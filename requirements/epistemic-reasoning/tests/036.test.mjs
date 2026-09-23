@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as events from '../../../dist/Persistence/EventStore/Surface.js'
 import * as api from '../../../dist/Sphinx/InquirySurface.js'
+import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'sphinx-turn-budget-'))
@@ -92,7 +93,7 @@ test('WHAT[epistemic-reasoning-036] uncalibrated candidate costs cannot masquera
   assert.equal(result.answer.turnBudget.usedTurns, 21)
 })
 
-test('WHAT[epistemic-reasoning-036] one independent safety ceiling survives indefinitely useful proposals', async t => {
+integrationTest('WHAT[epistemic-reasoning-036] one independent safety ceiling survives indefinitely useful proposals', async t => {
   const { open } = await fixture(t)
   const study = research({ grounded: false })
   const result = await run(open(), 'safety-ceiling', 100, study)
@@ -112,7 +113,7 @@ test('WHAT[epistemic-reasoning-036] price and target survive restart and conflic
   assert.equal(study.requests.length, 21)
 })
 
-test('WHAT[epistemic-reasoning-036] observed price-limited work calibrates later invocations of the same question and target', async t => {
+integrationTest('WHAT[epistemic-reasoning-036] observed price-limited work calibrates later invocations of the same question and target', async t => {
   const { open } = await fixture(t)
   const runtime = open()
   const counts = []
@@ -134,7 +135,7 @@ test('WHAT[epistemic-reasoning-036] observed price-limited work calibrates later
   t.diagnostic(`Target 21 with half-size gains: ${counts.join(', ')}`)
 })
 
-test('WHAT[epistemic-reasoning-036] calibration centers repeated discrete reference inquiries on expected 100', async t => {
+integrationTest('WHAT[epistemic-reasoning-036] calibration centers repeated discrete reference inquiries on expected 100', async t => {
   const { open } = await fixture(t)
   const runtime = open()
   const counts = []
@@ -211,7 +212,7 @@ for (const throughLane of [false, true]) {
   })
 }
 
-test('WHAT[epistemic-reasoning-036] a nested investigation cannot spend a second safety allowance', async t => {
+integrationTest('WHAT[epistemic-reasoning-036] a nested investigation cannot spend a second safety allowance', async t => {
   const { open } = await fixture(t)
   const runtime = open()
   const child = research({ grounded: false })

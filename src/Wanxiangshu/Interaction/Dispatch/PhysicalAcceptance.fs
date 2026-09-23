@@ -15,7 +15,20 @@ type PromptPhysicalOutcome =
 /// and the sole PhysicalAccepted writer completes it exactly once.
 module PromptPhysicalAcceptance =
 
-    [<Emit("Promise.race([$0.then(function(v){return{ok:true,v:v};}),new Promise(function(r){setTimeout(function(){r({ok:false});},$1);})])")>]
+    [<Emit("""(() => {
+      var timer = null;
+      var p = new Promise(function(resolve) {
+        timer = setTimeout(function() { resolve({ok:false}); }, $1);
+        if (timer && typeof timer.unref === 'function') timer.unref();
+      });
+      return Promise.race([
+        $0.then(
+          function(v) { if (timer) clearTimeout(timer); return {ok:true, v:v}; },
+          function(e) { if (timer) clearTimeout(timer); throw e; }
+        ),
+        p
+      ]);
+    })()""")>]
     let private raceTimeout (task: Task<'T>) (ms: int) : Task<obj> = jsNative
 
     let private gate = obj ()

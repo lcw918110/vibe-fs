@@ -10,7 +10,7 @@
 // 7. fail if test runner failed, or if coverage was corrupted/drifted
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -29,7 +29,8 @@ import {
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 export async function runCoverage(options = {}) {
-  const root = path.resolve(options.root ?? REPO_ROOT)
+  const resolvedRoot = path.resolve(options.root ?? REPO_ROOT)
+  const root = existsSync(resolvedRoot) ? realpathSync(resolvedRoot) : resolvedRoot
   const distDir = path.resolve(root, options.distDir ?? 'dist')
   const unitRunnerScript = options.unitRunnerScript ?? path.join(root, 'requirements/verification-system/tests/run.mjs')
   const c8Bin = options.c8Bin ?? path.join(root, 'node_modules/c8/bin/c8.js')
@@ -157,7 +158,10 @@ export async function runCoverage(options = {}) {
   }
 
   const reportedAbsFiles = Object.keys(coverageJson)
-  const reportedRelFiles = reportedAbsFiles.map((p) => path.relative(root, p).replace(/\\/g, '/'))
+  const reportedRelFiles = reportedAbsFiles.map((p) => {
+    const realP = existsSync(p) ? realpathSync(p) : p
+    return path.relative(root, realP).replace(/\\/g, '/')
+  })
 
   // Verify denominator matches build receipt outputs
   let manifest
