@@ -256,9 +256,15 @@ type SessionRecoveryHost
             match current with
             | Some(ChatExecutionState.Accepted accepted) ->
                 let! settled =
-                    PreProviderSettlement.settle journal request.ExecutionKey accepted ChatExecutionTerminalDisposition.Failed
+                    PreProviderSettlement.settle
+                        journal
+                        request.ExecutionKey
+                        accepted
+                        ChatExecutionTerminalDisposition.Failed
 
-                (completedLifecycleSettlement (ChatExecutionState.Accepted accepted) settled) |> ignore
+                (completedLifecycleSettlement (ChatExecutionState.Accepted accepted) settled)
+                |> ignore
+
                 publishNoAuthorizedDisposition request
             | Some _
             | None -> ()
@@ -351,7 +357,8 @@ type SessionRecoveryHost
             // `resumeFor event` settles an unresumed Accepted execution as a
             // pre-provider terminal failure instead of leaving a silent
             // dangling obligation; other events keep the plain resume port.
-            let! _ = ChatExecutionRecoveryRuntime.recover (if eventIsIdleSweep event then sweepActions else actions) evidence
+            let! _ =
+                ChatExecutionRecoveryRuntime.recover (if eventIsIdleSweep event then sweepActions else actions) evidence
 
             ()
         }

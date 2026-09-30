@@ -431,8 +431,7 @@ module ReadonlyDelegationContract =
         | InvestigationEstimateContract.InvestigationToolPolicy.EstimateAfterCall ->
             decorateToolParameters toolOutput toolId
         | InvestigationEstimateContract.InvestigationToolPolicy.NoEstimate
-        | InvestigationEstimateContract.InvestigationToolPolicy.Unreviewed ->
-            ()
+        | InvestigationEstimateContract.InvestigationToolPolicy.Unreviewed -> ()
 
     let decorateDefinition (toolInput: obj) (toolOutput: obj) : unit =
         if not (isNull toolInput) && not (isNull toolOutput) then

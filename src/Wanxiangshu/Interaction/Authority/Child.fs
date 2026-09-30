@@ -72,7 +72,7 @@ module ChildPromptAuthority =
                     Map.tryFind turn.PhysicalUserMessageId owner.PhysicalLandings
                     |> Option.filter (fun dispatch ->
                         dispatch.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
-                                              PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
+                            PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
 
                 let runtime = PromptDispatcher.forPrompts prompts
                 return! registerLinkedChildIfNeeded runtime turn handle activeProfile accepted

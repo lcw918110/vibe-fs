@@ -462,15 +462,15 @@ module PluginHooks =
             // carries no messageID, so decodeContext would always answer None.
             let sanitizeSnapshot (toolName: string) (snapshot: ProtocolArgumentVault.Snapshot) =
                 let isReview = ManagerReviewTools.isReviewTool toolName
+
                 let isDelegationActive =
                     readonlyDelegationPredictorConfigured ()
                     && InvestigationEstimateContract.classifyTool toolName = InvestigationEstimateContract.InvestigationToolPolicy.EstimateAfterCall
-                { ProtocolArgumentVault.Snapshot.Contract =
-                    (if isReview then snapshot.Contract else None)
+
+                { ProtocolArgumentVault.Snapshot.Contract = (if isReview then snapshot.Contract else None)
                   ProtocolArgumentVault.Snapshot.ReadonlyRounds =
                     (if isDelegationActive then snapshot.ReadonlyRounds else None)
-                  ProtocolArgumentVault.Snapshot.SelfNote =
-                    (if isDelegationActive then snapshot.SelfNote else None) }
+                  ProtocolArgumentVault.Snapshot.SelfNote = (if isDelegationActive then snapshot.SelfNote else None) }
 
             let commitRecordedSnapshot
                 (vault: ProtocolArgumentVault.Vault)
@@ -540,11 +540,13 @@ module PluginHooks =
 
                     let isParticipatingTool =
                         InvestigationEstimateContract.classifyTool toolName = InvestigationEstimateContract.InvestigationToolPolicy.EstimateAfterCall
+
                     let isDelegationActive =
                         readonlyDelegationPredictorConfigured () && isParticipatingTool
 
                     if isDelegationActive && not (isNull toolOutput) && not (isNull toolOutput?args) then
                         let args = toolOutput?args
+
                         match InvestigationEstimateContract.parseParticipatingArguments args with
                         | Ok _ -> ()
                         | Error err ->
@@ -554,6 +556,7 @@ module PluginHooks =
                                 else
                                     let ctx = ToolHostCodec.decodeContext toolInput
                                     ctx.SessionId
+
                             let language = ProviderLanguageBinding.forSessionText sessionText
                             let explanation = InvestigationEstimateContract.formatArgumentError language err
                             invalidOp (sprintf "Invalid investigation estimate arguments: %s" explanation)
@@ -589,6 +592,7 @@ module PluginHooks =
             let toolAfter (toolInput: obj) (toolOutput: obj) =
                 task {
                     let toolName = toolField toolInput "tool"
+
                     let isParticipatingTool =
                         InvestigationEstimateContract.classifyTool toolName = InvestigationEstimateContract.InvestigationToolPolicy.EstimateAfterCall
 
@@ -599,6 +603,7 @@ module PluginHooks =
                         // after hook receives a different object than before.
                         if isParticipatingTool then
                             ReadonlyDelegationContract.restore toolInput?args
+
                         ManagerReviewContract.restore toolInput?args
                         TodoWriteCompressionContract.restore toolInput?args
 

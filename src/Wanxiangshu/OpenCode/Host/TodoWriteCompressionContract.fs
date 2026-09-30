@@ -148,8 +148,7 @@ module TodoWriteCompressionContract =
         && (let description = string value?description
 
             description = ProviderProse.render ProviderLanguage.English Path.RetainCheckpoints Map.empty
-            || description
-               = ProviderProse.render ProviderLanguage.SimplifiedChinese Path.RetainCheckpoints Map.empty)
+            || description = ProviderProse.render ProviderLanguage.SimplifiedChinese Path.RetainCheckpoints Map.empty)
 
     let private appendRequired (required: obj array) =
         if required |> Array.exists (fun item -> string item = field) then

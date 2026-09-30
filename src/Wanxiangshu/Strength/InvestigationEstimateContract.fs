@@ -136,16 +136,20 @@ module InvestigationEstimateContract =
             Error EstimateArgumentError.MissingOrBlankNoteWhenPositive
         else
             let rawNote = args?(NoteField)
+
             if not (isJsString rawNote) then
                 Error EstimateArgumentError.NoteNotString
             else
                 let noteStr = string rawNote
+
                 if noteStr.Trim().Length = 0 then
                     Error EstimateArgumentError.MissingOrBlankNoteWhenPositive
                 else
                     Ok(Some noteStr)
 
-    let parseParticipatingArguments (arguments: obj) : Result<EstimatedReadonlyRounds * string option, EstimateArgumentError> =
+    let parseParticipatingArguments
+        (arguments: obj)
+        : Result<EstimatedReadonlyRounds * string option, EstimateArgumentError> =
         if not (isPlainObject arguments) then
             Error EstimateArgumentError.InvalidArgumentObject
         elif hasOwn arguments LegacyRoundsField then
@@ -154,6 +158,7 @@ module InvestigationEstimateContract =
             Error EstimateArgumentError.MissingEstimate
         else
             let rawRounds = arguments?(EstimatedReadonlyRoundsField)
+
             match validateNumber rawRounds with
             | Error err -> Error err
             | Ok 0 ->
@@ -169,40 +174,27 @@ module InvestigationEstimateContract =
         match language with
         | ProviderLanguage.SimplifiedChinese ->
             match error with
-            | EstimateArgumentError.MissingEstimate ->
-                "必须提供 estimated_readonly_rounds 估计字段"
-            | EstimateArgumentError.WrongNumberType ->
-                "estimated_readonly_rounds 必须为数字类型"
-            | EstimateArgumentError.InvalidRange ->
-                "estimated_readonly_rounds 必须为 0 至 2147483647 之间的非负整数"
-            | EstimateArgumentError.NotePresentWhenZero ->
-                "estimated_readonly_rounds 为 0 时必须省略 self_note"
-            | EstimateArgumentError.MissingOrBlankNoteWhenPositive ->
-                "正数估计需要非空的后续查证展望"
-            | EstimateArgumentError.NoteNotString ->
-                "self_note 必须为字符串类型"
-            | EstimateArgumentError.MixedProtocolFields ->
-                "不得携带旧协议字段 delegate_readonly_rounds"
-            | EstimateArgumentError.InvalidArgumentObject ->
-                "工具参数必须为合法的普通对象"
+            | EstimateArgumentError.MissingEstimate -> "必须提供 estimated_readonly_rounds 估计字段"
+            | EstimateArgumentError.WrongNumberType -> "estimated_readonly_rounds 必须为数字类型"
+            | EstimateArgumentError.InvalidRange -> "estimated_readonly_rounds 必须为 0 至 2147483647 之间的非负整数"
+            | EstimateArgumentError.NotePresentWhenZero -> "estimated_readonly_rounds 为 0 时必须省略 self_note"
+            | EstimateArgumentError.MissingOrBlankNoteWhenPositive -> "正数估计需要非空的后续查证展望"
+            | EstimateArgumentError.NoteNotString -> "self_note 必须为字符串类型"
+            | EstimateArgumentError.MixedProtocolFields -> "不得携带旧协议字段 delegate_readonly_rounds"
+            | EstimateArgumentError.InvalidArgumentObject -> "工具参数必须为合法的普通对象"
         | ProviderLanguage.English ->
             match error with
-            | EstimateArgumentError.MissingEstimate ->
-                "The estimated_readonly_rounds field must be provided"
-            | EstimateArgumentError.WrongNumberType ->
-                "estimated_readonly_rounds must be a number"
+            | EstimateArgumentError.MissingEstimate -> "The estimated_readonly_rounds field must be provided"
+            | EstimateArgumentError.WrongNumberType -> "estimated_readonly_rounds must be a number"
             | EstimateArgumentError.InvalidRange ->
                 "estimated_readonly_rounds must be a non-negative integer between 0 and 2147483647"
             | EstimateArgumentError.NotePresentWhenZero ->
                 "self_note must be omitted when estimated_readonly_rounds is 0"
             | EstimateArgumentError.MissingOrBlankNoteWhenPositive ->
                 "A positive estimate requires a non-empty self_note outlook"
-            | EstimateArgumentError.NoteNotString ->
-                "self_note must be a string"
-            | EstimateArgumentError.MixedProtocolFields ->
-                "The legacy delegate_readonly_rounds field must not be used"
-            | EstimateArgumentError.InvalidArgumentObject ->
-                "Tool arguments must be a valid plain object"
+            | EstimateArgumentError.NoteNotString -> "self_note must be a string"
+            | EstimateArgumentError.MixedProtocolFields -> "The legacy delegate_readonly_rounds field must not be used"
+            | EstimateArgumentError.InvalidArgumentObject -> "Tool arguments must be a valid plain object"
 
     let formatArgumentError (language: ProviderLanguage) (error: EstimateArgumentError) : string =
         describeArgumentError language error

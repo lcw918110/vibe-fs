@@ -323,6 +323,7 @@ type SyncDelegateRuntime
                                     "sync-delegate-interrupt-inflight-failed"
                                     [ "session_id", delegateKey; "result", reason ])
                             |> ignore
+
                             Ok())
                 | None -> ()
 

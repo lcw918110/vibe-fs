@@ -165,7 +165,7 @@ module ProviderWireCapture =
         let pluginSource =
             not (isNull info)
             && ProviderWireDecode.firstString info [ "source" ]
-            |> Option.exists (fun source -> source <> "physical-delta")
+               |> Option.exists (fun source -> source <> "physical-delta")
 
         flag || pluginSource
 

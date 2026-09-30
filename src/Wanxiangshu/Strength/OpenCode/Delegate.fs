@@ -330,9 +330,7 @@ module StrengthDelegate =
                           CanonicalArguments = arguments }
             | _ -> None)
 
-    let private tryExtractWireAssistantCalls
-        (message: ProviderProjection.WireMessage)
-        : SourceToolCall list option =
+    let private tryExtractWireAssistantCalls (message: ProviderProjection.WireMessage) : SourceToolCall list option =
         if not (String.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)) then
             None
         else
@@ -350,8 +348,7 @@ module StrengthDelegate =
                 |> List.map (fun exchange -> exchange.ToolName, exchange.CanonicalArguments)
 
             let callSignatures =
-                tailCalls
-                |> List.map (fun call -> call.ToolName, call.CanonicalArguments)
+                tailCalls |> List.map (fun call -> call.ToolName, call.CanonicalArguments)
 
             if batchSignatures = callSignatures then
                 Some tailCalls
@@ -433,6 +430,7 @@ module StrengthDelegate =
                         | Ok(rounds, _noteOpt) -> Ok rounds
                         | Error err ->
                             let explanation = InvestigationEstimateContract.formatArgumentError language err
+
                             Error(
                                 sprintf
                                     "delegation arguments of call %s rejected: %s"
@@ -464,7 +462,9 @@ module StrengthDelegate =
                 if maxValue = 0 then
                     BatchAggregation.EstimatedZero
                 else
-                    let budget = InvestigationEstimateContract.EstimatedReadonlyRounds.toExecutionBudget maxRounds
+                    let budget =
+                        InvestigationEstimateContract.EstimatedReadonlyRounds.toExecutionBudget maxRounds
+
                     BatchAggregation.PositiveEstimate budget
 
     // ---- phase one: capture the authorization ----------------------------------
@@ -491,7 +491,9 @@ module StrengthDelegate =
         : Result<SourceToolCall list * ReadonlyRoundBudget, string> =
         result {
             let! calls = tryResolveSourceCalls surface
-            let language = ProviderLanguageBinding.forSessionText (SessionId.value surface.Owner)
+
+            let language =
+                ProviderLanguageBinding.forSessionText (SessionId.value surface.Owner)
 
             match aggregateBatchEstimate language calls with
             | BatchAggregation.PositiveEstimate budget -> return calls, budget

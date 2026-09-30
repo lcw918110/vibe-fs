@@ -193,18 +193,15 @@ module PluginHooksSurface =
     /// { ok = true; note = <string|null> } or { ok = false; error = <code> }.
     let readonlyDelegationSelfNoteOf (arguments: obj) : obj =
         match InvestigationEstimateContract.parseParticipatingArguments arguments with
-        | Ok (rounds, _) ->
+        | Ok(rounds, _) ->
             let rawRounds = InvestigationEstimateContract.EstimatedReadonlyRounds.value rounds
+
             let noteVal =
-                if rawRounds = 0 then
-                    null
-                elif hasOwn arguments "self_note" then
-                    arguments?self_note
-                else
-                    null
-            box
-                {| ok = true
-                   note = noteVal |}
+                if rawRounds = 0 then null
+                elif hasOwn arguments "self_note" then arguments?self_note
+                else null
+
+            box {| ok = true; note = noteVal |}
         | Error err ->
             box
                 {| ok = false
