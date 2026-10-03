@@ -58,6 +58,12 @@ const REQUEST_KIND_SWITCHED = body(
 // typed authority-revision retention is proved by the unit projection tests and the
 // long-stroke root-only oracle.
 const GUIDANCE_SUFFIX = '\0\uFEFF<system>\n# # Wait-cost calibration: priced interval.\n</system>';
+// Production memory-preamble (en.md) — line-broken with `# ` prefixes as Host renders it.
+const COMPANION_PREAMBLE =
+  '# The following Chronicle records carry durable state transitions from an older\n'
+  + '# prefix of this session. Continue from what they actually settled and what they\n'
+  + '# left open. Raw code, tool mechanics, image contents, and incidental observation\n'
+  + '# details may have been removed.';
 const MANAGER_TRAFFIC = [
   user(`Round 1${GUIDANCE_SUFFIX}`),
   assistant('assessment evidence'),
@@ -73,6 +79,15 @@ const MANAGER_NEXT = body('test-model', [
   user('Round 2'),
 ]);
 const MANAGER_RETIRED_WITH_NUDGE = body('test-model', [SYSTEM, ...MANAGER_TRAFFIC, user('work nudge')]);
+// Companion frame (synthetic ack + preamble user) may disappear across iterations.
+const MANAGER_RETIRED_WITH_COMPANION = body('test-model', [
+  SYSTEM,
+  user('Round 1'),
+  assistant('.'),
+  user(`${COMPANION_PREAMBLE}\n# prior work record`),
+  assistant('assessment evidence'),
+  { role: 'tool', tool_call_id: 'review-call', content: 'scores' },
+]);
 
 const decide = (previous, next, boundary = null) =>
   sealDecision({ previousWire: previous === null ? null : wireOf(previous), body: next, boundary });
@@ -261,6 +276,11 @@ export const coldBoundaryCases = [
     name: 'MANAGER-LOOP a new iteration keeps the retained history and retires only its injection',
     fn: () => {
       assertEq(decide(MANAGER_RETIRED, MANAGER_NEXT, at('manager-loop')).resealed, 'manager-loop');
+      assertEq(
+        decide(MANAGER_RETIRED_WITH_COMPANION, MANAGER_NEXT, at('manager-loop')).resealed,
+        'manager-loop',
+        'production Chronicle-records companion frames may disappear across iterations',
+      );
       assertEq(
         decide(MANAGER_RETIRED_WITH_NUDGE, MANAGER_NEXT, at('manager-loop')).broken,
         'manager-loop-rewrote-fixed',

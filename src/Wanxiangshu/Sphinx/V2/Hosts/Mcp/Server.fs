@@ -102,9 +102,13 @@ module Mcp =
     let private currentRefusal (fault: CurrentError) : ToolRefusal =
         match fault with
         | CurrentError.DomainConflict _ ->
-            { Code = "DOMAIN_CONFLICT"; Path = "inquiryId"; Message = "inquiry has multiple legitimate durable heads; no resolution command is available" }
+            { Code = "DOMAIN_CONFLICT"
+              Path = "inquiryId"
+              Message = "inquiry has multiple legitimate durable heads; no resolution command is available" }
         | CurrentError.SemanticRejected reason ->
-            { Code = "PERSISTENCE_SEMANTIC_CUT"; Path = "inquiryId"; Message = reason }
+            { Code = "PERSISTENCE_SEMANTIC_CUT"
+              Path = "inquiryId"
+              Message = reason }
 
     /// A refusal result: the call changed nothing, and it carries no business fact.
     let private refused (refusal: ToolRefusal) : Task<obj> =
@@ -181,13 +185,98 @@ module Mcp =
               ("outcome", box "applied")
               ("inquiryId", box args.InquiryId)
               ("revision", Encode.revision revision) ]
+
         let refusedCurrent (refusal: ToolRefusal) =
-            Encode.record (receipt @ [ ("currentRefusal", Encode.record [
-                ("code", box refusal.Code); ("path", box refusal.Path); ("message", box refusal.Message) ]) ])
+            Encode.record (
+                receipt
+                @ [ ("currentRefusal",
+                     Encode.record
+                         [ ("code", box refusal.Code)
+                           ("path", box refusal.Path)
+                           ("message", box refusal.Message) ]) ]
+            )
+
         match currentState store (InquiryId.create args.InquiryId) with
         | Error fault -> refusedCurrent (currentRefusal fault)
         | Ok None -> refusedCurrent (unknownInquiry args.InquiryId)
         | Ok(Some current) -> Encode.record (receipt @ [ ("status", box (Encode.statusOf current)) ])
+
+    let private appendSealedCancellation
+        (store: IEventStore)
+        (encoded: EventEnvelope)
+        (args: CancelArgs)
+        (nextRevision: Revision)
+        : Task<obj> =
+        task {
+            let! appended = store.Append [ encoded ]
+
+            match appended with
+            | Error fault -> return! refused (appendRefusal fault)
+            | Ok receipt when not (List.isEmpty receipt.Cuts) -> return! refused (cutRefusal receipt)
+            | Ok _ -> return cancellationReceipt store args nextRevision
+        }
+
+    let private sealAndAppendCancellation
+        (store: IEventStore)
+        (state: InquiryState)
+        (args: CancelArgs)
+        (nextRevision: Revision)
+        (batch: TransitionBatch)
+        : Task<obj> =
+        match Codec.seal HostDigest.sha256Hex (Some state) batch with
+        | Error fault ->
+            refused
+                { Code = fault.Code
+                  Path = "commandId"
+                  Message = fault.Message }
+        | Ok encoded -> appendSealedCancellation store encoded args nextRevision
+
+    let private cancelFreshAdmission
+        (store: IEventStore)
+        (state: InquiryState)
+        (args: CancelArgs)
+        (fingerprint: string)
+        : Task<obj> =
+        let head = previousHead state
+        let nextRevision = Revision.next state.Revision
+
+        let batch =
+            { SchemaVersion = "2"
+              InquiryId = state.Id
+              PreviousRevision = state.Revision
+              PreviousHead = head
+              Revision = nextRevision
+              CommandId = args.CommandId
+              CommandFingerprint = fingerprint
+              PostStateFingerprint = None
+              Events = [ InquiryEventBody.CancelRequested args.Reason ] }
+
+        sealAndAppendCancellation store state args nextRevision batch
+
+    let private cancelAfterAdmission
+        (store: IEventStore)
+        (state: InquiryState)
+        (args: CancelArgs)
+        (fingerprint: string)
+        (admitted: Result<IdempotencyOutcome<InquiryCommand>, CommandError>)
+        : Task<obj> =
+        match admitted with
+        | Error fault -> refused (commandRefusal fault)
+        | Ok(IdempotencyOutcome.Conflict message) ->
+            refused
+                { Code = "COMMAND_CONFLICT"
+                  Path = "commandId"
+                  Message = message }
+        | Ok(IdempotencyOutcome.Replay revision) ->
+            Task.FromResult(
+                Encode.record
+                    [ ("apiVersion", box Contract.apiVersion)
+                      ("outcome", box "replayed")
+                      ("inquiryId", box args.InquiryId)
+                      ("revision", Encode.revision revision)
+                      ("status", box (Encode.statusOf state)) ]
+            )
+        | Ok(IdempotencyOutcome.Fresh _) -> cancelFreshAdmission store state args fingerprint
 
     /// Requests cancellation. The request is appended through the same canonical fold
     /// the reader uses, so a retried command id returns the original receipt instead
@@ -211,46 +300,7 @@ module Mcp =
                 let admitted =
                     Admission.admitCommand state args.CommandId fingerprint (InquiryCommand.CancelCommand args.Reason)
 
-                match admitted with
-                | Error fault -> return! refused (commandRefusal fault)
-                | Ok(IdempotencyOutcome.Conflict message) ->
-                    return!
-                        refused
-                            { Code = "COMMAND_CONFLICT"
-                              Path = "commandId"
-                              Message = message }
-                | Ok(IdempotencyOutcome.Replay revision) ->
-                    return
-                        Encode.record
-                            [ ("apiVersion", box Contract.apiVersion)
-                              ("outcome", box "replayed")
-                              ("inquiryId", box args.InquiryId)
-                              ("revision", Encode.revision revision)
-                              ("status", box (Encode.statusOf state)) ]
-                | Ok(IdempotencyOutcome.Fresh _) ->
-                    let head = previousHead state
-                    let nextRevision = Revision.next state.Revision
-
-                    let batch =
-                        { SchemaVersion = "2"
-                          InquiryId = state.Id
-                          PreviousRevision = state.Revision
-                          PreviousHead = head
-                          Revision = nextRevision
-                          CommandId = args.CommandId
-                          CommandFingerprint = fingerprint
-                          PostStateFingerprint = None
-                          Events = [ InquiryEventBody.CancelRequested args.Reason ] }
-
-                    match Codec.seal HostDigest.sha256Hex (Some state) batch with
-                    | Error fault ->
-                        return! refused { Code = fault.Code; Path = "commandId"; Message = fault.Message }
-                    | Ok encoded ->
-                        let! appended = store.Append [ encoded ]
-                        match appended with
-                        | Error fault -> return! refused (appendRefusal fault)
-                        | Ok receipt when not (List.isEmpty receipt.Cuts) -> return! refused (cutRefusal receipt)
-                        | Ok _ -> return cancellationReceipt store args nextRevision
+                return! cancelAfterAdmission store state args fingerprint admitted
         }
 
     /// Registers the seven public tools. Each one decodes its own arguments and then
@@ -287,7 +337,8 @@ module Mcp =
                   ==> zList zod (zString zod "one user constraint") "Supplementary constraints the user supplied"
                   "materialRefs"
                   ==> zList zod (zString zod "one material ref") "Content refs of material the user attached"
-                  "authorizationRef" ==> zString zod "Reference proving the user supplied this goal"
+                  "authorizationRef"
+                  ==> zString zod "Reference proving the user supplied this goal"
                   "profileRef" ==> zString zod "The declared profile this inquiry runs under" ]
 
         let workNextSchema =
@@ -331,11 +382,14 @@ module Mcp =
                 [ "commandId"
                   ==> zString zod "Idempotent command identity; a repeat returns the original receipt"
                   "inquiryId" ==> zString zod "The inquiry whose goal is amended"
-                  "authorizedBy" ==> zString zod "The user authorization reference for this amendment"
-                  "expectedRevision" ==> zString zod "The inquiry revision this amendment is preconditioned on"
+                  "authorizedBy"
+                  ==> zString zod "The user authorization reference for this amendment"
+                  "expectedRevision"
+                  ==> zString zod "The inquiry revision this amendment is preconditioned on"
                   "addedConstraints"
                   ==> zList zod (zString zod "one added constraint") "Constraints the user added"
-                  "replacementText" ==> zOptionalString zod "Replacement goal text, when the user reworded it" ]
+                  "replacementText"
+                  ==> zOptionalString zod "Replacement goal text, when the user reworded it" ]
 
         register
             SphinxTool.InquiryStart

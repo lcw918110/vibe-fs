@@ -131,6 +131,49 @@ module HandleProjection =
         && existing.CanonicalRole = role
         && existing.Ownership = ownership
 
+    let private lifecycleAfterSameBinding
+        (handle: HandleId)
+        (existing: HandleRecord)
+        (current: AgentLinkageProjection)
+        : Result<AgentLinkageProjection, HandleTransitionRejection> =
+        match existing.Lifecycle with
+        | Retired ->
+            Ok
+                { current with
+                    Handles = Map.add handle { existing with Lifecycle = Active } current.Handles }
+        | Active
+        | CompletedAwaitingJoin _ -> Ok current
+        | Abandoned _ -> Error AlreadyAbandoned
+
+    let private reopenOrKeepExisting
+        (childSessionId: SessionId)
+        (targetAgent: string)
+        (byname: string)
+        (role: Role)
+        (ownership: HandleOwnership)
+        (existing: HandleRecord)
+        (current: AgentLinkageProjection)
+        (handle: HandleId)
+        : Result<AgentLinkageProjection, HandleTransitionRejection> =
+        if not (sameBinding childSessionId targetAgent byname role ownership existing) then
+            Error HandleIdentityConflict
+        else
+            lifecycleAfterSameBinding handle existing current
+
+    let private absorbRetiredReplay
+        (childSessionId: SessionId)
+        (targetAgent: string)
+        (byname: string)
+        (role: Role)
+        (ownership: HandleOwnership)
+        (existing: HandleRecord)
+        (current: AgentLinkageProjection)
+        : Result<AgentLinkageProjection, HandleTransitionRejection> =
+        if not (sameBinding childSessionId targetAgent byname role ownership existing) then
+            Error HandleIdentityConflict
+        else
+            Ok current
+
     /// Abandoned is a durable terminal: the child never returns along this
     /// handle, so a re-link is refused (msl-006/018). Retired is the
     /// consumed-completion tombstone: reuse of the same agent id reopens Labor
@@ -169,18 +212,7 @@ module HandleProjection =
                   Works = current.Works
                   LegacyWorkHandles = current.LegacyWorkHandles }
         | Some { Lifecycle = Abandoned _ } -> Error AlreadyAbandoned
-        | Some existing ->
-            if not (sameBinding childSessionId targetAgent byname role ownership existing) then
-                Error HandleIdentityConflict
-            else
-                match existing.Lifecycle with
-                | Retired ->
-                    Ok
-                        { current with
-                            Handles = Map.add handle { existing with Lifecycle = Active } current.Handles }
-                | Active
-                | CompletedAwaitingJoin _ -> Ok current
-                | Abandoned _ -> Error AlreadyAbandoned
+        | Some existing -> reopenOrKeepExisting childSessionId targetAgent byname role ownership existing current handle
 
     /// Journal replay path (ExecutionFactFold): replaying a historical
     /// HandleLinked fact must not change already-folded state — a Retired
@@ -197,11 +229,8 @@ module HandleProjection =
         (current: AgentLinkageProjection)
         : Result<AgentLinkageProjection, HandleTransitionRejection> =
         match Map.tryFind handle current.Handles with
-        | Some ({ Lifecycle = Retired } as existing) ->
-            if not (sameBinding childSessionId targetAgent byname role ownership existing) then
-                Error HandleIdentityConflict
-            else
-                Ok current
+        | Some({ Lifecycle = Retired } as existing) ->
+            absorbRetiredReplay childSessionId targetAgent byname role ownership existing current
         | _ -> linkNamed handle childSessionId targetAgent byname role ownership current
 
     /// Compatibility for internal callers that do not need a separate
@@ -310,50 +339,94 @@ module HandleProjection =
         | Some({ Lifecycle = CompletedAwaitingJoin cell } as record) ->
             verifyFalseCompletionCell handle expectedRef expectedDigest current record cell
 
+    let private admitValidatedWork
+        handle
+        (profile: PromptAuthority.AuthorityExecutionProfile)
+        (binding: HandleRecord)
+        (current: AgentLinkageProjection)
+        =
+        let work =
+            { Handle = handle
+              ChildSessionId = profile.SessionId
+              AuthorityRoot = profile.AuthorityRootUserMessageId }
+
+        match Map.tryFind work current.Works, binding.Lifecycle with
+        | _, Abandoned _ -> Error AlreadyAbandoned
+        | Some existing, _ when existing.LogicalRunId = profile.LogicalRunId -> Ok current
+        | Some _, _ -> Error HandleIdentityConflict
+        | None, _ when
+            current.Works
+            |> Map.exists (fun key value -> key.Handle = handle && value.Lifecycle = Active)
+            ->
+            Error WorkStillActive
+        | None, _ ->
+            let admitted =
+                { Work = work
+                  LogicalRunId = profile.LogicalRunId
+                  Lifecycle = Active
+                  LastCompletion = None
+                  ConsumptionId = None }
+
+            Ok
+                { current with
+                    Works = Map.add work admitted current.Works }
+
+    let private decideAdmitWork
+        parentId
+        handle
+        (authority: PromptAuthority.PromptAuthorityProjection)
+        (binding: HandleRecord)
+        (profile: PromptAuthority.AuthorityExecutionProfile)
+        (current: AgentLinkageProjection)
+        =
+        let physical =
+            PhysicalUserMessageId.create (AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
+
+        let exactLanding =
+            Map.tryFind physical authority.PhysicalLandings
+            |> Option.exists (fun accepted ->
+                accepted.SessionId = binding.ChildSessionId
+                && accepted.IdentitySeed = profile.IdentitySeed
+                && accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
+                    PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
+
+        let exactOwner =
+            PromptAuthority.identitySeedOwner profile.IdentitySeed
+            |> Option.exists (fun (owner, _, _) -> owner = parentId)
+
+        if not exactLanding || not exactOwner then
+            Error WorkNotAdmitted
+        elif
+            profile.SessionId <> binding.ChildSessionId
+            || profile.CanonicalRole <> binding.CanonicalRole
+            || profile.SelectedAgent <> binding.TargetAgent
+        then
+            Error HandleIdentityConflict
+        elif Set.contains handle current.LegacyWorkHandles then
+            Error LegacyWorkAmbiguous
+        else
+            admitValidatedWork handle profile binding current
+
     // A binding never becomes a new work. Only validated canonical admission
     // adds a Root-keyed entry; completion/consume never alter another entry.
-    let admitWork parentId handle (authority: PromptAuthority.PromptAuthorityProjection) (current: AgentLinkageProjection) =
+    let admitWork
+        parentId
+        handle
+        (authority: PromptAuthority.PromptAuthorityProjection)
+        (current: AgentLinkageProjection)
+        =
         match Map.tryFind handle current.Handles, authority.ActiveLogicalRun with
         | None, _ -> Error UnknownHandle
         | _, None -> Error WorkNotAdmitted
-        | Some binding, Some profile ->
-            let physical = PhysicalUserMessageId.create (AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
-            let exactLanding = Map.tryFind physical authority.PhysicalLandings |> Option.exists (fun accepted ->
-                accepted.SessionId = binding.ChildSessionId
-                && accepted.IdentitySeed = profile.IdentitySeed
-                && accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
-            let exactOwner = PromptAuthority.identitySeedOwner profile.IdentitySeed
-                             |> Option.exists (fun (owner, _, _) -> owner = parentId)
-            if not exactLanding || not exactOwner then Error WorkNotAdmitted
-            elif profile.SessionId <> binding.ChildSessionId || profile.CanonicalRole <> binding.CanonicalRole
-                 || profile.SelectedAgent <> binding.TargetAgent then Error HandleIdentityConflict
-            elif Set.contains handle current.LegacyWorkHandles then Error LegacyWorkAmbiguous
-            else
-                let work =
-                    { Handle = handle
-                      ChildSessionId = profile.SessionId
-                      AuthorityRoot = profile.AuthorityRootUserMessageId }
-                match Map.tryFind work current.Works, binding.Lifecycle with
-                | _, Abandoned _ -> Error AlreadyAbandoned
-                | Some existing, _ when existing.LogicalRunId = profile.LogicalRunId -> Ok current
-                | Some _, _ -> Error HandleIdentityConflict
-                | None, _ when current.Works |> Map.exists (fun key value -> key.Handle = handle && value.Lifecycle = Active) ->
-                    Error WorkStillActive
-                | None, _ ->
-                    let admitted =
-                        { Work = work
-                          LogicalRunId = profile.LogicalRunId
-                          Lifecycle = Active
-                          LastCompletion = None
-                          ConsumptionId = None }
-                    Ok { current with Works = Map.add work admitted current.Works }
+        | Some binding, Some profile -> decideAdmitWork parentId handle authority binding profile current
 
     let tryWork work (current: AgentLinkageProjection) = Map.tryFind work current.Works
 
     let tryAdmittedWork work current =
         match tryWork work current with
         | _ when Set.contains work.Handle current.LegacyWorkHandles -> Error LegacyWorkAmbiguous
-        | Some { Lifecycle = Active; LogicalRunId = logicalRunId } -> Ok(AdmittedWork(work, logicalRunId))
+        | Some { Lifecycle = Active
+                 LogicalRunId = logicalRunId } -> Ok(AdmittedWork(work, logicalRunId))
         | Some _ -> Error HandleIsRetired
         | None -> Error WorkNotAdmitted
 
@@ -361,62 +434,109 @@ module HandleProjection =
         match tryWork work current with
         | None -> Error WorkNotAdmitted
         | Some _ when Set.contains work.Handle current.LegacyWorkHandles -> Error LegacyWorkAmbiguous
-        | Some existing -> update existing |> Result.map (fun value -> { current with Works = Map.add work value current.Works })
+        | Some existing ->
+            update existing
+            |> Result.map (fun value ->
+                { current with
+                    Works = Map.add work value current.Works })
 
     let completeWork work completion current =
-        updateWork work (fun record ->
-            match record.Lifecycle with
-            | Active when completion.Kind <> HandleCompletionKind.Cancelled && completion.CompletionRef.IsSome && completion.CompletionDigest.IsSome ->
-                Ok { record with Lifecycle = CompletedAwaitingJoin completion; LastCompletion = Some completion }
-            | Active -> Error NotCompleted
-            | CompletedAwaitingJoin _ -> Error AlreadyCompleted
-            | Abandoned _ -> Error AlreadyAbandoned
-            | Retired -> Error HandleIsRetired) current
+        updateWork
+            work
+            (fun record ->
+                match record.Lifecycle with
+                | Active when
+                    completion.Kind <> HandleCompletionKind.Cancelled
+                    && completion.CompletionRef.IsSome
+                    && completion.CompletionDigest.IsSome
+                    ->
+                    Ok
+                        { record with
+                            Lifecycle = CompletedAwaitingJoin completion
+                            LastCompletion = Some completion }
+                | Active -> Error NotCompleted
+                | CompletedAwaitingJoin _ -> Error AlreadyCompleted
+                | Abandoned _ -> Error AlreadyAbandoned
+                | Retired -> Error HandleIsRetired)
+            current
 
     let abandonWork work reason current =
-        updateWork work (fun record ->
-            match record.Lifecycle with
-            | Active -> Ok { record with Lifecycle = Abandoned reason }
-            | CompletedAwaitingJoin _ -> Error AlreadyCompleted
-            | Abandoned _ -> Error AlreadyAbandoned
-            | Retired -> Error HandleIsRetired) current
+        updateWork
+            work
+            (fun record ->
+                match record.Lifecycle with
+                | Active ->
+                    Ok
+                        { record with
+                            Lifecycle = Abandoned reason }
+                | CompletedAwaitingJoin _ -> Error AlreadyCompleted
+                | Abandoned _ -> Error AlreadyAbandoned
+                | Retired -> Error HandleIsRetired)
+            current
 
     let voidWork work current =
-        updateWork work (fun record ->
-            match record.Lifecycle with
-            | Active -> Ok { record with Lifecycle = Retired }
-            | CompletedAwaitingJoin _ -> Error AlreadyCompleted
-            | Abandoned _ -> Error AlreadyAbandoned
-            | Retired -> Error HandleIsRetired) current
+        updateWork
+            work
+            (fun record ->
+                match record.Lifecycle with
+                | Active -> Ok { record with Lifecycle = Retired }
+                | CompletedAwaitingJoin _ -> Error AlreadyCompleted
+                | Abandoned _ -> Error AlreadyAbandoned
+                | Retired -> Error HandleIsRetired)
+            current
 
     let consumeWork work consumptionId expected current =
-        updateWork work (fun record ->
-            match record.Lifecycle with
-            | _ when System.String.IsNullOrWhiteSpace consumptionId -> Error ConsumptionMismatch
-            | CompletedAwaitingJoin cell when cell = expected ->
-                Ok { record with Lifecycle = Retired; ConsumptionId = Some consumptionId }
-            | Abandoned _ when expected.Kind = HandleCompletionKind.Cancelled && expected.CompletionRef.IsNone && expected.CompletionDigest.IsNone ->
-                Ok { record with Lifecycle = Retired; ConsumptionId = Some consumptionId }
-            | CompletedAwaitingJoin _ -> Error ConsumptionMismatch
-            | Retired -> Error HandleIsRetired
-            | Active -> Error NotCompleted
-            | Abandoned _ -> Error ConsumptionMismatch) current
+        updateWork
+            work
+            (fun record ->
+                match record.Lifecycle with
+                | _ when System.String.IsNullOrWhiteSpace consumptionId -> Error ConsumptionMismatch
+                | CompletedAwaitingJoin cell when cell = expected ->
+                    Ok
+                        { record with
+                            Lifecycle = Retired
+                            ConsumptionId = Some consumptionId }
+                | Abandoned _ when
+                    expected.Kind = HandleCompletionKind.Cancelled
+                    && expected.CompletionRef.IsNone
+                    && expected.CompletionDigest.IsNone
+                    ->
+                    Ok
+                        { record with
+                            Lifecycle = Retired
+                            ConsumptionId = Some consumptionId }
+                | CompletedAwaitingJoin _ -> Error ConsumptionMismatch
+                | Retired -> Error HandleIsRetired
+                | Active -> Error NotCompleted
+                | Abandoned _ -> Error ConsumptionMismatch)
+            current
 
     let private workView (binding: HandleRecord) (work: HandleWorkRecord) =
-        { binding with Work = Some work.Work; Lifecycle = work.Lifecycle; LastCompletion = work.LastCompletion }
+        { binding with
+            Work = Some work.Work
+            Lifecycle = work.Lifecycle
+            LastCompletion = work.LastCompletion }
 
     let workRecords (current: AgentLinkageProjection) =
-        current.Works |> Map.toList |> List.choose (fun (_, work) ->
-            Map.tryFind work.Work.Handle current.Handles |> Option.map (fun binding -> workView binding work))
+        current.Works
+        |> Map.toList
+        |> List.choose (fun (_, work) ->
+            Map.tryFind work.Work.Handle current.Handles
+            |> Option.map (fun binding -> workView binding work))
 
     let private summary (current: AgentLinkageProjection) (binding: HandleRecord) =
         let works =
-            if Set.contains binding.Handle current.LegacyWorkHandles then []
-            else workRecords current |> List.filter (fun record -> record.Handle = binding.Handle)
+            if Set.contains binding.Handle current.LegacyWorkHandles then
+                []
+            else
+                workRecords current
+                |> List.filter (fun record -> record.Handle = binding.Handle)
+
         match works |> List.tryFind (fun record -> record.Lifecycle = Active) with
         | Some active -> active
         | None ->
-            works |> List.tryFind (fun record -> record.Lifecycle <> Retired)
+            works
+            |> List.tryFind (fun record -> record.Lifecycle <> Retired)
             |> Option.orElseWith (fun () -> List.tryHead works)
             |> Option.defaultValue binding
 
@@ -439,7 +559,10 @@ module HandleProjection =
         | _ -> false
 
     let private recordsWhere predicate (current: AgentLinkageProjection) =
-        current.Handles |> Map.toList |> List.map (snd >> summary current) |> List.filter predicate
+        current.Handles
+        |> Map.toList
+        |> List.map (snd >> summary current)
+        |> List.filter predicate
 
     /// GLORY-002 / SURFACE-006: a HostOwnedHidden handle (such as an internal Host workflow)
     /// is invisible to its nominal parent. Every parent-visible
@@ -463,6 +586,7 @@ module HandleProjection =
             current.Handles
             |> Map.tryPick (fun _ binding ->
                 let record = summary current binding
+
                 if
                     parentVisible record
                     && System.String.Equals(record.Byname, wanted, System.StringComparison.OrdinalIgnoreCase)
@@ -494,18 +618,29 @@ module HandleProjection =
 
     /// Historical projection observations are not executable work admission.
     let auditListable (current: AgentLinkageProjection) =
-        current.Handles |> Map.toList |> List.map snd |> List.filter (fun record ->
-            parentVisible record && (match record.Lifecycle with Active | CompletedAwaitingJoin _ -> true | _ -> false))
+        current.Handles
+        |> Map.toList
+        |> List.map snd
+        |> List.filter (fun record ->
+            parentVisible record
+            && (match record.Lifecycle with
+                | Active
+                | CompletedAwaitingJoin _ -> true
+                | _ -> false))
 
     let auditActiveHandles (current: AgentLinkageProjection) =
-        current.Handles |> Map.toList |> List.map snd |> List.filter (fun record -> parentVisible record && record.Lifecycle = Active)
+        current.Handles
+        |> Map.toList
+        |> List.map snd
+        |> List.filter (fun record -> parentVisible record && record.Lifecycle = Active)
 
     /// EXEC-005: `list` shows running, busy and completed-awaiting-join, never
     /// retired or abandoned.
     let listable (current: AgentLinkageProjection) =
         current
         |> recordsWhere (fun record ->
-            record.Work.IsSome && parentVisible record
+            record.Work.IsSome
+            && parentVisible record
             && (match record.Lifecycle with
                 | Retired
                 | Abandoned _ -> false
@@ -561,7 +696,8 @@ module HandleProjection =
     let activeHandles (current: AgentLinkageProjection) =
         current
         |> recordsWhere (fun record ->
-            record.Work.IsSome && parentVisible record
+            record.Work.IsSome
+            && parentVisible record
             && (match record.Lifecycle with
                 | Active -> true
                 | CompletedAwaitingJoin _

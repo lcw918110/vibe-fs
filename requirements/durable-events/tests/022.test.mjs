@@ -69,6 +69,8 @@ const ALLOWED_CONTRACT_CLOSURE_SHARDS = new Set([
   // canonical model contract. This is a contract-tier provider, not a runtime artifact.
   'outcome',
   'foundation-roles',
+  'runtime-platform-language',
+  'runtime-platform-assemblyinfo',
 ])
 
 test('WHAT[durable-events-022] EventStore contracts exclude physical and Strength runtime closure', () => {

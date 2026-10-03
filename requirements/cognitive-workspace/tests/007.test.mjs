@@ -12,4 +12,5 @@ test('WHAT[cognitive-workspace-007] no TodoSink compatibility bridge survives', 
   assert.doesNotMatch(hooks, /TodoWriteCompressionContract/)
   assert.doesNotMatch(hooks, /obligations/)
   assert.doesNotMatch(hooks, /MagicTodo/)
+  assert.doesNotMatch(hooks, /TodoSink/)
 })

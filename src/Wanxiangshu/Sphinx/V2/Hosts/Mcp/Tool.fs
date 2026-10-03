@@ -169,14 +169,25 @@ module Tool =
 
     /// 只拒绝明确夹带的变动或命令，不把所有冗余键当作非法入参。
     let private rejectReadMutation (raw: obj) : Result<unit, ToolRefusal> =
-        match (forbiddenResultFields @ [ "command"; "commands" ]) |> List.tryFind (fun name -> hasField raw name) with
+        match
+            (forbiddenResultFields @ [ "command"; "commands" ])
+            |> List.tryFind (fun name -> hasField raw name)
+        with
         | Some name ->
-            Error(fromText name (sprintf "field %s requests an additional mutation or command; status and export only read an inquiry" name))
+            Error(
+                fromText
+                    name
+                    (sprintf
+                        "field %s requests an additional mutation or command; status and export only read an inquiry"
+                        name)
+            )
         | None -> Ok()
 
     let private decodeResultSchema (raw: obj) : Result<SchemaRef, ToolRefusal> =
         let schema = field raw "resultSchema"
-        let isRecord = emitJsExpr schema "typeof $0 === 'object' && $0 !== null && !Array.isArray($0)"
+
+        let isRecord =
+            emitJsExpr schema "typeof $0 === 'object' && $0 !== null && !Array.isArray($0)"
 
         if not isRecord then
             Error(fromText "resultSchema" "resultSchema must be an object with id and hash")

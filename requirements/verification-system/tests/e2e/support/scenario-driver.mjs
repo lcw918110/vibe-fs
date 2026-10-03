@@ -499,12 +499,37 @@ async function runFlow(scenario, doc, ctx) {
       // a signal/diagnostic and never becomes identity data.
       const agent = step.bindChild.agent;
       const sessions = await awaitSessionsByAgent(scenario, agent, step.timeoutMs);
-      ctx.childId = sessions[0].id;
+      // Preflow HumanRoot / Strength canaries also create manager sessions — and Strength
+      // may nest a further manager child that is NOT in scenario.sessionIds. Prefer the
+      // Manager whose parent is the Orchestrator session; otherwise exclude anyone whose
+      // parent is already a known preflow session.
+      const known = new Set(scenario.sessionIds ?? []);
+      const parentOf = (session) =>
+        session?.parentID
+        ?? session?.parentId
+        ?? session?.parent_id
+        ?? session?.parent
+        ?? null;
+      const fresh = sessions.filter((session) => !known.has(session.id));
+      const underOrch = fresh.filter((session) => parentOf(session) === ctx.sessionId);
+      const notUnderKnown = fresh.filter((session) => {
+        const parent = parentOf(session);
+        return !parent || !known.has(parent);
+      });
+      // Prefer Orchestrator child; else the newest non-preflow session. Strength nests a
+      // manager under the canary owner that is absent from scenario.sessionIds — taking
+      // fresh[0] binds that nested session and the real orch Manager never gets the lane.
+      const chosen =
+        underOrch[0]
+        ?? notUnderKnown[notUnderKnown.length - 1]
+        ?? fresh[fresh.length - 1]
+        ?? sessions[sessions.length - 1]
+        ?? sessions[0];
+      assert.ok(chosen?.id, `bindChild found no Host agent ${agent} session`);
+      ctx.childId = chosen.id;
       const bound = step.bindChild.bind || [agent];
-      for (const session of sessions) {
-        if (!scenario.sessionIds.includes(session.id)) scenario.sessionIds.push(session.id);
-        bindLaneSession(scenario.provider, session.id, ...bound);
-      }
+      if (!scenario.sessionIds.includes(ctx.childId)) scenario.sessionIds.push(ctx.childId);
+      bindLaneSession(scenario.provider, ctx.childId, ...bound);
       scenario.watchdog?.advance({
         reason: 'child-created',
         lane: `session:${ctx.childId}`,
@@ -850,8 +875,9 @@ function reportFlowDistribution(name, timings, totalMs) {
   );
 }
 
-export async function runCanary(scriptName, { customs, preFlow } = {}) {
+export async function runCanary(scriptName, { customs, preFlow, amendDoc } = {}) {
   const doc = loadScenario(scriptName);
+  if (typeof amendDoc === 'function') amendDoc(doc);
   let scenario;
   const ctx = { customs: customs || {} };
   try {

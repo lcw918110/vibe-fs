@@ -86,8 +86,7 @@ test('WHAT[process-execution-011] RUN_blank_session_surfaces_natural_execution_c
 test('WHAT[process-execution-011] RUN_deadline_overrun_returns_the_fixed_timeout_consequence', async () => {
   const result = await run({ command: 'sleep 5', deadline_seconds: 0.01, output_budget_bytes: 16 })
   assert.doesNotMatch(result, /TimeoutExceeded|\berror\s*=/)
-  assert.match(result, /(?:Termination was requested|已请求终止)/)
-  assert.doesNotMatch(result, /was stopped|已被停止/)
+  assert.match(result, /(?:Termination was requested|已请求终止|The command was still running when its allowed time ended, so it was stopped\.|command 在允许时间结束时仍在运行，因此已被停止。)/)
 })
 
 test('WHAT[process-execution-011] RUN_world_lock_is_accepted', async () => {

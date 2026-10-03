@@ -247,15 +247,21 @@ type EventStoreJournalWriter private (runtimeId: RuntimeId, init: Envelope, blob
         let dependencySession =
             match envelope.Fact with
             | Fact.Agent(AgentFact.Prompt(Wanxiangshu.Interaction.Authority.PromptFactCases.AuthorityRootAccepted p)) ->
-                PromptIdentitySeed.owner p.IdentitySeed |> Option.map (fun (owner, _, _) -> owner)
+                PromptIdentitySeed.owner p.IdentitySeed
+                |> Option.map (fun (owner, _, _) -> owner)
             | Fact.Agent(AgentFact.Execution(ExecutionFactCases.HandleLinked p)) -> Some p.ChildSessionId
             | Fact.Agent(AgentFact.Execution(ExecutionFactCases.HandleWorkCompleted p)) -> Some p.Work.ChildSessionId
             | Fact.Agent(AgentFact.Execution(ExecutionFactCases.HandleWorkConsumed p)) -> Some p.Work.ChildSessionId
             | Fact.Agent(AgentFact.Execution(ExecutionFactCases.HandleWorkAbandoned p)) -> Some p.Work.ChildSessionId
             | Fact.Agent(AgentFact.Execution(ExecutionFactCases.ChildWorkVoided p)) -> Some p.Work.ChildSessionId
             | _ -> None
-        let parents = parents @ (dependencySession |> Option.bind (fun session ->
-            store.TryHead(EventStoreJournalCodec.encodeStreamId (StreamId.Session session))) |> Option.toList)
+
+        let parents =
+            parents
+            @ (dependencySession
+               |> Option.bind (fun session ->
+                   store.TryHead(EventStoreJournalCodec.encodeStreamId (StreamId.Session session)))
+               |> Option.toList)
 
         let encoded =
             EventStoreJournalCodec.encode parents (JournalPayloadClosure.ofFact envelope.Fact) envelope

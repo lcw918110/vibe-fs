@@ -334,12 +334,6 @@ module OpenCodePortAdapter =
                 }
 
     type HttpPort(baseUrl: string) =
-        let promptDispatchOutcome (sId: string) (response: Result<obj, string>) =
-            match response with
-            | Ok _ -> AdmittedWithReceipt(TransportReceipt.create (sprintf "accepted-%s" sId))
-            | Error error when error.StartsWith("HTTP ", System.StringComparison.Ordinal) -> Fatal error
-            | Error error -> AcceptanceUnknown error
-
         let cleanBaseUrl =
             if baseUrl.EndsWith("/") then
                 baseUrl.Substring(0, baseUrl.Length - 1)
@@ -412,7 +406,16 @@ module OpenCodePortAdapter =
                            |> Option.defaultValue [])
 
                     let! response = postJson $"/session/{sId}/prompt_async" (createObj bodyFields)
-                    return promptDispatchOutcome sId response
+
+                    let classifyPostError (error: string) =
+                        if error.StartsWith("HTTP ", System.StringComparison.Ordinal) then
+                            Fatal error
+                        else
+                            AcceptanceUnknown error
+
+                    match response with
+                    | Ok _ -> return AdmittedWithReceipt(TransportReceipt.create (sprintf "accepted-%s" sId))
+                    | Error error -> return classifyPostError error
                 }
 
             member _.AbortSession(sessionId: SessionId) =

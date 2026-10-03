@@ -33,20 +33,6 @@ module PromptPhysicalAcceptance =
         with _ ->
             false
 
-    [<Literal>]
-    let private DefaultAdmissionTimeoutMs = 10000
-
-    let private parseAdmissionTimeout (value: string) : int =
-        match System.Int32.TryParse value with
-        | true, parsed -> parsed
-        | false, _ -> DefaultAdmissionTimeoutMs
-
-    let private admissionTimeoutFromEnvironment () : int =
-        match System.Environment.GetEnvironmentVariable "WANXIANGSHU_ADMISSION_TIMEOUT_MS" with
-        | null
-        | "" -> DefaultAdmissionTimeoutMs
-        | value -> parseAdmissionTimeout value
-
     let register (promptKey: PromptKey) (callback: PhysicalUserMessageId -> unit) =
         lock gate (fun () -> callbacks.[PromptKey.value promptKey] <- callback)
 
@@ -116,10 +102,20 @@ module PromptPhysicalAcceptance =
                     waiters.[PromptKey.value promptKey] <- created
                     created)
 
+        let resolveTimeoutFromEnv () =
+            let envVal =
+                System.Environment.GetEnvironmentVariable "WANXIANGSHU_ADMISSION_TIMEOUT_MS"
+
+            if System.String.IsNullOrEmpty envVal then
+                10000
+            else
+                let success, parsed = System.Int32.TryParse envVal
+                if success then parsed else 10000
+
         let ms =
             match timeoutMs with
             | Some m -> m
-            | None -> admissionTimeoutFromEnvironment ()
+            | None -> resolveTimeoutFromEnv ()
 
         task {
             let! (res: obj) = raceTimeout tcs.Task ms

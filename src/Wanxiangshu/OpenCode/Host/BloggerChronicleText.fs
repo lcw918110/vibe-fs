@@ -12,7 +12,8 @@ open Wanxiangshu.Persistence.Journal
 
 module BloggerChronicleText =
 
-    let private bloggerChronicleTextSemanticPath = "cognitive-environment/blogger-chronicle-text"
+    let private bloggerChronicleTextSemanticPath =
+        "cognitive-environment/blogger-chronicle-text"
 
     let private bloggerChronicleText (language: ProviderLanguage) =
         ProviderProse.render language bloggerChronicleTextSemanticPath Map.empty

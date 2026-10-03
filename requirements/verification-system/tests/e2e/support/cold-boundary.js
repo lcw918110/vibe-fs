@@ -170,8 +170,9 @@ const withoutGuidanceMessage = (message) =>
 
 // The companion frame is the other retired auxiliary injection: the Host renders it as
 // a synthetic assistant ack row plus a user row carrying the memory preamble and the
-// prior work record.
-const COMPANION_PREAMBLE_MARKER = '# older prefix of this session. Continue from it.';
+// prior work record. Marker must match resources/provider/lifecycle/companion/memory-preamble
+// (en + zh-CN both carry the English token "Chronicle records").
+const COMPANION_PREAMBLE_MARKER = 'Chronicle records';
 
 const isCompanionFrameRow = (message) =>
   message?.role === 'user'

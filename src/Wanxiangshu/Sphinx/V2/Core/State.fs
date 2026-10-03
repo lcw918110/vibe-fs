@@ -98,7 +98,9 @@ module InquiryState =
     /// network retry of an already-applied command must return the original receipt
     /// rather than turn into a conflict.
     let commandRevision (state: InquiryState) (commandId: string) : Revision option =
-        state.CommandReceipts |> Map.tryFind commandId |> Option.map (fun receipt -> receipt.Revision)
+        state.CommandReceipts
+        |> Map.tryFind commandId
+        |> Option.map (fun receipt -> receipt.Revision)
 
     let commandReceipt (state: InquiryState) (commandId: string) : CommandReceipt option =
         state.CommandReceipts |> Map.tryFind commandId

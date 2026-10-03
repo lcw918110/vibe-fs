@@ -44,6 +44,6 @@ test('WHAT[verification-system-010] exceeding an event budget fails instead of e
 test('WHAT[verification-system-010] the Long Stroke retains its existing acceptance event ceilings', () => {
   const result = compileScenario(readFileSync(new URL('./e2e/scenarios/long-stroke.toml', import.meta.url), 'utf8'), { name: 'long-stroke.toml' })
   assert.equal(result.ok, true, result.ok ? '' : result.problems.join('\n'))
-  assert.equal(result.scenario.setup.maxJournalEvents, 699)
-  assert.equal(result.scenario.setup.maxSseEvents, 3351)
+  assert.equal(result.scenario.setup.maxJournalEvents, 550)
+  assert.equal(result.scenario.setup.maxSseEvents, 2500)
 })

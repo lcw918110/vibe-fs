@@ -219,19 +219,17 @@ type SyncDelegateRuntime
 
         Task.FromResult issued
 
-    /// A delegate session with no active physical execution has nothing to
-    /// settle. One that has one gets its exact physical binding fenced before
-    /// the new continuation is sent: bookkeeping first, then best-effort
-    /// interrupt. A failed Host interrupt degrades to today's behaviour (the
-    /// old run's next chat.params fails closed) and must not block the
-    /// delegation itself.
-    let settleInFlightDelegateExecution (sessions: ISessionHostPort) (delegateSession: SessionId) : Task<unit> =
-        task {
-            match ModelRouting.tryActivePhysical (sessionKey delegateSession) with
-            | None -> ()
-            | Some inFlightPhysical ->
-                let physicalId = PhysicalUserMessageId.create inFlightPhysical
-
+    let suppressActivePhysicalInFlight
+        (sessions: ISessionHostPort)
+        (delegateSession: SessionId)
+        (inFlightPhysical: string option)
+        : Task<unit> =
+        match inFlightPhysical with
+        | None -> Task.FromResult()
+        | Some inFlight ->
+            task {
+                let delegateKey = SessionId.value delegateSession
+                let physicalId = PhysicalUserMessageId.create inFlight
                 ModelRouting.suppressProviderStep delegateSession physicalId
                 ModelRouting.releasePhysicalExecution delegateSession physicalId |> ignore
 
@@ -241,9 +239,9 @@ type SyncDelegateRuntime
                 |> Result.mapError (fun reason ->
                     Diagnostic.emit
                         "sync-delegate-interrupt-inflight-failed"
-                        [ "session_id", sessionKey delegateSession; "result", reason ])
+                        [ "session_id", delegateKey; "result", reason ])
                 |> ignore
-        }
+            }
 
     let sendDelegatePrompt
         (call: SyncDelegateCall)
@@ -327,7 +325,11 @@ type SyncDelegateRuntime
                 // executing the old step and fail closed in chat.params
                 // (PROMPT-006), killing this new execution's run too. Settle the old
                 // attempt first — the same retire order the manager loop uses.
-                do! settleInFlightDelegateExecution sessions call.Delegate |> TaskResultCE.ofTask
+                let delegateKey = SessionId.value call.Delegate
+
+                do!
+                    suppressActivePhysicalInFlight sessions call.Delegate (ModelRouting.tryActivePhysical delegateKey)
+                    |> TaskResultCE.ofTask
 
                 let! _ =
                     dispatcher.SendContinuationWithTools

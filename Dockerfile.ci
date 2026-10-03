@@ -3,11 +3,12 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装基础运行与构建依赖：curl、git、ca-certificates
+# 安装基础运行与构建依赖：curl、git、ca-certificates、libicu
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     ca-certificates \
+    libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 Node.js 22 LTS (对齐 .github/workflows/ci.yml 中的 node-version: 22)

@@ -172,10 +172,26 @@ module ManagerWorkflow =
             RelayTransaction.create (invalidationEvents @ RelayTransaction.events opening.Transaction)
             |> Result.defaultValue opening.Transaction
 
+    /// ContinuousSessionAdvancesRoad is publication handoff (decideLoopOpening).
+    /// AuthorityRevisionAdvanced / RetirementBindingChanged race Host canary
+    /// authority clearance (032). Conflict / publish / workspace invalidations
+    /// must re-enter assess like Continue.
+    let private invalidationRequiresAssessLoop (reason: string option) =
+        match reason with
+        | Some "ContinuousSessionAdvancesRoad"
+        | Some "RetirementBindingChanged" -> false
+        | Some text when text.StartsWith("AuthorityRevisionAdvanced") -> false
+        | _ -> true
+
+    let private invalidatedAcceptedContinues (road: RoadView) (certId: QualityCertificateId) =
+        match road.Certificate with
+        | Some cert when cert.Id = certId && not cert.Valid -> invalidationRequiresAssessLoop cert.InvalidationReason
+        | _ -> false
+
     let private requiresContinuation (road: RoadView) (retirement: RetirementSummary) =
         match retirement.Outcome with
         | RetirementOutcome.Continue -> true
-        | RetirementOutcome.Accepted _ -> false
+        | RetirementOutcome.Accepted certId -> invalidatedAcceptedContinues road certId
 
     let private isAcceptedWithValidCertificate (road: RoadView) (retirement: RetirementSummary) =
         match retirement.Outcome, road.Certificate with
@@ -256,6 +272,14 @@ module ManagerWorkflow =
             Some(durable, sessionId, opening.RoadId, fullTransaction)
         | RetirementOutcome.Continue -> None
 
+    /// Orchestrator-owned ManagerJob sessions publish through CandidateReady /
+    /// ContinueLoop. ContinuousSessionAdvancesRoad must not invalidate their
+    /// Accepted certificate before Orchestrator admits the candidate.
+    let private sessionOwnsOrchestratorJob (durable: AgentJournal) (sessionId: SessionId) =
+        (AgentJournal.snapshot durable).AgentProjections
+        |> AgentProjection.activeOrchestratorJobPairs
+        |> List.exists (fun (_, managerSessionId) -> managerSessionId = sessionId)
+
     let private decideLoopOpening journal (workspaceDirectory: string option) sessionIdTextOpt =
         sessionIdTextOpt
         |> Option.filter (System.String.IsNullOrWhiteSpace >> not)
@@ -263,7 +287,9 @@ module ManagerWorkflow =
             journal
             |> Option.bind (fun durable ->
                 match tryAcceptedRoadContext durable sessionIdText with
-                | Some(_, sessionId, roadId, authorityRevision, retirement, true) ->
+                | Some(_, sessionId, roadId, authorityRevision, retirement, true) when
+                    not (sessionOwnsOrchestratorJob durable sessionId)
+                    ->
                     tryBuildAcceptedOpening durable workspaceDirectory sessionId roadId authorityRevision retirement
                 | _ -> None))
 

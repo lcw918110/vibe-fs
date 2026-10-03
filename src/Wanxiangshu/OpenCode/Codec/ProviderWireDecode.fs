@@ -212,6 +212,10 @@ module ProviderWireDecode =
     let private sessionIdOfMessage (msg: obj) : string option =
         if not (isNull msg) && not (isNull msg?info) && not (isNull msg?info?sessionID) then
             Some(unbox<string> msg?info?sessionID)
+        elif not (isNull msg) && not (isNull msg?sessionID) then
+            Some(unbox<string> msg?sessionID)
+        elif not (isNull msg) && not (isNull msg?sessionId) then
+            Some(unbox<string> msg?sessionId)
         else
             None
 

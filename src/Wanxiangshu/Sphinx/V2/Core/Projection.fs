@@ -319,8 +319,7 @@ module Projection =
     /// Covers every materialized field, including the physical bindings recovery needs.
     /// Two hosts that dispatched through different sessions differ here, which is why
     /// this hash is never offered as Host-independent.
-    let stateHash (state: InquiryState) : string =
-        state |> Representation.state |> digest
+    let stateHash (state: InquiryState) : string = state |> Representation.state |> digest
 
     /// Covers the accepted canonical envelopes in their exact order. Two hosts that ran
     /// different physical retries legitimately differ here; that is the point.

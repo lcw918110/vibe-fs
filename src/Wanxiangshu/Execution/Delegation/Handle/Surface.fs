@@ -331,7 +331,8 @@ module HandleSurface =
         let op = string (command?op)
 
         match op with
-        | "link" | "link-command" ->
+        | "link"
+        | "link-command" ->
             match parseHandleId (command?handle) with
             | Error e -> inputError e
             | Ok h ->
@@ -348,10 +349,11 @@ module HandleSurface =
                     | Ok ownership ->
                         let child = SessionId.create (string (command?child))
                         let agent = string (command?agent)
+
                         (if op = "link" then
-                            HandleProjection.replayLink h child agent agent role ownership projection
+                             HandleProjection.replayLink h child agent agent role ownership projection
                          else
-                            HandleProjection.link h child agent role ownership projection)
+                             HandleProjection.link h child agent role ownership projection)
                         |> resultOf
 
         | "complete" ->
@@ -457,9 +459,21 @@ module HandleSurface =
             |> List.toArray
 
         box
-            {| listable = describeRecords (if projection.Works.IsEmpty then HandleProjection.auditListable projection else HandleProjection.listable projection)
+            {| listable =
+                describeRecords (
+                    if projection.Works.IsEmpty then
+                        HandleProjection.auditListable projection
+                    else
+                        HandleProjection.listable projection
+                )
                joinable = describeRecords (HandleProjection.joinable projection)
-               active = describeRecords (if projection.Works.IsEmpty then HandleProjection.auditActiveHandles projection else HandleProjection.activeHandles projection) |}
+               active =
+                describeRecords (
+                    if projection.Works.IsEmpty then
+                        HandleProjection.auditActiveHandles projection
+                    else
+                        HandleProjection.activeHandles projection
+                ) |}
 
     /// `linkedChildren(projection)` — every child session ever linked, as
     /// record snapshots sorted by creation order.

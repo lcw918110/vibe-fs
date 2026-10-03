@@ -35,6 +35,7 @@ type HandleWorkRecord =
       ConsumptionId: string option }
 
 type AdmittedWork = private AdmittedWork of HandleWorkId * LogicalRunId
+
 module AdmittedWork =
     val id: AdmittedWork -> HandleWorkId
     val logicalRunId: AdmittedWork -> LogicalRunId
@@ -59,13 +60,38 @@ type HandleTransitionRejection =
 
 module HandleProjection =
     val empty: AgentLinkageProjection
-    val admitWork: SessionId -> HandleId -> PromptAuthority.PromptAuthorityProjection -> AgentLinkageProjection -> Result<AgentLinkageProjection, HandleTransitionRejection>
+
+    val admitWork:
+        SessionId ->
+        HandleId ->
+        PromptAuthority.PromptAuthorityProjection ->
+        AgentLinkageProjection ->
+            Result<AgentLinkageProjection, HandleTransitionRejection>
+
     val tryWork: HandleWorkId -> AgentLinkageProjection -> HandleWorkRecord option
     val tryAdmittedWork: HandleWorkId -> AgentLinkageProjection -> Result<AdmittedWork, HandleTransitionRejection>
-    val completeWork: HandleWorkId -> HandleCompletion -> AgentLinkageProjection -> Result<AgentLinkageProjection, HandleTransitionRejection>
-    val abandonWork: HandleWorkId -> HandleAbandonReason -> AgentLinkageProjection -> Result<AgentLinkageProjection, HandleTransitionRejection>
+
+    val completeWork:
+        HandleWorkId ->
+        HandleCompletion ->
+        AgentLinkageProjection ->
+            Result<AgentLinkageProjection, HandleTransitionRejection>
+
+    val abandonWork:
+        HandleWorkId ->
+        HandleAbandonReason ->
+        AgentLinkageProjection ->
+            Result<AgentLinkageProjection, HandleTransitionRejection>
+
     val voidWork: HandleWorkId -> AgentLinkageProjection -> Result<AgentLinkageProjection, HandleTransitionRejection>
-    val consumeWork: HandleWorkId -> string -> HandleCompletion -> AgentLinkageProjection -> Result<AgentLinkageProjection, HandleTransitionRejection>
+
+    val consumeWork:
+        HandleWorkId ->
+        string ->
+        HandleCompletion ->
+        AgentLinkageProjection ->
+            Result<AgentLinkageProjection, HandleTransitionRejection>
+
     val workRecords: AgentLinkageProjection -> HandleRecord list
     val tryBinding: HandleId -> AgentLinkageProjection -> HandleRecord option
 

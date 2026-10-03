@@ -38,4 +38,8 @@ module Codec =
     /// not post-state, so altered bytes at the same identity remain a shared-engine
     /// collision. Parents must agree; only inline payloads are supported. ArtifactRef
     /// never becomes PayloadRef by spelling or hash guessing.
-    val encode: (string -> string) -> TransitionBatch -> Wanxiangshu.Foundation.Identity.EventId option -> Result<EventEnvelope, CodecError>
+    val encode:
+        (string -> string) ->
+        TransitionBatch ->
+        Wanxiangshu.Foundation.Identity.EventId option ->
+            Result<EventEnvelope, CodecError>

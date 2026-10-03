@@ -21,7 +21,8 @@ open Wanxiangshu.Sphinx.V2.Persistence
 module Bind =
 
     /// The v2 rule list, ready for `CanonicalIntegrator.createWithRules`.
-    let rules: IntegrationRule list = [ Integrator.rule Wanxiangshu.Host.HostDigest.sha256Hex ]
+    let rules: IntegrationRule list =
+        [ Integrator.rule Wanxiangshu.Host.HostDigest.sha256Hex ]
 
     /// The `Current` key v2 publishes under.
     let currentKey = Integrator.currentKey

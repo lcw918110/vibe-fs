@@ -6,7 +6,8 @@ module Reducer =
     val apply: InquiryState option -> InquiryEvent -> Result<InquiryState, CoreError>
 
     /// Atomic bodies at one logical revision; validates base and complete post-state fingerprint.
-    val applyTransition: (string -> string) -> EventId -> InquiryState option -> TransitionBatch -> Result<InquiryState, CoreError>
+    val applyTransition:
+        (string -> string) -> EventId -> InquiryState option -> TransitionBatch -> Result<InquiryState, CoreError>
 
     /// Standalone typed-event history; not the durable one-revision TransitionBatch boundary.
     val foldBatch: InquiryEvent list -> Result<InquiryState, CoreError>

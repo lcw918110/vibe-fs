@@ -1372,11 +1372,28 @@ integrationTest(
       )
     }
 
-    const launched = spawnSync(process.execPath, [runnerPath], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      timeout: 120000,
-    })
+    // Linux CI (OpenCode 1.18.29) intermittently flakes mid-canary (Host 5xx or
+    // observation timeout) while Darwin 1.18.31 stays green. Retry the whole
+    // runner only on those transients; product contract assertions stay unchanged.
+    const isTransientHostCanaryFailure = (proc) => {
+      const text = `${proc.stderr || ''}\n${proc.stdout || ''}`
+      return (
+        /Unexpected server error/i.test(text) ||
+        /Timed out waiting for/i.test(text) ||
+        /ECONNRESET|socket hang up|ECONNREFUSED/i.test(text)
+      )
+    }
+
+    let launched = null
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      launched = spawnSync(process.execPath, [runnerPath], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        timeout: 120000,
+      })
+      if (launched.status === 0) break
+      if (!isTransientHostCanaryFailure(launched) || attempt === 3) break
+    }
 
     let stdoutSummary = null
     try {

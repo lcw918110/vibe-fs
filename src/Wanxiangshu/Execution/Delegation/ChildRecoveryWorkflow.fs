@@ -64,9 +64,13 @@ module ChildRecoveryWorkflow =
     let private evidenceFromDecodedBody (ports: Ports) (body: string) : DurableHandleEvidence =
         match HandleCompletionCodec.decodeBody body with
         | Current decoded when
-            ports.Journal |> Option.exists (fun journal ->
+            ports.Journal
+            |> Option.exists (fun journal ->
                 HandleProjection.tryFind ports.Handle (journal.HandleProjection ports.ParentId)
-                |> Option.exists (fun record -> record.Work |> Option.exists (fun work -> HandleCompletionCodec.belongsToWork work decoded))) ->
+                |> Option.exists (fun record ->
+                    record.Work
+                    |> Option.exists (fun work -> HandleCompletionCodec.belongsToWork work decoded)))
+            ->
             let proof =
                 JoinableCompletion.fromDecoded ports.AgentId ports.Handle ports.ChildSession decoded body
 
@@ -165,6 +169,39 @@ module ChildRecoveryWorkflow =
         | Some pulse -> pulse ()
         | None -> ()
 
+    let private commitRecoveredWork
+        (journal: AgentJournalPort option)
+        (durable: AgentJournalPort)
+        (parentId: SessionId)
+        (proof: JoinableCompletion)
+        (payload: CompletedPayload)
+        : Task<Result<unit, string>> =
+        let work =
+            { Handle = JoinableCompletion.handle proof
+              ChildSessionId = JoinableCompletion.childSession proof
+              AuthorityRoot = AuthorityRootUserMessageId.create payload.AuthorityRoot }
+
+        let projection = durable.HandleProjection parentId
+
+        match HandleProjection.tryAdmittedWork work projection, HandleProjection.tryWork work projection with
+        | Ok admitted, _ -> HandleController.recordWorkCompletion journal parentId admitted proof
+        | _, Some existing when
+            existing.Lifecycle <> Active
+            && not (Set.contains work.Handle projection.LegacyWorkHandles)
+            ->
+            Task.FromResult(Ok())
+        | _ -> Task.FromResult(Error "historical or unmatched terminal has no scoped admission")
+
+    let private commitDecodedJoinable
+        (journal: AgentJournalPort option)
+        (durable: AgentJournalPort)
+        (parentId: SessionId)
+        (proof: JoinableCompletion)
+        : Task<Result<unit, string>> =
+        match JoinableCompletion.body proof |> Option.map HandleCompletionCodec.decodeBody with
+        | Some(Current(CompletedV2 payload)) -> commitRecoveredWork journal durable parentId proof payload
+        | _ -> Task.FromResult(Error "recovery terminal requires its exact admitted Root; no legacy write fallback")
+
     /// Snapshot recovery must match an existing canonical work; it cannot reopen history.
     let commitJoinable
         (journal: AgentJournalPort option)
@@ -173,17 +210,7 @@ module ChildRecoveryWorkflow =
         : Task<Result<unit, string>> =
         match journal with
         | None -> Task.FromResult(Error "completion requires an exact canonical admission")
-        | Some durable ->
-            match JoinableCompletion.body proof |> Option.map HandleCompletionCodec.decodeBody with
-            | Some(Current(CompletedV2 payload)) ->
-                let work = { Handle = JoinableCompletion.handle proof; ChildSessionId = JoinableCompletion.childSession proof
-                             AuthorityRoot = AuthorityRootUserMessageId.create payload.AuthorityRoot }
-                let projection = durable.HandleProjection parentId
-                match HandleProjection.tryAdmittedWork work projection, HandleProjection.tryWork work projection with
-                | Ok admitted, _ -> HandleController.recordWorkCompletion journal parentId admitted proof
-                | _, Some existing when existing.Lifecycle <> Active && not (Set.contains work.Handle projection.LegacyWorkHandles) -> Task.FromResult(Ok())
-                | _ -> Task.FromResult(Error "historical or unmatched terminal has no scoped admission")
-            | _ -> Task.FromResult(Error "recovery terminal requires its exact admitted Root; no legacy write fallback")
+        | Some durable -> commitDecodedJoinable journal durable parentId proof
 
     let private commitAbandon
         (ports: Ports)

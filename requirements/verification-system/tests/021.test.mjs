@@ -14,6 +14,7 @@ import { NODE_TEST_INNER, superviseNodeTest } from './e2e/support/supervise-node
 const fixture = fileURLToPath(new URL('./support/fixtures/two-leaf.fixture.mjs', import.meta.url))
 const childEnv = { ...process.env }
 delete childEnv.NODE_TEST_CONTEXT
+delete childEnv.WXS_ACCEPT_TODO
 const verdict = (name, type = 'test:pass', extra = {}) => ({
   type,
   data: { name, file: '/test/a.mjs', details: { duration_ms: 1 }, ...extra },

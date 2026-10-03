@@ -195,7 +195,7 @@ test('WHAT[verification-system-014] the compiled Long Stroke scenario preserves 
   assert.ok(!result.scenario.entries.some((entry) => entry.id.startsWith('manager-repair-resume.')))
   assert.ok(!result.scenario.must.some((id) => id.startsWith('manager-join-guard.')))
   assert.deepEqual({ journal: result.scenario.setup.maxJournalEvents, sse: result.scenario.setup.maxSseEvents },
-    { journal: 699, sse: 3351 }, 'the measured scenario ceilings stay fixed during migration')
+    { journal: 550, sse: 2500 }, 'the measured scenario ceilings stay fixed during migration')
 })
 
 const STRENGTH_HOST_CANARY_PROMPT =
@@ -217,18 +217,36 @@ const runPreFlowPrompt = async (scenario, lane, prompt, agent) => {
   })
   assert.ok(response.ok, `${lane} prompt failed: ${JSON.stringify(response.data)}`)
   await turn.awaitTerminal()
+  return sessionID
+}
+
+const settlePreFlowManagerSession = async (scenario, ownerSessionId) => {
+  // A manager HumanRoot canary opens Incumbency; without Accepted retirement the Host
+  // continues it into the ordinary authority assessment on the same session. Abort +
+  // delete so bindChild later cannot pick this session as the orch Manager childId.
+  const replicaIds = factPayloads(scenario.host.workDir, 'DelegationBound')
+    .map((payload) => payload?.replicaSessionId ?? payload?.replica_session_id ?? payload?.ReplicaSessionId)
+    .filter((id) => typeof id === 'string' && id.length > 0)
+
+  const linkedBlogger = factPayloads(scenario.host.workDir, 'CompanionBloggerLinked')
+    .filter((payload) => JSON.stringify(payload ?? {}).includes(ownerSessionId))
+  if (linkedBlogger.length > 0) {
+    await retireCompanionForDeletion(scenario, ownerSessionId)
+  }
+
+  for (const sessionId of [ownerSessionId, ...replicaIds]) {
+    if (!scenario.sessionIds.includes(sessionId)) scenario.sessionIds.push(sessionId)
+    await scenario.client.abort(sessionId).catch(() => {})
+  }
 }
 
 const preFlowCanaries = async (scenario) => {
   await CUSTOMS.bindManagerLoopSequence(scenario)
-  await runPreFlowPrompt(scenario, 'strength-canary-owner', STRENGTH_HOST_CANARY_PROMPT, 'manager')
 
-  assert.equal(
-    scenario.provider.matchCount('strength-canary-replica.0'),
-    1,
-    `Strength dry-run must physically start its Replica without blocking the owner. Host stderr tail:\n${scenario.host.stderrLog.slice(-4000)}`,
-  )
-
+  // HumanRoot manager-loop canary first: its oracle pins absolute IncumbencyOpened /
+  // RetirementCommitted / AssessmentCommitted counts (HUMANROOT_CANARY_DELTAS). The
+  // Strength canary also opens a manager HumanRoot incumbency, so it must run after
+  // those absolute counts are sealed.
   const humanrootCreated = await scenario.client.createSession({ agent: 'manager' })
   const humanrootSessionId = getSessionId(humanrootCreated)
   assert.ok(humanrootSessionId, `humanroot-manager session creation failed: ${JSON.stringify(humanrootCreated)}`)
@@ -259,6 +277,60 @@ const preFlowCanaries = async (scenario) => {
   if (linkedBlogger.length > 0) {
     await retireCompanionForDeletion(scenario, humanrootSessionId)
   }
+  // Keep session id in scenario.sessionIds so bindChild can exclude this canary.
+  // Isolation: set WXS_SKIP_STRENGTH_CANARY=1 to prove the orch/Manager publish spine.
+  if (process.env.WXS_SKIP_STRENGTH_CANARY === '1') {
+    // Do not abort HumanRoot on the spine-only path — aborting was observed to
+    // correlate with manager-loop seal rewrites on the orch Manager child.
+    if (process.env.WXS_ABORT_HUMANROOT === '1') {
+      await scenario.client.abort(humanrootSessionId).catch(() => {})
+    }
+    console.error('[preflow-match] skipped-strength')
+    return
+  }
+
+  const strengthSessionId = await runPreFlowPrompt(
+    scenario,
+    'strength-canary-owner',
+    STRENGTH_HOST_CANARY_PROMPT,
+    'manager',
+  )
+  // Abort before any post-assert work: Host may already be queuing the ordinary
+  // manager-authority continuation on this open incumbency.
+  await settlePreFlowManagerSession(scenario, strengthSessionId)
+  // With Strength present, also abort HumanRoot so two open Manager roads cannot
+  // contend with the orch Manager continuum after ConflictDetected.
+  await scenario.client.abort(humanrootSessionId).catch(() => {})
+
+  const deliveryIds = Object.fromEntries(
+    [
+      'strength-canary-owner.0',
+      'strength-canary-owner.1',
+      'strength-canary-owner.2',
+      'strength-canary-owner.3',
+      'strength-canary-owner.4',
+      'strength-canary-owner.5',
+      'strength-canary-replica.0',
+      'strength-canary-replica.1',
+      'blogger.0',
+      'blogger.1',
+      'strength-canary-owner-title.0',
+    ].map((id) => [id, scenario.provider.matchCount(id)]),
+  )
+  console.error('[preflow-match]', JSON.stringify(deliveryIds))
+
+  assert.equal(
+    scenario.provider.matchCount('strength-canary-replica.0'),
+    1,
+    `Strength dry-run must physically start its Replica without blocking the owner. Host stderr tail:\n${scenario.host.stderrLog.slice(-4000)}\nmatch dump=${JSON.stringify(deliveryIds)}`,
+  )
+  // Survey text may land at step 2 (legacy) or step 3 (after reasoning inject).
+  assert.ok(
+    scenario.provider.matchCount('strength-canary-owner.2') +
+      scenario.provider.matchCount('strength-canary-owner.3') >=
+      1,
+    `Strength canary owner survey text must land at step 2 or 3. match dump=${JSON.stringify(deliveryIds)}`,
+  )
 }
 
 const awaitManagerJoinRunning = async (scenario, ctx) => {
@@ -282,6 +354,28 @@ const assertManagerToolSurfaceOnWire = async (scenario, ctx) => {
   console.log(`[manager-surface] ok tools=${result.unionTools.join(',')} requests=${result.requestCount}`)
 }
 
+const amendDocForStrengthSkip = (doc) => {
+  // Path A: prove the orch/Manager publish spine without Strength canary or
+  // recovery legs. Truncate after the main-spine wire assert and drop Strength
+  // must-ids so expectSatisfied does not demand skipped deliveries.
+  const cut = doc.flow.findIndex((step) => step.custom === 'assertManagerToolSurfaceOnWire')
+  assert.ok(cut >= 0, 'long-stroke flow must include assertManagerToolSurfaceOnWire')
+  doc.flow = [...doc.flow.slice(0, cut + 1), { expectSatisfied: true }]
+  doc.must = (doc.must ?? []).filter((id) => !String(id).startsWith('strength-'))
+  for (const entry of doc.entries ?? []) {
+    const strength =
+      String(entry.id ?? '').startsWith('strength-')
+      || String(entry.turnId ?? '').startsWith('strength-')
+      || String(entry.lane ?? '').startsWith('strength-')
+    if (strength) {
+      entry.optional = true
+      entry.internal = true
+    }
+    // Title turns are best-effort; the Host may skip them without failing the spine.
+    if (entry.kind === 'title') entry.optional = true
+  }
+}
+
 releaseTest('WHAT[verification-system-014] Long Stroke 真实物理验收环境', async () => {
   resetOpencodeSpawnCount()
   const code = await runCanary('long-stroke', {
@@ -291,6 +385,7 @@ releaseTest('WHAT[verification-system-014] Long Stroke 真实物理验收环境'
       awaitManagerJoinRunning,
       assertManagerToolSurfaceOnWire,
     },
+    ...(process.env.WXS_SKIP_STRENGTH_CANARY === '1' ? { amendDoc: amendDocForStrengthSkip } : {}),
   })
   assert.equal(code, 0, `Long Stroke canary exited with code ${code}`)
   assert.equal(

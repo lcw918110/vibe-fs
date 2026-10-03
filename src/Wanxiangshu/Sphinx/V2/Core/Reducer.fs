@@ -693,6 +693,12 @@ module Reducer =
                     Status = InquiryStatus.InputRequired reason }
         | _ -> Error(coreError "unknown-status" (sprintf "unknown inquiry status: %s" status))
 
+    let private cancellingUnlessTerminal status =
+        if InquiryState.isTerminal status then
+            status
+        else
+            InquiryStatus.Cancelling
+
     /// Every event dispatches to exactly one handler, and each handler is a named
     /// function so the dispatch stays a flat table instead of a nesting of conditions.
     let private dispatchHandler (state: InquiryState) (body: InquiryEventBody) : Result<InquiryState, CoreError> =
@@ -725,7 +731,7 @@ module Reducer =
             // A late request may be booked, but never resurrects a terminal inquiry.
             Ok
                 { state with
-                    Status = if InquiryState.isTerminal state.Status then state.Status else InquiryStatus.Cancelling }
+                    Status = cancellingUnlessTerminal state.Status }
         | InquiryEventBody.InquiryCancelled reason ->
             Ok
                 { state with
@@ -767,23 +773,42 @@ module Reducer =
     let private transitionBase (prior: InquiryState option) (batch: TransitionBatch) : Result<unit, CoreError> =
         if batch.SchemaVersion <> "2" then
             Error(coreError "unsupported-transition" "strict transitions require Sphinx API version 2")
-        elif String.IsNullOrWhiteSpace batch.CommandId || String.IsNullOrWhiteSpace batch.CommandFingerprint then
+        elif
+            String.IsNullOrWhiteSpace batch.CommandId
+            || String.IsNullOrWhiteSpace batch.CommandFingerprint
+        then
             Error(coreError "invalid-command" "transition requires a command identity and content fingerprint")
         elif List.isEmpty batch.Events then
             Error(coreError "empty-batch" "transition must carry at least one body")
         else
             match prior with
-            | None when batch.PreviousHead.IsSome || batch.PreviousRevision <> Revision.origin || batch.Revision <> Revision.origin ->
+            | None when
+                batch.PreviousHead.IsSome
+                || batch.PreviousRevision <> Revision.origin
+                || batch.Revision <> Revision.origin
+                ->
                 Error(coreError "invalid-origin" "creation has no parent and uses revision zero")
             | None -> Ok()
             | Some state when state.Id <> batch.InquiryId ->
                 Error(coreError "inquiry-mismatch" "transition belongs to another inquiry")
             | Some state when state.EventHead <> batch.PreviousHead ->
                 Error(coreError "parent-conflict" "transition parent does not name its base state")
-            | Some state when state.Revision <> batch.PreviousRevision || Revision.value state.Revision = Int64.MaxValue || batch.Revision <> Revision.next state.Revision ->
-                Error(coreError "revision-conflict" "one atomic transition must advance its parent's revision exactly once")
+            | Some state when
+                state.Revision <> batch.PreviousRevision
+                || Revision.value state.Revision = Int64.MaxValue
+                || batch.Revision <> Revision.next state.Revision
+                ->
+                Error(
+                    coreError
+                        "revision-conflict"
+                        "one atomic transition must advance its parent's revision exactly once"
+                )
             | Some state when Map.containsKey batch.CommandId state.CommandReceipts ->
-                Error(coreError "command-already-applied" "a committed command must be replayed through admission, not applied again")
+                Error(
+                    coreError
+                        "command-already-applied"
+                        "a committed command must be replayed through admission, not applied again"
+                )
             | Some _ -> Ok()
 
     /// All bodies share the envelope identity and one revision. Intermediate values
@@ -795,20 +820,26 @@ module Reducer =
         (batch: TransitionBatch)
         : Result<InquiryState, CoreError> =
         let step carried (index, body) =
-            carried |> Result.bind (fun state ->
+            carried
+            |> Result.bind (fun state ->
                 match state with
                 | None ->
                     let origin =
-                        { Id = eventId; InquiryId = batch.InquiryId; Revision = batch.Revision
-                          Parent = batch.PreviousHead; BatchIndex = index; Body = body }
+                        { Id = eventId
+                          InquiryId = batch.InquiryId
+                          Revision = batch.Revision
+                          Parent = batch.PreviousHead
+                          BatchIndex = index
+                          Body = body }
+
                     apply None origin |> Result.map Some
                 | Some current ->
                     admitBusinessEvent current body
                     |> Result.bind (fun () -> dispatchHandler current body)
                     |> Result.map Some)
+
         transitionBase prior batch
-        |> Result.bind (fun () ->
-            batch.Events |> List.indexed |> List.fold step (Ok prior))
+        |> Result.bind (fun () -> batch.Events |> List.indexed |> List.fold step (Ok prior))
         |> Result.bind (function
             | None -> Error(coreError "empty-batch" "transition produced no state")
             | Some folded ->
@@ -816,13 +847,23 @@ module Reducer =
                     { folded with
                         Revision = batch.Revision
                         EventHead = Some eventId
-                        CommandReceipts = Map.add batch.CommandId
-                            { Fingerprint = batch.CommandFingerprint; Revision = batch.Revision; EventId = eventId }
-                            folded.CommandReceipts }
+                        CommandReceipts =
+                            Map.add
+                                batch.CommandId
+                                { Fingerprint = batch.CommandFingerprint
+                                  Revision = batch.Revision
+                                  EventId = eventId }
+                                folded.CommandReceipts }
+
                 match batch.PostStateFingerprint with
                 | Some expected when expected <> Representation.fingerprint digest next ->
-                    Error(coreError "post-state-mismatch" "transition fingerprint does not match the complete materialized state")
-                | Some _ | None -> Ok next)
+                    Error(
+                        coreError
+                            "post-state-mismatch"
+                            "transition fingerprint does not match the complete materialized state"
+                    )
+                | Some _
+                | None -> Ok next)
 
     /// Fold a standalone typed-event history. Durable TransitionBatch ingress uses
     /// applyTransition above, not this per-event revision convenience.

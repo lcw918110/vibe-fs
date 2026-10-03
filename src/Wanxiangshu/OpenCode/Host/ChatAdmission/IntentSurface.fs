@@ -9,6 +9,9 @@ open Wanxiangshu.Participant.Persona
 
 module ChatAdmissionIntentSurface =
 
+    let private rawOptionalString (value: obj) : string option =
+        if isNull value then None else Some(string value)
+
     let private optionalString (value: obj) : string option =
         if isNull value then
             None
@@ -189,7 +192,7 @@ module ChatAdmissionIntentSurface =
                 false
             else
                 unbox<bool> value?hostSynthetic
-          Text = None }
+          Text = rawOptionalString value?text }
 
     let private rejectionName (rejection: ChatAdmissionIntent.Rejection) : string =
         match rejection with

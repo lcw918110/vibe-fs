@@ -43,7 +43,9 @@ module HandleController =
         reason: HandleAbandonReason ->
             Task<Result<unit, string>>
 
-    val recordWorkCompletion: AgentJournalPort option -> SessionId -> AdmittedWork -> JoinableCompletion -> Task<Result<unit, string>>
+    val recordWorkCompletion:
+        AgentJournalPort option -> SessionId -> AdmittedWork -> JoinableCompletion -> Task<Result<unit, string>>
+
     val consumeWork: AgentJournalPort -> SessionId -> HandleRecord -> Task<Result<HandleRecord, HandleConsumeRejection>>
 
     val recordCompletion:

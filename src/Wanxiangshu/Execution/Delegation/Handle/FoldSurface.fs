@@ -194,21 +194,47 @@ module HandleFoldSurface =
 
     let private buildScopedFact caseName (payload: obj) =
         let rawWork = payload?Work
+
         match parseHandleId (rawWork?Handle), parseCompletionKind (payload?Kind) with
-        | Error error, _ | _, Error error -> Error(inputError error)
+        | Error error, _
+        | _, Error error -> Error(inputError error)
         | Ok handle, Ok kind ->
-            let work = { Handle = handle; ChildSessionId = SessionId.create (string (rawWork?ChildSessionId))
-                         AuthorityRoot = AuthorityRootUserMessageId.create (string (rawWork?AuthorityRoot)) }
+            let work =
+                { Handle = handle
+                  ChildSessionId = SessionId.create (string (rawWork?ChildSessionId))
+                  AuthorityRoot = AuthorityRootUserMessageId.create (string (rawWork?AuthorityRoot)) }
+
             let parent = SessionId.create (string (payload?ParentSessionId))
-            let reference = match payload?CompletionRef with null -> None | value -> Some(BlobRef.create (string value))
-            let digest = match payload?CompletionDigest with null -> None | value -> Some(BlobDigest.create (string value))
+
+            let reference =
+                match payload?CompletionRef with
+                | null -> None
+                | value -> Some(BlobRef.create (string value))
+
+            let digest =
+                match payload?CompletionDigest with
+                | null -> None
+                | value -> Some(BlobDigest.create (string value))
+
             if caseName = "HandleWorkCompleted" then
-                Ok(ExecutionFactCases.HandleWorkCompleted
-                    {| ParentSessionId = parent; Work = work; Kind = kind; CompletionRef = reference; CompletionDigest = digest |})
+                Ok(
+                    ExecutionFactCases.HandleWorkCompleted
+                        {| ParentSessionId = parent
+                           Work = work
+                           Kind = kind
+                           CompletionRef = reference
+                           CompletionDigest = digest |}
+                )
             else
-                Ok(ExecutionFactCases.HandleWorkConsumed
-                    {| ParentSessionId = parent; Work = work; Kind = kind; CompletionRef = reference; CompletionDigest = digest
-                       ConsumptionId = string (payload?ConsumptionId) |})
+                Ok(
+                    ExecutionFactCases.HandleWorkConsumed
+                        {| ParentSessionId = parent
+                           Work = work
+                           Kind = kind
+                           CompletionRef = reference
+                           CompletionDigest = digest
+                           ConsumptionId = string (payload?ConsumptionId) |}
+                )
 
     let private buildFact (factObj: obj) : Result<ExecutionFactCases, obj> =
         let caseName = string (factObj?``case``)

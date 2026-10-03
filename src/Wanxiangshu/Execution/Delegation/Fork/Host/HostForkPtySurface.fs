@@ -229,10 +229,11 @@ module HostForkPtySurface =
                         member _.SendPrompt(_, _, _) =
                             physicalSequence.Value <- physicalSequence.Value + 1
 
-                            let physicalId =
-                                sprintf "pty-surface-physical:%d" physicalSequence.Value
+                            let physicalId = sprintf "pty-surface-physical:%d" physicalSequence.Value
 
-                            Task.FromResult(Outcome.SendOutcome.AdmittedWithPhysicalMessage(PhysicalUserMessageId.create physicalId))
+                            Task.FromResult(
+                                Outcome.SendOutcome.AdmittedWithPhysicalMessage(PhysicalUserMessageId.create physicalId)
+                            )
 
                         member _.AbortSession _ = Task.FromResult(Ok())
                         member _.InterruptAttempt _ = Task.FromResult(Ok())

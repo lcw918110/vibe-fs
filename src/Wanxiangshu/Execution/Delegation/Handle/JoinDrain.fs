@@ -204,7 +204,10 @@ module JoinDrain =
         (completedAt: DateTimeOffset)
         : Task<Result<RunCompletion, ForkError> option> =
         match HandleCompletionCodec.decodeBody body with
-        | Current decoded when record.Work |> Option.forall (fun work -> HandleCompletionCodec.belongsToWork work decoded) ->
+        | Current decoded when
+            record.Work
+            |> Option.forall (fun work -> HandleCompletionCodec.belongsToWork work decoded)
+            ->
             joinCurrentDecoded durable parentId record agentId decoded body completedAt
         | Current _ -> Task.FromResult(Some(Error(ForkError.NotFound "completion work identity mismatch")))
         | LegacyFalseAbort _ -> rejectUnretiredFalseAbort durable parentId record blobRef blobDigest

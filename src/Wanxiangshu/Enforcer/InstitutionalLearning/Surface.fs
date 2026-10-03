@@ -49,7 +49,9 @@ module InstitutionalLearningSurface =
                   Negative = textPropertyOf value "negative" }
 
     let evaluate (experience: string) (ruleNames: string array) (candidate: obj) : obj =
-        let disposition = InstitutionalEnhancer.evaluate experience (rulesOf ruleNames) (candidateOf candidate)
+        let disposition =
+            InstitutionalEnhancer.evaluate experience (rulesOf ruleNames) (candidateOf candidate)
+
         box {| disposition = dispositionName disposition |}
 
     /// Pure revision-contract decision (WHAT institutional-learning-002):
@@ -66,19 +68,25 @@ module InstitutionalLearningSurface =
             // An exhausted snapshot sequence repeats the last snapshot: the live
             // rulebook does not drift to an empty book between two reads.
             let names =
-                if next < snapshots.Length then snapshots.[next]
-                elif snapshots.Length > 0 then snapshots.[snapshots.Length - 1]
-                else [||]
+                if next < snapshots.Length then
+                    snapshots.[next]
+                elif snapshots.Length > 0 then
+                    snapshots.[snapshots.Length - 1]
+                else
+                    [||]
+
             next <- next + 1
             rulesOf names
 
         match InstitutionalEnhancer.commitDecision experience (candidateOf candidate) load with
         | InstitutionalEnhancer.LearnOutcome.LearnCommitted(disposition, revision, reevaluated) ->
-            box {| disposition = dispositionName disposition
+            box
+                {| disposition = dispositionName disposition
                    revision = revision
                    reevaluated = reevaluated |}
         | InstitutionalEnhancer.LearnOutcome.LearnRevisionConflict revision ->
-            box {| conflict = "revision-conflict"
+            box
+                {| conflict = "revision-conflict"
                    revision = revision |}
 
     let revision (ruleNames: string array) =

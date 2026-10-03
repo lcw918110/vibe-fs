@@ -399,9 +399,8 @@ module DispatchSurface =
                 |> Option.exists (fun authority ->
                     authority.PendingClaims
                     |> Map.exists (fun _ (claim: PromptAuthority.PromptClaim) ->
-                        claim.Origin =
-                            PromptAuthority.PromptOrigin.AuthorityRoot
-                                PromptAuthority.RootAuthorityKind.AgentOwnerRoot))
+                        claim.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
+                            PromptAuthority.RootAuthorityKind.AgentOwnerRoot))
 
             match PromptAuthorityProjectionQueries.activeProfile sessionId projections with
             | Some _ -> Ok()

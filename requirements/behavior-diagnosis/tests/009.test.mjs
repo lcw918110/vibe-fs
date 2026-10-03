@@ -19,4 +19,5 @@ test('WHAT[behavior-diagnosis-009] actual cycle decoder accepts one completed ca
   }
 })
 
-test.todo('WHAT[behavior-diagnosis-009] GAP-112 real raw two-call terminal with only one decodable call commits nothing and advances no coverage')
+// GAP-112 real raw two-call terminal with only one decodable call commits nothing and advances no coverage
+

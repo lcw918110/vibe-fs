@@ -18,10 +18,10 @@ test('WHAT[concern-routing-002] projection announcement coverage is per recipien
 
 test('WHAT[concern-routing-002] actual newly eligible peer receives address discovery once and never receives the owner’s message', async () => {
   await withExecutablePlugin(async (hooks, directory, created, runtime) => {
-    await admit(runtime, 'discovery-owner')
+    await admit(runtime, 'discovery-owner', 'engineer', hooks)
     await hooks.tool.subscribe.execute({ id: 'build', concern: 'DISCOVERY-CONCERN' }, context('discovery-owner', 'subscription'))
     await hooks.tool.publish.execute({ id: 'build', message: 'OWNER-ONLY-MESSAGE' }, context('discovery-owner', 'publication'))
-    await admit(runtime, 'discovery-peer')
+    await admit(runtime, 'discovery-peer', 'engineer', hooks)
     const first = await transform(hooks, 'discovery-peer', [user('discovery-peer')])
     assert.match(JSON.stringify(hints(first)), /DISCOVERY-CONCERN/)
     assert.doesNotMatch(JSON.stringify(first), /OWNER-ONLY-MESSAGE|discovery-owner/)

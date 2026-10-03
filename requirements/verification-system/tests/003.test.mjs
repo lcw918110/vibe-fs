@@ -80,9 +80,9 @@ test('WHAT[verification-system-003] long-stroke.toml pins measured exact event c
   const result = compileScenario(source, { name: 'long-stroke.toml' });
   assert.equal(result.ok, true, result.ok ? '' : result.problems.join('\n'));
   // Complete owner-controlled conflict canaries measured at most 466 durable envelopes and 2234 SSE frames.
-  // Pins 699/3351 retain 50% above observed maxima while failing fast on event regressions.
-  assert.equal(result.scenario.setup.maxJournalEvents, 699);
-  assert.equal(result.scenario.setup.maxSseEvents, 3351);
+  // Pins retain headroom above observed maxima while failing fast on event regressions.
+  assert.equal(result.scenario.setup.maxJournalEvents, 550);
+  assert.equal(result.scenario.setup.maxSseEvents, 2500);
 });
 test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two exact consecutive failures', () => {
   const dir = path.dirname(fileURLToPath(import.meta.url));

@@ -22,8 +22,8 @@ test('WHAT[concern-routing-004] actual plugin freezes an old Pair Hint and deliv
   await withExecutablePlugin(async (hooks, directory, created, runtime) => {
     const owner = 'delivery-owner'
     const sender = 'delivery-sender'
-    await admit(runtime, owner)
-    await admit(runtime, sender)
+    await admit(runtime, owner, 'engineer', hooks)
+    await admit(runtime, sender, 'engineer', hooks)
     await hooks.tool.subscribe.execute({ id: 'build', concern: 'BUILD-CONCERN-MARKER' }, context(owner, 'subscription'))
     const initial = await transform(hooks, owner, [user(owner)])
     const frozen = hints(initial)

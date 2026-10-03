@@ -265,11 +265,21 @@ module HostForkRestart =
         (blobDigest: BlobDigest)
         =
         match HandleCompletionCodec.decodeBody body with
-        | Current decoded when record.Work |> Option.forall (fun work -> HandleCompletionCodec.belongsToWork work decoded) ->
+        | Current decoded when
+            record.Work
+            |> Option.forall (fun work -> HandleCompletionCodec.belongsToWork work decoded)
+            ->
             publishCurrentCompletion runtime recovered agentId agentHandle record body decoded
             task { return () }
         | Current _ ->
-            addBlocked runtime blocked agentId agentHandle record.ChildSessionId "completion does not belong to the exact child work"
+            addBlocked
+                runtime
+                blocked
+                agentId
+                agentHandle
+                record.ChildSessionId
+                "completion does not belong to the exact child work"
+
             Task.FromResult(())
         | LegacyFalseAbort _ ->
             rejectLegacyFalseAbort
@@ -550,9 +560,18 @@ module HostForkRestart =
                 AgentProjection.tryFind parentId (AgentJournal.snapshot journal).AgentProjections
                 |> Option.bind (fun session -> session.Handles)
                 |> Option.map (fun handles ->
-                    let pending = HandleProjection.joinable handles @ HandleProjection.reportableAbandoned handles
-                    let bindings = HandleProjection.linkedChildren handles |> List.filter (fun record ->
-                        not (pending |> List.exists (fun candidate -> candidate.Handle = record.Handle && candidate.Work = record.Work)))
+                    let pending =
+                        HandleProjection.joinable handles @ HandleProjection.reportableAbandoned handles
+
+                    let bindings =
+                        HandleProjection.linkedChildren handles
+                        |> List.filter (fun record ->
+                            not (
+                                pending
+                                |> List.exists (fun candidate ->
+                                    candidate.Handle = record.Handle && candidate.Work = record.Work)
+                            ))
+
                     pending @ bindings)
                 |> Option.map (
                     List.filter (fun record ->

@@ -61,13 +61,16 @@ module BloggerChronicleSurface =
     let appendCompanionLink (journal: obj) (payload: obj) : Task<obj> =
         task {
             if isNullish journal then
-                return box {| ok = false; error = "journal required" |}
+                return
+                    box
+                        {| ok = false
+                           error = "journal required" |}
             else
                 let mainSessionId = SessionId.create (textOf payload?session)
                 let bloggerSessionId = SessionId.create (textOf payload?bloggerSession)
 
                 let fact =
-                    AgentFact.Companion (
+                    AgentFact.Companion(
                         CompanionFactCases.CompanionBloggerLinked
                             {| SessionId = mainSessionId
                                BloggerSessionId = bloggerSessionId
@@ -87,17 +90,15 @@ module BloggerChronicleSurface =
 
                         box {| ok = true; companion = companion |}
                     | Error failure ->
-                        box {| ok = false; error = JournalAppendFailure.describe failure |}
+                        box
+                            {| ok = false
+                               error = JournalAppendFailure.describe failure |}
         }
 
     /// Run the real production injection entry in place; the caller observes
     /// only the resulting message array.
     let maybeInject (journal: obj) (session: string) (language: obj) (outObj: obj) : obj =
-        BloggerChronicleText.maybeInject
-            (Some(agentJournalOf journal))
-            (Some session)
-            (languageOf language)
-            outObj
+        BloggerChronicleText.maybeInject (Some(agentJournalOf journal)) (Some session) (languageOf language) outObj
 
         let messages: obj array =
             if isNull outObj || isNull outObj?messages then

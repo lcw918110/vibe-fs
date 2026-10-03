@@ -102,5 +102,9 @@ module ProjectionUpdate =
         (fact: InstitutionalLearningFactCases)
         : Result<AgentProjectionSet, FoldRejection> =
         InstitutionalLearningProjection.apply fact projection.InstitutionalLearning
-        |> Result.map (fun updated -> { projection with InstitutionalLearning = updated })
-        |> Result.mapError (fun reason -> { Fact = "InstitutionalLearning"; Reason = reason })
+        |> Result.map (fun updated ->
+            { projection with
+                InstitutionalLearning = updated })
+        |> Result.mapError (fun reason ->
+            { Fact = "InstitutionalLearning"
+              Reason = reason })

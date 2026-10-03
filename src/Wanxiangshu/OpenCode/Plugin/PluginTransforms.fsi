@@ -30,7 +30,8 @@ module PluginTransforms =
             ApplyXWire: RelayProjectionDisposition -> obj -> Task<PrefixPresentationHorizon>
             FreezeProviderAttemptPlan: string option -> obj -> Task<unit>
             ApplyEnforcerContinuation: string option -> obj -> Task<unit>
-            CaptureAndStartReadonlyDelegation: obj -> Task<unit>
+            CaptureReadonlyDelegation: string option -> obj -> Task<unit>
+            ApplyReadonlyDelegation: string option -> obj -> Task<unit>
             InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
             ProjectRequirementGrounding: string option -> obj -> Task<unit>
             InjectBloggerChronicle: string option -> obj -> unit

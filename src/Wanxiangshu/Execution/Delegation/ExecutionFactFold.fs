@@ -30,7 +30,9 @@ module ExecutionFactFold =
             |> Option.map (fun record -> IndexChildHandle(record.ChildSessionId, record))
 
         let terminalChanges =
-            terminalChild |> Option.map (fun child -> TerminatedChildHandle(parentSessionId, child)) |> Option.toList
+            terminalChild
+            |> Option.map (fun child -> TerminatedChildHandle(parentSessionId, child))
+            |> Option.toList
 
         match result with
         | Ok updatedHandles ->
@@ -55,18 +57,41 @@ module ExecutionFactFold =
         | Error NotCompleted -> Error(HandleCompletionMissing factName)
         | Error reason -> Error(WorkRejected(factName, reason))
 
+    let private workProjectionChanges parentId prior (work: HandleWorkId) updated terminal =
+        let record = HandleProjection.tryFind work.Handle updated |> Option.get
+        let completed = HandleProjection.tryWork work updated |> Option.get
+
+        let terminalChanges =
+            if terminal then
+                [ TerminatedChildWork(work, completed.LogicalRunId) ]
+            else
+                []
+
+        [ ReplaceSessionState(parentId, { prior with Handles = Some updated })
+          IndexChildHandle(work.ChildSessionId, record)
+          yield! terminalChanges ]
+
     let private foldWork sessionState parentId (work: HandleWorkId) factName terminal transition =
-        let prior = sessionState parentId |> Option.defaultValue DelegationSessionState.empty
+        let prior =
+            sessionState parentId |> Option.defaultValue DelegationSessionState.empty
+
         let handles = prior.Handles |> Option.defaultValue HandleProjection.empty
+
         match transition handles with
-        | Error AlreadyCompleted | Error AlreadyAbandoned | Error HandleIsRetired -> Ok []
+        | Error AlreadyCompleted
+        | Error AlreadyAbandoned
+        | Error HandleIsRetired -> Ok []
         | Error reason -> Error(WorkRejected(factName, reason))
-        | Ok updated ->
-            let record = HandleProjection.tryFind work.Handle updated |> Option.get
-            let completed = HandleProjection.tryWork work updated |> Option.get
-            Ok [ ReplaceSessionState(parentId, { prior with Handles = Some updated })
-                 IndexChildHandle(work.ChildSessionId, record)
-                 if terminal then TerminatedChildWork(work, completed.LogicalRunId) ]
+        | Ok updated -> Ok(workProjectionChanges parentId prior work updated terminal)
+
+    let private foldChildRunVoided parentId childSessionId (handles: AgentLinkageProjection) =
+        let childWork =
+            handles.Works
+            |> Seq.tryFind (fun (KeyValue(key, _)) -> key.ChildSessionId = childSessionId)
+
+        match childWork with
+        | Some(KeyValue(work, record)) -> Ok [ TerminatedChildWork(work, record.LogicalRunId) ]
+        | None -> Ok [ TerminatedChildHandle(parentId, childSessionId) ]
 
     let fold
         (sessionState: SessionId -> DelegationSessionState option)
@@ -75,13 +100,37 @@ module ExecutionFactFold =
         // ── execution handles ───────────────────────────────────────────────
         match fact with
         | ExecutionFactCases.HandleWorkCompleted p ->
-            foldWork sessionState p.ParentSessionId p.Work "HandleWorkCompleted" true
-                (HandleProjection.completeWork p.Work { Kind = p.Kind; CompletionRef = p.CompletionRef; CompletionDigest = p.CompletionDigest })
+            foldWork
+                sessionState
+                p.ParentSessionId
+                p.Work
+                "HandleWorkCompleted"
+                true
+                (HandleProjection.completeWork
+                    p.Work
+                    { Kind = p.Kind
+                      CompletionRef = p.CompletionRef
+                      CompletionDigest = p.CompletionDigest })
         | ExecutionFactCases.HandleWorkConsumed p ->
-            foldWork sessionState p.ParentSessionId p.Work "HandleWorkConsumed" false
-                (HandleProjection.consumeWork p.Work p.ConsumptionId { Kind = p.Kind; CompletionRef = p.CompletionRef; CompletionDigest = p.CompletionDigest })
+            foldWork
+                sessionState
+                p.ParentSessionId
+                p.Work
+                "HandleWorkConsumed"
+                false
+                (HandleProjection.consumeWork
+                    p.Work
+                    p.ConsumptionId
+                    { Kind = p.Kind
+                      CompletionRef = p.CompletionRef
+                      CompletionDigest = p.CompletionDigest })
         | ExecutionFactCases.HandleWorkAbandoned p ->
-            foldWork sessionState p.ParentSessionId p.Work "HandleWorkAbandoned" true
+            foldWork
+                sessionState
+                p.ParentSessionId
+                p.Work
+                "HandleWorkAbandoned"
+                true
                 (HandleProjection.abandonWork p.Work p.Reason)
         | ExecutionFactCases.ChildWorkVoided p ->
             foldWork sessionState p.ParentSessionId p.Work "ChildWorkVoided" true (HandleProjection.voidWork p.Work)
@@ -171,13 +220,7 @@ module ExecutionFactFold =
                 |> Option.bind (fun s -> s.Handles)
                 |> Option.defaultValue HandleProjection.empty
 
-            let childWork =
-                handles.Works
-                |> Seq.tryFind (fun (KeyValue(key, _)) -> key.ChildSessionId = payload.ChildSessionId)
-
-            match childWork with
-            | Some(KeyValue(work, record)) -> Ok [ TerminatedChildWork(work, record.LogicalRunId) ]
-            | None -> Ok [ TerminatedChildHandle(payload.ParentSessionId, payload.ChildSessionId) ]
+            foldChildRunVoided payload.ParentSessionId payload.ChildSessionId handles
 
         | ExecutionFactCases.HandleFalseCompletionRejected payload ->
             let priorState = sessionState payload.ParentSessionId

@@ -34,6 +34,8 @@ module StrengthDelegate =
         tryAttemptPlan: (SessionId -> ProviderRunIdentity -> AttemptPlan option) ->
         syncDelegateRuntime: SyncDelegateRuntime option ->
         predictorConfigured: bool ->
+        projectionSessionIdOpt: string option ->
+        timerPort: Wanxiangshu.Foundation.ITimerPort option ->
         output: obj ->
             Task<CaptureOutcome>
 
@@ -52,5 +54,7 @@ module StrengthDelegate =
         tryAttemptPlan: (SessionId -> ProviderRunIdentity -> AttemptPlan option) ->
         syncDelegateRuntime: SyncDelegateRuntime option ->
         predictorConfigured: bool ->
+        projectionSessionIdOpt: string option ->
+        timerPort: Wanxiangshu.Foundation.ITimerPort option ->
         output: obj ->
             Task<unit>

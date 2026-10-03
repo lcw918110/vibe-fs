@@ -573,7 +573,8 @@ export const journalEventLines = (workDir) => readLocalSnapshot(workDir).lines;
 const journalEventTexts = journalEventLines;
 
 /**
- * Payloads of the named fact case wherever it nests inside EventStore journal envelopes.
+ * Payloads of the named fact case wherever it nests inside EventStore journal envelopes,
+ * or on Strength-style stream rows whose `event_type` is the case name (payload is flat).
  * Accepts either workDir or an array of event JSON texts / Envelope-like objects.
  */
 export function factPayloads(workDirOrLines, caseName) {
@@ -588,14 +589,30 @@ export function factPayloads(workDirOrLines, caseName) {
     }
   };
   for (const line of lines) {
+    let parsed = null;
+    if (typeof line === 'string') {
+      try { parsed = JSON.parse(line); } catch { parsed = null; }
+    } else if (line && typeof line === 'object') {
+      parsed = line;
+    }
+    // Strength / non-envelope rows: event_type IS the case name and payload is flat
+    // (e.g. DelegationBound.replica_session_id). countFactCase already tallies these;
+    // factPayloads must return the same rows or DELEGATE oracles see Bound=0.
+    if (
+      parsed
+      && typeof parsed.event_type === 'string'
+      && parsed.event_type !== 'JournalEnvelope'
+      && parsed.event_type === caseName
+    ) {
+      found.push(parsed.payload ?? parsed);
+      continue;
+    }
     const envelope =
       typeof line === 'string'
         ? journalEnvelopeFromEventText(line)
-        : line && typeof line === 'object'
-          ? line.payload && typeof line.payload === 'object'
-            ? line.payload
-            : line
-          : null;
+        : parsed?.payload && typeof parsed.payload === 'object'
+          ? parsed.payload
+          : parsed;
     if (envelope) walk(envelope.Fact);
   }
   return found;

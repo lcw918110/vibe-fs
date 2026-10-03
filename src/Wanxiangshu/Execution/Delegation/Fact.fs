@@ -6,10 +6,18 @@ open Wanxiangshu.Composition.Durable.Fact
 /// Execution fact constructors — bridge from Delegation-owned ExecutionFactCases
 /// into the Composition-owned AgentFact outer routing union.
 module ExecutionFact =
-    let inline HandleWorkCompleted payload = AgentFact.Execution(ExecutionFactCases.HandleWorkCompleted payload)
-    let inline HandleWorkConsumed payload = AgentFact.Execution(ExecutionFactCases.HandleWorkConsumed payload)
-    let inline HandleWorkAbandoned payload = AgentFact.Execution(ExecutionFactCases.HandleWorkAbandoned payload)
-    let inline ChildWorkVoided payload = AgentFact.Execution(ExecutionFactCases.ChildWorkVoided payload)
+    let inline HandleWorkCompleted payload =
+        AgentFact.Execution(ExecutionFactCases.HandleWorkCompleted payload)
+
+    let inline HandleWorkConsumed payload =
+        AgentFact.Execution(ExecutionFactCases.HandleWorkConsumed payload)
+
+    let inline HandleWorkAbandoned payload =
+        AgentFact.Execution(ExecutionFactCases.HandleWorkAbandoned payload)
+
+    let inline ChildWorkVoided payload =
+        AgentFact.Execution(ExecutionFactCases.ChildWorkVoided payload)
+
     let inline HandleLinked payload =
         AgentFact.Execution(ExecutionFactCases.HandleLinked payload)
 

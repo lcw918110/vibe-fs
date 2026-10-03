@@ -65,55 +65,81 @@ module PromptDispatcherSend =
             PromptPhysicalAcceptance.cancel key
             result
 
-    let private persistSubmittedFact
-        (key: PromptKey)
-        (sessionId: SessionId)
-        (persist: PromptSessionFact -> Task<Result<unit, string>>)
-        (receipt: TransportReceipt)
-        : Task<Result<unit, string>> =
-        persist (
-            PromptSessionFact.PromptSubmitted
-                {| PromptKey = key
-                   SessionId = sessionId
-                   Receipt = receipt |}
-        )
-
-    let private admissionVerdict
-        (key: PromptKey)
-        (confirmation: PromptPhysicalOutcome option)
-        : Result<PromptKey, string> =
+    let private handleConfirmationOutcome (key: PromptKey) (confirmation: PromptPhysicalOutcome option) =
         match confirmation with
         | Some(PromptPhysicalOutcome.Accepted _) -> Ok key
         | Some(PromptPhysicalOutcome.Rejected reason) -> Error(sprintf "Prompt admission rejected: %s" reason)
         | None -> Error(sprintf "Acceptance unknown for PromptKey %s: confirmation timed out" (PromptKey.value key))
 
-    let private awaitAdmissionConfirmation
+    let private verifyReceiptConfirmation
         (key: PromptKey)
         (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
-        : Task<Result<PromptKey, string>> =
-        match confirmationWaiterOpt with
-        | None -> Task.FromResult(Ok key)
-        | Some confirmationTask ->
-            task {
+        =
+        task {
+            match confirmationWaiterOpt with
+            | None -> return Ok key
+            | Some confirmationTask ->
                 let! confirmation = confirmationTask
-                return admissionVerdict key confirmation
-            }
+                return handleConfirmationOutcome key confirmation
+        }
 
-    let private settleAdmittedReceipt
+    let private handleReceiptAdmission
         (key: PromptKey)
         (sessionId: SessionId)
+        (receipt: TransportReceipt)
         (persist: PromptSessionFact -> Task<Result<unit, string>>)
         (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
-        (receipt: TransportReceipt)
         : Task<Result<PromptKey, string>> =
         task {
-            let! persisted = persistSubmittedFact key sessionId persist receipt
+            let! persisted =
+                persist (
+                    PromptSessionFact.PromptSubmitted
+                        {| PromptKey = key
+                           SessionId = sessionId
+                           Receipt = receipt |}
+                )
 
             match persisted with
             | Error err ->
                 PromptPhysicalAcceptance.cancel key
                 return Error err
-            | Ok() -> return! awaitAdmissionConfirmation key confirmationWaiterOpt
+            | Ok() -> return! verifyReceiptConfirmation key confirmationWaiterOpt
+        }
+
+    let private processSendOutcome
+        (key: PromptKey)
+        (sessionId: SessionId)
+        (persist: PromptSessionFact -> Task<Result<unit, string>>)
+        (acceptPhysical: PhysicalUserMessageId -> Task<Result<unit, string>>)
+        (abandon: PromptAbandonReason -> string -> Task<Result<unit, string>>)
+        (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
+        (outcome: SendOutcome)
+        : Task<Result<PromptKey, string>> =
+        task {
+            match outcome with
+            | AdmittedWithReceipt receipt ->
+                return! handleReceiptAdmission key sessionId receipt persist confirmationWaiterOpt
+            | AdmittedWithPhysicalMessage physicalId ->
+                let submitted r =
+                    persist (
+                        PromptSessionFact.PromptSubmitted
+                            {| PromptKey = key
+                               SessionId = sessionId
+                               Receipt = r |}
+                    )
+
+                return! handleAdmittedPhysical submitted acceptPhysical physicalId key
+            | Retryable error ->
+                PromptPhysicalAcceptance.cancel key
+                let! _ = abandon (PromptAbandonReason.SendFailed error) error
+                return Error error
+            | Fatal error ->
+                PromptPhysicalAcceptance.cancel key
+                let! _ = abandon (PromptAbandonReason.SendFailed error) error
+                return Error error
+            | AcceptanceUnknown reason ->
+                PromptPhysicalAcceptance.cancel key
+                return Error(sprintf "Acceptance unknown for PromptKey %s: %s" (PromptKey.value key) reason)
         }
 
     let private awaitPhysicalAwareSend
@@ -125,36 +151,10 @@ module PromptDispatcherSend =
         (sendTask: Task<SendOutcome>)
         (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
         : Task<Result<PromptKey, string>> =
-        let settle =
-            task {
-                let! outcome = sendTask
-
-                match outcome with
-                | AdmittedWithReceipt receipt ->
-                    return! settleAdmittedReceipt key sessionId persist confirmationWaiterOpt receipt
-                | AdmittedWithPhysicalMessage physicalId ->
-                    return!
-                        handleAdmittedPhysical
-                            (persistSubmittedFact key sessionId persist)
-                            acceptPhysical
-                            physicalId
-                            key
-                | Retryable error ->
-                    PromptPhysicalAcceptance.cancel key
-                    let! _ = abandon (PromptAbandonReason.SendFailed error) error
-                    return Error error
-                | Fatal error ->
-                    PromptPhysicalAcceptance.cancel key
-                    let! _ = abandon (PromptAbandonReason.SendFailed error) error
-                    return Error error
-                | AcceptanceUnknown reason ->
-                    PromptPhysicalAcceptance.cancel key
-                    return Error(sprintf "Acceptance unknown for PromptKey %s: %s" (PromptKey.value key) reason)
-            }
-
         task {
             try
-                return! settle
+                let! outcome = sendTask
+                return! processSendOutcome key sessionId persist acceptPhysical abandon confirmationWaiterOpt outcome
             with ex ->
                 PromptPhysicalAcceptance.cancel key
                 return Error ex.Message
@@ -776,6 +776,23 @@ module PromptDispatcherSend =
             (directory: string option)
             (tools: Map<string, bool> option)
             : Task<Result<PromptKey, string>> =
+            let sendRootWithSeed identitySeed =
+                this.SendAgentOwnerRootCore
+                    port
+                    sessionId
+                    text
+                    identitySeed
+                    directory
+                    PromptDispatcher.AwaitMode.Detached
+                    None
+                    None
+                    tools
+
+            let sendRoot () =
+                match issueIdentitySeed () with
+                | Error reason -> Task.FromResult(Error reason)
+                | Ok identitySeed -> sendRootWithSeed identitySeed
+
             match (this.ProjectionFor sessionId).ActiveLogicalRun with
             | Some profile ->
                 this.SendContinuationWithDigest

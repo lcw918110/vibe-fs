@@ -34,9 +34,8 @@ test('WHAT[relay-retirement-008] actual Continue starts one same-session success
   })
 })
 
-test.todo('WHAT[relay-retirement-008] a controlled in-flight Host interrupt prevents successor dispatch until exact provider-step release and physical interruption complete')
-
 test('WHAT[relay-retirement-008] physical prompt after Accepted suicide invalidates certificate and unblocks successor manager tools', async () => {
+  const { withExecutablePlugin, acceptAuthorityRoot } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
   await withExecutablePlugin(async (hooks, _directory, _children, runtime) => {
     const sessionID = 'ses-accepted-human-successor'
     const rootID = `root-${sessionID}`
@@ -114,3 +113,5 @@ test('WHAT[relay-retirement-008] physical prompt after Accepted suicide invalida
     assert.doesNotMatch(forkSuccessor, /(当前不可用|is not available right now)/, 'fork must be unblocked after human input advances the continuous session')
   })
 })
+
+test.todo('WHAT[relay-retirement-008] a controlled in-flight Host interrupt prevents successor dispatch until exact provider-step release and physical interruption complete')

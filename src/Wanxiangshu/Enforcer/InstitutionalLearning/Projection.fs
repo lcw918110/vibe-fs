@@ -31,7 +31,9 @@ type InstitutionalLearningProjectionState =
 [<RequireQualifiedAccess>]
 module InstitutionalLearningProjection =
 
-    let empty = { BySession = Map.empty; BornRules = [] }
+    let empty =
+        { BySession = Map.empty
+          BornRules = [] }
 
     let tryFind sessionId occurrenceId state =
         state.BySession
@@ -67,16 +69,17 @@ module InstitutionalLearningProjection =
                 BySession = Map.add sessionId (Map.add occurrenceId record current) state.BySession }
 
     let private applyBorn
-        (payload: {| SessionId: SessionId
-                     OccurrenceId: string
-                     TipName: string
-                     EnforcerTextEn: string
-                     EnforcerTextZh: string
-                     MainTextEn: string
-                     MainTextZh: string
-                     Trigger: string
-                     Negative: string
-                     LexicalOrder: int |})
+        (payload:
+            {| SessionId: SessionId
+               OccurrenceId: string
+               TipName: string
+               EnforcerTextEn: string
+               EnforcerTextZh: string
+               MainTextEn: string
+               MainTextZh: string
+               Trigger: string
+               Negative: string
+               LexicalOrder: int |})
         state
         =
         let born =
@@ -94,7 +97,10 @@ module InstitutionalLearningProjection =
         // Shared TipName namespace across the live union fails closed
         // (behavior-diagnosis 001).
         | Some _ -> Error(sprintf "institutional rule tip name conflict: %s" born.TipName)
-        | None -> Ok { state with BornRules = state.BornRules @ [ born ] }
+        | None ->
+            Ok
+                { state with
+                    BornRules = state.BornRules @ [ born ] }
 
     /// Fold one institutional-learning fact. A TipName collision between born
     /// rules is a semantic rejection, not a silent overwrite.

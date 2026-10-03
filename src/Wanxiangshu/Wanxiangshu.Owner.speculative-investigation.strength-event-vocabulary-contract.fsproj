@@ -7,6 +7,7 @@
     <WanxiangshuOwnerLocalityKind>contract</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.language.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-model.fsproj"/>
     <Compile Include="Strength/Budget.fsi"/>

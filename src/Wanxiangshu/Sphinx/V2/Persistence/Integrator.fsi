@@ -14,7 +14,8 @@ module Integrator =
     val currentKey: string
 
     /// Read the exact accepted ancestor required by pure transition preparation.
-    val parentState: obj -> InquiryId -> Wanxiangshu.Sphinx.V2.Core.EventId option -> Result<InquiryState option, string>
+    val parentState:
+        obj -> InquiryId -> Wanxiangshu.Sphinx.V2.Core.EventId option -> Result<InquiryState option, string>
 
     /// The v2 integration rule. Folds accepted envelopes through the single reducer.
     val rule: (string -> string) -> IntegrationRule

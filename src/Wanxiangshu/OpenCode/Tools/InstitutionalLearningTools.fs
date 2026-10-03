@@ -1,6 +1,7 @@
 namespace Wanxiangshu.OpenCode
 
 open System
+open System.Threading.Tasks
 open Wanxiangshu.Enforcer
 open Wanxiangshu.Enforcer.InstitutionalLearning
 open Wanxiangshu.Foundation
@@ -59,7 +60,7 @@ module InstitutionalLearningTools =
     /// candidate with any missing field is absent: admission falls back to
     /// ABSORB/DISCARD rather than birthing an incomplete rule.
     let private candidateOf (args: HostToolArguments) : BirthCandidate option =
-        let field name = args.OptionalTextIn ("candidate", name)
+        let field name = args.OptionalTextIn("candidate", name)
 
         match
             field "tipName",
@@ -136,6 +137,155 @@ module InstitutionalLearningTools =
         | RevisionConflict
         | AppendUnavailable of InstitutionalLearningAppendFailure
 
+    let private commitDispositionAppend
+        (append: InstitutionalLearningFactCases -> Task<Result<unit, InstitutionalLearningAppendFailure>>)
+        (appendCommitted:
+            LearningDisposition -> string -> string -> (string * string) list -> InstitutionalLearningFactCases)
+        disposition
+        revision
+        frozen
+        pending
+        =
+        task {
+            let! committedAppend = append (appendCommitted disposition revision frozen pending)
+
+            match committedAppend with
+            | Error failure -> return Error(LearningCommitFailure.AppendUnavailable failure)
+            | Ok() -> return Ok frozen
+        }
+
+    let private commitBirthDisposition
+        (append: InstitutionalLearningFactCases -> Task<Result<unit, InstitutionalLearningAppendFailure>>)
+        (appendCommitted:
+            LearningDisposition -> string -> string -> (string * string) list -> InstitutionalLearningFactCases)
+        (durable: InstitutionalLearningJournalPort)
+        (candidate: BirthCandidate option)
+        language
+        sessionId
+        occurrence
+        disposition
+        revision
+        frozen
+        pending
+        tipName
+        =
+        task {
+            // Unreachable with a None candidate: evaluate concludes
+            // BIRTH only for an admissible candidate.
+            let candidate =
+                Option.defaultWith (fun () -> invalidOp "BIRTH disposition requires an admissible candidate") candidate
+
+            let state = durable.ReadState sessionId
+
+            let lexicalOrder =
+                List.length state.BornRules
+                + List.length (EnforcerCatalogResource.loadFor language)
+                + 1
+
+            let bornFact =
+                InstitutionalLearningFactCases.InstitutionalRuleBorn
+                    {| SessionId = sessionId
+                       OccurrenceId = occurrence
+                       TipName = tipName
+                       EnforcerTextEn = candidate.EnforcerTextEn.Trim()
+                       EnforcerTextZh = candidate.EnforcerTextZh.Trim()
+                       MainTextEn = candidate.MainTextEn.Trim()
+                       MainTextZh = candidate.MainTextZh.Trim()
+                       Trigger = candidate.Trigger.Trim()
+                       Negative = candidate.Negative.Trim()
+                       LexicalOrder = lexicalOrder |}
+
+            let! bornAppend = append bornFact
+
+            match bornAppend with
+            | Error failure -> return Error(LearningCommitFailure.AppendUnavailable failure)
+            | Ok() -> return! commitDispositionAppend append appendCommitted disposition revision frozen pending
+        }
+
+    let private commitDispositionOutcome
+        kind
+        (durable: InstitutionalLearningJournalPort)
+        (candidate: BirthCandidate option)
+        language
+        sessionId
+        occurrence
+        providerRun
+        experience
+        disposition
+        revision
+        =
+        task {
+            let pending = pendingFor kind durable sessionId
+
+            let frozen =
+                LlmFacing.renderInstructions (
+                    dispositionInstructions language disposition
+                    @ resurfacedInstructions language pending
+                )
+
+            let append fact =
+                durable.Append sessionId providerRun fact
+
+            let appendCommitted disposition revision frozen pending =
+                InstitutionalLearningFactCases.LearningDispositionCommitted
+                    {| SessionId = sessionId
+                       OccurrenceId = occurrence
+                       Kind = kind
+                       Experience = experience
+                       RulebookRevision = revision
+                       Disposition = disposition
+                       FrozenResult = frozen
+                       ResurfacedDeferredWorkIds = pending |> List.map fst |}
+
+            match disposition with
+            | LearningDisposition.Birth tipName ->
+                return!
+                    commitBirthDisposition
+                        append
+                        appendCommitted
+                        durable
+                        candidate
+                        language
+                        sessionId
+                        occurrence
+                        disposition
+                        revision
+                        frozen
+                        pending
+                        tipName
+            | _ -> return! commitDispositionAppend append appendCommitted disposition revision frozen pending
+        }
+
+    let private commitFreshLearning
+        kind
+        (durable: InstitutionalLearningJournalPort)
+        experience
+        (candidate: BirthCandidate option)
+        language
+        sessionId
+        occurrence
+        providerRun
+        =
+        let load () =
+            liveRules language (durable.ReadState sessionId)
+
+        match InstitutionalEnhancer.commitDecision experience candidate load with
+        | InstitutionalEnhancer.LearnOutcome.LearnRevisionConflict _ ->
+            // Zero commits, explicit failure, no intermediate state.
+            Task.FromResult(Error LearningCommitFailure.RevisionConflict)
+        | InstitutionalEnhancer.LearnOutcome.LearnCommitted(disposition, revision, _) ->
+            commitDispositionOutcome
+                kind
+                durable
+                candidate
+                language
+                sessionId
+                occurrence
+                providerRun
+                experience
+                disposition
+                revision
+
     let private commitLearning
         kind
         (durable: InstitutionalLearningJournalPort)
@@ -150,79 +300,7 @@ module InstitutionalLearningTools =
             match InstitutionalLearningProjection.tryFind sessionId occurrence (durable.ReadState sessionId) with
             | Some record -> return Ok record.FrozenResult
             | None ->
-                let load () = liveRules language (durable.ReadState sessionId)
-
-                let appendCommitted disposition revision frozen pending =
-                    InstitutionalLearningFactCases.LearningDispositionCommitted
-                        {| SessionId = sessionId
-                           OccurrenceId = occurrence
-                           Kind = kind
-                           Experience = experience
-                           RulebookRevision = revision
-                           Disposition = disposition
-                           FrozenResult = frozen
-                           ResurfacedDeferredWorkIds = pending |> List.map fst |}
-
-                match InstitutionalEnhancer.commitDecision experience candidate load with
-                | InstitutionalEnhancer.LearnOutcome.LearnRevisionConflict _ ->
-                    // Zero commits, explicit failure, no intermediate state.
-                    return Error LearningCommitFailure.RevisionConflict
-                | InstitutionalEnhancer.LearnOutcome.LearnCommitted(disposition, revision, _) ->
-                    let pending = pendingFor kind durable sessionId
-
-                    let frozen =
-                        LlmFacing.renderInstructions (
-                            dispositionInstructions language disposition
-                            @ resurfacedInstructions language pending
-                        )
-
-                    let append fact = durable.Append sessionId providerRun fact
-
-                    match disposition with
-                    | LearningDisposition.Birth tipName ->
-                        // Unreachable with a None candidate: evaluate concludes
-                        // BIRTH only for an admissible candidate.
-                        let candidate =
-                            Option.defaultWith
-                                (fun () -> invalidOp "BIRTH disposition requires an admissible candidate")
-                                candidate
-
-                        let state = durable.ReadState sessionId
-
-                        let lexicalOrder =
-                            List.length state.BornRules
-                            + List.length (EnforcerCatalogResource.loadFor language)
-                            + 1
-
-                        let bornFact =
-                            InstitutionalLearningFactCases.InstitutionalRuleBorn
-                                {| SessionId = sessionId
-                                   OccurrenceId = occurrence
-                                   TipName = tipName
-                                   EnforcerTextEn = candidate.EnforcerTextEn.Trim()
-                                   EnforcerTextZh = candidate.EnforcerTextZh.Trim()
-                                   MainTextEn = candidate.MainTextEn.Trim()
-                                   MainTextZh = candidate.MainTextZh.Trim()
-                                   Trigger = candidate.Trigger.Trim()
-                                   Negative = candidate.Negative.Trim()
-                                   LexicalOrder = lexicalOrder |}
-
-                        let! bornAppend = append bornFact
-
-                        match bornAppend with
-                        | Error failure -> return Error (LearningCommitFailure.AppendUnavailable failure)
-                        | Ok () ->
-                            let! committedAppend = append (appendCommitted disposition revision frozen pending)
-
-                            match committedAppend with
-                            | Error failure -> return Error (LearningCommitFailure.AppendUnavailable failure)
-                            | Ok () -> return Ok frozen
-                    | _ ->
-                        let! committedAppend = append (appendCommitted disposition revision frozen pending)
-
-                        match committedAppend with
-                        | Error failure -> return Error (LearningCommitFailure.AppendUnavailable failure)
-                        | Ok () -> return Ok frozen
+                return! commitFreshLearning kind durable experience candidate language sessionId occurrence providerRun
         }
 
     let private executeDurable
@@ -237,13 +315,15 @@ module InstitutionalLearningTools =
         task {
             let sessionId = SessionId.create ctx.SessionId
             let occurrence = ToolCallId.value callId
-            let! result = commitLearning kind durable experience candidate language sessionId occurrence ctx.ProviderRunId
+
+            let! result =
+                commitLearning kind durable experience candidate language sessionId occurrence ctx.ProviderRunId
 
             match result with
             | Ok frozen -> return frozen
             | Error LearningCommitFailure.RevisionConflict ->
                 return instructionResult language Path.RevisionConflict Map.empty
-            | Error (LearningCommitFailure.AppendUnavailable _) ->
+            | Error(LearningCommitFailure.AppendUnavailable _) ->
                 return instructionResult language Path.DurableUnavailable Map.empty
         }
 

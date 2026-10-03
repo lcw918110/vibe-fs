@@ -62,7 +62,7 @@ module HostForkRunLifecycle =
         identitySeed: PromptAuthority.IdentitySeed ->
         prompt: string ->
         onAccepted: (PhysicalUserMessageId -> unit) ->
-        Task<AgentOwnerDispatchOutcome>
+            Task<AgentOwnerDispatchOutcome>
 
     val openTemporaryJournal: unit -> Task<AgentJournal>
 

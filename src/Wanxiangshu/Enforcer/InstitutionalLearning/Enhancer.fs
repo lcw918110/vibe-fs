@@ -41,8 +41,7 @@ module InstitutionalEnhancer =
         (candidate: BirthCandidate option)
         : LearningDisposition =
         match candidate with
-        | Some candidate when candidateAdmissible candidate rules ->
-            LearningDisposition.Birth(candidate.TipName.Trim())
+        | Some candidate when candidateAdmissible candidate rules -> LearningDisposition.Birth(candidate.TipName.Trim())
         | _ ->
             let lower = experience.ToLowerInvariant()
 
@@ -59,6 +58,46 @@ module InstitutionalEnhancer =
         | LearnCommitted of disposition: LearningDisposition * revision: string * reevaluated: bool
         | LearnRevisionConflict of revision: string
 
+    let private settleReevaluatedBirth
+        (load: unit -> EnforcerRule list)
+        (freshRevision: string)
+        (reevaluatedTip: string)
+        : LearnOutcome =
+        let final = load ()
+        let finalRevision = rulebookRevision final
+
+        if finalRevision = freshRevision then
+            LearnCommitted(LearningDisposition.Birth reevaluatedTip, finalRevision, true)
+        else
+            LearnRevisionConflict finalRevision
+
+    let private reevaluateBirthOnDrift
+        (experience: string)
+        (candidate: BirthCandidate option)
+        (load: unit -> EnforcerRule list)
+        (fresh: EnforcerRule list)
+        : LearnOutcome =
+        let freshRevision = rulebookRevision fresh
+
+        match evaluate experience fresh candidate with
+        | LearningDisposition.Birth reevaluatedTip -> settleReevaluatedBirth load freshRevision reevaluatedTip
+        | other -> LearnCommitted(other, freshRevision, true)
+
+    let private commitBirth
+        (experience: string)
+        (candidate: BirthCandidate option)
+        (load: unit -> EnforcerRule list)
+        (tip: string)
+        (revision: string)
+        : LearnOutcome =
+        let fresh = load ()
+        let freshRevision = rulebookRevision fresh
+
+        if freshRevision = revision then
+            LearnCommitted(LearningDisposition.Birth tip, revision, false)
+        else
+            reevaluateBirthOnDrift experience candidate load fresh
+
     let commitDecision
         (experience: string)
         (candidate: BirthCandidate option)
@@ -68,21 +107,5 @@ module InstitutionalEnhancer =
         let revision = rulebookRevision rules
 
         match evaluate experience rules candidate with
-        | LearningDisposition.Birth tip ->
-            let fresh = load ()
-            let freshRevision = rulebookRevision fresh
-
-            if freshRevision = revision then
-                LearnCommitted(LearningDisposition.Birth tip, revision, false)
-            else
-                match evaluate experience fresh candidate with
-                | LearningDisposition.Birth reevaluatedTip ->
-                    let final = load ()
-                    let finalRevision = rulebookRevision final
-
-                    if finalRevision = freshRevision then
-                        LearnCommitted(LearningDisposition.Birth reevaluatedTip, finalRevision, true)
-                    else
-                        LearnRevisionConflict finalRevision
-                | other -> LearnCommitted(other, freshRevision, true)
+        | LearningDisposition.Birth tip -> commitBirth experience candidate load tip revision
         | other -> LearnCommitted(other, revision, false)

@@ -112,7 +112,8 @@ module PluginTransforms =
           ApplyXWire: RelayProjectionDisposition -> obj -> Task<PrefixPresentationHorizon>
           FreezeProviderAttemptPlan: string option -> obj -> Task<unit>
           ApplyEnforcerContinuation: string option -> obj -> Task<unit>
-          CaptureAndStartReadonlyDelegation: obj -> Task<unit>
+          CaptureReadonlyDelegation: string option -> obj -> Task<unit>
+          ApplyReadonlyDelegation: string option -> obj -> Task<unit>
           InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
           ProjectRequirementGrounding: string option -> obj -> Task<unit>
           InjectBloggerChronicle: string option -> obj -> unit
@@ -423,7 +424,41 @@ module PluginTransforms =
                         (ProviderWireDecode.projectionSessionIdFromMessages outObj)
             }
 
-        let captureAndStartReadonlyDelegation outObj =
+        let captureReadonlyDelegation projectionSessionIdOpt outObj =
+            task {
+                let! outcome =
+                    StrengthDelegate.tryCapture
+                        snapshotOpt
+                        journal
+                        strengthDurability
+                        boot.StrengthScope
+                        scope.TryAttemptPlan
+                        scope.SyncDelegateRuntime
+                        (predictorConfigured ())
+                        projectionSessionIdOpt
+                        (Some boot.Timer)
+                        outObj
+
+                match outcome with
+                | StrengthDelegate.CaptureOutcome.Captured request ->
+                    Diagnostic.emit
+                        "strength-delegation-requested"
+                        [ "session_id", SessionId.value request.OwnerSessionId
+                          "result", "capture-phase:" + string (ReadonlyRoundBudget.value request.RequestedRounds) ]
+                | StrengthDelegate.CaptureOutcome.Skipped reason ->
+                    let sessionId =
+                        projectionSessionIdOpt
+                        |> Option.orElseWith (fun () -> ProviderWireDecode.projectionSessionIdFromMessages outObj)
+                        |> Option.defaultValue ""
+
+                    Diagnostic.emit
+                        "strength-delegation-skip"
+                        [ "session_id", sessionId; "result", "capture-phase:" + reason ]
+
+                return ()
+            }
+
+        let applyReadonlyDelegation projectionSessionIdOpt outObj =
             StrengthDelegate.tryCaptureAndStart
                 snapshotOpt
                 journal
@@ -432,6 +467,8 @@ module PluginTransforms =
                 scope.TryAttemptPlan
                 scope.SyncDelegateRuntime
                 (predictorConfigured ())
+                projectionSessionIdOpt
+                (Some boot.Timer)
                 outObj
 
         { BeginPhysicalProviderAttempt =
@@ -481,7 +518,7 @@ module PluginTransforms =
                             |> ChatExecutionProjection.byKey key
                             |> Option.exists (fun execution ->
                                 execution.origin = PromptAuthority.PromptOrigin.Continuation
-                                                       PromptAuthority.ContinuationKind.HumanMessage)
+                                    PromptAuthority.ContinuationKind.HumanMessage)
                         | _ -> false
 
                     return!
@@ -633,7 +670,8 @@ module PluginTransforms =
                             outObj
                 }
 
-          CaptureAndStartReadonlyDelegation = captureAndStartReadonlyDelegation
+          CaptureReadonlyDelegation = captureReadonlyDelegation
+          ApplyReadonlyDelegation = applyReadonlyDelegation
           InjectPairGuideline =
             fun projectionSessionIdOpt sessionStartedAt outObj ->
                 task {
@@ -740,6 +778,12 @@ module PluginTransforms =
             // this the capture never sees the budget the model signed.
             do! caps.RestoreProtocolArguments outObj
 
+            // 4.5 StrengthDelegate.tryCapture — freeze the explicit authorization
+            // from the real completed owner batch and persist DelegationRequested
+            // here, before any compaction or message replacement downstream can
+            // lose batch metadata.
+            do! caps.CaptureReadonlyDelegation projectionSessionIdOpt outObj
+
             // 5. XTraceCapture.captureObservedMessagesWithReceipt
             let! traceCapture = caps.CaptureXTraceMessages projectionSessionIdOpt outObj
 
@@ -767,18 +811,16 @@ module PluginTransforms =
             do! caps.ApplyEnforcerContinuation projectionSessionIdOpt outObj
 
             if prefixHorizon = PrefixPresentationHorizon.Current then
-                // 13. PairProgrammingThoughtTransform.maybeInjectGuideline
+                // 12. PairProgrammingThoughtTransform.maybeInjectGuideline
                 do! caps.InjectPairGuideline projectionSessionIdOpt sessionStartedAt outObj
 
-                // 14. RequirementGroundingTransform.projectOrTerminate
+                // 13. RequirementGroundingTransform.projectOrTerminate
                 do! caps.ProjectRequirementGrounding projectionSessionIdOpt outObj
 
-                // 17. StrengthDelegate.tryCaptureAndStart — capture and start in ONE
-                // call on the FINAL outgoing request. This replaces the old two-phase
-                // hand-off (4.5 early capture + 12 late start on a subsequent request),
-                // which stranded 44 of 201 decisions whenever a subsequent request
-                // carried a tentative cold prefix or switched logical runs.
-                do! caps.CaptureAndStartReadonlyDelegation outObj
+                // 14. StrengthDelegate.tryCaptureAndStart — only on the live
+                // Current horizon so manager-loop / prefix-probe sealed views
+                // are not rewritten by a no-op start path's surface apply.
+                do! caps.ApplyReadonlyDelegation projectionSessionIdOpt outObj
 
             // 15. BloggerChronicleText.maybeInject
             caps.InjectBloggerChronicle projectionSessionIdOpt outObj

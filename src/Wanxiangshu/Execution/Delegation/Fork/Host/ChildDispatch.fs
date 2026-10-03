@@ -100,6 +100,16 @@ module HostForkChildDispatch =
         | Some r -> r.CanonicalRole = Role.DevOps || r.Byname = "devops"
         | None -> isFixedDevOps agentId
 
+    let private settleExemptedDevOpsWork
+        (journalPort: AgentJournalPort option)
+        (parentId: SessionId)
+        (run: PendingHostRun)
+        : Task<Result<unit, string>> =
+        match run.Work with
+        | Some admitted ->
+            HandleController.settleExemptedWork journalPort parentId admitted HandleAbandonReason.ParentCancelled
+        | None -> Task.FromResult(Ok())
+
     let private clearChildrenAndRuns
         (gate: obj)
         (children: Dictionary<string, SessionId>)
@@ -425,13 +435,8 @@ module HostForkChildDispatch =
                 |> List.filter (fun run -> isFixedDevOpsHandle durableHandles run.AgentId)
 
             for run in devopsPending do
-                match run.Work with
-                | Some admitted ->
-                    let! devopsSettled =
-                        HandleController.settleExemptedWork journalPort parentId admitted HandleAbandonReason.ParentCancelled
-
-                    requireOk "DevOps exempted work settlement failed" devopsSettled
-                | None -> ()
+                let! devopsSettled = settleExemptedDevOpsWork journalPort parentId run
+                requireOk "DevOps exempted work settlement failed" devopsSettled
 
             settlePendingAbandoned gate pendingRuns settleAbandoned
             do! awaitRecovery ()

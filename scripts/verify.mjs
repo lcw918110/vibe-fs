@@ -52,7 +52,13 @@ export function verificationSteps({ root = ROOT, release = false, verbose = fals
       label: 'unit',
       cmd: process.execPath,
       argv: [path.join(root, 'requirements/verification-system/tests/run.mjs')],
-      env: getTestEnv({ verbose, hostEnv }),
+      env: getTestEnv({
+        verbose,
+        hostEnv,
+        extra: {
+          ...(process.env.UNIT_VERDICT_SILENCE_MS ? { UNIT_VERDICT_SILENCE_MS: process.env.UNIT_VERDICT_SILENCE_MS } : {}),
+        },
+      }),
     },
     {
       label: 'integration',

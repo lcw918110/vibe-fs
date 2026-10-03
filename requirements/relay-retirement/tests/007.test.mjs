@@ -105,6 +105,42 @@ test('WHAT[relay-retirement-007] cleanup-blocked fold accepts a subsequent exact
 
 test('WHAT[relay-retirement-007] real durable retirement is atomic across crash points and cleanup retry', {todo: 'GAP-197: pure fold transition does not persist a transaction or clear actual resource blockers'})
 
+test('WHAT[relay-retirement-007] Accepted road cannot reopen new incumbency while certificate is valid', () => {
+  const opened = relay.openIncumbency(relay.empty(), 'road-1', 'inc-1', 'snapshot-1', 'authority-1')
+  assert.equal(opened.ok, true)
+  const assessed = relay.assess(
+    opened.state,
+    'road-1',
+    'inc-1',
+    'assessment-1',
+    'snapshot-1',
+    'authority-1',
+    ...Array(8).fill('PERFECT'),
+  )
+  assert.equal(assessed.ok, true)
+
+  const retired = relay.retireAccepted(
+    assessed.state,
+    'road-1',
+    'inc-1',
+    'ret-accepted-1',
+    'run-1',
+    'tool-1',
+    'certificate:assessment-1',
+    'snapshot-1',
+  )
+  assert.equal(retired.ok, true)
+
+  const reopened = relay.openIncumbency(retired.state, 'road-1', 'inc-2', 'snapshot-1', 'authority-1')
+  assert.deepEqual(reopened, { ok: false, error: 'RoadAlreadyAccepted' })
+
+  const invalidated = relay.invalidateCertificate(retired.state, 'road-1', 'NewHumanInputAdvancesPhase')
+  assert.equal(invalidated.ok, true)
+  const reopenedAfterInvalidate = relay.openIncumbency(invalidated.state, 'road-1', 'inc-2', 'snapshot-1', 'authority-1')
+  assert.equal(reopenedAfterInvalidate.ok, true)
+  assert.equal(relay.view(reopenedAfterInvalidate.state, 'road-1').activeIncumbency, 'inc-2')
+})
+
 test.todo('WHAT[relay-retirement-007] retirement ends incumbent obligations without rewriting independent context-compression history')
 
 test('WHAT[relay-retirement-007] Accepted road cannot reopen new incumbency while certificate is valid', () => {

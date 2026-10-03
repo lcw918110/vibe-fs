@@ -5,7 +5,7 @@
  * Side-effect-free functions live here; the main class file imports them.
  */
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,10 +16,28 @@ import { SIGTERM_GRACE_MS, SIGKILL_GRACE_MS } from "./time-budget.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..");
 
-/** Prefer repo-local bin so CI `npm ci` can run ProcessHost without a global install. */
+/** Prefer repo-local bin so CI `npm ci` can run ProcessHost without a global install.
+ * If local binary cannot be executed (e.g. Linux ELF on Darwin), walk PATH for the
+ * first runnable absolute candidate — bare `"opencode"` would re-hit the broken
+ * `node_modules/.bin` entry that npm scripts prepend to PATH.
+ */
 function defaultOpencodeBin() {
   const local = path.join(REPO_ROOT, "node_modules", ".bin", "opencode");
-  if (fs.existsSync(local)) return local;
+  const candidates = [];
+  if (fs.existsSync(local)) candidates.push(local);
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, process.platform === "win32" ? "opencode.cmd" : "opencode");
+    if (candidate !== local && fs.existsSync(candidate)) candidates.push(candidate);
+  }
+  for (const candidate of candidates) {
+    try {
+      execFileSync(candidate, ["--version"], { stdio: "ignore" });
+      return candidate;
+    } catch {
+      /* try next */
+    }
+  }
   return "opencode";
 }
 

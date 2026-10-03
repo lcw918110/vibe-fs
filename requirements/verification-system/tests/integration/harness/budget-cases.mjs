@@ -49,6 +49,18 @@ export const budgetCases = [
         Object.entries({ ...budget }).filter(([, value]) => typeof value === 'number'),
       );
 
+      // CI may inject UNIT_VERDICT_SILENCE_MS (ci.yml hang headroom). Frozen
+      // table asserts committed fallbacks; prove the override applied, then
+      // compare the rest against defaults (no product-logic change).
+      if (process.env.UNIT_VERDICT_SILENCE_MS !== undefined) {
+        assertEq(
+          actual.UNIT_VERDICT_SILENCE_MS,
+          Number(process.env.UNIT_VERDICT_SILENCE_MS),
+          'UNIT_VERDICT_SILENCE_MS env override must apply at runtime',
+        );
+        actual.UNIT_VERDICT_SILENCE_MS = expected.UNIT_VERDICT_SILENCE_MS;
+      }
+
       const canonical = (table) =>
         JSON.stringify(Object.fromEntries(Object.entries(table).sort(([a], [b]) => (a < b ? -1 : 1))), null, 1);
 
