@@ -108,7 +108,37 @@ const wireInspection = {
 };
 
 let sessionID = null;
-let managerStep = 0;
+/** Diagnostic only — lane replies are keyed by prompt/tool history, not this counter. */
+let managerCompletions = 0;
+
+const messageText = (message) => {
+  if (typeof message?.content === 'string') return message.content;
+  if (!Array.isArray(message?.content)) return '';
+  return message.content
+    .map((part) => (typeof part?.text === 'string' ? part.text : typeof part === 'string' ? part : ''))
+    .join('');
+};
+
+const lastUserText = (body) => {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'user') return messageText(messages[index]);
+  }
+  return '';
+};
+
+/** Latest tool result id, if the Host is asking for a post-tool assistant turn. */
+const pendingToolResultCallId = (body) => {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'tool' && typeof message?.tool_call_id === 'string') {
+      return message.tool_call_id;
+    }
+    if (message?.role === 'user' || message?.role === 'assistant') break;
+  }
+  return null;
+};
 
 const isTitleRequest = (body) => {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
@@ -200,11 +230,37 @@ const provider = await startHttpServer(async (request, response) => {
       return;
     }
 
-    // 3. Target Manager session requests: step exclusively for manager lane
-    managerStep += 1;
+    // 3. Manager lane: reply by prompt / tool-result history.
+    // A global step counter desyncs when Host retries or inserts sidecar
+    // completions, then the cancel tool call is never emitted and the
+    // harness burns a full wait. Content routing keeps each round O(1).
+    managerCompletions += 1;
+    const toolResultId = pendingToolResultCallId(body);
+    const userText = lastUserText(body);
 
-    // Manager Step 1: Initial prompt -> issue js-manager tool call (with contract)
-    if (managerStep === 1) {
+    if (toolResultId === 'call_read_norm_1') {
+      const historical = (body.messages ?? []).flatMap((message) => message.tool_calls ?? [])
+        .find((call) => call.id === 'call_read_norm_1');
+      wireInspection.historicalToolCallPreservesContract =
+        historical !== undefined && JSON.parse(historical.function?.arguments ?? '{}').contract === CONTRACT_TOKEN;
+      sendSSE(response, buildTextChunks('resp_read_norm_done', 'CANARY_READ_DONE', 15));
+      return;
+    }
+
+    if (toolResultId === 'call_read_err_1') {
+      sendSSE(response, buildTextChunks('resp_err_done', 'CANARY_ERROR_DONE', 30));
+      return;
+    }
+
+    if (toolResultId === 'call_js_cancel_1' || userText.includes('VERIFY_CANCEL_HISTORY')) {
+      const cancelled = (body.messages ?? []).flatMap((message) => message.tool_calls ?? [])
+        .find((call) => call.id === 'call_js_cancel_1');
+      publish({ kind: 'manager.cancellation.history', value: cancelled?.function?.arguments ?? null });
+      sendSSE(response, buildTextChunks(`resp_cancel_hist_${managerCompletions}`, 'CANARY_OK', 40));
+      return;
+    }
+
+    if (userText.includes('READ_SAMPLE')) {
       if (Array.isArray(body.tools)) {
         wireInspection.providerVisibleToolNames = body.tools.map((tool) => tool?.function?.name ?? tool?.name).sort();
         wireInspection.providerVisibleProtocolAbsence = body.tools.every((tool) => {
@@ -220,31 +276,23 @@ const provider = await startHttpServer(async (request, response) => {
         wireInspection.contractEnum = contractProp?.enum ?? null;
         wireInspection.contractRequired = Array.isArray(required) && required.includes('contract');
       }
-
-      const call = {
-        name: 'js-manager',
-        argsStr: JSON.stringify({
-          program: "class Js extends JsProgram { async run() { const f = await this.file('fixture-sample.txt'); return f.text('^', '$'); } }",
-          contract: CONTRACT_TOKEN,
-          estimated_readonly_rounds: 0,
-        }),
-      };
-      sendSSE(response, buildToolCallChunks('call_read_norm_1', call.name, call.argsStr, 10));
+      sendSSE(
+        response,
+        buildToolCallChunks(
+          'call_read_norm_1',
+          'js-manager',
+          JSON.stringify({
+            program: "class Js extends JsProgram { async run() { const f = await this.file('fixture-sample.txt'); return f.text('^', '$'); } }",
+            contract: CONTRACT_TOKEN,
+            estimated_readonly_rounds: 0,
+          }),
+          10,
+        ),
+      );
       return;
     }
 
-    // Manager Step 2: Follow-up after js-manager normal execution
-    if (managerStep === 2) {
-      const historical = (body.messages ?? []).flatMap((message) => message.tool_calls ?? [])
-        .find((call) => call.id === 'call_read_norm_1');
-      wireInspection.historicalToolCallPreservesContract =
-        historical !== undefined && JSON.parse(historical.function?.arguments ?? '{}').contract === CONTRACT_TOKEN;
-      sendSSE(response, buildTextChunks('resp_read_norm_done', 'CANARY_READ_DONE', 15));
-      return;
-    }
-
-    // Manager Step 3: Stability verification prompt (inspect history and tools)
-    if (managerStep === 3) {
+    if (userText.includes('VERIFY_STABILITY')) {
       let foundContractInHistory = false;
       for (const msg of body.messages ?? []) {
         if (msg.role === 'assistant' && Array.isArray(msg.tool_calls)) {
@@ -259,52 +307,40 @@ const provider = await startHttpServer(async (request, response) => {
         }
       }
       wireInspection.historicalToolCallPreservesContract ||= foundContractInHistory;
-
       const toolNames = (body.tools ?? []).map((t) => t?.function?.name ?? t?.name);
-      wireInspection.round2ToolsStable = JSON.stringify(toolNames.sort()) === JSON.stringify(wireInspection.providerVisibleToolNames);
-
+      wireInspection.round2ToolsStable =
+        JSON.stringify(toolNames.sort()) === JSON.stringify(wireInspection.providerVisibleToolNames);
       publish({ kind: 'manager.stability.done' });
       sendSSE(response, buildTextChunks('resp_stability_done', 'CANARY_STABILITY_DONE', 20));
       return;
     }
 
-    // Manager Step 4: Error path prompt -> issue js-manager with nonexistent file
-    if (managerStep === 4) {
-      const call = {
-        name: 'js-manager',
-        argsStr: JSON.stringify({
-          program: "class Js extends JsProgram { async run() { const f = await this.file('nonexistent-missing-file.txt'); return f.text('^', '$'); } }",
-          contract: CONTRACT_TOKEN,
-          estimated_readonly_rounds: 0,
-        }),
-      };
-      sendSSE(response, buildToolCallChunks('call_read_err_1', call.name, call.argsStr, 25));
+    if (userText.includes('TRIGGER_ERROR')) {
+      sendSSE(
+        response,
+        buildToolCallChunks(
+          'call_read_err_1',
+          'js-manager',
+          JSON.stringify({
+            program: "class Js extends JsProgram { async run() { const f = await this.file('nonexistent-missing-file.txt'); return f.text('^', '$'); } }",
+            contract: CONTRACT_TOKEN,
+            estimated_readonly_rounds: 0,
+          }),
+          25,
+        ),
+      );
       return;
     }
 
-    // Manager Step 5: Follow-up after tool error
-    if (managerStep === 5) {
-      sendSSE(response, buildTextChunks('resp_err_done', 'CANARY_ERROR_DONE', 30));
+    if (userText.includes('TRIGGER_CANCEL')) {
+      sendSSE(
+        response,
+        buildToolCallChunks('call_js_cancel_1', 'js-manager', JSON.stringify(CANCEL_ARGUMENTS), 35),
+      );
       return;
     }
 
-    // Manager Step 6: Cancellation path prompt -> issue long-running js-manager call
-    if (managerStep === 6) {
-      const call = {
-        name: 'js-manager',
-        argsStr: JSON.stringify(CANCEL_ARGUMENTS),
-      };
-      sendSSE(response, buildToolCallChunks('call_js_cancel_1', call.name, call.argsStr, 35));
-      return;
-    }
-
-    // Fallback if additional manager steps arrive
-    if (managerStep === 7) {
-      const cancelled = (body.messages ?? []).flatMap((message) => message.tool_calls ?? [])
-        .find((call) => call.id === 'call_js_cancel_1');
-      publish({ kind: 'manager.cancellation.history', value: cancelled?.function?.arguments ?? null });
-    }
-    sendSSE(response, buildTextChunks(`resp_step_${managerStep}`, 'CANARY_OK', 40));
+    sendSSE(response, buildTextChunks(`resp_idle_${managerCompletions}`, 'CANARY_OK', 40));
     return;
   }
 
@@ -326,10 +362,12 @@ const requestOnce = async (baseUrl, method, pathname, body) => {
   return { status: response.status, text };
 };
 
-/** Up to 3 attempts on Host 5xx "Unexpected server error" — intermittent on
- * Linux CI with OpenCode 1.18.29 while Darwin 1.18.31 stays green. Harness-only. */
+/** Retry only session creation on Host 5xx. Replaying /message or
+ * /prompt_async after a false 500 duplicates Host work and desyncs the
+ * mock lane — that is the expensive failure mode. */
 const request = async (baseUrl, method, pathname, body, expectedStatus) => {
-  const backoffsMs = [0, 250, 750];
+  const mayRetry = method === 'POST' && pathname === '/api/session';
+  const backoffsMs = mayRetry ? [0, 250, 750] : [0];
   let status = 0;
   let text = '';
   for (const delayMs of backoffsMs) {
@@ -549,7 +587,7 @@ try {
     providerRequests: providerRequests.map((body) => (body.messages ?? [])
       .filter((message) => message.role === 'user')
       .map((message) => typeof message.content === 'string' ? message.content.slice(0, 150) : '<structured>')),
-    providerRequestsCount: providerRequests.length, managerStep,
+    providerRequestsCount: providerRequests.length, managerCompletions,
   }));
   console.error(`Host stdout:\n${host.stdoutLog}\nHost stderr:\n${host.stderrLog}`);
   process.exitCode = 1;
