@@ -302,14 +302,11 @@ test('WHAT[delegation-003] parent cancel preserves the busy fixed DevOps work un
     await forkTool.cancelOwnerChildren(runtime, owner)
     assert.deepEqual(forkTool.workSnapshot(runtime, owner), originalWork)
     const completeOriginal = await forkTool.prepareTerminalDelivery(runtime, owner, 'DEVOPS-OLD-WORK-RETURNED', 'devops-busy-run-1')
-    forkTool.acceptNextPrompt(runtime)
-    await forkTool.executeManagerResume(runtime, toolModule, owner, '', 'devops', 'GUIDANCE-WHILE-BUSY')
-    assert.equal(forkTool.promptCount(runtime), 2)
-    assert.match(forkTool.prompt(runtime, 1), /GUIDANCE-WHILE-BUSY/)
-    forkTool.acceptNextPrompt(runtime)
-    await forkTool.executeManagerResume(runtime, toolModule, owner, '', 'devops', 'DEVOPS-ACTIVE-CHARGE')
-    assert.equal(forkTool.promptCount(runtime), 3, 'an independent guidance act is not deduplicated by its text')
-    assert.match(forkTool.prompt(runtime, 2), /DEVOPS-ACTIVE-CHARGE/)
+
+    // DevOps 忙时明确拒绝新的 assignment（capability-enforcement 规范），不追加引导
+    const busyRejection = await forkTool.executeManagerResume(runtime, toolModule, owner, '', 'devops', 'GUIDANCE-WHILE-BUSY')
+    assert.match(busyRejection, /cannot take another charge|尚不能再接下另一项托付|cannot take charge|busy|无法承担新的差事/i, 'Busy DevOps must be rejected')
+    assert.equal(forkTool.promptCount(runtime), 1, 'no new prompt when DevOps is busy')
     assert.deepEqual(forkTool.workSnapshot(runtime, owner), originalWork)
 
     await completeOriginal()

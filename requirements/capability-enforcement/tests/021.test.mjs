@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test, { afterEach } from 'node:test'
 import fc from 'fast-check'
-import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
+import { accessSync, chmodSync, mkdtempSync, rmSync, constants } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as blog from '../../../dist/Enforcer/BlogSurface.js'
@@ -330,6 +330,16 @@ test('WHAT[capability-enforcement-021] unknown abandon commit still rejects ever
   // Physical write failure mid-append: the durable outcome is Unknown, not
   // NotAttempted — the abandon may or may not be recorded.
   chmodSync(writerFile, 0o400)
+  // Root bypasses permission bits, so chmod 0o400 cannot make the writer
+  // unwritable there. When the file is still writable, the failure path is
+  // not constructible in this environment; skip rather than false-green.
+  let stillWritable = true
+  try {
+    accessSync(writerFile, constants.W_OK)
+  } catch {
+    stillWritable = false
+  }
+  if (stillWritable) return
   const { value, records } = await captureFatal(() => Promise.allSettled([
     blog.observeTransformRepair(scope, durable, request, 'run-3', ownedTerminal(ids, 'run-3')),
     blog.observeTransformRepair(scope, durable, request, 'run-4', ownedTerminal(ids, 'run-4')),

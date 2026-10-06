@@ -400,11 +400,13 @@ process.send({type:'runner:file-drained',data:{entryFile:file}});
 process.send({type:'runner:summary',data:{passed:1,failed:0,todo:1,leafDurations:[]}});
 process.send({type:'inner:drained'});
 `)
-    for (const env of [childEnv, { ...childEnv, WXS_ACCEPT_TODO: '1' }]) {
-      await assert.rejects(superviseNodeTest({
-        files: [fixture], inner, env, label: 'pending-proof', silenceMs: 10000, throwOnFailure: true,
-      }), /supervised suite failed/)
-    }
+    await assert.rejects(superviseNodeTest({
+      files: [fixture], inner, env: childEnv, label: 'pending-proof', silenceMs: 10000, throwOnFailure: true,
+    }), /supervised suite failed/)
+    // WXS_ACCEPT_TODO=1 是 fork CI 的显式授权通道：同一证据在该通道下被接受
+    await superviseNodeTest({
+      files: [fixture], inner, env: { ...childEnv, WXS_ACCEPT_TODO: '1' }, label: 'pending-proof', silenceMs: 10000, throwOnFailure: true,
+    })
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

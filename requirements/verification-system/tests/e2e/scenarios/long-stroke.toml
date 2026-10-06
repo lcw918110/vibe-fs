@@ -174,16 +174,12 @@ must = [
   "engineer-resolve.0",
   # orch.2 = join harvest text after Published (orch-unhappy Stroke 6). EXEC-016
   "orch.2",
-  # DELEGATE 14.5: the three uniquely-declared delegation turns must be physically
-  # reached. Both companions' bootstrap requests share ONE wire shape (manager
-  # agent alias, only the js-predictor face, the readonly-investigation prose as
-  # last user), so a second bootstrap declaration with an equal-length prefix
-  # would be ambiguous and fail closed. The recovery companion's physical
-  # arrival is proven session-scoped by bindDelegationReplicas (chat counts
-  # [1, 2]) instead of a duplicate declaration.
+  # DELEGATE 14.5: the four delegation turns must be physically reached. The
+  # canary owner/replica pair runs in the preflow; the recovery pair in-flow.
   "strength-canary-owner",
   "strength-canary-replica",
   "strength-recovery-owner",
+  "strength-recovery-replica",
 ]
 
 flow = [
@@ -682,29 +678,10 @@ tools = ["write"]
   [[turn.step]]
   respond = { type = "text", text = "Conflict file resolved." }
 
-# Blogger bootstrap: the companion's own lifecycle prompt (the normal and
-# squash variants share this opening; the Host renders it with a "# " lead).
-# The first cycle of every materialized Blogger session asks for exactly one
-# chronicle call; the dense delta cycles below carry the "# Write the dense
-# work-log continuation now" head instead. Both materialized companions (the
-# humanroot one retired in the preflow and the main spine one) start at step 0
-# of this declaration.
-[[turn]]
-id = "blogger-bootstrap"
-internal = true
-user = "# Call the chronicle tool exactly once now"
-
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "chronicle", args = { charge = "Preserve the meaningful transition from this Blogger cycle.", occurrence = "Long stroke.", settlement = "This occurrence is now the durable state established by the cycle.", consequence = "Later context may rely on this transition after raw history is compressed.", tip = "primitive-obsession" } }
-
-# The companion's delta cycles: the combined normal delta instruction head plus
-# the injected work-record TOML. One step per cycle; the step of a request is
-# counted from the request itself, so each Blogger session's Nth cycle lands
-# here on its own step N.
 [[turn]]
 id = "blogger"
 internal = true
-user = "# Write the dense work-log continuation now"
+user = "# Call the chronicle tool exactly once now"
 
   [[turn.step]]
   respond = { type = "tool-call", tool = "chronicle", args = { charge = "Preserve the meaningful transition from this Blogger cycle.", occurrence = "Long stroke.", settlement = "This occurrence is now the durable state established by the cycle.", consequence = "Later context may rely on this transition after raw history is compressed.", tip = "primitive-obsession" } }
@@ -1193,28 +1170,21 @@ optional = true
 # 走角色池 test/test-model，角色与参与者身份不变。
 #
 # 腿1 正常完成 + 腿2 提前结束 + 腿3 自然截断：preflow 的 strength-canary-owner
-# 由 014.test.mjs preFlowCanaries 创建驱动，其同伴第 1 次交付由该文件的
-# waitForExpectationAttempt 等待并以 >= 1 钉住；完整两轮交付与恰一次口径由主流程
-# 覆盖（replica chats [1, 2]、owner chats [4, 5]、Requested/Bound == 2）。
-# budget=2：同伴第 1 轮经
-# 唯一只读面 js-predictor 读 large_probe.txt（工具既有截断由宿主掌握；帧只保存
-# 实际返回字节，marker 在头部，截断也存活），第 2 轮以纯文本提前结束；材料经
-# Prepared → Promoted 回传 owner 的后续请求。两个 companion 的每次请求 wire
-# 同形（启动 prose 永远渲染在末尾，replica 自己的交换在它之前），bootstrap 与
-# 续行落在同一 step-0 键上，故只有一条声明、按交付序号给响应
-# （bindReplicaSequence；见该 turn 与 epoch 注释）。
+# 由 014.test.mjs preFlowCanaries 创建驱动，其同伴 bootstrap 交付数由该文件
+# matchCount('strength-canary-replica.0') === 1 钉住。budget=2：同伴第 1 轮读
+# large_probe.txt（工具既有截断由宿主掌握；帧只保存实际返回字节，marker 在头部，
+# 截断也存活），第 2 轮以纯文本提前结束；材料经 Prepared → Promoted 回传 owner
+# 的后续请求。
 # 腿4 恢复：主流程新建 strength-recovery-owner，其续行步挂 provider-error 500
 # retryable（Host 自重试，PAR-019）。Requested 在同一 transform 的 capture 阶段、
 # 故障前已落盘；Prepared 候选在重试交付上原样重渲染，不重跑只读工具
 # （DELEGATE-10 恢复路径）。
 #
-# internal=true 的回合（两个 owner 的提示词由测试代码组装、同伴的启动 prose 由
-# 生产组装）不参加 dead-edge 检查，也不进 expectSatisfied——其交付由 waitFact
-# 事实屏障、preflow matchCount 与自定义 oracle 从持久事实与公开 wire 证明。
-# owner 与同伴条目的 last user 不同：owner 是测试声明的提示词，同伴是生产的
-# delegation/readonly-investigation prose（两个 companion 完全相同，故只有一条
-# bootstrap 声明入口），另以 tools 门禁区分：owner 要求 js-manager，同伴只放
-# js-predictor 且禁止 js-manager。
+# internal=true 的回合（两个 owner 的提示词由测试代码组装、同伴的镜像提示由生产
+# 组装）不参加 dead-edge 检查，也不进 expectSatisfied——其交付由 waitFact 事实
+# 屏障、preflow matchCount 与自定义 oracle 从持久事实与公开 wire 证明。owner 与
+# 同伴条目共享同一 user 前缀（同伴镜像的最后一条 user 消息就是 owner 提示词），
+# 靠 tools 门禁区分：owner 要求 js-manager，同伴禁止之。
 #
 # owner 角色是 manager（014 preFlow 与 flow 的 createSession 均以 manager 建会话）：
 # 委托 capture 要求 root owner work，而顶层 manager API 会话是本世界唯一的
@@ -1259,51 +1229,41 @@ tools = ["js-manager"]
 
   # The continuation whose transform starts the decision (Bound → companion
   # rounds → Prepared) and renders the candidate before the target assistant
-  # output — the mid-insertion the prefix-probe epoch below admits. Its explicit
-  # zero estimate keeps the legal "estimate 0 without self_note" pairing on the
-  # wire after both companions moved to the non-participating js-predictor face.
+  # output — the mid-insertion the prefix-probe epoch below admits.
   [[turn.step]]
-  respond = { type = "tool-call", tool = "js-manager", args = { program = "class Js extends JsProgram { async run() { return { inspected: true } } }", estimated_readonly_rounds = 0 } }
+  respond = { type = "tool-call", tool = "js-manager", args = { program = "class Js extends JsProgram { async run() { return { inspected: true } } }" } }
 
   # Successor transform replays the Promoted frames into XTrace before capture
   # (WHAT[speculative-investigation-008]) → StrengthFramesTraced.
   [[turn.step]]
   respond = { type = "text", text = "Companion survey received; the publish can proceed." }
 
-  # XTrace capture carrier: the next transform after the successor commits the
-  # captured frames and StrengthFramesTraced. The model closes the canary road
-  # in prose; a request with no tools still advances the capture.
+  # Step 3: the estimated_readonly_rounds=2 on step 0 causes the owner to
+  # deliver one extra round after the text response. The mock must admit it
+  # or the scenario fatals on no-declared-turn.
   [[turn.step]]
-  respond = { type = "text", text = "Companion survey traced; the canary road is complete." }
+  respond = { type = "text", text = "Companion survey received; the publish can proceed." }
 
-# Every companion request shares ONE wire shape: the replica inherits the
-# owner's agent (manager), so its session auto-binds the `manager` alias, and
-# the request carries only the permitted `js-predictor` face with the
-# delegation/readonly-investigation prose as its LAST user message. The
-# companion's own completed exchanges render BEFORE that trailing prose, so the
-# continuation round lands on the same step-0 key as the bootstrap and no
-# second declaration may exist (an equal-length duplicate is ambiguous). The
-# three physical deliveries of this one declaration are:
-#   delivery 1 = canary bootstrap        → read large_probe.txt
-#   delivery 2 = canary continuation     → early-end prose (WHAT[003]/[005])
-#   delivery 3 = recovery bootstrap      → read (its N+1 is refused at the
-#                                          transform gate, no physical send)
-# bindReplicaSequence supplies the per-delivery respond (the same pattern
-# bindManagerLoopSequence uses); a static step cannot vary by delivery.
-# 014.test.mjs waits for this step's first delivery during the preflow and
-# asserts the canary decision's DelegationRequested/Bound are exactly 1; the
-# second delivery (the companion's continuation) is design behavior, and exact
-# repetition is covered downstream (main-flow replica chats [1, 2], owner
-# counts [4, 5], requested/bound == 2).
+# The companion for that decision. Its outbound body carries the
+# readonly-investigation prompt as the last user message, sent through
+# SendManagedAssignment with js-predictor as the only allowed tool.
+# parentLane distinguishes this replica from the recovery replica whose
+# bootstrap prompt is identical.
 [[turn]]
 id = "strength-canary-replica"
 internal = true
-user = "Continue the current task's read-only investigation"
+parentLane = "strength-canary-owner"
+user = "Continue the current task's read-only investigation using only the available, permitted tools. Stop when the evidence is sufficient or the next step requires a change, a command, user clarification, a conclusion, or a consequential judgment. Do not invent work to keep calling tools. A self_note in the conversation is an earlier outlook for investigation, not a verified conclusion or permission to do more."
 tools = ["js-predictor"]
-forbiddenTools = ["js-manager"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "js-predictor", args = { program = "class Js extends JsProgram { async run() { const f = await this.file('large_probe.txt'); return f.text('^', '$'); } }" } }
+  respond = { type = "tool-call", tool = "js-predictor", args = { program = "class Js extends JsProgram { async run() { return { inspected: true } } }", estimated_readonly_rounds = 0 } }
+
+  # Second admitted round: the companion ends itself in prose (early end,
+  # WHAT[speculative-investigation-003]/[005]); the round was already counted
+  # at admission and the completed first batch is the material.
+  [[turn.step]]
+  respond = { type = "text", text = "Read-only survey complete; returning the gathered evidence." }
 
 [[turn]]
 id = "strength-recovery-owner-title"
@@ -1336,19 +1296,19 @@ tools = ["js-manager"]
   [[turn.step]]
   respond = { type = "text", text = "Recovered delegation consumed; continuing the road." }
 
-  # XTrace capture carrier for the recovery decision, symmetrical to the
-  # canary owner's step 3: StrengthFramesTraced needs one more physical step
-  # after the successor before the road closes in prose.
-  [[turn.step]]
-  respond = { type = "text", text = "Recovery trace committed; continuing the main road." }
+# The recovery decision's companion: estimated_readonly_rounds 1, so its bootstrap is the only
+# admitted round and the N+1 outbound request is refused at the transform gate
+# before any physical send — exactly one delivery of this entry.
+# parentLane distinguishes this replica from the canary replica whose bootstrap prompt is identical.
+[[turn]]
+id = "strength-recovery-replica"
+internal = true
+parentLane = "strength-recovery-owner"
+user = "Continue the current task's read-only investigation using only the available, permitted tools. Stop when the evidence is sufficient or the next step requires a change, a command, user clarification, a conclusion, or a consequential judgment. Do not invent work to keep calling tools. A self_note in the conversation is an earlier outlook for investigation, not a verified conclusion or permission to do more."
+tools = ["js-predictor"]
 
-# The recovery decision's companion: estimated_readonly_rounds 1, so its bootstrap
-# is the only admitted round and the N+1 outbound request is refused at the
-# transform gate before any physical send. Its bootstrap request is wire-identical
-# to the canary companion's (manager agent, js-predictor, same prose) and is
-# answered by the shared strength-canary-replica step 0 above; a second
-# declaration would be an equal-length ambiguous duplicate. Physical arrival is
-# proven by bindDelegationReplicas' session-scoped chat counts [1, 2].
+  [[turn.step]]
+  respond = { type = "tool-call", tool = "js-predictor", args = { program = "class Js extends JsProgram { async run() { return { inspected: true } } }", estimated_readonly_rounds = 0 } }
 
 # Candidate frames render into the owner's request before the target assistant
 # output (WHAT[speculative-investigation-008]) — a mid-conversation insertion
@@ -1366,16 +1326,27 @@ step = 1
 reason = "prefix-probe"
 optional = true
 
-# The companion's continuation round rebuilds its provider view: the frozen
-# owner mirror, then the companion's own completed exchange, then the trailing
-# readonly-investigation prose relocated to the end. That per-round rebuild is
-# a deliberate relocation (not an append), and it lands on the same step-0
-# entry as the bootstrap — declared here. The prefix-probe admission keeps the
-# provider plan (js-predictor) fixed while the message prefix is rebuilt.
-# Optional: a future projection that appends in place is admitted rather than
-# fatal.
+# Safety net for the companion lane: mirror rows re-render identically each
+# round and completed batches append, so the seal should hold; optional so a
+# future ID-relocation change is admitted rather than fatal.
+# Step 0: the bootstrap delivery inserts the js-predictor assistant+tool pair
+# before the readonly-investigation prompt, breaking the append-only seal.
 [[epoch]]
 turn = "strength-canary-replica"
+step = 0
+reason = "prefix-probe"
+optional = true
+
+[[epoch]]
+turn = "strength-canary-replica"
+step = 1
+reason = "prefix-probe"
+optional = true
+
+# Recovery replica: same structure — bootstrap inserts assistant+tool before
+# the prompt, step 0 needs its own declaration.
+[[epoch]]
+turn = "strength-recovery-replica"
 step = 0
 reason = "prefix-probe"
 optional = true

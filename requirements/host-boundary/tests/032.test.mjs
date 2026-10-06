@@ -1500,7 +1500,7 @@ test('WHAT[host-boundary-032] C46_before_hide_failure_restores_the_already_hidde
 // automatable assertion already lives in the canary; the remaining narrow
 // face (C44 in-memory restore absent on the throw path) cannot be made green
 // from the plugin side and is kept here as the T180 record anchor.
-test.todo('WHAT[host-boundary-032] installed Host executor throw path: after not invoked, durable error materialized, wire contract preserved (Host physical boundary contracted by the clause 019 executorThrow canary; narrow face: C44 in-memory restore absent on the throw path)')
+test.todo('WHAT[host-boundary-032] installed Host executor throw path: after not invoked, durable error materialized, wire contract preserved (Host physical boundary contracted by the 019 executorThrow canary; narrow face: C44 in-memory restore absent on the throw path)')
 
 test('WHAT[host-boundary-032] C47_interrupted_field_deletion_restores_arguments_and_rethrows_the_original_error', async () => {
   setPredictorState('configured')

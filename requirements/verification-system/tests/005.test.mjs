@@ -298,7 +298,7 @@ test('WHAT[verification-system-005] waitAny rejects an open or malformed alterna
 
 {
 const { default: assert } = await import("node:assert/strict");
-const { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, chmodSync } = await import("node:fs");
+const { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, chmodSync, readdirSync } = await import("node:fs");
 const { join } = await import("node:path");
 const { tmpdir } = await import("node:os");
 const { default: test } = await import("node:test");
@@ -344,6 +344,17 @@ test('WHAT[verification-system-005] walk throws on a nested unreadable directory
       // only if the permission could not be applied at all.
       return
     }
+    // Root bypasses permission bits, so chmod 0o000 cannot make a directory
+    // unreadable there. When readdirSync still succeeds, the failure path is
+    // not constructible in this environment; skip rather than false-green.
+    let stillReadable = false
+    try {
+      readdirSync(nested)
+      stillReadable = true
+    } catch {
+      stillReadable = false
+    }
+    if (stillReadable) return
     assert.throws(
       () => walk(dir, ['.fs']),
       /walk: readdir failed/,

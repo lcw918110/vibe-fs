@@ -410,6 +410,7 @@ const compileTurns = (turns) =>
       step: step.runtimeStep ?? stepIndex,
       tools: turn.tools ?? [],
       forbiddenTools: turn.forbiddenTools ?? [],
+      parentLane: turn.parentLane ?? undefined,
       respond: step.respond,
     })),
   );
@@ -565,6 +566,7 @@ const duplicateDeclarations = (entries) => {
       if (turnDigest(left) !== turnDigest(right)) continue;
       if (toolsDigest(left) !== toolsDigest(right)) continue;
       if (left.kind !== right.kind) continue;
+      if (left.parentLane !== right.parentLane) continue;
       if (left.id >= right.id) continue;
 
       problems.push(

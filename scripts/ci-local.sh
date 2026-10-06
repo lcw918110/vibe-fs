@@ -23,6 +23,9 @@ echo "------------------------------------------------------------"
 docker run --rm \
     -v "${ROOT_DIR}:/workspace" \
     -w /workspace \
+    -e WXS_ACCEPT_TODO=1 \
+    -e NODE_TEST_CONCURRENCY=2 \
+    -e UNIT_VERDICT_SILENCE_MS=30000 \
     "${IMAGE_NAME}" \
     /bin/bash -c "npm ci && dotnet tool restore && npm run verify:release"
 

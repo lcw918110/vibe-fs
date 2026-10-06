@@ -40,6 +40,7 @@ import { extractToolNames } from './strict-mock-matches.js';
 import {
   source as pairProgrammingThoughtSource,
 } from '../../../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js';
+import { readText } from '../../../../../dist/Participant/Provider/LanguageSurface.js';
 
 // ── lane ────────────────────────────────────────────────────────────────────
 
@@ -223,11 +224,42 @@ export function turnOf(body) {
  *
  * Zero on the first provider step of a turn, one after the model's first reply, and
  * so on. Counted from the request, never accumulated.
+ *
+ * ── delegated Replica ──────────────────────────────────────────────────────
+ *
+ * A Replica re-sends its readonly-investigation prompt as the LAST user message on
+ * every request (`Strength/Replica/Transform.fs` `withContinuationTurn`). Its own
+ * js-predictor reply therefore sits *before* that trailing prompt, together with
+ * the parent owner's js-manager history. When the last user message is the
+ * readonly-investigation prose, step counts only the Replica's own assistant
+ * replies — the ones whose tool calls belong to this request's tool set — so the
+ * bootstrap (no predictor reply yet) is step 0 and the first reply is step 1.
  */
 export function stepOf(body) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const index = lastUserIndex(messages);
   if (index < 0) return 0;
+
+  if (index > 0 && isUser(messages[index])) {
+    const projected = semanticOf({ messages: [messages[index]] }).messages;
+    if (projected.length > 0) {
+      const text = messageText(projected[0]);
+      if (text === readText('en', 'delegation/readonly-investigation')) {
+        // The Replica's own replies are the assistant rows before this trailing
+        // prompt whose tool calls belong to the request's tool set. The parent
+        // owner's js-manager history is not in that set, so it is not counted.
+        const ownTools = new Set(extractToolNames(body));
+        let step = 0;
+        for (let cursor = 0; cursor < index; cursor += 1) {
+          if (!isAssistant(messages[cursor])) continue;
+          const calls = Array.isArray(messages[cursor].tool_calls) ? messages[cursor].tool_calls : [];
+          const names = calls.map((c) => c?.function?.name ?? c?.name).filter((n) => typeof n === 'string');
+          if (names.length > 0 && names.every((n) => ownTools.has(n))) step += 1;
+        }
+        return step;
+      }
+    }
+  }
 
   let step = 0;
   for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
@@ -358,9 +390,22 @@ export function resolveEntry(body, entries, bindings, context) {
   const key = runtimeKeyOf(body, bindings, context);
   const requestTools = extractToolNames(body);
 
+  // Resolve parent lane from context.parentSessionId through bindings.
+  // A replica turn can declare `parentLane` to match only when its parent
+  // session belongs to that lane — this distinguishes two replicas whose
+  // bootstrap prompts are otherwise identical (e.g. canary vs recovery).
+  const parentLanes = new Set();
+  if (context?.parentSessionId) {
+    for (const [alias, bound] of bindings ?? []) {
+      const matches = bound instanceof Set ? bound.has(context.parentSessionId) : bound === context.parentSessionId;
+      if (matches) parentLanes.add(alias);
+    }
+  }
+
   const atKey = entries.filter(
     (entry) =>
       (entry.lane === undefined || key.lanes.has(entry.lane)) &&
+      (entry.parentLane === undefined || parentLanes.has(entry.parentLane)) &&
       (entry.kind ?? 'chat') === key.kind &&
       entry.step === key.step &&
       toolsGate(entry, requestTools),

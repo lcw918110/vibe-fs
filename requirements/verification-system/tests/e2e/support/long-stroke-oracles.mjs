@@ -731,7 +731,7 @@ export async function oracleLongStroke(scenario, ctx) {
     'long-stroke: conflict repair must create one exact Conflict Resolver handle',
   );
   assert.ok(
-    scenario.provider.matchCount('continue.1') >= 0,
+    scenario.provider.matchCount('manager-interrupt.0') >= 0,
     'long-stroke determinism: the interrupted join closes the superseded provider turn exactly once',
   );
   assert.equal(
@@ -962,9 +962,12 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
   assert.ok(typeof sessionId === 'string' && sessionId.length > 0, `${label}: canary session id required`);
   const workDir = scenario.host.workDir;
 
-  await awaitNamedFact(workDir, waitFactShape('AssessmentCommitted', { eq: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
-  await awaitNamedFact(workDir, waitFactShape('RetirementCommitted', { eq: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
-  await awaitNamedFact(workDir, waitFactShape('IncumbencyOpened', { eq: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
+  // Preflow baseline scoped to the HumanRoot Manager road only — another Manager
+  // session (e.g. strength-canary-owner) also opens a road during preflow, so
+  // global fact counts are not safe here.
+  await awaitNamedFact(workDir, waitFactShape('AssessmentCommitted', { gte: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
+  await awaitNamedFact(workDir, waitFactShape('RetirementCommitted', { gte: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
+  await awaitNamedFact(workDir, waitFactShape('IncumbencyOpened', { gte: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
 
  // The authority-turn family answers the initial iteration only: once the successor
  // carries the owner-controlled assess resource as its last user message, the
@@ -1042,11 +1045,21 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
 
  // Durable loop behavior: two openings (initial + one after Continue), one
  // Continue retirement followed by one Accepted; positive counts prove the loop.
-  const openings = factPayloads(workDir, 'IncumbencyOpened');
+ // Scope to the HumanRoot Manager road only — strength-canary-owner is another
+ // Manager session whose road opening also emits IncumbencyOpened.
+  const roadTransactions = factPayloads(workDir, 'TransactionCommitted')
+    .filter((payload) => payload?.RoadId?.[1] === sessionId);
+  const roadEvents = roadTransactions.flatMap((payload) => payload?.Transaction?.[1] ?? []);
+  const roadLogicalEvents = [...new Map(
+    roadEvents.map((event) => [JSON.stringify(event), event]),
+  ).values()];
+  const openings = roadLogicalEvents.filter((event) => event?.[0] === 'IncumbencyOpened');
   assert.equal(openings.length, 2, `${label}: canary road must open exactly two iterations (got ${openings.length})`);
-  const openedIds = incumbencyIdsIn(openings);
+  const openedIds = incumbencyIdsIn(openings.map((event) => event[1]));
   assert.equal(openedIds.length, 2, `${label}: iterations must carry distinct incumbencies (got ${JSON.stringify(openedIds)})`);
-  const canaryRetirements = factPayloads(workDir, 'RetirementCommitted');
+  const canaryRetirements = roadLogicalEvents
+    .filter((event) => event?.[0] === 'RetirementCommitted')
+    .map((event) => event[1]);
   assert.equal(
     canaryRetirements.length,
     2,
@@ -1062,18 +1075,19 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
     1,
     `${label}: next retirement must be Outcome Accepted with a certificate`,
   );
+  const roadAssessments = roadLogicalEvents.filter((event) => event?.[0] === 'AssessmentCommitted');
   assert.equal(
-    countFactCase(workDir, 'AssessmentCommitted'),
+    roadAssessments.length,
     HUMANROOT_CANARY_DELTAS.assessments,
     `${label}: preflow must contribute exactly ${HUMANROOT_CANARY_DELTAS.assessments} AssessmentCommitted before the main spine`,
   );
   assert.equal(
-    countFactCase(workDir, 'RetirementCommitted'),
+    canaryRetirements.length,
     HUMANROOT_CANARY_DELTAS.retirements,
     `${label}: preflow must contribute exactly ${HUMANROOT_CANARY_DELTAS.retirements} RetirementCommitted before the main spine`,
   );
   assert.equal(
-    countFactCase(workDir, 'IncumbencyOpened'),
+    openings.length,
     HUMANROOT_CANARY_DELTAS.incumbencyOpenings,
     `${label}: preflow must contribute exactly ${HUMANROOT_CANARY_DELTAS.incumbencyOpenings} IncumbencyOpened before the main spine`,
   );

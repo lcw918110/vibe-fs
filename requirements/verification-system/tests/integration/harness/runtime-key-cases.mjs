@@ -24,6 +24,7 @@ import {
   source as pairProgrammingThoughtSource,
   text as pairProgrammingThoughtText,
 } from '../../../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js';
+import { readText } from '../../../../../dist/Participant/Provider/LanguageSurface.js';
 
 const SESSION = 'ses_real_1';
 const BINDINGS = new Map([
@@ -830,6 +831,51 @@ export const runtimeKeyCases = [
         resolveEntry(request([user('Do it')]), bound, BINDINGS, { sessionId: 'ses_unbound' }).matched === undefined,
         'an unbound session must not match a lane-bound declaration',
       );
+    },
+  },
+
+  // ── a delegated Replica re-sends its bootstrap prompt as the last user message ──
+
+  {
+    name: 'DELEGATE-014 step distinguishes a Replica bootstrap from its own reply',
+    fn: () => {
+      // A delegated Replica re-sends its readonly-investigation prompt as the LAST
+      // user message on every request (`Strength/Replica/Transform.fs`). Its own
+      // js-predictor reply therefore sits *before* that trailing prompt, so counting
+      // "assistant messages after the last user message" collapses the bootstrap
+      // (step 0) and the first reply (step 1) to the same value.
+      const readonly = readText('en', 'delegation/readonly-investigation');
+
+      const bootstrap = {
+        ...request([
+          { role: 'system', content: 'sys' },
+          { role: 'system', content: 'sys' },
+          user('STRENGTH_HOST_CANARY: inspect README.md'),
+          toolCall('js-manager'),
+          toolResult('# ok'),
+          user(readonly),
+        ]),
+        tools: [{ name: 'js-predictor' }],
+      };
+      const firstReply = {
+        ...request([
+          { role: 'system', content: 'sys' },
+          { role: 'system', content: 'sys' },
+          user('STRENGTH_HOST_CANARY: inspect README.md'),
+          toolCall('js-manager'),
+          toolResult('# ok'),
+          toolCall('js-predictor'),
+          toolResult('# ok'),
+          user(readonly),
+        ]),
+        tools: [{ name: 'js-predictor' }],
+      };
+
+      const bootstrapStep = stepOf(bootstrap);
+      const replyStep = stepOf(firstReply);
+
+      assertEq(bootstrapStep, 0, 'bootstrap is the Replica turn first provider step');
+      assertEq(replyStep, 1, 'the Replica own reply is the second step');
     },
   },
 ];
