@@ -497,6 +497,12 @@ module PluginTransforms =
                 emitJsExpr (partCopy, "args", merged) "$0[$1] = $2" |> ignore
                 partCopy
 
+        let readRestoreCurrent (state: obj) (part: obj) (hasStateInput: bool) : obj =
+            if hasStateInput then
+                ProviderWireDecode.readField state "input"
+            else
+                ProviderWireDecode.readField part "args"
+
         let tryRestoreSnapshot (part: obj) (snapshot: ProtocolArgumentVault.Snapshot) : obj =
             let state = ProviderWireDecode.readField part "state"
 
@@ -508,12 +514,7 @@ module PluginTransforms =
             if not hasStateInput && not hasTopLevelArgs then
                 part
             else
-                let current =
-                    if hasStateInput then
-                        ProviderWireDecode.readField state "input"
-                    else
-                        ProviderWireDecode.readField part "args"
-
+                let current = readRestoreCurrent state part hasStateInput
                 let merged = ProtocolArgumentVault.restoreArguments snapshot current
                 restoreMergedPart part state hasStateInput current merged
 
