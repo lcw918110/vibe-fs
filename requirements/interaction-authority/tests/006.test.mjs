@@ -109,6 +109,7 @@ const personas = {
   reviewer: 'Auditor',
   inspector: 'Investigator',
   devops: 'Operator',
+  plan: 'Planner',
 }
 const rootSelection = (agent) => {
   const role = agent === 'predictor' ? 'inspector' : agent
@@ -145,12 +146,12 @@ const continuation = (key, root, kind = 'ManagerGuard', payload = 'payload') =>
   authority.claimContinuation(key, 'ses_a', kind, root, payload)
 
 test('WHAT[interaction-authority-006] IA_006_canonical_names_resolve_and_legacy_or_malformed_are_refused', () => {
-  for (const name of ['engineer', 'manager', 'devops']) {
+  for (const name of ['engineer', 'manager', 'devops', 'plan']) {
     const result = authority.createAuthorityRoot(hash, 'rt_1', 'ses_a', 'HumanRoot', 'msg_u1', rootSelection(name))
     assert.equal(result.ok, true, result.error)
     assert.equal(authority.parseAgentName(name).ok, true)
   }
-  for (const name of ['coder', 'inspector', 'browser', 'inquiry', 'distiller', 'build', 'plan', 'student', 'teacher', 'meditator', 'executor', 'fast_coder']) {
+  for (const name of ['coder', 'inspector', 'browser', 'inquiry', 'distiller', 'build', 'student', 'teacher', 'meditator', 'executor', 'fast_coder']) {
     assert.equal(authority.parseAgentName(name).error.kind, 'LegacyAgentName')
     const result = authority.createAuthorityRoot(hash, 'rt_1', 'ses_a', 'HumanRoot', 'msg_u1', rootSelection(name))
     assert.equal(result.ok, false)

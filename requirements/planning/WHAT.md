@@ -193,3 +193,35 @@ Plan 的生命周期事实接入 EventStore 统一持久化存储与 CanonicalIn
   3. 同一任期内相同载荷的重复 `ask` 调用或相同游标的 `PlanAskResolved` 事件重放保持幂等。
 - 禁止后果：同一任期内同时至多存在一个未决问题（`PendingAsk`）；在前序未决提问未被 `PlanAskResolved` 消灭前，严禁发起第二次 `ask`，违者必须返回强类型拒绝错误。已标记为 `Delivered` 的规划任务严禁再次调用 `ask`。系统严禁依据用户回答的具体文本内容（如是否为“是/否”）推测有效性，任何非合成用户原文均属于合法回答。
 - 失败后果：若在无活跃任期、无未决提问或载荷冲突时触发解析与解决，Fold 状态机与工具门禁必须返回强类型错误并拒绝状态跃迁，底层存储零变更。
+
+## [021] 任期隔离消息装配与重锚请求
+
+当系统为 Plan 角色组装 Provider 请求消息集时，`assembleTenureMessages` 负责任期切分、LWR_prev 注入与重锚请求判定。
+
+- 允许后果：消息装配按 §017 规则执行任期隔离，并返回 `reanchorRequested` 布尔标志供上游消费。
+- 禁止后果：严禁在无活跃任期时触发装配逻辑。严禁伪造默认 S1 数据。
+- 失败后果：装配失败时停止请求组装，不向下游发送污染上下文。
+
+## [022] 退休范围与任期推进
+
+当任期退休时，系统记录其游标覆盖范围 `PreviousRange`，供下一任期在消息装配中精确切分历史。
+
+- 允许后果：`latestRetirementRange` 返回最近一次退休的 `[openingCursor, retirementCursor]` 区间。`assembleTenureMessages` 消费该区间，将区间外的旧消息剥除，区间内的历史渲染为 `LWR_prev`。
+- 禁止后果：严禁在无退休记录时返回伪造范围。严禁跨任期泄露 assistant/tool 消息。
+- 失败后果：范围越界或数据冲突时，装配必须失败并拒绝发送。
+
+## [023] 任期重锚事件与幂等
+
+当 Plan 任期切换触发前缀重锚时，系统追加 `TenureReanchor` 事件记录任期身份与 epoch 跃迁。
+
+- 允许后果：`applyTenureReanchor` 接受 `{ previousEpoch, nextEpoch, incumbencyId }`，追加到前缀状态。同一 `incumbencyId` 的重锚事件幂等拒绝（`TenureAlreadyReanchored`）。`reanchorRequested` 在 `isFreshHandover` 时返回 true。
+- 禁止后果：严禁同一任期多次重锚。严禁在无任期切换时伪造重锚事件。
+- 失败后果：重复重锚返回强类型拒绝，状态零变更。
+
+## [024] 连续三任期接力契约
+
+系统在单个物理会话内支持连续三次任期接力（S1 → S2 → S3），每次交接遵循 §007 handoff 契约，阶段单向推进，终态交付遵循 §008 deliver 契约。
+
+- 允许后果：`decideAction` 依据当前任期阶段与事实单一判定放行/拒绝动作，三任期接力全程状态机不变量保持。
+- 禁止后果：阶段严禁逆行或跳级。终态交付后严禁再次发起任何动作。
+- 失败后果：不合法动作门禁返回强类型拒绝，状态零变更。

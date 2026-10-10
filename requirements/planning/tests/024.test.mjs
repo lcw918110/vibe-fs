@@ -8,7 +8,7 @@ PlanningSurface.decideAction = decideAction;
 // Note: Pure contract assertions below verify the exact invariant ladder on PlanningSurface.
 // Live daemon execution requires physical OpenCode host with configured Predictor/ModelTarget.
 
-test('WHAT[planning-canary] continuous three-tenure relay across single session contract verification', async () => {
+test('WHAT[planning-024] continuous three-tenure relay across single session contract verification', async () => {
   const workId = 'work-canary-relay-1';
   const root = '/workspace/test';
 
@@ -130,4 +130,4 @@ test('WHAT[planning-canary] continuous three-tenure relay across single session 
 });
 
 // Physical OpenCode daemon integration requirement mark:
-test.todo('WHAT[planning-canary] physical OpenCode host canary live execution across 3 continuous tenures in single session');
+test.todo('WHAT[planning-024] physical OpenCode host canary live execution across 3 continuous tenures in single session');
