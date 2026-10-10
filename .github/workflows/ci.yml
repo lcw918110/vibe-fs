@@ -18,6 +18,7 @@ jobs:
         with:
           global-json-file: global.json
       - run: npm ci
+      - run: npm install -g npm@11.12.1
       - run: dotnet tool restore
       - name: Run verification
         id: verify
