@@ -29,6 +29,8 @@ jobs:
         run: |
           set -x
           export WXS_VERIFICATION_NPM_CLI="$(npm root -g)/npm/bin/npm-cli.js"
+          export WXS_VERIFICATION_DOTNET_ROOT="$DOTNET_ROOT"
+          export WXS_VERIFICATION_NUGET_PROJECT_TREE_ID="$(git rev-parse HEAD^{tree})"
           if npm run verify:release; then
             exit 0
           else
