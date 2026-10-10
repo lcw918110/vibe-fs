@@ -14,6 +14,10 @@ import {
   createTrackingReaderV1,
   readSelectedInputsV1,
 } from './generated-artifact-v1.mjs'
+import {
+  loopDetectorEnvelopeDistPath,
+  loopDetectorEnvelopeRepositoryPath,
+} from './loop-detector-envelope-paths.mjs'
 
 const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const halfLife = 256
@@ -220,7 +224,7 @@ export const encodeParallel = async (text, workerCount = 0, options = {}) => {
 
 export const loopDetectorEnvelopeLinkageV1 = Object.freeze({
   import_specifier: '#wanxiangshu-loop-detector-envelope',
-  package_import_target: './dist/Execution/Session/LoopDetectorEnvelope.js',
+  package_import_target: `./${loopDetectorEnvelopeDistPath}`,
   generator_path: 'scripts/lib/derive-loop-detector-envelope.mjs',
   generator_entry: 'writeLoopDetectorEnvelopeArtifact',
   input_selector_path: 'scripts/lib/loop-detector-repository-corpus.mjs',
@@ -271,8 +275,8 @@ const deriveEnvelopeFromCorpus = async ({ selectedInputs, texts }) => {
 export const deriveLoopDetectorEnvelope = async (root = defaultRoot, dependencies = {}) =>
   deriveEnvelopeFromCorpus(loadLoopDetectorRepositoryCorpusV1(root, dependencies))
 
-const artifactSource = (envelope) => `// Generated from the current repository SSOT by scripts/build.mjs.
-// Ephemeral build input; never hand-edit or copy these values into tracked source.
+const artifactSource = (envelope) => `// auto-generated from the repository SSOT; do not edit by hand.
+// Refresh with \`node scripts/derive-envelope.mjs\`; the build copies this tracked artifact to dist.
 import { encode } from 'gpt-tokenizer/encoding/o200k_base'
 export { encode }
 
@@ -299,11 +303,11 @@ export const writeLoopDetectorEnvelopeArtifact = async (root = defaultRoot, {
 } = {}) => {
   const envelope = await deriveLoopDetectorEnvelope(root, deriveDependencies)
   const artifactBytes = Buffer.from(artifactSource(envelope), 'utf8')
-  writeArtifact(path.join(root, 'dist/Execution/Session/LoopDetectorEnvelope.js'), artifactBytes)
+  writeArtifact(path.join(root, loopDetectorEnvelopeRepositoryPath), artifactBytes)
   return {
     ...envelope,
     generatedArtifact: buildGeneratedArtifactRowV1({
-      artifact_path: 'dist/Execution/Session/LoopDetectorEnvelope.js',
+      artifact_path: loopDetectorEnvelopeRepositoryPath,
       artifact_bytes: artifactBytes,
       selected_inputs: envelope.selectedInputs,
       linkage: loopDetectorEnvelopeLinkageV1,

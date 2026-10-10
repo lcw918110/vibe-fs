@@ -36,6 +36,10 @@
 
 本地 fingerprint、retention expiry 与上次成功快照未变，且 tracking ref 仍指向该快照时，`pre-push` 必须零网络复用。writer/payload、TTL 或已观察 tracking ref 变化时，双向读取、归并完整 writer 流，原子替换本地集合并 CAS 发布远端快照。未被本机观察的远端推进不由 clean no-op 主动拉取，也不得被覆盖；下次本地事实或 tracking 变化时再完整收敛。
 
+收敛的跨进程文件锁只覆盖本地 writer 字节边界：读取本地 writer 流、过期 writer 删除、远端事件导入写回、快照物化与物化缓存写入必须在同一互斥窗口内完成。网络发现与发布（`ls-remote`、`fetch`、`push`）不得在持锁期间执行；远端 Git 对象读取不需要锁。锁外不得读取本地 writer 文件字节；tracking ref 与物化缓存的只读短路是明确豁免的非权威优化。
+
+Hook 进程对单条 Git 命令与整次收敛设置有限 deadline：网络命令按类型取上限（`ls-remote` 30 秒，`fetch`/`rev-parse`/`push` 120 秒），整次收敛 600 秒，锁内 Git 子进程调用同样受 120 秒超时约束。deadline 超时只终止 hook 自身的物理等待并报错，不产生任何 durable 事实，也不改变失败同步阻塞用户 Git 操作的既有行为。
+
 ## [009] Dumb remote
 
 远端只提供标准 Git 对象读写、引用推进和 CAS，不解释领域事件，不执行合并，不依赖万象术专有后端。

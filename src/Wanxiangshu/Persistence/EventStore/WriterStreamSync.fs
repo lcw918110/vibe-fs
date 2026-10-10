@@ -44,7 +44,7 @@ module WriterStreamSync =
         { BlobOid: GitObjectId
           LastActivityMs: float }
 
-    type private RemoteWriter =
+    type RemoteWriter =
         { WriterId: string
           Text: string
           LastActivityMs: float option }
@@ -336,7 +336,8 @@ module WriterStreamSync =
         // the first instant it becomes "the day before yesterday" and is collected.
         writers
         |> List.map (fun writer ->
-            (ProcessEventLog.utcDayOf writer.LastActivityMs + 2.0) * retentionMilliseconds ())
+            (ProcessEventLog.utcDayOf writer.LastActivityMs + 2.0)
+            * retentionMilliseconds ())
         |> List.sort
         |> List.tryHead
 
@@ -380,7 +381,17 @@ module WriterStreamSync =
             let cache = readMaterializationCache commonDir
             let writerMetadata = ProcessEventLog.writerPhysicalMetadata commonDir
 
-            let! resolvedWriters = materializeWriters raw commonDir cache writerMetadata
+            // GC BEFORE blobbing: expired writers are deleted by metadata only,
+            // so their multi-MB bytes are never read or hashed. Retention is a
+            // UTC-day group on LastActivityMs; it needs no file content.
+            let activeMetadata, expiredMetadata =
+                writerMetadata
+                |> List.partition (fun metadata -> isWriterActiveAt nowMs metadata.LastActivityMs)
+
+            expiredMetadata
+            |> List.iter (fun metadata -> ProcessEventLog.removeWriterFile commonDir metadata.Name)
+
+            let! resolvedWriters = materializeWriters raw commonDir cache activeMetadata
             let writers = removeExpiredLocalWriters nowMs resolvedWriters commonDir
 
             let! writerTree = raw.WriteTree(writers |> List.map (fun writer -> writer.Entry))
@@ -744,3 +755,37 @@ module WriterStreamSync =
         (remote: StoreSnapshot option)
         : Task<Result<StoreSnapshot, ConvergeError>> =
         syncWriterStreamsAt raw commonDir remote (currentTimeMs ())
+
+    /// Lock-free remote read: Git object graph only. It never reads local writer
+    /// bytes; the cache/stat filter is a non-authoritative shortcut.
+    let readRemoteStreamsAt
+        (raw: IGitRawStore)
+        (commonDir: string)
+        (nowMs: float)
+        (snapshot: StoreSnapshot)
+        : Task<Result<RemoteWriter list, ConvergeError>> =
+        readRemote raw (readMaterializationCache commonDir) commonDir nowMs snapshot
+
+    /// Non-authoritative shortcut: the current materialization already equals the
+    /// remote root, so there is nothing to import or rewrite.
+    let tryCachedMergedAt (commonDir: string) (nowMs: float) (remote: StoreSnapshot) : StoreSnapshot option =
+        tryCachedLocal commonDir nowMs
+        |> Option.filter (fun cache -> sameRoot cache.Root remote)
+        |> Option.map (fun cache -> cache.Root)
+
+    /// Lock-held local-only pass for an absent remote.
+    let syncWithoutRemoteUnderLock (raw: IGitRawStore) (commonDir: string) (nowMs: float) =
+        syncWithoutRemote raw commonDir nowMs
+
+    /// Lock-held import: validate the union against the local streams read under
+    /// the same lock, merge the remote writers, then materialize the final snapshot.
+    let mergeRemoteStreamsUnderLock
+        (raw: IGitRawStore)
+        (commonDir: string)
+        (nowMs: float)
+        (writers: RemoteWriter list)
+        : Task<Result<StoreSnapshot, ConvergeError>> =
+        taskResult {
+            do! importRemote commonDir nowMs writers
+            return! materializeLocalAt raw commonDir nowMs |> TaskResultCE.ofTask
+        }

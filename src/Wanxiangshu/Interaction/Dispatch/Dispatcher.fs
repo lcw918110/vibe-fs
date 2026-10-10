@@ -622,7 +622,7 @@ module PromptDispatcher =
                     accepted.PromptKey = key
                     && accepted.SessionId = sessionId
                     && accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
-                                             PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
+                        PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
 
             let acceptExisting
                 (accepted: PromptAuthority.AcceptedDispatch)

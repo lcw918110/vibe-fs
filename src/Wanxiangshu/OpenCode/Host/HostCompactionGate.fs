@@ -177,17 +177,21 @@ module HostCompactionGate =
     /// `None` means "not yet applicable" — this snapshot does not represent a completed
     /// first turn, so there is nothing to judge. The caller keeps the probe armed.
     ///
-    /// A first turn is recognised by the presence of a COMPLETED assistant message. The
-    /// alternative — judging on the first snapshot of any kind — would fire mid-stream,
-    /// before the Host has had the opportunity to compact at all, and would therefore
-    /// pass unconditionally: a probe that cannot fail is not a probe.
+    /// A first turn is recognised by the presence of a COMPLETED assistant message, and
+    /// the pseudo-runs counted are the ones inside that same window — everything up to
+    /// and including the first completed assistant. The alternative — judging on the
+    /// first snapshot of any kind — would fire mid-stream, before the Host has had the
+    /// opportunity to compact at all, and would therefore pass unconditionally: a probe
+    /// that cannot fail is not a probe.
     ///
     /// Why the first turn specifically. A first turn is necessarily far below any
-    /// context threshold, so an automatic compaction there cannot be legitimate. Any
-    /// pseudo-run present means something compacted outside the configuration the
-    /// plugin can reach, and that is the state HOST-006 refuses to run in: reanchoring
-    /// every few rounds means probe coverage never accumulates while everything looks
-    /// normal from outside.
+    /// context threshold, so an automatic compaction there cannot be legitimate. A
+    /// pseudo-run inside the window means something compacted outside the configuration
+    /// the plugin can reach, and that is the state HOST-006 refuses to run in:
+    /// reanchoring every few rounds means probe coverage never accumulates while
+    /// everything looks normal from outside. A pseudo-run after the window is a user
+    /// `/compact` or a later-round compaction; it belongs to the containment layer,
+    /// which must reanchor rather than refuse startup.
     ///
     /// The residual misjudgement is a user manually compacting an empty session between
     /// plugin start and the first turn finishing. That costs one startup refusal with a
@@ -198,16 +202,13 @@ module HostCompactionGate =
         (sessionId: SessionId)
         (messages: SessionMessage list)
         : CompactionGateVerdict option =
-        let firstTurnComplete =
+        let window =
             messages
-            |> List.exists (fun message -> message.Role = "assistant" && message.Completed)
+            |> List.map (fun message ->
+                { CompletedAssistant = message.Role = "assistant" && message.Completed
+                  Compaction = HostCompactionPolicy.isContainableCompaction message.IsCompaction })
 
-        if not firstTurnComplete then
-            None
-        else
-            let pseudoRuns =
-                messages
-                |> List.filter (fun message -> HostCompactionPolicy.isContainableCompaction message.IsCompaction)
-                |> List.length
-
-            Some(HostCompactionPolicy.judgeFirstTurn settingGap sessionId pseudoRuns)
+        match HostCompactionPolicy.firstTurnCompactionRuns window with
+        | None -> None
+        | Some pseudoRunsOnFirstTurn ->
+            Some(HostCompactionPolicy.judgeFirstTurn settingGap sessionId pseudoRunsOnFirstTurn)

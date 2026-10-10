@@ -63,6 +63,8 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
   // Physical-exit canary: the child must reach the real Diagnostic.fatal and
   // FatalProcess.trip links — a wire-level invariant, not a test seam.
   'requirements/host-boundary/tests/fixtures/fatal-process-child.fixture.mjs',
+  // Plan relay host canary: continuous three-tenure relay in a single physical session
+  'requirements/planning/tests/host-canary-plan-relay.test.mjs',
 ])
 
 /**
@@ -1775,6 +1777,27 @@ export const SURFACE_MANIFEST = [
     owner: 'relay-assessment',
     laws: ['ASSESS-001', 'ASSESS-007'],
     source: 'src/Wanxiangshu/Mission/Relay/Assessment/Surface.fs',
+    representation: 'json',
+    kind: 'pure',
+  },
+  {
+    module: 'Mission/Planning/Surface.js',
+    owner: 'planning',
+    laws: [
+      'planning-003',
+      'planning-004',
+      'planning-005',
+      'planning-007',
+      'planning-008',
+      'planning-009',
+      'planning-010',
+      'planning-011',
+      'planning-016',
+      'planning-017',
+      'planning-018',
+      'planning-019',
+    ],
+    source: 'src/Wanxiangshu/Mission/Planning/Surface.fs',
     representation: 'json',
     kind: 'pure',
   },

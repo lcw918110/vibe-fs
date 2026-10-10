@@ -13,7 +13,8 @@ module Model =
 
     let private property (value: obj) (name: string) : obj = emitJsExpr (value, name) "$0[$1]"
 
-    let private isStringValue (value: obj) : bool = emitJsExpr value "typeof $0 === 'string'"
+    let private isStringValue (value: obj) : bool =
+        emitJsExpr value "typeof $0 === 'string'"
 
     let private readString (value: obj) (name: string) : Result<string, string> =
         let raw = property value name

@@ -374,6 +374,16 @@ export async function bindManagerLoopSequence(scenario) {
   );
   assert.ok(humanAudit, 'long-stroke: humanroot-loop audit entry is required');
 
+  // The successor assess resource is composed by production (`internal = true`), so the
+  // schema forbids a declared lane. Both the strength-canary-owner and the humanroot-
+  // manager sessions send "# You are the N Manager…" prompts, so an unlaned entry would
+  // match either. Pin the successor entries to the humanroot-manager lane at runtime —
+  // the harness KNOWS which session the Continue retirement reopens (HOST-008 binding),
+  // and this is exactly the knowledge the schema's lane ban is guarding against losing.
+  for (const entry of runtime.scenario.entries) {
+    if (entry.turnId === 'manager-reopened-loop') entry.lane = 'humanroot-manager';
+  }
+
   const scores = (grade) => grade === 'REVISE'
     ? [{ acceptance_criteria: 'the target state is not yet reached', work_plan: 'close the remaining gap' }]
     : [];
@@ -476,6 +486,47 @@ export async function bindManagerLoopSequence(scenario) {
   };
 }
 
+/**
+ * Script the companion's per-delivery responses across both delegation decisions.
+ *
+ * The companion's trailing readonly-investigation prose is rendered at the END
+ * of every outbound request (the frozen owner mirror, then the companion's own
+ * completed exchange, then the prose), so the bootstrap and the continuation
+ * land on the SAME step-0 entry (`strength-canary-replica.0`) and a static
+ * declaration cannot vary the response by delivery. This binder mirrors the
+ * bindManagerLoopSequence pattern: delivery 1 (canary bootstrap) and delivery 3
+ * (recovery bootstrap) read the large-probe marker, while delivery 2 (the
+ * canary continuation) ends in prose — the early-end leg
+ * (WHAT[speculative-investigation-003]/[005]). Delivery order across the two
+ * decisions is fixed by the run: canary decision first, recovery decision in
+ * the flow.
+ */
+export async function bindReplicaSequence(scenario) {
+  const runtime = scenario.provider?._scenario;
+  assert.ok(runtime?.scenario?.entries, 'long-stroke: strict scenario entries required for replica sequence bind');
+
+  const bootstrap = runtime.scenario.entries.find(
+    (entry) => entry.id === 'strength-canary-replica.0',
+  );
+  assert.ok(bootstrap, 'long-stroke: strength-canary-replica.0 entry is required');
+  const readProbe = bootstrap.respond;
+  const earlyEnd = {
+    type: 'text',
+    text: 'Read-only survey complete; returning the gathered evidence.',
+  };
+
+  const consume = runtime.consume;
+  const originalConsume = (body, selection, context) => consume.call(runtime, body, selection, context);
+  runtime.consume = (body, selection, context) => {
+    const { entry, attempt } = selection ?? {};
+    if (entry?.id === 'strength-canary-replica.0') {
+      // 1 = canary bootstrap, 2 = canary continuation, 3 = recovery bootstrap.
+      entry.respond = attempt === 2 ? earlyEnd : readProbe;
+    }
+    originalConsume(body, selection, context);
+  };
+}
+
 const lastUserText = (body) => {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -483,11 +534,6 @@ const lastUserText = (body) => {
   }
   return '';
 };
-
-const requestTools = (body) =>
-  (Array.isArray(body?.tools) ? body.tools : [])
-    .map((tool) => tool?.function?.name ?? tool?.name)
-    .filter((name) => typeof name === 'string');
 
 const chatRequests = (requests) =>
   (requests ?? []).filter((body) => {
@@ -690,7 +736,7 @@ export async function oracleLongStroke(scenario, ctx) {
     'long-stroke: conflict repair must create one exact Conflict Resolver handle',
   );
   assert.ok(
-    scenario.provider.matchCount('continue.1') >= 0,
+    scenario.provider.matchCount('manager-interrupt.0') >= 0,
     'long-stroke determinism: the interrupted join closes the superseded provider turn exactly once',
   );
   assert.equal(
@@ -921,9 +967,12 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
   assert.ok(typeof sessionId === 'string' && sessionId.length > 0, `${label}: canary session id required`);
   const workDir = scenario.host.workDir;
 
-  await awaitNamedFact(workDir, waitFactShape('AssessmentCommitted', { eq: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
-  await awaitNamedFact(workDir, waitFactShape('RetirementCommitted', { eq: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
-  await awaitNamedFact(workDir, waitFactShape('IncumbencyOpened', { eq: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
+  // Preflow baseline scoped to the HumanRoot Manager road only — another Manager
+  // session (e.g. strength-canary-owner) also opens a road during preflow, so
+  // global fact counts are not safe here.
+  await awaitNamedFact(workDir, waitFactShape('AssessmentCommitted', { gte: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
+  await awaitNamedFact(workDir, waitFactShape('RetirementCommitted', { gte: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
+  await awaitNamedFact(workDir, waitFactShape('IncumbencyOpened', { gte: 2 }), { timeoutMs: WAIT_FACT_WINDOW_MS });
 
  // The authority-turn family answers the initial iteration only: once the successor
  // carries the owner-controlled assess resource as its last user message, the
@@ -1001,11 +1050,21 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
 
  // Durable loop behavior: two openings (initial + one after Continue), one
  // Continue retirement followed by one Accepted; positive counts prove the loop.
-  const openings = factPayloads(workDir, 'IncumbencyOpened');
+ // Scope to the HumanRoot Manager road only — strength-canary-owner is another
+ // Manager session whose road opening also emits IncumbencyOpened.
+  const roadTransactions = factPayloads(workDir, 'TransactionCommitted')
+    .filter((payload) => payload?.RoadId?.[1] === sessionId);
+  const roadEvents = roadTransactions.flatMap((payload) => payload?.Transaction?.[1] ?? []);
+  const roadLogicalEvents = [...new Map(
+    roadEvents.map((event) => [JSON.stringify(event), event]),
+  ).values()];
+  const openings = roadLogicalEvents.filter((event) => event?.[0] === 'IncumbencyOpened');
   assert.equal(openings.length, 2, `${label}: canary road must open exactly two iterations (got ${openings.length})`);
-  const openedIds = incumbencyIdsIn(openings);
+  const openedIds = incumbencyIdsIn(openings.map((event) => event[1]));
   assert.equal(openedIds.length, 2, `${label}: iterations must carry distinct incumbencies (got ${JSON.stringify(openedIds)})`);
-  const canaryRetirements = factPayloads(workDir, 'RetirementCommitted');
+  const canaryRetirements = roadLogicalEvents
+    .filter((event) => event?.[0] === 'RetirementCommitted')
+    .map((event) => event[1]);
   assert.equal(
     canaryRetirements.length,
     2,
@@ -1021,18 +1080,19 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
     1,
     `${label}: next retirement must be Outcome Accepted with a certificate`,
   );
+  const roadAssessments = roadLogicalEvents.filter((event) => event?.[0] === 'AssessmentCommitted');
   assert.equal(
-    countFactCase(workDir, 'AssessmentCommitted'),
+    roadAssessments.length,
     HUMANROOT_CANARY_DELTAS.assessments,
     `${label}: preflow must contribute exactly ${HUMANROOT_CANARY_DELTAS.assessments} AssessmentCommitted before the main spine`,
   );
   assert.equal(
-    countFactCase(workDir, 'RetirementCommitted'),
+    canaryRetirements.length,
     HUMANROOT_CANARY_DELTAS.retirements,
     `${label}: preflow must contribute exactly ${HUMANROOT_CANARY_DELTAS.retirements} RetirementCommitted before the main spine`,
   );
   assert.equal(
-    countFactCase(workDir, 'IncumbencyOpened'),
+    openings.length,
     HUMANROOT_CANARY_DELTAS.incumbencyOpenings,
     `${label}: preflow must contribute exactly ${HUMANROOT_CANARY_DELTAS.incumbencyOpenings} IncumbencyOpened before the main spine`,
   );
@@ -1238,17 +1298,18 @@ export async function assertDelegationMaterialOnWire(scenario) {
       `DELEGATE 14.5: owner ${ownerId} must receive the companion's real readonly result in a later provider request`,
     );
   }
- // R6: bounded delivery. The canary owner walks three chat requests (investigation estimate
- // call, injected continuation, successor); the recovery owner four (investigation estimate
- // call, faulted delivery, retried delivery, successor). An unbounded
- // redelivery loop after injection fails this equality.
+ // R6: bounded delivery. The canary owner walks four chat requests (investigation estimate
+ // call, injected continuation, successor, XTrace-capture carrier); the recovery owner five
+ // (investigation estimate call, faulted delivery, retried delivery, successor, capture
+ // carrier). The capture carrier is the physical step whose transform commits
+ // StrengthFramesTraced; an unbounded redelivery loop after injection fails this equality.
   const ownerChatCounts = [...ownerSessions]
     .map((ownerId) => chatRequestsOfSession(requests, ownerId).length)
     .sort((left, right) => left - right);
   assert.deepEqual(
     ownerChatCounts,
-    [3, 4],
-    `DELEGATE 14.5: owner delivery must be bounded at 3 and 4 chat requests, got ${JSON.stringify(ownerChatCounts)}`,
+    [4, 5],
+    `DELEGATE 14.5: owner delivery must be bounded at 4 and 5 chat requests, got ${JSON.stringify(ownerChatCounts)}`,
   );
 
   console.log(`[delegation] material returned to owners=${[...ownerSessions].length} chatCounts=${JSON.stringify(ownerChatCounts)}`);
@@ -1837,6 +1898,7 @@ export async function assertDelegationPurposeOnWire(scenario) {
 export const CUSTOMS = {
   holdChildC1UntilLabor,
   bindManagerLoopSequence,
+  bindReplicaSequence,
   oracleLongStroke,
   bindDelegationReplicas,
   assertDelegationMaterialOnWire,

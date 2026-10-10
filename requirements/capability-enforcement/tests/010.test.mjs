@@ -398,7 +398,6 @@ integrationTest('WHAT[capability-enforcement-010] MANAGER_host_schemas_are_prese
       'bash-honeypot': [],
       assume: ['assumption'],
       defer: ['new_work'],
-      subscribe: ['id', 'concern'],
       publish: ['id', 'message'],
     }
     for (const toolName in expected) {

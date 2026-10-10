@@ -42,7 +42,10 @@ module Surface =
         let acceptance = emitJsExpr (value, "acceptance_criteria") "$0[$1]"
         let workPlan = emitJsExpr (value, "work_plan") "$0[$1]"
 
-        if emitJsExpr acceptance "typeof $0 === 'string'" && emitJsExpr workPlan "typeof $0 === 'string'" then
+        if
+            emitJsExpr acceptance "typeof $0 === 'string'"
+            && emitJsExpr workPlan "typeof $0 === 'string'"
+        then
             Ok
                 { AcceptanceCriteria = unbox<string> acceptance
                   WorkPlan = unbox<string> workPlan }
@@ -109,12 +112,7 @@ module Surface =
         |> result
 
     let confirmRetirement state road incumbent providerRunId toolCallId =
-        Decision.confirmRetirement
-            state
-            (RoadId.create road)
-            (IncumbencyId.create incumbent)
-            providerRunId
-            toolCallId
+        Decision.confirmRetirement state (RoadId.create road) (IncumbencyId.create incumbent) providerRunId toolCallId
         |> result
 
     let private normalize (value: string) = if isNull value then "" else value

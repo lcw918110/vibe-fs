@@ -101,7 +101,6 @@
 |---|---|
 | `behavior-diagnosis` | 工程病理只能在满足明确 trigger / negative / distinction 的证据上成立。 |
 | `guidance-delivery` | diagnosis 成立不等于必须立刻重复告知；反馈需要独立的 occurrence、coverage、dedupe 与 horizon-relative delivery 语义。 |
-| `institutional-learning` | 已随 WP-036 退役的历史包；celebrate/regret 不再注册，保留设计沿革，不参与当前验收。 |
 
 ## 11. Repository knowledge / programming
 
@@ -118,13 +117,19 @@
 |---|---|
 | `speculative-investigation` | 可丢弃 speculation 只有在 authoritative world 零影响时才可换取调查成本下降。 |
 | `epistemic-reasoning` | 已由 sphinx-v2 取代的历史包；保留设计沿革和旧证据，不参与当前验收。 |
-| `sphinx-v2` | clean-break 后的 Sphinx 内核：LLM 负责语义判断，程序负责科学问法、作用域估值与资源内调度；旧手写语义评分表整类删除。 |
+| `sphinx-v2` | clean-break 后的 Sphinx 内核：LLM 负责语义判断，程序负责科学问法、作用域估值与资源内调度；旧手写语义评分表整类删除；WP-039 后收敛为 MCP-only 单一入口，原生工具面不恢复。 |
 
 ## 13. Delivery
 
 | Package | 一句话 WHY |
 |---|---|
 | `distribution` | 可安装 artifact 必须携带运行所需代码与 semantic resources，同时排除不属于交付面的源码/开发资产；打包资源与活动注册严格同步。 |
+
+## 14. Planning
+
+| Package | 一句话 WHY |
+|---|---|
+| `planning` | SWELoop 自评死锁改成交接而非阻塞，多任期跑者在同一物理会话内接力推进单一底稿 P。 |
 
 # 规范条款索引
 
@@ -140,7 +145,7 @@
 | 6 | `time-capability` | 8 | time-capability-001 ~ 008 |
 | 7 | `causal-wait` | 9 | causal-wait-001 ~ 009 |
 | 8 | `session-ontology` | 14 | session-ontology-001 ~ 012、014 ~ 015 |
-| 9 | `managed-session-lifecycle` | 25 | managed-session-lifecycle-001 ~ 022、managed-session-lifecycle-023（身份替换后旧活跃会话显式收束）、managed-session-lifecycle-024（固定 DevOps 崩溃恢复单一权威与进程排空）、managed-session-lifecycle-025（固定 DevOps 每次工作返回时 PTY 进程彻底收束与记账清理） |
+| 9 | `managed-session-lifecycle` | 27 | managed-session-lifecycle-001 ~ 022、managed-session-lifecycle-023（身份替换后旧活跃会话显式收束）、managed-session-lifecycle-024（固定 DevOps 崩溃恢复单一权威与进程排空）、managed-session-lifecycle-025（固定 DevOps 每次工作返回时 PTY 进程彻底收束与记账清理）、managed-session-lifecycle-026（Main 收束级联 Attached InternalLeaf 的 execution 结算）、managed-session-lifecycle-027（Session 收束的作用域保留取消与延后归还） |
 | 10 | `host-boundary` | 32 | host-boundary-001 ~ 031、host-boundary-032（Contract 提示字段解耦与参数清理安全） |
 | 11 | `participant-identity` | 10 | participant-identity-001 ~ 009、participant-identity-010（活跃身份解析与历史身份隔离解码） |
 | 12 | `execution-model-routing` | 19 | execution-model-routing-001 ~ 017、execution-model-routing-018（新角色集合模型路由解耦）、execution-model-routing-019（固定 DevOps 模型绑定持久性与禁止借 resume 换模型） |
@@ -155,7 +160,7 @@
 | 20 | `provider-projection` | 14 | provider-projection-001 ~ 014 |
 | 21 | `concern-routing` | 7 | concern-routing-001 ~ 007 |
 | 22 | `interaction-authority` | 23 | interaction-authority-001 ~ 020、interaction-authority-021（历史事件不可变与旧身份不升权）、interaction-authority-022（DevOps 恢复与续行锁定固定模型与执行权威）、interaction-authority-023（ProviderRetryAttempt 的 repair 抑制随 attempt 终结而失效） |
-| 23 | `managed-chat-execution` | 14 | managed-chat-execution-001 ~ 014 |
+| 23 | `managed-chat-execution` | 15 | managed-chat-execution-001 ~ 014、managed-chat-execution-015（Provider 启动边界拒绝的精确定夺） |
 | 24 | `dispatch-protocol` | 15 | dispatch-protocol-001 ~ 015 |
 | 25 | `durable-events` | 25 | durable-events-001 ~ 025 |
 | 26 | `effect-accounting` | 10 | effect-accounting-001 ~ 008、010、012 |
@@ -169,7 +174,7 @@
 | 34 | `context-compression` | 30 | context-compression-001 ~ 027、context-compression-028（逐次 todowrite K 窗口）、context-compression-029（coverage 落后不丢 raw 与紧急 Probe 例外）、context-compression-030（assume call/result 永久原文穿透 LWR） |
 | 35 | `prefix-stability` | 15 | prefix-stability-001 ~ 015；todowrite checkpoint 窗口见 context-compression-028 |
 | 36 | `execution-failure-policy` | 14 | execution-failure-policy-001 ~ 014 |
-| 37 | `provider-attempt-recovery` | 23 | provider-attempt-recovery-001 ~ 023 |
+| 37 | `provider-attempt-recovery` | 24 | provider-attempt-recovery-001 ~ 023、provider-attempt-recovery-024（加载期 Blogger stale 请求的同源未启动执行定夺） |
 | 38 | `host-provider-failure-ownership` | 7 | host-provider-failure-ownership-001 ~ 007 |
 | 39 | `crash-reconciliation` | 21 | crash-reconciliation-001 ~ 019、crash-reconciliation-020（固定 DevOps 崩溃恢复单一逻辑权威与命令去重）、crash-reconciliation-021（进程本地表是缓存，durable 投影是存在性真源） |
 | 40 | `degeneration-guard` | 13 | degeneration-guard-001 ~ 013 |
@@ -180,7 +185,7 @@
 | 45 | `relay-context-projection` | 9 | relay-context-projection-001 ~ 008、relay-context-projection-009（前任工作与交互对继任可见，固定 DevOps 执行事实如实呈现） |
 | 46 | `behavior-diagnosis` | 20 | behavior-diagnosis-001 ~ 020 |
 | 47 | `guidance-delivery` | 11 | guidance-delivery-001 ~ 009、011 ~ 012 |
-| 48 | `institutional-learning` | 0 | 已随 WP-036 退役；旧001 ~ 008仅保留历史 |
+| 48 | institutional-learning（已退役） | 0 | 随 WP-036 整包退役，目录与条款已删除 |
 | 49 | `repository-investigation` | 9 | repository-investigation-001 ~ 009 |
 | 50 | `knowledge-reuse` | 16 | knowledge-reuse-001 ~ 016 |
 | 51 | `repository-programming` | 27 | repository-programming-001 ~ 025、repository-programming-026（事务 ReadSnapshots 与案例实质访问严格分离）、repository-programming-027（Engineer 与 DevOps 统一文件工具与编程面生成） |
@@ -189,6 +194,7 @@
 | 54 | `epistemic-reasoning` | 0 | 旧001 ~ 036仅保留历史，现行替代关系见 sphinx-v2/SUPERSEDES.md |
 | 55 | `sphinx-v2` | 36 | sphinx-v2-001 ~ 036（取代 epistemic-reasoning 旧内核条款，关系见 SUPERSEDES.md） |
 | 56 | `distribution` | 10 | distribution-001 ~ 009、distribution-010（打包资源与活动注册同步） |
+| 58 | `planning` | 19 | planning-001 ~ 019（五条轮换事实与自查游标、三阶段单向推进、动作许可矩阵、持久化与任期隔离、崩溃恢复判定、ask两段式挂起与回送） |
 
 # 依赖骨架
 
@@ -251,6 +257,7 @@ speculative-investigation→ repository-investigation, participant-identity, exe
 epistemic-reasoning      → 历史包，不再定义当前依赖
 sphinx-v2                → 取代关系及当前合同见本包，完整依赖待审
 distribution             → 特殊：所有声明 runtime resource 的 semantic packages（不获其语义 ownership）
+planning                 → participant-identity, semantic-trace, office-capability
 ```
 
 Phase E 审计结论：3 条 coupling edge 已删（见 `AUDIT.md` Phase E）：

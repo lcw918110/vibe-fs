@@ -26,6 +26,7 @@ module ManagedAgentCatalog =
         | Persona.Distiller -> "distiller"
         | Persona.Curator -> "curator"
         | Persona.Predictor -> "predictor"
+        | Persona.Planner -> "planner"
 
     /// Parse one exact lowercase Host `calling` label into typed identity.
     let tryParsePersonaCallingName (value: string) : Persona option =
@@ -60,6 +61,8 @@ module ManagedAgentCatalog =
         | "bookkeeper"
         | "clerk" -> Some Persona.Curator
         | "predictor" -> Some Persona.Predictor
+        | "planner"
+        | "plan" -> Some Persona.Planner
         | _ -> None
 
     let allRoles: Role list = Roles.all
@@ -98,7 +101,6 @@ module ManagedAgentCatalog =
               "inquiry"
               "distiller"
               "build"
-              "plan"
               "student"
               "teacher"
               "meditator"

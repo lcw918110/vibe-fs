@@ -34,7 +34,6 @@ module OrchestratorGit =
           WorkingDirectory = Some dir
           Environment = None
           Stdin = None
-          Deadline = None
           PtyOptions = None }
 
     /// True when an in-progress rebase is present. Prefer rebase-merge / rebase-apply

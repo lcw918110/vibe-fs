@@ -82,11 +82,14 @@ npm install wanxiangshu --registry <your-private-registry>
 |------|------|
 | `WANXIANGSHU_SKIP_AUTO_INJECTED=1` | 跳过 HOST-013 新的 `auto-injected` 伪工具注入；已落盘历史 pair 仍会 replay |
 | `WANXIANGSHU_PROCESS_HARD_LIMIT_SECS` | executor 单进程硬超时上限（秒） |
-| `WANXIANGSHU_NO_FATAL_EXIT=1` | 诊断路径禁止 `process.exit`（测试用） |
+| `WANXIANGSHU_NO_FATAL_EXIT=1` | 抑制 fatal 的物理进程退出（`SIGKILL` / `process.exit`）；测试用 |
 | `WANXIANGSHU_PROVIDER_LANGUAGE` | provider 语言偏好显式设置（`en` / `zh-CN`），位于全局语言阶梯最高优先级 |
 | `WANXIANGSHU_ADMISSION_TIMEOUT_MS` | prompt 物理 acceptance 等待超时（毫秒，默认 10000） |
 | `WANXIANGSHU_DIAG=1` | 让内部诊断记录经 stderr 可见；只观测，不改变任何决策 |
 | `WANXIANGSHU_ABLATION_PROFILE` | feature-ablation 拓扑 profile 选择（配 `resources/ablation/`） |
+| `WANXIANGSHU_ABLATION_<node>` | feature-ablation 单节点三态覆盖（`ablated` / `borrowed` / `active`）；仍过 DAG 校验 |
+| `SPHINX_COMMON_DIR` | Sphinx MCP 独立进程的 durable workspace；缺失即启动失败 |
+| `SPHINX_START_CONFIG` | Sphinx MCP start 配置 JSON；缺失时只允许读取类工具（start 返回 `CONFIG_REQUIRED`） |
 
 ### 升级：只读委托（调度协议 2）
 
@@ -149,11 +152,12 @@ Blogger、Bookkeeper、Predictor 等内部角色由编排路径调用，不作�
 
 | 角色 | 典型工具面 | 说明 |
 |------|------------|------|
-| Orchestrator | `commission`, `join`, `horizon`, `sphinx` | 顶层战役战略统筹与独立道路委任 |
-| Manager | `fork`, `resume`, `join`, `horizon`, `review`, `suicide`, `sphinx` | 独立评估、任务分解与推进未尽账本；通过 fork 派发 Engineer，通过 resume 续做固定 DevOps（无 Fission） |
-| Engineer | `read`, `write`, `edit`, `glob`, `grep`, `mv`, `rm`, `fetch`, `js-engineer`, `bash-honeypot`, `fission`, `sphinx` | 本地事实调查与源码读写实现（不执行真实命令，不差遣 DevOps）；独占 Fission 权能 |
+| Orchestrator | `commission`, `join`, `horizon` | 顶层战役战略统筹与独立道路委任 |
+| Manager | `fork`, `resume`, `join`, `horizon`, `review`, `suicide` | 独立评估、任务分解与推进未尽账本；通过 fork 派发 Engineer，通过 resume 续做固定 DevOps（无 Fission） |
+| Engineer | `read`, `write`, `edit`, `glob`, `grep`, `mv`, `rm`, `fetch`, `js-engineer`, `bash-honeypot`, `fission` | 本地事实调查与源码读写实现（不执行真实命令，不差遣 DevOps）；独占 Fission 权能 |
 | DevOps | `read`, `write`, `edit`, `glob`, `grep`, `mv`, `rm`, `js-devops`, `run`, `open-terminal`, `send-terminal`, `read-terminal`, `signal-terminal`, `join`, `horizon` | 真实命令执行、终端与进程管理；具备角色固有的非架构级自修授权（无 Fission） |
 | Blogger | `chronicle` | Companion 叶子，记录工作历史与认知上下文 |
+| Plan | `js-plan`, `ask`, `resume`, `handoff`, `deliver` | 接力式规划跑者，负责产出保姆级底稿 P；三阶段交接、任期隔离与崩溃恢复 |
 
 Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）。每个 managed work session 配套叶子 Companion（Blogger）。精确权限见 `requirements/participant-identity` 与 `requirements/capability-enforcement`。
 
@@ -161,7 +165,7 @@ Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）
 
 领域事实写入 Git common directory 下插件私有 `wanxiangshu-next/runtimes/` 路径中的 journal（按 runtime 的 NDJSON；取不到 common dir 时回退 XDG state home），不在业务 workspace 强制创建插件私有目录。随包资源：
 
-- `resources/provider/`（Common Law / Role Law / Tool Law / Delegation Law / Office Library，加 Casebook、Attention Regulation、Concern Routing、Institutional Learning；EN + zh-CN）；`resources/ablation/{fact-map,nodes,profiles,tool-map}.json`（feature-ablation 拓扑）；`resources/enforcer/<TipName>/{enforcer,main}{,.zh-CN}.md`；`resources/git/wanxiang-hook.mjs`；`resources/wanxiangshu.mjs`（model routing 模板）。**无** `resources/prompts/*`；**无** `catalog.json` SSOT。
+- `resources/provider/`（Common Law / Role Law / Tool Law / Delegation Law / Office Library，加 Casebook、Attention Regulation、Concern Routing；EN + zh-CN）；`resources/ablation/{fact-map,nodes,profiles,tool-map}.json`（feature-ablation 拓扑）；`resources/enforcer/<TipName>/{enforcer,main}{,.zh-CN}.md`；`resources/git/wanxiang-hook.mjs`；`resources/wanxiangshu.mjs`（model routing 模板）；`resources/degeneration-guard/envelope/LoopDetectorEnvelope.js`（入库的 loop detector envelope；构建复制到 `dist/`）。**无** `resources/prompts/*`；**无** `catalog.json` SSOT。
 - journal 与事实名默认冻结；升级前阅读 [CHANGELOG](CHANGELOG.md)。
 
 
@@ -182,8 +186,8 @@ Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）
 ```text
 src/           生产源码
 resources/     随包运行时资源
-requirements/  56 包 normative 语义树：每包必备 WHY.md、WHAT.md 与 tests/
-spec/          过程规范：对 opencode 功能增强的伪代码阅读地图（000-999）
+requirements/  56 包 normative 语义树（另 2 个历史包）：每包必备 WHY.md、WHAT.md 与 tests/
+人工审订语义指南的保姆级多人协作实现法/  过程规范：000 手册与 001 指南
 proposals/     现行施工计划、未来提案与 archive 历史记录（用户管理）
 万象体系/     投资人材料（DOC.html、PPT.html）
 scripts/       构建与少量仓库检查
@@ -234,7 +238,7 @@ npm run verify:release      # 发布验证
 |------|------|
 | `npm run format` | Fantomas 写盘（与 `format:check` 的相对面：一个改文件，一个只判失败） |
 | `node scripts/build.mjs --plan` | 只读计划报告：`mode`/`reason`/`changedInputs`/`selectedShards`/`compileItems`/`fableCompileInvocations`，不写 `dist/` |
-| `node scripts/derive-envelope.mjs` | 手动派生 loop detector envelope 到 `dist/Execution/Session/LoopDetectorEnvelope.js`。构建不自动派生；产物缺失时构建会提示运行本命令 |
+| `node scripts/derive-envelope.mjs` | 手动派生 loop detector envelope，更新入库产物 `resources/degeneration-guard/envelope/LoopDetectorEnvelope.js`。构建不自动派生，把入库产物复制到 `dist/Execution/Session/LoopDetectorEnvelope.js`；入库产物缺失时构建会提示运行本命令 |
 
 ### 测试分层
 
@@ -252,7 +256,7 @@ npm run verify:release      # 发布验证
 
 规范是万象术的语义根：每条行为命题有稳定 ID、测试落点和 owner 包。规范不跟踪实现进度，只定义正确性。
 
-- **规范**：`requirements/<package>/`（56 包 normative 树；必备 WHY.md、WHAT.md 与 tests/；WHAT 命题 ID 稳定寻址，条款与测试文件一一映射，覆盖缺口见 [requirements/GAP.md](requirements/GAP.md)）。
+- **规范**：`requirements/<package>/`（56 包 normative 树，另 2 个历史包；必备 WHY.md、WHAT.md 与 tests/；WHAT 命题 ID 稳定寻址，条款与测试文件一一映射，覆盖缺口见 [requirements/GAP.md](requirements/GAP.md)；含 `planning`（planning-001~019）：Plan 角色的接力式规划——三阶段交接、任期隔离、崩溃恢复）。
 - **历史 Clause 与变更记录**：2026-08-14 cutover 已归档（含 Kolmogorov 工程纪律与 completed change 考古；git 历史可回溯）。
 - 测试全部包自有（`requirements/<package>/tests/`），直接引用 WHAT 命题 ID。规范不跟踪实现进度。
 
@@ -273,7 +277,6 @@ resources/provider/
   casebook/<step>/{en,zh-CN}.md
   attention-regulation/<entry>/{en,zh-CN}.md
   concern-routing/<entry>/{en,zh-CN}.md
-  institutional-learning/<entry>/{en,zh-CN}.md
   README.md
 resources/ablation/{fact-map,nodes,profiles,tool-map}.json
 resources/enforcer/<TipName>/{enforcer,main}{,.zh-CN}.md
@@ -286,7 +289,7 @@ resources/wanxiangshu.mjs
 
 ### 构建与打包
 
-- **构建**：`scripts/build.mjs`（增量：按输入摘要判定 no-op / focused / full / clean 四模式，plan 与 run 共用判定；非源码输入或工具链变化进入 full 编译但不清空 `dist/`；仅源图删除、重命名或显式 `--clean` 时清空输出目录后重建；其余情况按受影响分片增量聚焦编译；随后校验入口与资源）。不把 `resources/` 复制进 `dist/`。
+- **构建**：`scripts/build.mjs`（增量：按输入摘要判定 no-op / focused / full / clean 四模式，plan 与 run 共用判定；非源码输入或工具链变化进入 full 编译但不清空 `dist/`；仅源图删除、重命名或显式 `--clean` 时清空输出目录后重建；其余情况按受影响分片增量聚焦编译；随后把入库的 loop detector envelope 复制到 `dist/` 并校验入口与资源）。除这一处 runtime import 产物外，不把 `resources/` 复制进 `dist/`。
 - **打包**：仓库根 `npm pack`（或 `--pack-destination artifacts/package`）。tarball = `dist/` + `resources/` + metadata（`package.json`、`README.md`、`LICENSE`）。不得含 `src/`、`requirements/`、`scripts/`、`artifacts/`。
 
 发布预检：`npm run verify:release`（干净工作树；验证日志默认写 `.fable-build/verify-logs/`，已被 .gitignore 忽略；CI 工作流 `.github/workflows/ci.yml` 运行同一命令，但无 artifact 上传，runner 结束后只剩余作业控制台输出）。

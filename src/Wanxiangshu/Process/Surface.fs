@@ -303,7 +303,6 @@ module ProcessSurface =
               WorkingDirectory = optionString workingDirectory
               Environment = None
               Stdin = optionString stdin
-              Deadline = None
               PtyOptions = None }
         :> obj
 

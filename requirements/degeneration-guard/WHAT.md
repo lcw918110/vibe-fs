@@ -16,12 +16,12 @@
 
 Half-life 固定为 `256` 个 `o200k_base` token，不由排版推导。包络从仓库唯一语料源派生，但只允许手动更新，遵守以下合同：
 
-- 构建不自动派生包络，也不自动检查包络是否随语料改变。构建只校验 `dist/Execution/Session/LoopDetectorEnvelope.js` 存在；缺失时构建失败，并提示运行显式派生命令 `node scripts/derive-envelope.mjs`。
-- 包络只允许手动更新：运行显式命令从当前仓库语料重新派生并写盘。产物是 runtime import 文件，不是配置源；不得将 normal/min/max 复制回 tracked 源码或作数值快照。
+- 构建不自动派生包络，也不自动检查包络是否随语料改变。入库产物位于 `resources/degeneration-guard/envelope/LoopDetectorEnvelope.js`；构建把入库产物原样复制到 `dist/Execution/Session/LoopDetectorEnvelope.js`。入库产物缺失时构建失败，并提示运行显式派生命令 `node scripts/derive-envelope.mjs`。
+- 包络只允许手动更新：运行显式命令从当前仓库语料重新派生并写盘到入库位置。产物是 runtime import 文件，不是配置源；它是唯一的手动更新落点，不得把 normal/min/max 另抄进其它源码或文档作数值快照。
 - selector 只返回 Git-tracked 路径；generator 拒绝 root 外路径，规范为 canonical repository-relative identity。generator、build、selector 及其输出绑定同一 staged input；raw bytes 只能经同一 tracking reader 取得，再作 strict UTF-8 和 generated marker 判定，不得旁路读取。
 - 语料使用 source/document 正向类型 allowlist，排除生成物、vendor/dependency、fixture/golden 和 JSON/JSONL/CSV 等结构化数据。按 repository path 顺序连成单一文本流；并行编码只在安全换行边界（`\n` 后为可打印、非 `/` 的 ASCII 字符）切分，结果须与整流编码位等价。
 - 以 $D_0=X$ 作一次仿射 replay，求唯一自洽先验 $X=mean(D_t(X))$，再从 $D_t(X)=\lambda^tX+b_t$ 的轨迹取 [003] 分位数。不用任意 seed 预热后二次 replay、Beta/连续分布拟合、运行时分位数或其它概率外推。
-- 生成 JS 仅为 runtime import 的临时产物；唯一 generated artifact row 须绑定 stable identity、output digest、selected-input digest、generator/build/selector lineage、package import target 与完整 JavaScript traversal；确定性不豁免产物实际携带的 authority。
+- 生成 JS 是 runtime import 产物：入库一份，构建复制到 dist。唯一 generated artifact row 须绑定 stable identity、output digest、selected-input digest、generator/build/selector lineage、package import target 与完整 JavaScript traversal；确定性不豁免产物实际携带的 authority。
 
 ## [005] O(1) 更新与有界内存
 

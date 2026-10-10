@@ -60,7 +60,8 @@ module CompletedTurnClassifier =
         | Some Role.Inspector
         | Some Role.DevOps
         | Some Role.Browser
-        | Some Role.Inquiry -> true
+        | Some Role.Inquiry
+        | Some Role.Plan -> true
         | Some Role.Distiller
         | Some Role.Blogger
         | None -> false

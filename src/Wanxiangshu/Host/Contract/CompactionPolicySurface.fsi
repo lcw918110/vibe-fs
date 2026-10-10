@@ -23,6 +23,9 @@ module CompactionPolicySurface =
     /// `isReanchored` is a JS function `(runId: string) => boolean`.
     val nextReanchor: observed: string array -> isReanchored: obj -> obj
 
+    /// HOST-006 startup probe: pseudo-runs inside the first-turn window (count or null).
+    val firstTurnCompactionRuns: messages: obj array -> obj
+
     /// HOST-006 startup probe verdict as JSON:
     ///   `{ kind: "Satisfied", message }`
     ///   `{ kind: "SettingUnavailable", path, required, clause, reason, message }`

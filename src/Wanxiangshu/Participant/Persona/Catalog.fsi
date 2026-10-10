@@ -17,6 +17,7 @@ type Persona =
     | Distiller
     | Curator
     | Predictor
+    | Planner
 
 [<RequireQualifiedAccess>]
 module Persona =

@@ -10,6 +10,10 @@ import * as trace from '../../../dist/Context/Trace/SemanticTraceSurface.js'
 import { acceptAuthorityRoot, openIncumbency, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
 import './support/007-provider-serialization.integration.mjs'
 
+// 语言阶梯最高优先级显式设为英文：本文件的注册组合证明逐字节断言 marker 文本与
+// grounding 的顺序，不能随调用者 shell 的语言设置漂移。插件实例化时才解析该值。
+process.env.WANXIANGSHU_PROVIDER_LANGUAGE = 'en'
+
 const sandbox = () => {
   const dir = mkdtempSync(join(tmpdir(), 'wanxiang-grounding-opencode-'))
   mkdirSync(join(dir, 'requirements', 'alpha'), { recursive: true })
@@ -501,14 +505,16 @@ for (const providerID of ['anthropic', 'cursor', 'openai']) {
   })
 }
 
-const assertRegisteredComposition = (messages, original, resultId) => {
+const assertRegisteredComposition = (messages, original, resultId, facts) => {
   assert.equal(messages.length, original.length, 'registered composition preserves message count')
   assert.deepEqual(messages.map(message => message.info), original.map(message => message.info))
   assert.deepEqual(messages[0], original[0], 'pending tool call and arguments are untouched')
   const output = messages.find(message => message.info.id === resultId).parts[0].state.output
   const originalOutput = original.find(message => message.info.id === resultId).parts[0].state.output
   assert.ok(output.startsWith(originalOutput), 'existing result and suffix bytes remain intact')
-  const guidance = 'Pair Programming: Language Anchor'
+  const anchored = facts.find(fact => fact[0] === 'PairProgrammingGuidelineAnchored')
+  assert.ok(anchored, 'registered guidance is present exactly once')
+  const guidance = anchored[1].MarkerText
   const requirementSource = 'requirement_source_path = "requirements/alpha/WHAT.md"'
   assert.equal(output.split(guidance).length - 1, 1, 'registered guidance is present exactly once')
   assert.equal(output.split(requirementSource).length - 1, 1, 'registered grounding is present exactly once')
@@ -558,7 +564,8 @@ const exerciseRegisteredComposition = async (providerID) => {
       }]
       const transformed = { messages: structuredClone(original) }
       await hooks['experimental.chat.messages.transform']({}, transformed)
-      assertRegisteredComposition(transformed.messages, original, original.at(-1).info.id)
+      const facts = sessionHostFacts(directory, sessionID)
+      assertRegisteredComposition(transformed.messages, original, original.at(-1).info.id, facts)
       assert.deepEqual(original.at(-1).parts[0].state.output, rawOutput)
       const canonical = await trace.currentProjection(runtime.journal, sessionID)
       assert.deepEqual(canonical.messages.flatMap(message => message.parts).filter(part => part.kind === 'tool-result'),

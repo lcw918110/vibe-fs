@@ -111,3 +111,13 @@ Host 停止自动重试的唯一证据是确切 `(SessionId, ProviderRunIdentity
 session-only idle 是唤醒，不能证明同 session 所有已接受输入都已被 Host 停止。在线 sweep 必须由公开 Host snapshot 的最新已完成 assistant 的 exact `parentID` 确认停止的物理执行，只定夺它自己的未启动义务。已被 owner 明确取代的旧 assistant idle 不定夺新输入，不铸造新输入的 idle permit；尚未保存到 Host 或仍在容量排队的已接受 successor 由其准入 owner 和独立 recovery sweep 负责。
 
 定夺必须终局：有 typed resume capability 时，用确切已接受 material 恢复执行；否则将该执行结为终态并报告该 turn 失败。本义务不发送新文本、不生成替换 PromptClaim，也不放宽 [003] 的单次物理发送约束。
+
+## [024] 加载期 Blogger stale 请求的同源未启动执行定夺
+
+加载归位把上一 runtime 遗留、本进程已无同 RequestId live flight 的 Blogger open request 结算为 `BloggerRequestAbandoned`（reason `stale-open-at-load`，crash-reconciliation-018/020）时，必须同时定夺该 Blogger session 名下恰好处于 `Accepted ∧ ¬ProviderStarted ∧ ¬Terminal` 的执行：
+
+- 每个此类执行按其 exact key 写入 typed pre-provider terminal `Failed`，复用 [023] 的定夺路径与 `managed-chat-execution-007` 的结算纪律；terminal durable 提交确认后发出该执行的 exact capacity 归还请求（boot 场景新进程没有旧 lease，release 是幂等 no-op，仍须请求）。
+- 已有 `ProviderStarted` 或已有 terminal 的执行保持不动；不触碰其他 session 或其他 open request 的执行；projection 中没有该 key 时不伪造执行或结算。
+- 同一 stale request 的重复加载幂等：已 terminal 的执行不再产生第二份 terminal 或第二次释放副作用；不得以 session-wide release、计数减一、idle/time/诊断文本定夺。
+- 本定夺只适用于「本进程无 live flight 的 stale open request」这一同源子集；全量加载快照的 `Accepted ∧ ¬ProviderStarted` sweep（含 resume 与不替代发送语义）仍归 [023] 的 boot sweep，未被本条替代。
+- terminal 提交未知时保留显式未知、不释放；失败显式暴露，不阻塞同一加载回调中其他 stale request 的结算。

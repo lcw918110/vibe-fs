@@ -11,9 +11,12 @@ module PrefixSurface =
     val select: value: obj -> obj
     val applyRebase: request: obj -> state: obj -> obj
     val applyReanchor: request: obj -> state: obj -> obj
+    val applyTenureReanchor: request: obj -> state: obj -> obj
     val epochOf: state: obj -> int64
     val hasSnapshot: state: obj -> bool
     val reanchoredRuns: state: obj -> string array
+    val reanchoredTenures: state: obj -> string array
+    val isTenureReanchored: incumbencyId: string -> state: obj -> bool
     val isReanchored: run: string -> state: obj -> bool
     val forSnapshot: snapshot: obj -> memoryPreamble: string -> memoryBody: string -> obj
     val forChoice: choice: obj -> committed: obj -> memoryPreamble: string -> memoryBody: string -> obj

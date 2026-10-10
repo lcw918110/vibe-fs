@@ -105,7 +105,6 @@ module WorktreeCommands =
           WorkingDirectory = cwd
           Environment = None
           Stdin = None
-          Deadline = None
           PtyOptions = None }
 
     let private outcome code stdout stderr =

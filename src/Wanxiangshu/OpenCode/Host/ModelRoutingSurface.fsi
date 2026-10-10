@@ -18,6 +18,7 @@ module ModelRoutingSurface =
     val sharedCapacitySnapshot: unit -> obj
     val commitSharedExecutionAdmission: token: obj -> observed: obj -> obj
     val releaseSharedExecutionAdmissionBeforeProvider: token: obj -> observed: obj -> obj
+    val sharedRetainContinuationInput: token: obj -> physicalUserMessageId: string -> obj
     val releasePhysical: sessionId: string -> physicalUserMessageId: string -> obj
     val bootstrapAndLoadAt: path: string -> template: string -> Task<obj>
 

@@ -25,6 +25,7 @@ type ContextFoldRejection =
     | BlogObservationsSquashedFrameRejected of rejection: BlogFoldRejection
     | PrefixRebaseCommittedRejected of reason: string
     | ContextReanchoredRejected of reason: string
+    | TenureReanchoredRejected of reason: string
 
 [<RequireQualifiedAccess>]
 module ContextFoldRejection =
@@ -37,6 +38,7 @@ module ContextFoldRejection =
         | ContextFoldRejection.BlogObservationsSquashedFrameRejected _ -> "BlogObservationsSquashed"
         | ContextFoldRejection.PrefixRebaseCommittedRejected _ -> "PrefixRebaseCommitted"
         | ContextFoldRejection.ContextReanchoredRejected _ -> "ContextReanchored"
+        | ContextFoldRejection.TenureReanchoredRejected _ -> "TenureReanchored"
 
     /// PERSIST-010: every Companion frame refusal describes a line a correct
     /// writer could not have produced, so none of them is absorbed.
@@ -70,6 +72,7 @@ module ContextFoldRejection =
         | ContextFoldRejection.BlogObservationsSquashedRejected reason -> reason
         | ContextFoldRejection.PrefixRebaseCommittedRejected reason -> reason
         | ContextFoldRejection.ContextReanchoredRejected reason -> reason
+        | ContextFoldRejection.TenureReanchoredRejected reason -> reason
         | ContextFoldRejection.BlogObservationCommittedFrameRejected rejection -> blogFrameMessage rejection
         | ContextFoldRejection.BlogObservationsSquashedFrameRejected rejection -> blogFrameMessage rejection
 
@@ -88,6 +91,13 @@ module ContextFactFold =
         match PrefixEpochProjection.describe rejection with
         | None -> Ok []
         | Some reason -> Error(ContextFoldRejection.ContextReanchoredRejected reason)
+
+    let private tenureReanchorRejected
+        (rejection: PrefixFoldRejection)
+        : Result<ContextProjectionChange list, ContextFoldRejection> =
+        match PrefixEpochProjection.describe rejection with
+        | None -> Ok []
+        | Some reason -> Error(ContextFoldRejection.TenureReanchoredRejected reason)
 
     // CTX-019: a successful Y prefix rebase is itself a provider-horizon
     // cold boundary. PrefixEpoch and auxiliary visibility must therefore
@@ -136,6 +146,21 @@ module ContextFactFold =
                   ContextProjectionChange.BlogReanchored sessionId
                   ContextProjectionChange.AuxiliaryVisibilityRetired sessionId ]
         | Error rejection -> reanchorRejected rejection
+
+    let private foldTenureReanchored
+        sessionId
+        previousEpoch
+        nextEpoch
+        incumbencyId
+        (current: ActivePrefixEpoch)
+        : Result<ContextProjectionChange list, ContextFoldRejection> =
+        match PrefixEpochProjection.applyTenureReanchor previousEpoch nextEpoch incumbencyId current with
+        | Ok retired ->
+            Ok
+                [ ContextProjectionChange.PrefixEpochSet(sessionId, retired)
+                  ContextProjectionChange.BlogReanchored sessionId
+                  ContextProjectionChange.AuxiliaryVisibilityRetired sessionId ]
+        | Error rejection -> tenureReanchorRejected rejection
 
     let fold
         (bloggerCyclesOf: SessionId -> BloggerCycleProjectionState option)
@@ -300,4 +325,16 @@ module ContextFactFold =
                 payload.PreviousEpochId
                 payload.NextEpochId
                 payload.ObservedCompactionRun
+                current
+
+        | ContextFactCases.TenureReanchored payload ->
+            let current =
+                prefixEpochOf payload.SessionId
+                |> Option.defaultValue PrefixEpochProjection.empty
+
+            foldTenureReanchored
+                payload.SessionId
+                payload.PreviousEpochId
+                payload.NextEpochId
+                payload.IncumbencyId
                 current

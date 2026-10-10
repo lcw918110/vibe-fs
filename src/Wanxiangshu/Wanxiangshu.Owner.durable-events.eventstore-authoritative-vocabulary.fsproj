@@ -12,6 +12,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.speculative-investigation.strength-event-vocabulary-contract.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-event-vocabulary-contract.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.repository-programming.repository-programming-js-event-vocabulary-contract.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.planning.mission-planning-event-vocabulary-contract.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.epistemic-reasoning.sphinx-v2-core.fsproj"/>
     <Compile Include="Persistence/EventStore/AuthoritativeVocabulary.fsi"/>
     <Compile Include="Persistence/EventStore/AuthoritativeVocabulary.fs"/>

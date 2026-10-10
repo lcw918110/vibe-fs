@@ -26,7 +26,7 @@
 
 ## [007] Compaction 观测门禁之预防与收容
 
-宿主压缩控制实行双层防护：启动前严格校验并关闭自动压缩配置，首轮调用若产生非预期压缩则直接拒绝启动；运行时若观测到压缩事实，必须立即触发原子上下文重锚定。
+宿主压缩控制实行双层防护：启动前严格校验并关闭自动压缩配置；启动探针只在第一回合窗口内拒绝非预期压缩——窗口从会话开始、截止于首个 completed assistant 消息（含该消息本身）；窗口之后的压缩（含用户手动 `/compact` 与后续回合压缩）属于运行时收容范围。运行时若观测到压缩事实，必须立即触发原子上下文重锚定。
 
 ## [008] Transform 到 ProviderRunIdentity 因果读与唯一性
 
@@ -115,7 +115,7 @@ Host subsystem 的公开 Contract、Runtime 与物理 Adapter 必须保持编译
 - `Host.Signal.Adapter`（`host-signal-adapter`）：宿主信号词汇 `HostSignal`、完整 provider failure/terminal `HostEventCodec`、信号路由（`HostSignalAdapter`）、物理订阅与事件总线适配器（`SharedTerminalBus`/`Events`）；按实际知识消费窄 codec contract，不向 message/loop consumer 输出自身完整闭包，也不编入工具注册实现。
 - `Host.Tool.Adapter`（`host-tool-adapter`）：独立拥有 `ToolHostCodec` 与 `ToolHostSurface` 的参数解码、上下文身份配对、SDK schema、工具注册、abort listener 与有界输出接线；它是物理适配器，不是纯合同。工具注册闭包不得取得信号路由或终端总线实现；同时需要两侧的 composition 显式装配，不恢复宽 adapter 或复制物理实现。
 - `Host.Session.Runtime`（`host-session-runtime`）：SDK/HTTP 快照投影、进程级静止门禁状态机（`SessionQuiescenceGate`、`QuiescenceSurface`）、消息就地变更与宿主上下文投影，禁止被普通业务契约直接引用。
-- `Sphinx.Host.Adapter`（`sphinx-host-adapter`）：原生 `/sphinx question` 命令配置适配器，隔离于核心契约之外；不启动或注入 Sphinx MCP。
+- `Sphinx.Host.Adapter`（`sphinx-host-adapter`）：`Hosts/OpenCode` 的 dispatch 借道端口（`OpenCodeHostPort`，Capabilities 仅 `dispatch`），隔离于核心契约之外；不注册原生工具，不启动或注入 Sphinx MCP。
 
 `HostDigest` 属于 `runtime-platform/digest` 的无领域摘要原语，不属于 `Host.Signal.Contract`；摘要计算不应使 consumer 获得 Host 消息、SDK、终端或物理适配能力。物理启动配置留在对应适配器，不回填共享终端合同。
 
@@ -145,7 +145,7 @@ Root workspace 是process-local Host资源定位结果，不是公开可变状�
 
 ## [032] Contract 提示字段解耦与参数清理安全
 
-工具入参中的 `contract` 仅作为对 provider 的提示字段；插件本地对缺失或错误的 `contract` 采取乐观处理，不进行二次强校验。执行清理时，对需要暂存的参数执行私有暂存，并在 `after` 回调中原样恢复；异常退出路径同样保证同源恢复，确保历史原始调用与上下文记录不被参数清理逻辑改写。此处「历史」指每次 provider 请求发给模型的 provider wire 层历史投影：参数清理后由 provider-facing transform 从 before 期私有暂存还原协议字段，使 wire 层历史保留原始入参；宿主持久化快照的内部形态属宿主实现，在公开 Hook API 内既不可满足也不可观测，不作为本仓门禁对象。参数恢复后的对象身份与原始键顺序必须以真实 canary 得到严格证明。参数清理机制按字段所有权处理：服务评审提示字段 `contract` 与仅限参与工具的只读委托估计字段 `estimated_readonly_rounds` / `self_note`。对第 5.2 节参与工具，业务执行视图对其估计字段执行剥除并在 `after`（含异常退出、重复调用与并发回调）同源恢复原始 arguments、自有键顺序与原始证据；两类字段互不覆盖、互不串值，provider wire 层调用记录保留原始入参。不参与工具（及未判定工具）属于 no-op 路径，本机制对其参数不读取、不剥离、不校验，其自有同名字段原样透传。对于参与工具的条件校验，当估计大于 0 时短记必须非空，当估计为 0 时短记属性必须不存在（省略）；非法输入在 before 阶段拒绝并进入参数错误路径，不触发全进程 fuse。工具定义装饰按 Predictor 只读配置存在性查询两态门控：查询为已配置时，仅对第 5.2 节参与工具 schema 追加必选 `estimated_readonly_rounds` 与条件 `self_note` 字段及客观事实说明，与评审 `contract` 装饰并存；未参与工具无任何增量；未配置时不装饰、不追加。查询结构非法时该 hook 按其 ToolDefinition 既有 fail-closed 处置明确失败，不得静默降级为未配置，也不得发布不完整协议。原始参数保证主要落在 provider wire 历史投影，不得承诺 Host 持久化快照对象形态或宣称重启后宿主内部字段必然完整。该查询由 ModelRouting 随唯一 MJS 模型配置在 Load Phase 一次加载并持有，工具装饰与委托准入共用同一结果，不存在第二份 enabled 真相。
+工具入参中的 `contract` 仅作为对 provider 的提示字段；插件本地对缺失或错误的 `contract` 采取乐观处理，不进行二次强校验。执行清理时，对需要暂存的参数执行私有暂存，并在 `after` 回调中原样恢复；异常退出路径同样保证同源恢复，确保历史原始调用与上下文记录不被参数清理逻辑改写。此处「历史」指每次 provider 请求发给模型的 provider wire 层历史投影：参数清理后由 provider-facing transform 从 before 期私有暂存还原协议字段，使 wire 层历史保留原始入参；宿主持久化快照的内部形态属宿主实现，在公开 Hook API 内既不可满足也不可观测，不作为本仓门禁对象。参数恢复后的对象身份与原始键顺序必须以真实 canary 得到严格证明。参数清理机制按字段所有权处理：服务评审提示字段 `contract` 与仅限参与工具的只读委托估计字段 `estimated_readonly_rounds` / `self_note`。对第 5.2 节参与工具，业务执行视图对其估计字段执行剥除并在 `after`（含异常退出、重复调用与并发回调）同源恢复原始 arguments、自有键顺序与原始证据；两类字段互不覆盖、互不串值，provider wire 层调用记录保留原始入参。不参与工具（及未判定工具）属于 no-op 路径，本机制对其参数不读取、不剥离、不校验，其自有同名字段原样透传。对于参与工具的估计字段校验，非法输入在 before 阶段拒绝并进入参数错误路径，不触发全进程 fuse；建议性短记 `self_note` 的形态不构成调用失败，该填不填、不该填填了、填空白或非字符串均不视为失败。工具定义装饰按 Predictor 只读配置存在性查询两态门控：查询为已配置时，仅对第 5.2 节参与工具 schema 追加必选 `estimated_readonly_rounds` 与条件 `self_note` 字段及客观事实说明，与评审 `contract` 装饰并存；未参与工具无任何增量；未配置时不装饰、不追加。查询结构非法时该 hook 按其 ToolDefinition 既有 fail-closed 处置明确失败，不得静默降级为未配置，也不得发布不完整协议。原始参数保证主要落在 provider wire 历史投影，不得承诺 Host 持久化快照对象形态或宣称重启后宿主内部字段必然完整。该查询由 ModelRouting 随唯一 MJS 模型配置在 Load Phase 一次加载并持有，工具装饰与委托准入共用同一结果，不存在第二份 enabled 真相。
 
 ## [033] 读取端 hook 的 exact 只读租约校验
 

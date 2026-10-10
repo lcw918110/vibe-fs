@@ -77,3 +77,9 @@ module ProjectionUpdate =
                     Attention =
                         projection.Attention
                         |> AttentionProjection.record payload.SessionId payload.OccurrenceId payload.Text }
+        | AttentionFactCases.DeferredWorkConsumed payload ->
+            Ok
+                { projection with
+                    Attention =
+                        projection.Attention
+                        |> AttentionProjection.consume payload.SessionId payload.OccurrenceIds }

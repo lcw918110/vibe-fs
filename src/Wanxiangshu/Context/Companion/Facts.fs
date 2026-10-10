@@ -102,3 +102,9 @@ type ContextFactCases =
            PreviousEpochId: PrefixEpochId
            NextEpochId: PrefixEpochId
            ObservedCompactionRun: ProviderRunIdentity |}
+    | TenureReanchored of
+        {| SessionId: SessionId
+           PreviousEpochId: PrefixEpochId
+           NextEpochId: PrefixEpochId
+           WorkId: string
+           IncumbencyId: string |}

@@ -6,7 +6,8 @@ open Wanxiangshu.Foundation
 type ActivePrefixEpoch =
     { EpochId: PrefixEpochId
       Snapshot: PrefixSnapshot option
-      ReanchoredRuns: Set<ProviderRunIdentity> }
+      ReanchoredRuns: Set<ProviderRunIdentity>
+      ReanchoredTenures: Set<string> }
 
 [<RequireQualifiedAccess>]
 type PrefixFoldRejection =
@@ -15,6 +16,7 @@ type PrefixFoldRejection =
     | CutoffRetreated of committed: int * proposed: int
     | CandidateNotNew
     | CompactionAlreadyReanchored of run: ProviderRunIdentity
+    | TenureAlreadyReanchored of incumbencyId: string
 
 module PrefixEpochProjection =
     val empty: ActivePrefixEpoch
@@ -34,6 +36,15 @@ module PrefixEpochProjection =
             Result<ActivePrefixEpoch, PrefixFoldRejection>
 
     val isReanchored: run: ProviderRunIdentity -> state: ActivePrefixEpoch -> bool
+
+    val applyTenureReanchor:
+        previousEpoch: PrefixEpochId ->
+        nextEpoch: PrefixEpochId ->
+        incumbencyId: string ->
+        state: ActivePrefixEpoch ->
+            Result<ActivePrefixEpoch, PrefixFoldRejection>
+
+    val isTenureReanchored: incumbencyId: string -> state: ActivePrefixEpoch -> bool
     val hasSnapshot: state: ActivePrefixEpoch -> bool
 
     /// Absorption policy for prefix observations. `None` means the observation is

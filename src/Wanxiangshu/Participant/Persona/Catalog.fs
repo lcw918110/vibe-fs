@@ -19,6 +19,7 @@ type Persona =
     | Distiller
     | Curator
     | Predictor
+    | Planner
 
 [<RequireQualifiedAccess>]
 module Persona =
@@ -38,6 +39,7 @@ module Persona =
         | Persona.Distiller -> "Distiller"
         | Persona.Curator -> "Curator"
         | Persona.Predictor -> "Predictor"
+        | Persona.Planner -> "Planner"
 
     let tryParse (label: string) : Persona option =
         match label with
@@ -55,6 +57,7 @@ module Persona =
         | "Distiller" -> Some Persona.Distiller
         | "Curator" -> Some Persona.Curator
         | "Predictor" -> Some Persona.Predictor
+        | "Planner" -> Some Persona.Planner
         | _ -> None
 
 /// AGENT-028: Role → the persona embedded in ParticipantIdentity.
@@ -70,6 +73,7 @@ module PersonaCatalog =
         | Role.Engineer -> Persona.Engineer
         | Role.DevOps -> Persona.Operator
         | Role.Blogger -> Persona.Chronicler
+        | Role.Plan -> Persona.Planner
         | Role.Coder -> Persona.Coder
         | Role.Inspector -> Persona.Investigator
         | Role.Browser -> Persona.Researcher

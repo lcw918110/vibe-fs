@@ -1366,15 +1366,47 @@ module ModelRouting =
                  | None -> admissionOwner.ReleasePhysical(sessionId, physicalUserMessageId))
                 |> completePhysicalRelease sessionId physicalUserMessageId)
 
+        /// managed-session-lifecycle-027: a delayed return replays the release of
+        /// an exact execution whose credit is still owned by the ledger. It must
+        /// not take the pending-queue branch: that branch cancels a current
+        /// demand only when the physical keys match, and a retained input's old
+        /// key never matches the newer pending demand — the queue branch would
+        /// answer StaleFence and leave the old exact credit silently held.
+        let releasePhysicalExecutionExactLocked (sessionId, physicalUserMessageId) =
+            lock gate (fun () ->
+                admissionOwner.ReleasePhysical(sessionId, physicalUserMessageId)
+                |> completePhysicalRelease sessionId physicalUserMessageId)
+
         let hasContinuationInput (sessionId, physicalId) =
             continuationInputs.Values
             |> Seq.exists (fun lease ->
                 lease.Identity.SessionId = sessionId
                 && lease.Identity.PhysicalUserMessageId = physicalId)
 
+        /// managed-session-lifecycle-027: the delayed return accepts the
+        /// idempotent outcomes and clears the pending record. A Conflict is a
+        /// real ownership violation: it must surface instead of silently
+        /// dropping the held credit, and the pending record stays in place so
+        /// the cancelled-retention / not-yet-returned state is not rewritten.
+        /// Callers already hold the gate.
+        let releaseUnretainedOutcome oldKey =
+            match releasePhysicalExecutionExactLocked oldKey with
+            | CapacityTransitionOutcome.Conflict ->
+                let sessionId, physicalUserMessageId = oldKey
+
+                invalidOp (
+                    sprintf
+                        "managed-session-lifecycle-027: retained continuation input release was rejected (%s/%s)"
+                        sessionId
+                        physicalUserMessageId
+                )
+            | CapacityTransitionOutcome.Applied
+            | CapacityTransitionOutcome.AlreadyApplied
+            | CapacityTransitionOutcome.StaleFence -> heldPhysicalReleases.Remove oldKey |> ignore
+
         let releaseUnretainedPhysical oldKey =
-            if not (hasContinuationInput oldKey) && heldPhysicalReleases.Remove oldKey then
-                releasePhysicalExecutionLocked oldKey |> ignore
+            if not (hasContinuationInput oldKey) && heldPhysicalReleases.Contains oldKey then
+                releaseUnretainedOutcome oldKey
 
         let releaseContinuationInputLocked key =
             match continuationInputs.TryGetValue key with
@@ -1617,6 +1649,19 @@ module ModelRouting =
 
         member internal _.CancelContinuationInput(sessionId: string, physicalUserMessageId: string) =
             lock gate (fun () -> releaseContinuationInputLocked (sessionId, physicalUserMessageId))
+
+        /// managed-session-lifecycle-027: scope close cancels every retained
+        /// continuation input this session owns, completing the delayed exact
+        /// return of the old credit once the last retention is gone. Exact to
+        /// this session's retention keys; no session-wide or force release.
+        member internal _.CancelRetainedInputsForSession(sessionId: string) =
+            normalizeSessionId sessionId
+            |> Option.iter (fun normSessionId ->
+                lock gate (fun () ->
+                    continuationInputs.Keys
+                    |> Seq.filter (fun (inputSession, _) -> inputSession = normSessionId)
+                    |> Seq.toArray
+                    |> Array.iter releaseContinuationInputLocked))
 
         member internal _.ContinueExecutionAdmission(previous: ExecutionAdmissionLease, physicalUserMessageId: string) =
             try
@@ -2062,6 +2107,18 @@ module ModelRouting =
             runtime.RetainContinuationInput(previous, PhysicalUserMessageId.value key.PhysicalUserMessageId)
         | None -> invalidOp "model-routing runtime is unavailable"
 
+    /// managed-session-lifecycle-027: the physical-only face of the shared
+    /// retention operation used by the Surface. The session of the retention
+    /// key is the previous lease's own session, so no caller needs to construct
+    /// a ChatExecutionKey for it.
+    let internal retainContinuationInputForPhysical
+        (previous: ExecutionAdmissionLease)
+        (physicalUserMessageId: PhysicalUserMessageId)
+        =
+        match lock sharedGate (fun () -> sharedRuntime) with
+        | Some runtime -> runtime.RetainContinuationInput(previous, PhysicalUserMessageId.value physicalUserMessageId)
+        | None -> invalidOp "model-routing runtime is unavailable"
+
     let internal tryContinuationInput (key: ChatExecutionKey) =
         lock sharedGate (fun () -> sharedRuntime)
         |> Option.bind (fun runtime ->
@@ -2077,6 +2134,12 @@ module ModelRouting =
                 SessionId.value key.SessionId,
                 PhysicalUserMessageId.value key.PhysicalUserMessageId
             ))
+
+    /// managed-session-lifecycle-027: cancel every retained continuation input
+    /// this session owns on the process-shared runtime.
+    let internal cancelRetainedInputsForSession (sessionId: SessionId) =
+        lock sharedGate (fun () -> sharedRuntime)
+        |> Option.iter (fun runtime -> runtime.CancelRetainedInputsForSession(SessionId.value sessionId))
 
     /// Read-only exact committed lease query on the process-shared runtime; an
     /// unloaded runtime observes nothing.

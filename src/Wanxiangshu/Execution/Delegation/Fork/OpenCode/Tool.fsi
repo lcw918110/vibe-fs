@@ -143,6 +143,7 @@ module ForkTool =
           ExpectedToolCalls: int option }
 
     val managerAdmission: ToolAdmission
+    val resumeAdmission: ToolAdmission
     val orchestratorAdmission: ToolAdmission
     val managerSpec: factory: HostToolFactory -> scope: ToolRuntimeScope -> ToolSpec
     val resumeSpec: factory: HostToolFactory -> scope: ToolRuntimeScope -> ToolSpec

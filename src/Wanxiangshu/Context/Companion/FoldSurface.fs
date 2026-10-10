@@ -187,6 +187,15 @@ module ContextFoldSurface =
                        NextEpochId = prefixEpoch (payload?NextEpochId)
                        ObservedCompactionRun = providerRun (payload?ObservedCompactionRun) |}
             )
+        | "TenureReanchored" ->
+            AgentFact.Context(
+                ContextFactCases.TenureReanchored
+                    {| SessionId = sessionId (payload?SessionId)
+                       PreviousEpochId = prefixEpoch (payload?PreviousEpochId)
+                       NextEpochId = prefixEpoch (payload?NextEpochId)
+                       WorkId = text (payload?WorkId)
+                       IncumbencyId = text (payload?IncumbencyId) |}
+            )
         | "TodoCheckpointCommitted" ->
             AgentFact.Context(
                 ContextFactCases.TodoCheckpointCommitted

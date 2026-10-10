@@ -56,15 +56,20 @@ module HostForkJoin =
         | Done of Result<JoinWaitOutcome<JoinItem>, ForkError>
         | Retry
 
-    /// host-boundary-021 / EXEC-009: a durable handle is actionable only while
-    /// THIS process owns its agent. After a restart the journal still carries the
-    /// previous process's handles; join must not consume them and the horizon
+    /// host-boundary-021 / EXEC-009 / participant-horizon-011: a durable handle is
+    /// actionable only while THIS process established its agent. A child cancelled
+    /// by its own process stays established (durable Abandoned, consequence not
+    /// yet consumed) even after its runtime is replaced, so that process still
+    /// sees it and join can consume it. After a restart the journal still carries
+    /// the previous process's handles; join must not consume them and the horizon
     /// roster must not present them. Join admission and HorizonTool share this
     /// one predicate so the two surfaces cannot disagree.
     let currentProcessHandle (runtime: HostForkRuntime) (record: HandleRecord) =
         match HandleId.tryAgent record.Handle with
         | None -> false
-        | Some handleId -> runtime.OwnsAgent(AgentHandleId.value handleId)
+        | Some handleId ->
+            let agentId = AgentHandleId.value handleId
+            runtime.OwnsAgent agentId || runtime.EstablishedByProcess agentId
 
     let private tryResultsAvailable (items: JoinItem list) =
         NonEmptyBatch.tryOfList items

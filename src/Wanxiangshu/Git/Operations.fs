@@ -17,7 +17,6 @@ module GitOperations =
           WorkingDirectory = Some repo
           Environment = None
           Stdin = None
-          Deadline = None
           PtyOptions = None }
 
     let private failure stdout stderr =

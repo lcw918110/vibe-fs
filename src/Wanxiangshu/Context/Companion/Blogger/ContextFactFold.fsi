@@ -25,6 +25,7 @@ type ContextFoldRejection =
     | BlogObservationsSquashedFrameRejected of rejection: BlogFoldRejection
     | PrefixRebaseCommittedRejected of reason: string
     | ContextReanchoredRejected of reason: string
+    | TenureReanchoredRejected of reason: string
 
 [<RequireQualifiedAccess>]
 module ContextFoldRejection =

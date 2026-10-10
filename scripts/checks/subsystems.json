@@ -15,6 +15,7 @@
     { "id": "knowledge", "legacy_owners": ["knowledge-reuse"] },
     { "id": "output", "legacy_owners": ["output-distillation"] },
     { "id": "participant", "legacy_owners": ["office-capability", "participant-identity"] },
+    { "id": "planning", "legacy_owners": ["planning"] },
     { "id": "persistence", "legacy_owners": ["durable-convergence", "durable-events"] },
     { "id": "process", "legacy_owners": ["process-execution"] },
     { "id": "provider", "legacy_owners": ["execution-model-routing", "host-provider-failure-ownership", "provider-attempt-recovery", "provider-language", "provider-projection"] },

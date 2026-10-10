@@ -1,5 +1,29 @@
 # Changelog — 版本历史
 
+## Unreleased — 接力式规划协议（Plan 模式）完整实现
+
+- 接力式规划协议完整实现（Role.Plan、三阶段 handoff、tenure-isolation、ask 两段式、崩溃恢复；requirements/planning 包 19 条条款、40 项测试）。
+
+## Unreleased — Blogger Provider 容量泄漏修复（GAP1 / GAP2）
+
+- `managed-session-lifecycle` [026]（`e0527f7bb`）：Main 会话收束（宿主 `SessionDeleted` 且有 durable `CompanionBloggerLinked`）时，级联结算每个 linked Blogger 名下全部已准入 execution——pre-provider 复用 `PreProviderSettlement.settle`、after-provider-start 复用 `ManagedChatProviderLifecycle.terminal`，durable 提交确认后逐个 exact 归还容量；`AlreadyApplied`/`StaleFence` 幂等接受，`Conflict` 不吞没。
+- `managed-session-lifecycle` [027]（`4133e0aa2`）：Session 收束（`ClearSession`）时取消自身与每个 linked Attached InternalLeaf 名下的全部 retained continuation input，并以 `admissionOwner.ReleasePhysical` 的 exact 路径回放其挂起的旧 credit 归还；`AlreadyApplied`/`StaleFence` 幂等接受，`Conflict` 显式暴露（带 exact key 的 `InvalidOperationException`）并保留挂起记录；不触发 `ReleaseExecution`/`ReleaseSession` 等 force 路径，重复收束幂等；`surface` 补 `sharedRetainContinuationInput` 对称暴露 shared runtime 保留操作。
+- `managed-session-lifecycle` [027] 失败隔离：`ClearSession` 的 Main 自身结算/保留取消/释放、每个 linked Attached InternalLeaf 的结算/取消/释放、以及无条件 per-session 清理组逐段隔离，任一步失败不跳过其余独立义务，首个真实失败在其余义务完成后重抛；`PluginRuntimeScope.DisposeSession` 承接失败后仍执行其后续清理组。
+- 对应测试：`requirements/managed-session-lifecycle/tests/026.test.mjs`、`requirements/managed-session-lifecycle/tests/027.test.mjs`、`requirements/managed-chat-execution/tests/015.test.mjs`、`requirements/provider-attempt-recovery/tests/024.test.mjs`；运行结果见提交时的工作记录。
+- `managed-chat-execution` [015]（`fa40d6fbb`）：transform 在 provider 启动边界拒绝执行（attempt plan freeze 失败）时，对 exact `Accepted ∧ ¬ProviderStarted ∧ ¬Terminal` 执行写 typed pre-provider `Failed` terminal，durable 提交确认后精确归还其容量；projection 中无该 key 时不伪造结算、交准入侧；原拒绝异常仍照常上报。
+- `provider-attempt-recovery` [024]（`2da1be87e`）：加载归位废弃 stale Blogger open request（`stale-open-at-load`）时，同源 `Accepted ∧ ¬ProviderStarted` 执行一并定夺为 `Failed` 并在 boot 场景发出幂等 release 请求；已启动/已终态与其他 session 不动，重复加载幂等。
+- 剩余边界：终态拒绝分支显式化（GAP-227）、全量 boot sweep（GAP-228）登记于 `requirements/GAP.md`。
+
+## Unreleased — 开发者意见 W1–W6 施工
+
+- W1 持久化与工具链：插件路径统一 `<git-common-dir>/wanxiangshu/`（WP-001）；ndjson 事件行内嵌载荷、取消旁挂 payloads（WP-021）；UTC 日期分组 GC（WP-022）；writer 增量读与有界锁等待（WP-023，修复前后数字对比未验证）；git hook 修复后默认重开（WP-024）。
+- W2 provider 与恢复：运行时漂移校验退役、交测试期性质保证（WP-003）；重启后首个新指令 prepend 状态指导（WP-020）；horizon 崩溃后不泄露未决工作（WP-025）；provider 可见文案改称「事实」（WP-026）；失败恢复去刻板实现（WP-027）；assume 穿透 LWR 核对（WP-028）。
+- W3 工具面与通信：celebrate/regret 整包退役（WP-036）；enough/abandon 合入 assume（WP-029）；defer 新消费语义与 Pair Hint 鼓励（WP-030、WP-031、WP-032）；会话自动订阅自身名字（WP-033）；publish 至 user 弹窗并复制 root（WP-034）；邮箱语义双语解释（WP-035）；fork/commission calling 可选（WP-009、WP-011）；底层 id 可见面收敛核对（WP-012）。
+- W4 relay：评审对象改为 findings pairs（WP-014、WP-015）；两段式 suicide 确认（WP-018）；末任收尾（WP-016）；快照去形式化（WP-017）；证书只作历史（WP-019）。
+- W5 重构与遗骸：normalTransform 具名 stage 管线（WP-004）；共享 ProtocolArgumentStash 原语（WP-005）；tool.execute 具名 stage 序列（WP-006）；工具门链具名化与 capability 单源（WP-007）；Sphinx 收敛 MCP-only（WP-039）；query-shell 遗骸丢弃（WP-040）；CHANGELOG 遗骸清理（WP-041）。
+- W6 文档收尾：环境变量 KISS（WP-037）；验证入口 KISS（WP-038）；指南 42 条状态标注与文档同步（算法 F）。
+- 证据：各包套件与门禁由 DevOps 实跑，数字见 `proposals/` 施工记录；WP-023 修复前后同输入的数字对比未验证。
+
 ## Unreleased — WP-021 / WP-026（ndjson 内嵌载荷与措辞清理）
 
 - `durable-events-012`：取消旁挂 payloads 目录，事件行自包含载荷。`EventEnvelope` 增内嵌 `Payloads`；`CanonicalEventCodec` 仅在事件确实引用载荷时写出 `payloads` 键（无载荷事件的 canonical 字节不变）；`IEventStore.WritePayload` 改为进程内暂存、`Append` 内嵌；`ICanonicalIntegrator.TryPayload` 成为已提交内嵌载荷的唯一读口，Store 不再自行 `readStreams` 重建缓存。删除 `ProcessEventLog` 的 payload 文件 API、`WriterStreamSync` 与 `RetentionSurface` 的远端 payload 树及缓存。条款同步 `durable-events` [002]/[003]/[010]/[012]、`durable-convergence` [010]、`speculative-investigation` [006]。

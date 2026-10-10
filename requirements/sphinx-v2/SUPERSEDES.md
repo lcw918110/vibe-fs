@@ -56,3 +56,7 @@
 ## 旧数据的处置
 
 旧事件不删除、不自动转换为新语义、不执行目录清空。新程序必须明确拒绝把旧 inquiry 当作 v2 恢复：返回 `LEGACY_INQUIRY_UNSUPPORTED` 或经版本识别的同义错误，附不含敏感内容的恢复说明。不得悄悄返回空状态。
+
+## 原生工具面残留的清理
+
+2026-10-10（WP-039）：旧原生工具面的残留——权限词表 `ToolPermission.Sphinx`、静态工具名单、ablation 工具映射与 `resources/provider/tool/sphinx/` 文案资源——已清理。插件不提供 `sphinx` 原生工具面；生产接入仅 v2 七件套 MCP。历史事件与旧数据处置仍按上一节。

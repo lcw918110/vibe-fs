@@ -426,8 +426,15 @@ module ProcessGitRawStore =
                     createObj
                         [ "encoding", box "buffer"
                           "input", box bytes
-                          "maxBuffer", box (64 * 1024 * 1024) ]
-                | None -> createObj [ "encoding", box "buffer"; "maxBuffer", box (64 * 1024 * 1024) ]
+                          "maxBuffer", box (64 * 1024 * 1024)
+                          "timeout", box 120000
+                          "killSignal", box "SIGTERM" ]
+                | None ->
+                    createObj
+                        [ "encoding", box "buffer"
+                          "maxBuffer", box (64 * 1024 * 1024)
+                          "timeout", box 120000
+                          "killSignal", box "SIGTERM" ]
 
             try
                 execFile "git" argv options (fun error stdout stderr -> ProcessGitExec.complete tcs error stdout stderr)

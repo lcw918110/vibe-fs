@@ -205,7 +205,7 @@ integrationTest('WHAT[crash-reconciliation-020] actual child settlement persists
 
 integrationTest('WHAT[crash-reconciliation-020] actual child settlement propagates unknown and unattempted append failures', async () => {
   await withDurableChildRuns(async ({ handle, commonDir, reopen, dispatch }) => {
-    const { renameSync, writeFileSync, rmSync } = await import('node:fs')
+    const { renameSync, mkdirSync, readdirSync, rmSync } = await import('node:fs')
     const { join } = await import('node:path')
     const events = join(commonDir, 'wanxiangshu', 'events')
     const saved = join(commonDir, 'wanxiangshu', 'saved-events')
@@ -217,14 +217,21 @@ integrationTest('WHAT[crash-reconciliation-020] actual child settlement propagat
     const active = child => dispatch.projectionObservation(handle, child).activeLogicalRun
     const initial = ['engineer', 'devops'].map(active)
     assert.ok(initial.every(profile => profile !== null), 'the failed operation must have real unsettled child work')
-    renameSync(events, saved)
+    mkdirSync(saved, { recursive: true })
+    const writers = readdirSync(events).filter(name => name.endsWith('.ndjson'))
+    const stashed = writers.map(name => ({ live: join(events, name), held: join(saved, name) }))
+    // Replace each existing writer file with a same-named directory: the events
+    // directory stays usable, so the fault lands in PhysicalAppend
+    // (AppendAllText against a directory) and reports an unknown outcome.
+    for (const writer of stashed) renameSync(writer.live, writer.held)
+    for (const writer of stashed) mkdirSync(writer.live)
     try {
-      writeFileSync(events, 'blocked: not a directory')
       await assert.rejects(() => recovery.settleChildRuns(handle), /append outcome unknown/i)
       assert.deepEqual(['engineer', 'devops'].map(active), initial, 'failed durability cannot close either run')
     } finally {
-      rmSync(events, { force: true })
-      renameSync(saved, events)
+      for (const writer of stashed) rmSync(writer.live, { recursive: true, force: true })
+      for (const writer of stashed) renameSync(writer.held, writer.live)
+      rmSync(saved, { recursive: true, force: true })
     }
     assert.deepEqual(await durableEvents(commonDir), before, 'the refused append publishes no durable fact')
     await assert.rejects(() => recovery.settleChildRuns(handle), /append not attempted.*writer poisoned/i)

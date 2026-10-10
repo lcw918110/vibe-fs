@@ -23,6 +23,10 @@ import {
   readManifest,
   writeManifest,
 } from './lib/build-state.mjs'
+import {
+  loopDetectorEnvelopeDistPath,
+  loopDetectorEnvelopeRepositoryPath,
+} from './lib/loop-detector-envelope-paths.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dist = path.join(root, 'dist')
@@ -125,29 +129,24 @@ export class CrossProcessMutex {
 
 // ── Resource & Artifact Verification ─────────────────────────────────────────
 
-async function verifyArtifacts(targetRoot = root) {
-  // degeneration-guard-004: repository is the SSOT, but the envelope is derived manually.
-  // Build never auto-derives it and never checks whether it changed; a missing artifact
-  // fails the build and points at the explicit derivation command.
-  const envelopeArtifact = path.join(targetRoot, 'dist/Execution/Session/LoopDetectorEnvelope.js')
-  if (!fs.existsSync(envelopeArtifact)) {
-    // A full rebuild stages the prior dist aside before compiling into a blank
-    // dist. The manually derived envelope is not an F# compile output, so it
-    // would otherwise be lost on every full rebuild. Preserve the existing
-    // manual artifact from the staged backup; this is not auto-derivation.
-    // Only when neither the current dist nor the staged backup carries the
-    // artifact do we fail and point at the explicit derivation command.
-    const stagedEnvelope = path.join(stagedBackupDirFor(path.join(targetRoot, 'dist')), 'Execution/Session/LoopDetectorEnvelope.js')
-    if (fs.existsSync(stagedEnvelope)) {
-      fs.mkdirSync(path.dirname(envelopeArtifact), { recursive: true })
-      fs.copyFileSync(stagedEnvelope, envelopeArtifact)
-    } else {
-      throw new Error(
-        `missing loop detector envelope artifact: ${envelopeArtifact}\n` +
-          'Run `node scripts/derive-envelope.mjs` to derive it from the repository corpus.',
-      )
-    }
+export function materializeLoopDetectorEnvelope(targetRoot = root) {
+  // degeneration-guard-004: the envelope is derived manually into the tracked
+  // repository artifact. The build never auto-derives it and never checks
+  // whether it changed; it copies the repository artifact verbatim into dist.
+  const source = path.join(targetRoot, loopDetectorEnvelopeRepositoryPath)
+  const target = path.join(targetRoot, loopDetectorEnvelopeDistPath)
+  if (!fs.existsSync(source)) {
+    throw new Error(
+      `missing repository loop detector envelope artifact: ${source}\n` +
+        'Run `node scripts/derive-envelope.mjs` to derive it from the repository corpus.',
+    )
   }
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.copyFileSync(source, target)
+}
+
+async function verifyArtifacts(targetRoot = root) {
+  materializeLoopDetectorEnvelope(targetRoot)
 
   const entry = path.join(targetRoot, 'dist/OpenCode/Plugin/Plugin.js')
   if (!fs.existsSync(entry)) throw new Error(`missing entry artifact: ${entry}`)

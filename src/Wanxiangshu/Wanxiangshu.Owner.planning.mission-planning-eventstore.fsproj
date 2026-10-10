@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <WanxiangshuSubsystem>planning</WanxiangshuSubsystem>
+    <WanxiangshuCompileShard>mission-planning-eventstore</WanxiangshuCompileShard>
+    <WanxiangshuSemanticOwner>planning</WanxiangshuSemanticOwner>
+    <WanxiangshuOwnerLocality>mission-planning-eventstore</WanxiangshuOwnerLocality>
+    <WanxiangshuOwnerLocalityKind>contract</WanxiangshuOwnerLocalityKind>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="Wanxiangshu.Owner.planning.mission-planning-event-vocabulary-contract.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.planning.mission-planning-core.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-model.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-storetypes.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.durable-convergence.eventstore-integrator-contract.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-canonicalcodec.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-canonical-json.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.digest.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.action-affordance.opencode-tools-nodefs.fsproj"/>
+    <Compile Include="Mission/Planning/EventCodec.fsi"/>
+    <Compile Include="Mission/Planning/EventCodec.fs"/>
+    <Compile Include="Mission/Planning/IntegrationRules.fsi"/>
+    <Compile Include="Mission/Planning/IntegrationRules.fs"/>
+    <Compile Include="Mission/Planning/Store.fsi"/>
+    <Compile Include="Mission/Planning/Store.fs"/>
+    <Compile Include="Mission/Planning/PlanPath.fsi"/>
+    <Compile Include="Mission/Planning/PlanPath.fs"/>
+    <Compile Include="Mission/Planning/PlanTools.fsi"/>
+    <Compile Include="Mission/Planning/PlanTools.fs"/>
+    <Compile Include="Mission/Planning/Surface.fsi"/>
+    <Compile Include="Mission/Planning/Surface.fs"/>
+  </ItemGroup>
+</Project>

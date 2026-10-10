@@ -62,6 +62,6 @@ DevOps 不发明架构、产品含义、兼容性或安全政策，不削弱断�
 
 ## [018] Sphinx
 
-Sphinx 由程序控制探究步骤、工作项、预算、续行与收束，通过 `sphinx(question, expectTurns?)` 或 `/sphinx question` 同步调用标准 Engineer 获取事实与完成工作项。内部 Engineer 的文件修改、工具及 Fission 能力遵循标准 Engineer 权限和相同的资格、authority 检查，不另设只读 profile，不增加真实执行或 DevOps 调度权。
+Sphinx 以独立 MCP stdio 服务存在（`Sphinx/V2/ServeEntry` 与 `Hosts/Mcp` 七件套），插件不提供 `sphinx` 原生工具面或对应 capability。程序内部的标准 Engineer 调用遵循 delegation 与 capability-enforcement 的现有资格、authority 检查，不另设只读 profile，不增加真实执行或 DevOps 调度权。
 
 Sphinx 不是 Role、Persona 或普通 subagent，不拥有独立 Fission 身份、不增加 session 层级，不设 Inquiry 或其他中间模型驾驶层。

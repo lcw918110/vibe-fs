@@ -125,6 +125,9 @@ type HostForkRuntime =
     member List: unit -> AgentRecord list * PtyRecord list
     member TryFindAgent: agentId: string -> AgentRecord option
     member internal OwnsAgent: agentId: string -> bool
+    member internal EstablishedByProcess: agentId: string -> bool
+    member internal EstablishedAgentIds: string list
+    member internal RestoreEstablishedAgents: agentIds: string list -> unit
     member AdoptExisting: agentId: string * childId: SessionId -> unit
     member internal TryReusableChild: agentId: string -> (SessionId * bool) option
 

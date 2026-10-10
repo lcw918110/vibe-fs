@@ -332,7 +332,7 @@ test('WHAT[speculative-investigation-012] STRENGTH_012_investigation_prose_is_fa
   const nonParticipating = [
     'fork', 'resume', 'commission', 'join', 'horizon', 'review', 'suicide',
     'fission', 'open-terminal', 'send-terminal', 'read-terminal', 'signal-terminal',
-    'skill', 'sphinx', 'assume', 'defer', 
+    'skill', 'assume', 'defer', 
     'publish', 'chronicle', 'js-bookkeeper',
     'bash-honeypot', 'invalid', 'js-orchestrator', 'js-blogger',
   ]

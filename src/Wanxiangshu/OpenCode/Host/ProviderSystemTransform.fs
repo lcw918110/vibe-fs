@@ -68,7 +68,8 @@ module ProviderSystemTransform =
         | Role.Inspector
         | Role.Browser
         | Role.Inquiry
-        | Role.Distiller -> None
+        | Role.Distiller
+        | Role.Plan -> None
 
     let private localizedRolePrompt lang role =
         match role with

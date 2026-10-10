@@ -40,6 +40,7 @@ type SessionRecoveryHost
         | ChatExecutionRecoveryLifecycleEvent.SessionCancelled key
         | ChatExecutionRecoveryLifecycleEvent.SessionSuperseded key
         | ChatExecutionRecoveryLifecycleEvent.PhysicalExecutionQuiesced key -> Some key
+        | ChatExecutionRecoveryLifecycleEvent.ProviderStartBoundaryRejected(key, _) -> Some key
         | _ -> None
 
     let statesFor (event: ChatExecutionRecoveryLifecycleEvent) =
@@ -362,6 +363,90 @@ type SessionRecoveryHost
         | Some key -> [ key.SessionId ]
         | None -> statesFor event |> List.map (fun state -> state.key.SessionId) |> List.distinct
 
+    /// managed-chat-execution-015: decide an accepted execution that never
+    /// reached the provider with a typed pre-provider Failed terminal, then
+    /// return its exact capacity once the commit is durable.
+    let settleAcceptedBoundaryRejection
+        (key: ChatExecutionKey)
+        (accepted: AcceptedChatExecutionEvidence)
+        : Task<string> =
+        task {
+            let! settled = PreProviderSettlement.settle journal key accepted ChatExecutionTerminalDisposition.Failed
+
+            match settled with
+            | Ok _ ->
+                do! release key
+                scope.RevokeManualIntervention key
+                return "terminalized"
+            | Error error ->
+                return
+                    raise (
+                        InvalidOperationException(
+                            $"managed chat provider start boundary rejection settlement failed: {error}"
+                        )
+                    )
+        }
+
+    /// provider-attempt-recovery-024: the load phase abandoned a stale Blogger
+    /// open request. Decide every same-session execution still Accepted without
+    /// a provider start; already-terminal keys are counted, never rewritten.
+    let settleStaleBloggerAcceptedExecutions (sessionId: SessionId) : Task<int * int> =
+        task {
+            let current =
+                (AgentJournal.snapshot journal).AgentProjections.ChatExecutions
+                |> ChatExecutionProjection.current
+                |> List.filter (fun state -> state.key.SessionId = sessionId)
+
+            let accepted =
+                current
+                |> List.filter (fun state -> state.startedEvidence.IsNone && state.terminalDisposition.IsNone)
+
+            let alreadyTerminal =
+                current
+                |> List.filter (fun state -> state.terminalDisposition.IsSome)
+                |> List.length
+
+            for state in accepted do
+                let! _ = settleAcceptedBoundaryRejection state.key state.acceptedEvidence
+                ()
+
+            return List.length accepted, alreadyTerminal
+        }
+
+    /// managed-chat-execution-015: the transform refused the provider start
+    /// boundary for this exact execution. Terminal keys are idempotent; a key
+    /// without an accepted projection is never fabricated. Provider-started
+    /// executions belong to the provider phase and are never terminalized
+    /// through this pre-provider path.
+    let settleProviderStartBoundaryRejected (key: ChatExecutionKey) (reason: string) : Task<string> =
+        task {
+            let current =
+                (AgentJournal.snapshot journal).AgentProjections.ChatExecutions
+                |> ChatExecutionProjection.byKey key
+
+            let! result =
+                match current with
+                | None -> Task.FromResult "no-execution"
+                | Some(ChatExecutionState.Accepted accepted) -> settleAcceptedBoundaryRejection key accepted
+                | Some(ChatExecutionState.Started _) -> Task.FromResult "ignored"
+                | Some(ChatExecutionState.EndedBeforeStart _)
+                | Some(ChatExecutionState.EndedAfterStart _) ->
+                    task {
+                        do! release key
+                        scope.RevokeManualIntervention key
+                        return "already-terminal"
+                    }
+
+            Diagnostic.emit
+                "provider-start-boundary-rejected"
+                [ "session_id", SessionId.value key.SessionId
+                  "physical_user_message_id", PhysicalUserMessageId.value key.PhysicalUserMessageId
+                  "provider_error", reason
+                  "result", result ]
+
+            return result
+        }
+
     let recoverState (event: ChatExecutionRecoveryLifecycleEvent) (state: ChatExecutionState) =
         task {
             let! current = settleAcceptedCancellation event state
@@ -414,7 +499,22 @@ type SessionRecoveryHost
 
     member _.Signal(event: ChatExecutionRecoveryLifecycleEvent) : Task =
         task {
-            for state in statesFor event do
+            let statesToRecover =
+                match event with
+                | ChatExecutionRecoveryLifecycleEvent.ProviderStartBoundaryRejected _ -> []
+                | ChatExecutionRecoveryLifecycleEvent.BloggerStaleRequestAbandoned _ -> []
+                | _ -> statesFor event
+
+            match event with
+            | ChatExecutionRecoveryLifecycleEvent.ProviderStartBoundaryRejected(key, reason) ->
+                let! _ = settleProviderStartBoundaryRejected key reason
+                ()
+            | ChatExecutionRecoveryLifecycleEvent.BloggerStaleRequestAbandoned sessionId ->
+                let! _ = settleStaleBloggerAcceptedExecutions sessionId
+                ()
+            | _ -> ()
+
+            for state in statesToRecover do
                 do! recoverSignalledState event state
 
             sessionsToPulse event |> List.iter pulseDrain
@@ -454,3 +554,15 @@ type SessionRecoveryHost
     /// Persists the terminal, releases the physical resource and revokes the
     /// manual intervention through the shared recovery ports.
     member _.Finalize(request: TerminalFinalizationRequest) : Task = actions.Finalize request
+
+    /// managed-chat-execution-015: exact provider-start-boundary rejection
+    /// report. Returns "terminalized" | "already-terminal" | "no-execution" |
+    /// "ignored" as the observable decision of this signal.
+    member _.SettleProviderStartBoundaryRejected(key: ChatExecutionKey, reason: string) : Task<string> =
+        settleProviderStartBoundaryRejected key reason
+
+    /// provider-attempt-recovery-024: the load phase abandoned a stale Blogger
+    /// open request. Returns (settled, alreadyTerminal) for the same-source
+    /// accepted executions.
+    member _.SettleStaleBloggerAcceptedExecutions(sessionId: SessionId) : Task<int * int> =
+        settleStaleBloggerAcceptedExecutions sessionId

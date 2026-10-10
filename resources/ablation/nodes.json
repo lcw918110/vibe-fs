@@ -398,6 +398,13 @@
       "borrowed_surface": []
     },
     {
+      "id": "planning",
+      "package": "planning",
+      "station": 57,
+      "kind": "package",
+      "borrowed_surface": []
+    },
+    {
       "id": "delegation.sync-delegate",
       "package": "delegation",
       "station": 42,

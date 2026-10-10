@@ -546,19 +546,10 @@ module HostSignalBootstrap =
                     ChatAdmissionTransaction.production durable (fun managed ->
                         runtime.AcceptManagedChatIntent(ChatAdmissionIntent.ofManaged managed)))
 
-            // Operator kill switch: the git-hook integration (hook installation and
-            // the ref-triggered converge it launches) stays off while its hang is
-            // investigated. `WANXIANG_GIT_SYNC=1` re-enables installation.
-            let gitSyncEnabled =
-                match System.Environment.GetEnvironmentVariable "WANXIANG_GIT_SYNC" with
-                | null -> false
-                | value -> value = "1"
-
             let durabilityActivation =
                 lazy
                     (match workspaceDirectory with
                      | None -> Ok()
-                     | Some _ when not gitSyncEnabled -> Ok()
                      | Some workspace -> HookDispatcher.ensure workspace)
 
             let requireDurabilityActivation () =
@@ -1071,9 +1062,8 @@ module HostSignalBootstrap =
                 |> Option.filter (fun _ ->
                     ProviderWireDecode.firstString info [ "role" ] = Some "user"
                     && ProviderWireDecode.firstString info [ "sessionID"; "sessionId" ] = Some(
-                                                                                              SessionId.value
-                                                                                                  selected.SessionId
-                                                                                          ))
+                        SessionId.value selected.SessionId
+                    ))
                 |> Option.map (fun physical ->
                     { SessionId = selected.SessionId
                       PhysicalUserMessageId = PhysicalUserMessageId.create physical })

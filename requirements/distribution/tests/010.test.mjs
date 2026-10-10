@@ -21,6 +21,7 @@ test('WHAT[distribution-010] repository resources and emitted role/tool declarat
     'engineer',
     'manager',
     'orchestrator',
+    'plan',
   ].sort()
 
   assert.deepEqual(

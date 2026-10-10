@@ -135,6 +135,7 @@ module PluginTransforms =
           ApplyStrengthReplay: string option -> obj -> Task<StrengthReplayPlan list>
           RestoreProtocolArguments: obj -> Task<unit>
           ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
+          ApplyTenureIsolation: string option -> obj -> Task<unit>
           CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
           CommitStrengthTrace: string option -> XTraceProjectionState option -> StrengthReplayPlan list -> Task<unit>
           RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
@@ -241,6 +242,49 @@ module PluginTransforms =
         let requireProviderAdmission key =
             if ModelRouting.readExecutionAdmission key |> Option.isNone then
                 rejectProviderStartBoundary (ProviderStartBoundaryFailure.CommittedAdmissionUnavailable key)
+
+        /// managed-chat-execution-015: the exact execution key a refused
+        /// provider start boundary addresses; a missing wire identity means
+        /// the refusal carries no exact key and is never guessed.
+        let exactProviderStartBoundaryKey
+            (projectionSessionIdOpt: string option)
+            (outObj: obj)
+            : ChatExecutionKey option =
+            match projectionSessionIdOpt with
+            | Some sessionText when not (String.IsNullOrWhiteSpace sessionText) ->
+                outObj
+                |> ProviderWireDecode.messagesFromTransformOutput
+                |> ProviderWireCapture.lastUserMessageId
+                |> Option.map (fun physical ->
+                    { SessionId = SessionId.create sessionText
+                      PhysicalUserMessageId = physical })
+            | _ -> None
+
+        let signalProviderStartBoundaryRejection (key: ChatExecutionKey) (reason: string) () : Task =
+            scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.ProviderStartBoundaryRejected(key, reason))
+
+        /// managed-chat-execution-015: report a refused provider start boundary
+        /// for the exact execution to the settlement owner. The report must
+        /// never replace the original refusal: a failed report is emitted as a
+        /// diagnostic and the caller still raises the hook failure below.
+        let reportProviderStartBoundaryRejected
+            (projectionSessionIdOpt: string option)
+            (outObj: obj)
+            (reason: string)
+            : Task =
+            task {
+                let report () =
+                    match exactProviderStartBoundaryKey projectionSessionIdOpt outObj with
+                    | Some key -> signalProviderStartBoundaryRejection key reason ()
+                    | None -> Task.FromResult(()) :> Task
+
+                try
+                    do! report ()
+                with reportError ->
+                    Diagnostic.emit
+                        "provider-start-boundary-rejection-report-failed"
+                        [ "provider_error", reason; "result", reportError.Message ]
+            }
 
         let observeProviderRun (key: ChatExecutionKey) =
             task {
@@ -386,12 +430,17 @@ module PluginTransforms =
                 with
                 | Ok _ -> do! confirmProviderStarted projectionSessionIdOpt outObj
                 | Error error ->
+                    let reason = ProviderLifecycle.providerStartObservationErrorCode error
+
+                    // managed-chat-execution-015: the refused start boundary must be
+                    // reported to the settlement owner for the exact execution. The
+                    // report never replaces the original refusal: a failed report is
+                    // emitted as a diagnostic and the hook failure is raised below.
+                    do! reportProviderStartBoundaryRejected projectionSessionIdOpt outObj reason
+
                     return
                         invalidOp (
-                            sprintf
-                                "HOST-BOUNDARY-008: provider attempt plan freeze failed (%s): %A"
-                                (ProviderLifecycle.providerStartObservationErrorCode error)
-                                error
+                            sprintf "HOST-BOUNDARY-008: provider attempt plan freeze failed (%s): %A" reason error
                         )
             }
 
@@ -430,7 +479,7 @@ module PluginTransforms =
         // provider request is built from stripped history. The before hook
         // recorded the wire originals in the process-local vault; this step
         // merges them back into the request's assistant tool-call parts before
-        // delegation capture (4.5) or the replica batch collector reads the
+        // delegation capture (13.3) or the replica batch collector reads the
         // same history. Pure per part: business arguments verbatim, protocol
         // keys appended when missing or different, results untouched, no vault
         // entry means fail-open.
@@ -558,6 +607,167 @@ module PluginTransforms =
                 (Some boot.Timer)
                 outObj
 
+        let ownerRole (sessionId: string) =
+            journal
+            |> Option.bind (fun durable ->
+                let projections = (AgentJournal.snapshot durable).AgentProjections
+                let sid = SessionId.create sessionId
+
+                PromptAuthorityProjectionQueries.activeProfile sid projections
+                |> Option.orElseWith (fun () -> PromptAuthorityProjectionQueries.lastAuthorityProfile sid projections))
+            |> Option.map (fun profile -> profile.CanonicalRole)
+
+        let planSessionOf (sidOpt: string option) : string option =
+            match sidOpt with
+            | Some sid when not (String.IsNullOrWhiteSpace sid) && ownerRole sid = Some Role.Plan -> Some sid
+            | _ -> None
+
+        let tenureHasAssistantOrTool (rawMessages: obj list) : bool =
+            rawMessages
+            |> List.exists (fun raw ->
+                let tm = Wanxiangshu.Mission.Planning.TenureIsolation.messageOfRaw raw
+                tm.Role = "assistant" || tm.Role = "tool")
+
+        let tryReadActivePlanState () : Wanxiangshu.Mission.Planning.PlanWorkState option =
+            journal
+            |> Option.bind (fun durable ->
+                Wanxiangshu.Mission.Planning.PlanEventStore.tryActiveWorkState (fun key ->
+                    durable.Writer.TryCurrent key))
+
+        let buildTenureOf
+            (state: Wanxiangshu.Mission.Planning.PlanWorkState)
+            (fresh: bool)
+            : Wanxiangshu.Mission.Planning.ActiveTenureInfo =
+            let active = state.Active.Value
+
+            let workId =
+                state.WorkId
+                |> Option.map Wanxiangshu.Mission.Planning.PlanWorkId.value
+                |> Option.defaultValue ""
+
+            let previousRange =
+                state.LatestRetirement
+                |> Option.map (fun (_, _, startC, endC) -> (XTraceCursor.sequence startC, XTraceCursor.sequence endC))
+
+            { WorkId = workId
+              IncumbencyId = Wanxiangshu.Mission.Planning.PlanIncumbencyId.value active.Id
+              Stage = Wanxiangshu.Mission.Planning.PlanStage.render active.Stage
+              OpeningCursor = XTraceCursor.sequence active.OpeningCursor
+              PreviousRange = previousRange
+              IsFreshHandover = fresh }
+
+        let resolveTenure (outObj: obj) : Wanxiangshu.Mission.Planning.ActiveTenureInfo option =
+            let rawMessages = ProviderWireDecode.messagesFromTransformOutput outObj
+            let fresh = not (tenureHasAssistantOrTool rawMessages)
+
+            tryReadActivePlanState ()
+            |> Option.filter (fun state -> state.Active.IsSome)
+            |> Option.map (fun state -> buildTenureOf state fresh)
+
+        let tenureReanchorEpoch (durable: AgentJournal) (sessionId: SessionId) : ActivePrefixEpoch option =
+            match AgentProjection.tryFind sessionId (AgentJournal.snapshot durable).AgentProjections with
+            | None -> None
+            | Some session -> session.PrefixEpoch
+
+        let emitTenureReanchorSkipped (reason: string) : unit =
+            Diagnostic.emit "plan-tenure-reanchor-skipped" [ "result", reason ]
+
+        let handleReanchorTarget (requested: bool) : unit =
+            if requested then
+                emitTenureReanchorSkipped "no-journal-or-session"
+            else
+                ()
+
+        let reportTenureReanchorAppend
+            (appendTask: Task<Result<ProjectionSet, JournalAppendFailure>>)
+            (workId: string)
+            (incumbencyId: string)
+            : Task<unit> =
+            task {
+                match! appendTask with
+                | Ok _ -> ()
+                | Error failure ->
+                    Diagnostic.emit
+                        "plan-tenure-reanchor-append-failed"
+                        [ "work_id", workId
+                          "incumbency_id", incumbencyId
+                          "result", JournalAppendFailure.describe failure ]
+            }
+
+        let fireTenureReanchor
+            (durable: AgentJournal)
+            (sessionId: SessionId)
+            (workId: string)
+            (incumbencyId: string)
+            : unit =
+            match tenureReanchorEpoch durable sessionId with
+            | None -> emitTenureReanchorSkipped "no-epoch"
+            | Some epoch ->
+                let fact =
+                    ContextFact.TenureReanchored
+                        {| SessionId = sessionId
+                           PreviousEpochId = epoch.EpochId
+                           NextEpochId = PrefixEpochId.next epoch.EpochId
+                           WorkId = workId
+                           IncumbencyId = incumbencyId |}
+
+                let appendTask =
+                    AgentJournal.appendAgent (StreamId.Session sessionId) None fact durable
+
+                reportTenureReanchorAppend appendTask workId incumbencyId |> ignore
+
+        let tryReadReanchorRequested (result: obj) : bool =
+            try
+                unbox<bool> result?reanchorRequested
+            with _ ->
+                false
+
+        let isTenureReanchorRequested (result: obj) : bool =
+            if isNull result then
+                false
+            else
+                tryReadReanchorRequested result
+
+        let assembleAndRewrite
+            (sidOpt: string option)
+            (outObj: obj)
+            (tenure: Wanxiangshu.Mission.Planning.ActiveTenureInfo)
+            : unit =
+            let rawMessages = ProviderWireDecode.messagesFromTransformOutput outObj
+
+            let result =
+                Wanxiangshu.Mission.Planning.PlanningSurface.assembleTenureMessages
+                    (box (rawMessages |> List.toArray))
+                    (box tenure)
+                    (fun _ -> "")
+
+            let assembled = unbox<obj array> result?messages |> Array.toList
+            HostMessageProjection.replaceMessagesInPlace outObj assembled
+
+            let requested = isTenureReanchorRequested result
+
+            let target =
+                match journal, sidOpt, requested with
+                | Some durable, Some sid, true when not (String.IsNullOrWhiteSpace sid) ->
+                    Some(durable, SessionId.create sid)
+                | _ -> None
+
+            match target with
+            | None -> handleReanchorTarget requested
+            | Some(durable, sessionId) -> fireTenureReanchor durable sessionId tenure.WorkId tenure.IncumbencyId
+
+        let applyResolvedTenure (sidOpt: string option) (outObj: obj) : unit =
+            match resolveTenure outObj with
+            | None -> ()
+            | Some tenure -> assembleAndRewrite sidOpt outObj tenure
+
+        let applyTenureIsolation (sidOpt: string option) (outObj: obj) : Task<unit> =
+            task {
+                match planSessionOf sidOpt with
+                | None -> ()
+                | Some _ -> applyResolvedTenure sidOpt outObj
+            }
+
         { BeginPhysicalProviderAttempt =
             fun sessionId output ->
                 task {
@@ -577,17 +787,6 @@ module PluginTransforms =
             // The owner-facing replay must name the projected readonly exchange
             // with the owner's own `js-<role>` surface. Resolve that role from the
             // live authority projection for the session being transformed.
-            let ownerRole (sessionId: string) =
-                journal
-                |> Option.bind (fun durable ->
-                    let projections = (AgentJournal.snapshot durable).AgentProjections
-                    let sid = SessionId.create sessionId
-
-                    PromptAuthorityProjectionQueries.activeProfile sid projections
-                    |> Option.orElseWith (fun () ->
-                        PromptAuthorityProjectionQueries.lastAuthorityProfile sid projections))
-                |> Option.map (fun profile -> profile.CanonicalRole)
-
             StrengthReplay.applyBeforeXTrace journal snapshotOpt strengthDurability strengthFailFuse ownerRole
           RestoreProtocolArguments = restoreProtocolArguments
           ApplyRelayProjection =
@@ -651,6 +850,7 @@ module PluginTransforms =
                             sidOpt
                             outObj
                 }
+          ApplyTenureIsolation = applyTenureIsolation
           CaptureXTraceMessages =
             fun projectionSessionIdOpt outObj ->
                 task {
@@ -851,6 +1051,41 @@ module PluginTransforms =
                 }
           ReplicaSanitize = HostMessageProjection.sanitizeOutputMessages }
 
+    /// 普通分支请求的静态管道上下文：预读的物理消息 id 与各 stage 产出的
+    /// 会话起点、Strength 重放计划、已捕获 XTrace、horizon 只经这份 frame 传递。
+    type private TransformFrame =
+        { SessionId: string option
+          InObj: obj
+          OutObj: obj
+          PhysicalUserMessageId: PhysicalUserMessageId option
+          SessionStartedAt: DateTimeOffset option
+          ReplayPlans: StrengthReplayPlan list
+          TracedXTrace: XTraceProjectionState option
+          Horizon: PrefixPresentationHorizon }
+
+    /// 普通分支 stage：具名、静态列出，Run 直接调用一个或一段 caps 入口。
+    /// 返回 None 表示本次请求到此终止（退休旧 attempt 已被拦截）。
+    type private TransformStage =
+        { Name: string
+          Run: TransformFrame -> Task<TransformFrame option> }
+
+    let private runOrdinaryStages (stages: TransformStage list) (frame: TransformFrame) : Task<unit> =
+        let rec runStages stages frame =
+            task {
+                match stages with
+                | [] -> ()
+                | stage :: rest -> return! runOneStage stage rest frame
+            }
+
+        and runOneStage (stage: TransformStage) rest frame =
+            task {
+                match! stage.Run frame with
+                | Some next -> return! runStages rest next
+                | None -> return ()
+            }
+
+        runStages stages frame
+
     let normalTransform
         (caps: NormalTransformCapabilities)
         (projectionSessionIdOpt: string option)
@@ -858,80 +1093,188 @@ module PluginTransforms =
         (outObj: obj)
         : Task<unit> =
         task {
+            // 预读：在 Relay 投影改写消息数组之前捕获原始物理用户消息 id。
             let physicalUserMessageId =
                 ProviderWireDecode.messagesFromTransformOutput outObj
                 |> ProviderWireCapture.lastUserMessageId
 
-            // 1. SessionExecutionBinding.beginPhysicalProviderAttemptForTransform (durable-evidence gate)
-            do! caps.BeginPhysicalProviderAttempt projectionSessionIdOpt outObj
+            // host-boundary-019 的普通分支固定次序，不得重排；每个 stage 直接调用
+            // 对应 caps 入口，Run 返回 None 时本次请求到此终止。
+            let stages: TransformStage list =
+                [ // 1. SessionExecutionBinding.beginPhysicalProviderAttemptForTransform (durable-evidence gate)
+                  { Name = "begin-physical-provider-attempt"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.BeginPhysicalProviderAttempt frame.SessionId frame.OutObj
+                              return Some frame
+                          } }
+                  // 2. SessionStartedAtLedger.tryBindOrAbort
+                  { Name = "bind-session-started-at"
+                    Run =
+                      fun frame ->
+                          task {
+                              let! sessionStartedAt = caps.BindSessionStartedAt frame.SessionId
 
-            // 2. SessionStartedAtLedger.tryBindOrAbort
-            let! sessionStartedAt = caps.BindSessionStartedAt projectionSessionIdOpt
+                              return
+                                  Some
+                                      { frame with
+                                          SessionStartedAt = sessionStartedAt }
+                          } }
+                  // 3. Relay projection cut + manager-loop opening. This MUST run
+                  // before every trace/compaction owner so retired raw history
+                  // cannot be reintroduced later in the composition.
+                  { Name = "relay-projection-cut"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.SettleAndReplaceDeferredInspections frame.SessionId frame.OutObj
+                              let! disposition = caps.ApplyRelayProjection frame.SessionId frame.OutObj
 
-            // 3. Relay projection cut + manager-loop opening. This MUST run
-            // before every trace/compaction owner so retired raw history cannot
-            // be reintroduced later in the composition.
-            do! caps.SettleAndReplaceDeferredInspections projectionSessionIdOpt outObj
-            let! relayProjection = caps.ApplyRelayProjection projectionSessionIdOpt outObj
+                              if disposition = RelayProjectionDisposition.RetiredAttemptStopped then
+                                  return None
+                              else
+                                  return Some frame
+                          } }
+                  // 4. Tenure isolation (baton handover). Isolates message set for
+                  // active tenures (currently Plan); strips prior assistant/tool messages,
+                  // and reanchors prefix on fresh handover.
+                  { Name = "tenure-isolation"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.ApplyTenureIsolation frame.SessionId frame.OutObj
+                              return Some frame
+                          } }
+                  // 5. StrengthReplay.applyBeforeXTrace
+                  { Name = "strength-replay"
+                    Run =
+                      fun frame ->
+                          task {
+                              let! plans = caps.ApplyStrengthReplay frame.SessionId frame.OutObj
+                              return Some { frame with ReplayPlans = plans }
+                          } }
+                  // 5. host-boundary-032 / restore the protocol fields the Host
+                  // persisted away into the provider-facing request BEFORE
+                  // delegation capture (13.3) reads the same history; without
+                  // this the capture never sees the budget the model signed.
+                  { Name = "restore-protocol-arguments"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.RestoreProtocolArguments frame.OutObj
+                              return Some frame
+                          } }
+                  // 6. XTraceCapture.captureObservedMessagesWithReceipt
+                  { Name = "capture-xtrace"
+                    Run =
+                      fun frame ->
+                          task {
+                              let! capture = caps.CaptureXTraceMessages frame.SessionId frame.OutObj
 
-            if relayProjection = RelayProjectionDisposition.RetiredAttemptStopped then
-                return ()
+                              return
+                                  Some
+                                      { frame with
+                                          TracedXTrace = capture.Current }
+                          } }
+                  // 7. StrengthReplay.commitTracedAfterCapture
+                  { Name = "commit-strength-trace"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.CommitStrengthTrace frame.SessionId frame.TracedXTrace frame.ReplayPlans
 
-            // 4. StrengthReplay.applyBeforeXTrace
-            let! strengthReplayPlans = caps.ApplyStrengthReplay projectionSessionIdOpt outObj
+                              return Some frame
+                          } }
+                  // 8. CompanionHost.RefreshXTrace
+                  { Name = "refresh-companion-xtrace"
+                    Run =
+                      fun frame ->
+                          caps.RefreshCompanionXTrace frame.SessionId frame.TracedXTrace
+                          Task.FromResult(Some frame) }
+                  // 9. applyCompanionForOrdinaryMaterial
+                  { Name = "apply-companion"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.ApplyCompanion frame.SessionId frame.InObj frame.OutObj
+                              return Some frame
+                          } }
+                  // 10. XWire.applyTransform. A selected prefix probe creates a
+                  // tentative cold horizon for this physical request; downstream
+                  // historical auxiliaries must not replay the old horizon into it.
+                  { Name = "apply-xwire"
+                    Run =
+                      fun frame ->
+                          task {
+                              let! horizon = caps.ApplyXWire frame.OutObj
+                              return Some { frame with Horizon = horizon }
+                          } }
+                  // 11. ProviderLifecycle.freezeProviderAttemptPlanForTransform.
+                  // Freeze the exact plan, then confirm the Host's real assistant
+                  // identity and durable ProviderStarted before returning its body.
+                  { Name = "freeze-provider-attempt-plan"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.FreezeProviderAttemptPlan frame.SessionId frame.OutObj
+                              return Some frame
+                          } }
+                  // 12. EnforcerContinuation.applyContinuation
+                  { Name = "apply-enforcer-continuation"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.ApplyEnforcerContinuation frame.SessionId frame.OutObj
+                              return Some frame
+                          } }
+                  // 13.1 PairProgrammingThoughtTransform.maybeInjectGuideline
+                  // 13.2 RequirementGroundingTransform.projectOrTerminate
+                  // 13.3 Capture and start on the final outgoing request so the
+                  //      preparation owns the same mirror and provider attempt plan.
+                  { Name = "current-horizon-auxiliaries"
+                    Run =
+                      fun frame ->
+                          task {
+                              if frame.Horizon = PrefixPresentationHorizon.Current then
+                                  do! caps.InjectPairGuideline frame.SessionId frame.SessionStartedAt frame.OutObj
+                                  do! caps.ProjectRequirementGrounding frame.SessionId frame.OutObj
+                                  do! caps.ApplyReadonlyDelegation frame.SessionId frame.OutObj
 
-            // 4.4 host-boundary-032 / restore the protocol
-            // fields the Host persisted away into the provider-facing request
-            // BEFORE delegation capture (4.5) reads the same history; without
-            // this the capture never sees the budget the model signed.
-            do! caps.RestoreProtocolArguments outObj
+                              return Some frame
+                          } }
+                  // 14. BloggerChronicleText.maybeInject
+                  { Name = "inject-blogger-chronicle"
+                    Run =
+                      fun frame ->
+                          caps.InjectBloggerChronicle frame.SessionId frame.PhysicalUserMessageId frame.OutObj
+                          Task.FromResult(Some frame) }
+                  // 15. Re-apply replaced inspection results after any intermediate insertions
+                  { Name = "reapply-deferred-inspections"
+                    Run =
+                      fun frame ->
+                          task {
+                              do! caps.SettleAndReplaceDeferredInspections frame.SessionId frame.OutObj
+                              return Some frame
+                          } }
+                  // 16. HostMessageProjection.sanitizeMessages
+                  { Name = "sanitize-output-messages"
+                    Run =
+                      fun frame ->
+                          caps.SanitizeMessages frame.OutObj
+                          Task.FromResult(Some frame) } ]
 
-            // 5. XTraceCapture.captureObservedMessagesWithReceipt
-            let! traceCapture = caps.CaptureXTraceMessages projectionSessionIdOpt outObj
+            let frame: TransformFrame =
+                { SessionId = projectionSessionIdOpt
+                  InObj = inObj
+                  OutObj = outObj
+                  PhysicalUserMessageId = physicalUserMessageId
+                  SessionStartedAt = None
+                  ReplayPlans = []
+                  TracedXTrace = None
+                  Horizon = PrefixPresentationHorizon.Current }
 
-            // 6. StrengthReplay.commitTracedAfterCapture
-            do! caps.CommitStrengthTrace projectionSessionIdOpt traceCapture.Current strengthReplayPlans
-
-            // 7. CompanionHost.RefreshXTrace
-            caps.RefreshCompanionXTrace projectionSessionIdOpt traceCapture.Current
-
-            // 8. applyCompanionForOrdinaryMaterial
-            do! caps.ApplyCompanion projectionSessionIdOpt inObj outObj
-
-            // 9. XWire.applyTransform. A selected prefix probe creates a
-            // tentative cold horizon for this physical request; downstream
-            // historical auxiliaries must not replay the old horizon into it.
-            let! prefixHorizon = caps.ApplyXWire outObj
-
-            // 10. ProviderLifecycle.freezeProviderAttemptPlanForTransform
-            // Freeze the exact plan, then confirm the Host's real assistant
-            // identity and durable ProviderStarted before returning its body.
-            do! caps.FreezeProviderAttemptPlan projectionSessionIdOpt outObj
-
-            // 11. EnforcerContinuation.applyContinuation
-            do! caps.ApplyEnforcerContinuation projectionSessionIdOpt outObj
-
-            if prefixHorizon = PrefixPresentationHorizon.Current then
-                // 12. PairProgrammingThoughtTransform.maybeInjectGuideline
-                do! caps.InjectPairGuideline projectionSessionIdOpt sessionStartedAt outObj
-
-                // 13. RequirementGroundingTransform.projectOrTerminate
-                do! caps.ProjectRequirementGrounding projectionSessionIdOpt outObj
-
-                // Capture and start on the final outgoing request so the
-                // preparation owns the same mirror and provider attempt plan.
-                do! caps.ApplyReadonlyDelegation projectionSessionIdOpt outObj
-
-            // 15. BloggerChronicleText.maybeInject
-            caps.InjectBloggerChronicle projectionSessionIdOpt physicalUserMessageId outObj
-
-            // 15.1 Re-apply replaced inspection results after any intermediate insertions
-            do! caps.SettleAndReplaceDeferredInspections projectionSessionIdOpt outObj
-
-            // 16. HostMessageProjection.sanitizeMessages
-            caps.SanitizeMessages outObj
-
-            ()
+            do! runOrdinaryStages stages frame
         }
 
     let createWithCaps

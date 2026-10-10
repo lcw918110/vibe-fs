@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import * as hook from '../../../dist/Git/Hook/Surface.js'
 import { createBareWorkspace, readRemoteStoreOid } from '../../verification-system/tests/support/dumb-remote.mjs'
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
@@ -86,3 +87,125 @@ test('WHAT[durable-convergence-008] ensure repairs a store-only remote without r
 
 test.todo('WHAT[durable-convergence-008] real plugin load leaves Git configuration unchanged and first durability activation installs hooks without starting synchronization (GAP-151)')
 test.todo('WHAT[durable-convergence-008] controlled CAS competition and replacement crash cuts preserve all facts while clean no-op leaves unseen remote progress untouched (GAP-151)')
+
+// ── WP-024: the store lock covers local bytes only; network stays outside ──
+
+const hookRunner = fileURLToPath(new URL('../../../resources/git/wanxiang-hook.mjs', import.meta.url))
+
+const waitFor = async (predicate, timeoutMs = 8000) => {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (predicate()) return true
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+  return predicate()
+}
+
+// A slow `git` shim: ls-remote/fetch/push stamp a marker file and sleep, so the
+// hook's network window is observable from this test process. Every other git
+// verb passes straight through.
+const makeSlowGit = () => {
+  const shim = mkdtempSync(join(tmpdir(), 'wxs-slow-git-'))
+  const marker = join(shim, 'network-started')
+  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
+  const script = [
+    '#!/bin/sh',
+    'case " $* " in',
+    '  *" ls-remote "*) echo started >> ' + JSON.stringify(marker) + '; sleep 2.5 ;;',
+    '  *" fetch "*) echo started >> ' + JSON.stringify(marker) + '; sleep 2.5 ;;',
+    '  *" push "*) echo started >> ' + JSON.stringify(marker) + '; sleep 2.5 ;;',
+    'esac',
+    'exec ' + JSON.stringify(realGit) + ' "$@"',
+    '',
+  ].join(String.fromCharCode(10))
+  const gitPath = join(shim, 'git')
+  writeFileSync(gitPath, script, 'utf8')
+  chmodSync(gitPath, 0o755)
+  return { shim, marker }
+}
+
+const spawnHook = (repo, kind, arg, shim) =>
+  spawn(process.execPath, [hookRunner, kind, arg], {
+    cwd: repo,
+    env: { ...process.env, PATH: shim + ':' + process.env.PATH, WANXIANG_GIT_SYNC_ACTIVE: '' },
+    stdio: 'ignore',
+  })
+
+integrationTest('WHAT[durable-convergence-008] a network command in flight never blocks local append', async () => {
+  const workspace = createBareWorkspace(['client'])
+  try {
+    const repo = workspace.client('client')
+    await appendFact(repo, 'writer-a', event('a'.repeat(40), [], { writer: 'writer-a' }))
+    const { shim, marker } = makeSlowGit()
+    const child = spawnHook(repo, 'pre-push', 'origin', shim)
+    const exit = new Promise(resolve => child.on('exit', code => resolve(code)))
+
+    assert.ok(await waitFor(() => existsSync(marker)), 'the slow git shim was never invoked')
+    const started = Date.now()
+    await appendFact(repo, 'writer-probe', event('b'.repeat(40), [], { writer: 'writer-probe' }))
+    const waited = Date.now() - started
+
+    assert.ok(waited < 1000, 'append waited ' + waited + ' ms behind the hook network window')
+    assert.equal(await exit, 0)
+  } finally {
+    workspace.cleanup()
+  }
+})
+
+integrationTest('WHAT[durable-convergence-008] a hung network command still converges the full union without holding the lock', async () => {
+  const workspace = createBareWorkspace(['left', 'right'])
+  try {
+    const left = workspace.client('left')
+    const right = workspace.client('right')
+    const a = event('a'.repeat(40), [], { writer: 'left' })
+    const b = event('b'.repeat(40), [], { writer: 'right' })
+    await appendFact(left, 'writer-left', a)
+    runHook(left)
+    await appendFact(right, 'writer-right', b)
+    runHook(right)
+
+    const { shim, marker } = makeSlowGit()
+    const child = spawnHook(left, 'pre-push', 'origin', shim)
+    const exit = new Promise(resolve => child.on('exit', code => resolve(code)))
+
+    assert.ok(await waitFor(() => existsSync(marker)), 'the slow git shim was never invoked')
+    const started = Date.now()
+    const c = event('c'.repeat(40), [], { writer: 'writer-probe' })
+    await appendFact(left, 'writer-probe', c)
+    const waited = Date.now() - started
+    assert.ok(waited < 1000, 'append waited ' + waited + ' ms behind the hung network window')
+    assert.equal(await exit, 0)
+
+    assertFacts(left, [a, b, c])
+    assert.ok(readRemoteStoreOid(workspace.bare), 'the converged union reached the remote')
+  } finally {
+    workspace.cleanup()
+  }
+})
+
+integrationTest('WHAT[durable-convergence-008] a lease race refetches and republishes the union instead of overwriting unseen remote progress', async () => {
+  const workspace = createBareWorkspace(['left', 'right'])
+  try {
+    const left = workspace.client('left')
+    const right = workspace.client('right')
+    const a = event('a'.repeat(40), [], { writer: 'left' })
+    const b = event('b'.repeat(40), [], { writer: 'right' })
+    const c = event('c'.repeat(40), [], { writer: 'left' })
+    await appendFact(left, 'writer-left', a)
+    runHook(left)
+    await appendFact(right, 'writer-right', b)
+    runHook(right)
+    await appendFact(left, 'writer-left', c)
+    runHook(left)
+
+    assertFacts(left, [a, b, c])
+    assert.ok(readRemoteStoreOid(workspace.bare), 'the race left the remote published')
+
+    runHook(right)
+    assertFacts(right, [a, b, c])
+    runHook(left)
+    assertFacts(left, [a, b, c])
+  } finally {
+    workspace.cleanup()
+  }
+})

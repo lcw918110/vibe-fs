@@ -156,6 +156,36 @@ test('WHAT[durable-convergence-010] hook installer migrates the ephemeral tmp-di
   }
 })
 
+test('WHAT[durable-convergence-010] hook installer drops the deleted legacy wrapper from the chain and rewrites a stale owned wrapper', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'wxs-hook-ssh-legacy-wrapper-'))
+
+  try {
+    execFileSync('git', ['init', '--quiet', repo])
+    const commonDir = execFileSync('git', ['-C', repo, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
+    const wrapper = join(commonDir, 'wanxiangshu', 'ssh-command')
+    const legacyWrapper = join(commonDir, 'wanxiang', 'ssh-command')
+    const legacySuffix = `-o ControlMaster=auto -o ControlPersist=15s -o 'ControlPath=${join(commonDir, 'wanxiang', 'ssh-%C')}'`
+
+    execFileSync('git', ['-C', repo, 'config', '--local', 'core.sshCommand', `${legacyWrapper} ${legacySuffix}`])
+    assert.equal(ensure(repo), true, 'hook ensure failed')
+    const configured = execFileSync('git', ['-C', repo, 'config', '--local', '--get', 'core.sshCommand'], { encoding: 'utf8' }).trim()
+    const wrapperBody = readFileSync(wrapper, 'utf8')
+    assert.match(configured, /wanxiangshu\/ssh-command/)
+    assert.doesNotMatch(wrapperBody, /wanxiang\/ssh-command/)
+    assert.doesNotMatch(wrapperBody, /wanxiang\/ssh-%C/)
+    assert.match(wrapperBody, /^ssh -o ControlMaster=auto/m)
+
+    writeFileSync(wrapper, `#!/bin/sh\n# wanxiang-hook-dispatcher ssh-command\nset -eu\nexec '${legacyWrapper}' -o ControlMaster=auto -o ControlPersist=15s -o 'ControlPath=${join(commonDir, 'wanxiang', 'ssh-%C')}' "$@"\n`)
+    assert.equal(ensure(repo), true, 'second hook ensure failed')
+    const rewritten = readFileSync(wrapper, 'utf8')
+    assert.doesNotMatch(rewritten, /wanxiang\/ssh-command/)
+    assert.doesNotMatch(rewritten, /wanxiang\/ssh-%C/)
+    assert.match(rewritten, /^ssh -o ControlMaster=auto/m)
+  } finally {
+    rmSync(repo, { recursive: true, force: true })
+  }
+})
+
 test('WHAT[durable-convergence-010] hook installer respects user-owned SSH multiplex configuration', () => {
   const repo = mkdtempSync(join(tmpdir(), 'wxs-hook-ssh-user-owned-'))
 

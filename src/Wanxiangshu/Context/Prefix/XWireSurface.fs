@@ -903,7 +903,8 @@ module XWireSurface =
                                 Some
                                     { EpochId = PrefixEpochId.create (int64 input?prefixEpoch)
                                       Snapshot = None
-                                      ReanchoredRuns = Set.empty } }
+                                      ReanchoredRuns = Set.empty
+                                      ReanchoredTenures = Set.empty } }
 
                     let currentProjection =
                         if isNullish input?currentProjection then

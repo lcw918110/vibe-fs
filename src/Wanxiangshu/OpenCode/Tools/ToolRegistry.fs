@@ -56,6 +56,263 @@ module ToolRegistry =
 
         ProviderLanguageBinding.forSessionText sessionText
 
+    /// The refusal prose follows the provider language, so it cannot serve as a
+    /// machine-readable reason. `code` carries the resource key when a caller
+    /// needs one; omitting it leaves the rendered bytes exactly as before, which
+    /// is why tools without a code contract keep prose only.
+    let private denied
+        (ctx: HostToolContext)
+        (specName: string)
+        (path: string)
+        (subs: Map<string, string>)
+        (code: string option)
+        =
+        let fields =
+            match code with
+            | Some key -> [ "code", ToolHostCodec.TString key ]
+            | None -> []
+
+        ToolHostCodec.tomlObjectWithInstructions [ ProviderProse.render (lang ctx) path subs ] fields
+
+    /// mv / rm expose their refusals by code; the other tools keep the
+    /// prose-only shape their existing consumers already match on.
+    let private carriesRefusalCode (specName: string) =
+        match specName with
+        | "mv"
+        | "rm" -> true
+        | _ -> false
+
+    let private refusalCodeFor (specName: string) (path: string) =
+        if carriesRefusalCode specName then Some path else None
+
+    let private denyRole (ctx: HostToolContext) (specName: string) (role: Role) =
+        let path =
+            if specName = "fission" then
+                Path.DeniedFission
+            else
+                Path.DeniedRole
+
+        denied ctx specName path (Map [ "tool", specName; "role", sprintf "%A" role ]) (refusalCodeFor specName path)
+
+    /// The current capability decides; the denial stays action-focused and never
+    /// echoes internal loop state.
+    let private denyTaskState (ctx: HostToolContext) (specName: string) =
+        denied ctx specName Path.DeniedTaskState (Map [ "tool", specName ]) None
+
+    /// execution-model-routing-010: the tool context carries this call's own
+    /// exact ProviderRunIdentity. The physical message it answers is the one the
+    /// Host stated for that run; a run this process never observed has no step to
+    /// end, and must never be resolved from the session's current binding.
+    let private endObservedStep (providerRun: ProviderRunIdentity) =
+        ModelRouting.tryProviderStepIdentity providerRun
+        |> Option.iter (fun (sessionId, physicalUserMessageId) ->
+            ModelRouting.endProviderStep sessionId physicalUserMessageId providerRun)
+
+    let private providerToolBoundary (ctx: HostToolContext) =
+        if String.IsNullOrWhiteSpace ctx.SessionId then
+            Ok()
+        else
+            ctx.ProviderRunId |> Option.iter endObservedStep
+            Ok()
+
+    /// capability-enforcement-005/010/025: the exact session facts the execute
+    /// gate reads. `create` fills every field from the ToolRuntimeScope or its
+    /// own callbacks; a stage never receives the whole scope.
+    type private ToolGateFacts =
+        { RoleFor: HostToolContext -> Role option
+          EnsureRoleFor: HostToolContext -> Task<Role option>
+          IsStrengthReplica: HostToolContext -> bool
+          ManagerFactsFor: string -> ManagerCapabilityFacts
+          IsRetirementFrozen: string -> bool
+          BeginToolExecution: string -> unit
+          EndToolExecution: string -> unit }
+
+    let private accountingStageWithSession
+        (gate: ToolGateFacts)
+        (ctx: HostToolContext)
+        (run: unit -> Task<string>)
+        : Task<string> =
+        task {
+            gate.BeginToolExecution ctx.SessionId
+
+            try
+                return! run ()
+            finally
+                gate.EndToolExecution ctx.SessionId
+        }
+
+    /// Tool-execution accounting around one physical gate pass.
+    let private accountingStage
+        (gate: ToolGateFacts)
+        (ctx: HostToolContext)
+        (run: unit -> Task<string>)
+        : Task<string> =
+        if String.IsNullOrWhiteSpace ctx.SessionId then
+            run ()
+        else
+            accountingStageWithSession gate ctx run
+
+    /// feature-ablation-002: an ablated node never reaches the tool body.
+    let private ablationStage (spec: ToolSpec) (ctx: HostToolContext) : Task<string option> =
+        Task.FromResult(
+            if AblationGate.toolDenied (AblationGate.registry ()) spec.Name then
+                Some(denied ctx spec.Name Path.DeniedAblation (Map [ "tool", spec.Name ]) None)
+            else
+                None
+        )
+
+    /// capability-enforcement-005 / STRENGTH-004: Host-native read/glob/grep are
+    /// the entire replica surface. js-predictor is the single plugin tool a live
+    /// replica may execute; every other plugin tool stays denied.
+    let private replicaStage (gate: ToolGateFacts) (spec: ToolSpec) (ctx: HostToolContext) : Task<string option> =
+        Task.FromResult(
+            if not (gate.IsStrengthReplica ctx) then
+                None
+            elif spec.Name = "js-predictor" then
+                None
+            else
+                Some(denied ctx spec.Name Path.DeniedStrength Map.empty None)
+        )
+
+    /// capability-enforcement-025: current Manager facts close the office gate.
+    /// A frozen retirement keeps only Join and Finality; the final incumbent
+    /// keeps the read/cleanup/close-out surface and loses every new-work
+    /// capability.
+    let private managerFactsStage
+        (gate: ToolGateFacts)
+        (spec: ToolSpec)
+        (managerPermission: ToolPermission option)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
+        task {
+            let managerFacts = gate.ManagerFactsFor ctx.SessionId
+            let frozen = gate.IsRetirementFrozen ctx.SessionId
+
+            match managerPermission with
+            | Some permission when
+                frozen
+                && permission <> ToolPermission.Join
+                && permission <> ToolPermission.Finality
+                ->
+                return denyTaskState ctx spec.Name
+            | Some permission when not (OfficeCapability.isAllowedForManagerFacts managerFacts permission) ->
+                return denyTaskState ctx spec.Name
+            | _ -> return! spec.Execute args ctx
+        }
+
+    let private executeAdmittedRole
+        (gate: ToolGateFacts)
+        (spec: ToolSpec)
+        (managerPermission: ToolPermission option)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        (role: Role)
+        : Task<string> =
+        if role = Role.Manager then
+            managerFactsStage gate spec managerPermission args ctx
+        else
+            spec.Execute args ctx
+
+    /// capability-enforcement-002: office Role then admission then Manager facts.
+    let private officeStage
+        (gate: ToolGateFacts)
+        (spec: ToolSpec)
+        (managerPermission: ToolPermission option)
+        (officeAdmission: HostToolContext -> Role -> bool)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
+        task {
+            let! resolvedRole =
+                match gate.RoleFor ctx with
+                | Some role -> Task.FromResult(Some role)
+                | None -> gate.EnsureRoleFor ctx
+
+            match resolvedRole with
+            | Some role when officeAdmission ctx role ->
+                return! executeAdmittedRole gate spec managerPermission args ctx role
+            | Some role -> return denyRole ctx spec.Name role
+            | None ->
+                return
+                    denied
+                        ctx
+                        spec.Name
+                        Path.DeniedUnestablished
+                        Map.empty
+                        (refusalCodeFor spec.Name Path.DeniedUnestablished)
+        }
+
+    /// capability-enforcement-006: the attachment IS the authority. Resolving a
+    /// public office Role here would deny the Bookkeeper its own exact tool,
+    /// because a HostInternal prompt deliberately installs no public authority
+    /// profile.
+    let private attachmentStage
+        (spec: ToolSpec)
+        (attachmentAdmission: HostToolContext -> bool)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
+        task {
+            if attachmentAdmission ctx then
+                return! spec.Execute args ctx
+            else
+                return denied ctx spec.Name Path.DeniedUnestablished Map.empty None
+        }
+
+    let private admissionStage
+        (gate: ToolGateFacts)
+        (spec: ToolSpec)
+        (managerPermission: ToolPermission option)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
+        match spec.Admission with
+        | ToolAdmission.OfficeRole officeAdmission -> officeStage gate spec managerPermission officeAdmission args ctx
+        | ToolAdmission.PrivateAttachment attachmentAdmission -> attachmentStage spec attachmentAdmission args ctx
+
+    let private runAfterAblation
+        (gate: ToolGateFacts)
+        (spec: ToolSpec)
+        (managerPermission: ToolPermission option)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
+        task {
+            match! replicaStage gate spec ctx with
+            | Some refusal -> return refusal
+            | None -> return! admissionStage gate spec managerPermission args ctx
+        }
+
+    let private runBoundaryStages
+        (gate: ToolGateFacts)
+        (spec: ToolSpec)
+        (managerPermission: ToolPermission option)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
+        task {
+            match! ablationStage spec ctx with
+            | Some refusal -> return refusal
+            | None -> return! runAfterAblation gate spec managerPermission args ctx
+        }
+
+    /// The one composition point. Six named stages, fixed ordinary calls in the
+    /// order written here. No middleware list, no fold, no registry.
+    let private executeGate
+        (gate: ToolGateFacts)
+        (spec: ToolSpec)
+        (managerPermission: ToolPermission option)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
+        task {
+            match providerToolBoundary ctx with
+            | Error error -> return raise (InvalidOperationException error)
+            | Ok() ->
+                return! accountingStage gate ctx (fun () -> runBoundaryStages gate spec managerPermission args ctx)
+        }
+
     let private staticAdmissions (bloggerHost: IBloggerRuntimeHost option) : (string * ToolAdmission) list =
         [ "fork", ForkTool.managerAdmission
           "resume", ForkTool.managerAdmission
@@ -225,6 +482,32 @@ module ToolRegistry =
                 jsTransactionPersistence
                 (Some groundingObservation)
 
+        let planningAdmission: ToolAdmission =
+            ToolAdmission.OfficeRole(fun _ role -> role = Role.Plan)
+
+        let planningSpecs () =
+            [ { Name = "ask"
+                Description = ProviderProse.render providerLanguage "tool/ask" Map.empty
+                Arguments = [ "question", ToolHostCodec.stringSchemaDescribed "Question for the user" factory ]
+                Admission = planningAdmission
+                Execute = fun _ _ -> Task.FromResult("ask accepted") }
+              { Name = "handoff"
+                Description = ProviderProse.render providerLanguage "tool/handoff" Map.empty
+                Arguments =
+                  [ "note", ToolHostCodec.optionalStringSchemaDescribed "Handoff note for the next runner" factory ]
+                Admission = planningAdmission
+                Execute = fun _ _ -> Task.FromResult("handoff accepted") }
+              { Name = "deliver"
+                Description = ProviderProse.render providerLanguage "tool/deliver" Map.empty
+                Arguments = [ "note", ToolHostCodec.optionalStringSchemaDescribed "Final delivery summary" factory ]
+                Admission = planningAdmission
+                Execute = fun _ _ -> Task.FromResult("deliver accepted") }
+              { Name = "js-plan"
+                Description = ProviderProse.render providerLanguage "tool/js-plan" Map.empty
+                Arguments = []
+                Admission = planningAdmission
+                Execute = fun _ _ -> Task.FromResult("js-plan accepted") } ]
+
         let baseSpecs =
             [ yield ForkTool.managerSpec factory runtime
               yield ForkTool.resumeSpec factory runtime
@@ -265,201 +548,35 @@ module ToolRegistry =
 
               yield! casebookToolSpecs
               yield predictorJsSpec ()
-              yield! generatedJsSpecs () ]
+              yield! generatedJsSpecs ()
+              yield! planningSpecs () ]
+
+        let isStrengthReplica (ctx: HostToolContext) =
+            match isReplicaSession with
+            | Some replicaPred when not (String.IsNullOrWhiteSpace ctx.SessionId) ->
+                replicaPred (SessionId.create ctx.SessionId)
+            | _ -> false
+
+        let gateFacts: ToolGateFacts =
+            { RoleFor = (fun ctx -> runtime.RoleFor ctx)
+              EnsureRoleFor = (fun ctx -> runtime.EnsureRoleFor ctx)
+              IsStrengthReplica = isStrengthReplica
+              ManagerFactsFor = (fun sessionId -> runtime.ManagerCapabilityFactsFor sessionId)
+              IsRetirementFrozen = (fun sessionId -> runtime.IsRetirementFrozen sessionId)
+              BeginToolExecution = beginToolExecution
+              EndToolExecution = endToolExecution }
 
         // Generic execute gate: every tool declares the authority it is admitted
         // under, and the registry never invents one the session does not hold.
+        // capability-enforcement-012: Manager tool permissions come from the one
+        // StaticTools reverse lookup the schema projection already reads.
         let gateExecute (spec: ToolSpec) =
-            let original = spec.Execute
-
-            let fallbackManagerPermission specName =
-                match specName with
-                | "fork" -> Some ToolPermission.Fork
-                | "resume" -> Some ToolPermission.Resume
-                | "join" -> Some ToolPermission.Join
-                | "horizon" -> Some ToolPermission.Horizon
-                | "fission" -> Some ToolPermission.Fission
-                | "review" -> Some ToolPermission.ReviewAssessment
-                | "suicide" -> Some ToolPermission.Finality
-                | _ -> None
-
             let managerPermission =
                 match ManagerReviewTools.requiredPermissions spec.Name with
                 | Some perms -> perms |> Seq.tryHead
-                | None -> fallbackManagerPermission spec.Name
+                | None -> StaticTools.permissionOfToolName spec.Name
 
-            /// The refusal prose follows the provider language, so it cannot serve
-            /// as a machine-readable reason. `code` carries the resource key when a
-            /// caller needs one; omitting it leaves the rendered bytes exactly as
-            /// before, which is why tools without a code contract keep prose only.
-            let denied (ctx: HostToolContext) path (subs: Map<string, string>) (code: string option) =
-                let fields =
-                    match code with
-                    | Some key -> [ "code", ToolHostCodec.TString key ]
-                    | None -> []
-
-                ToolHostCodec.tomlObjectWithInstructions [ ProviderProse.render (lang ctx) path subs ] fields
-
-            /// mv / rm expose their refusals by code; the other tools keep the
-            /// prose-only shape their existing consumers already match on.
-            let carriesRefusalCode specName =
-                match specName with
-                | "mv"
-                | "rm" -> true
-                | _ -> false
-
-            let denyRole (ctx: HostToolContext) (role: Role) =
-                let path =
-                    if spec.Name = "fission" then
-                        Path.DeniedFission
-                    else
-                        Path.DeniedRole
-
-                denied
-                    ctx
-                    path
-                    (Map [ "tool", spec.Name; "role", sprintf "%A" role ])
-                    (if carriesRefusalCode spec.Name then Some path else None)
-
-            // The current capability decides; the denial stays action-focused
-            // and never echoes internal loop state.
-            let denyTaskState (ctx: HostToolContext) =
-                denied ctx Path.DeniedTaskState (Map [ "tool", spec.Name ]) None
-
-            let executeManager args (ctx: HostToolContext) =
-                task {
-                    let facts = runtime.ManagerCapabilityFactsFor ctx.SessionId
-                    let frozen = runtime.IsRetirementFrozen ctx.SessionId
-
-                    match managerPermission with
-                    | Some permission when
-                        frozen
-                        && permission <> ToolPermission.Join
-                        && permission <> ToolPermission.Finality
-                        ->
-                        return denyTaskState ctx
-                    | Some permission when not (OfficeCapability.isAllowedForManagerFacts facts permission) ->
-                        return denyTaskState ctx
-                    | _ -> return! original args ctx
-                }
-
-            let executeKnownRole officeAdmission args (ctx: HostToolContext) (role: Role) =
-                task {
-                    if not (officeAdmission ctx role) then
-                        return denyRole ctx role
-                    elif role <> Role.Manager then
-                        return! original args ctx
-                    else
-                        return! executeManager args ctx
-                }
-
-            let executeAfterEnsure officeAdmission args (ctx: HostToolContext) =
-                task {
-                    match! runtime.EnsureRoleFor ctx with
-                    | Some role -> return! executeKnownRole officeAdmission args ctx role
-                    | None ->
-                        return
-                            denied
-                                ctx
-                                Path.DeniedUnestablished
-                                Map.empty
-                                (if carriesRefusalCode spec.Name then
-                                     Some Path.DeniedUnestablished
-                                 else
-                                     None)
-                }
-
-            let executeOffice officeAdmission args (ctx: HostToolContext) =
-                task {
-                    match runtime.RoleFor ctx with
-                    | Some role -> return! executeKnownRole officeAdmission args ctx role
-                    | None -> return! executeAfterEnsure officeAdmission args ctx
-                }
-
-            // The attachment IS the authority. Resolving a public office Role here
-            // would deny the Bookkeeper its own exact tool, because a HostInternal
-            // prompt deliberately installs no public authority profile.
-            let executePrivateAttachment attachmentAdmission args (ctx: HostToolContext) =
-                task {
-                    if attachmentAdmission ctx then
-                        return! original args ctx
-                    else
-                        return denied ctx Path.DeniedUnestablished Map.empty None
-                }
-
-            let executeEstablished args (ctx: HostToolContext) =
-                match spec.Admission with
-                | ToolAdmission.OfficeRole officeAdmission -> executeOffice officeAdmission args ctx
-                | ToolAdmission.PrivateAttachment attachmentAdmission ->
-                    executePrivateAttachment attachmentAdmission args ctx
-
-            /// execution-model-routing-010: the tool context carries this call's
-            /// own exact ProviderRunIdentity. The physical message it answers is
-            /// the one the Host stated for that run; a run this process never
-            /// observed has no step to end, and must never be resolved from the
-            /// session's current binding.
-            let endObservedStep (providerRun: ProviderRunIdentity) =
-                ModelRouting.tryProviderStepIdentity providerRun
-                |> Option.iter (fun (sessionId, physicalUserMessageId) ->
-                    ModelRouting.endProviderStep sessionId physicalUserMessageId providerRun)
-
-            let providerToolBoundary (ctx: HostToolContext) =
-                if String.IsNullOrWhiteSpace ctx.SessionId then
-                    Ok()
-                else
-                    ctx.ProviderRunId |> Option.iter endObservedStep
-                    Ok()
-
-            let isStrengthReplica (ctx: HostToolContext) =
-                match isReplicaSession with
-                | Some replicaPred when not (String.IsNullOrWhiteSpace ctx.SessionId) ->
-                    replicaPred (SessionId.create ctx.SessionId)
-                | _ -> false
-
-            /// STRENGTH-004: Host-native read/glob/grep are the entire replica surface.
-            /// STRENGTH-004 / js-predictor: Host-native read/glob/grep never reach
-            /// this gate; js-predictor is the single plugin tool a live replica may
-            /// execute. Every other plugin tool stays denied.
-            let executeReplica args (ctx: HostToolContext) =
-                task {
-                    if spec.Name = "js-predictor" then
-                        return! executeEstablished args ctx
-                    else
-                        return denied ctx Path.DeniedStrength Map.empty None
-                }
-
-            let executeAfterBoundary args (ctx: HostToolContext) =
-                task {
-                    if AblationGate.toolDenied (AblationGate.registry ()) spec.Name then
-                        return denied ctx Path.DeniedAblation (Map [ "tool", spec.Name ]) None
-                    elif isStrengthReplica ctx then
-                        return! executeReplica args ctx
-                    else
-                        return! executeEstablished args ctx
-                }
-
-            let executeTrackedSession args (ctx: HostToolContext) =
-                task {
-                    beginToolExecution ctx.SessionId
-
-                    try
-                        return! executeAfterBoundary args ctx
-                    finally
-                        endToolExecution ctx.SessionId
-                }
-
-            let executeTracked args (ctx: HostToolContext) =
-                if String.IsNullOrWhiteSpace ctx.SessionId then
-                    executeAfterBoundary args ctx
-                else
-                    executeTrackedSession args ctx
-
-            fun args (ctx: HostToolContext) ->
-                task {
-                    match providerToolBoundary ctx with
-                    | Error error -> return raise (InvalidOperationException error)
-                    | Ok() -> return! executeTracked args ctx
-                }
+            fun args (ctx: HostToolContext) -> executeGate gateFacts spec managerPermission args ctx
 
         let specs =
             baseSpecs |> List.map (fun spec -> { spec with Execute = gateExecute spec })

@@ -10,7 +10,6 @@ and Command =
       WorkingDirectory: string option
       Environment: Map<string, string> option
       Stdin: string option
-      Deadline: Deadline option
       PtyOptions: PtyOptions option }
 
 and EstimatedRuntime = RuntimeSeconds of float

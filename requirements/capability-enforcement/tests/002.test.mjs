@@ -97,7 +97,6 @@ const allowList = (config, name) => {
     'join',
     'horizon',
     'fission',
-    'sphinx',
     'review',
     'chronicle',
     'fetch',
@@ -125,11 +124,10 @@ const ROLE_ALLOW = {
     'horizon',
     'suicide',
     'review',
-    'sphinx',
     'js-manager',
   ],
-  Orchestrator: ['commission', 'join', 'horizon', 'sphinx'],
-  Engineer: ['read', 'write', 'edit', 'glob', 'grep', 'mv', 'rm', 'bash-honeypot', 'fetch', 'fission', 'sphinx', 'js-engineer'],
+  Orchestrator: ['commission', 'join', 'horizon'],
+  Engineer: ['read', 'write', 'edit', 'glob', 'grep', 'mv', 'rm', 'bash-honeypot', 'fetch', 'fission', 'js-engineer'],
   DevOps: [
     'read',
     'write',
@@ -178,7 +176,6 @@ test('WHAT[capability-enforcement-002] office_capability_permissions_agree_with_
       join: 'Join',
       horizon: 'Horizon',
       fission: 'Fission',
-      sphinx: 'Sphinx',
       read: 'Read',
       write: 'Write',
       edit: 'Edit',
@@ -225,17 +222,17 @@ const { nameOf: managedAgentName } = await import('../../../dist/Participant/Per
 
 test('WHAT[capability-enforcement-002] P7_SURFACE_role_labels_are_js_native_strings', () => {
   assertJsData(allRoleLabels, 'allRoleLabels')
-  assert.equal(allRoleLabels.length, 5, 'exactly five canonical roles')
+  assert.equal(allRoleLabels.length, 6, 'exactly six canonical roles')
   assert.deepEqual(
     allRoleLabels,
-    ['blogger', 'devops', 'engineer', 'manager', 'orchestrator']
+    ['blogger', 'devops', 'engineer', 'manager', 'orchestrator', 'plan']
       .sort(),
   )
 })
 test('WHAT[capability-enforcement-002] P7_SURFACE_public_internal_partition_and_managed_agent_name_are_js_native', () => {
   assertJsData(allPublicRoleLabels, 'allPublicRoleLabels')
   assertJsData(allInternalRoleLabels, 'allInternalRoleLabels')
-  assert.deepEqual(allPublicRoleLabels, ['devops', 'engineer', 'manager', 'orchestrator'])
+  assert.deepEqual(allPublicRoleLabels, ['devops', 'engineer', 'manager', 'orchestrator', 'plan'])
   assert.deepEqual(allInternalRoleLabels, ['blogger'])
   assert.equal(allPublicRoleLabels.length + allInternalRoleLabels.length, allRoleLabels.length)
   assert.equal(managedAgentName('deep', 'blogger'), 'blogger')

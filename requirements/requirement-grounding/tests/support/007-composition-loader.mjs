@@ -26,11 +26,13 @@ export async function load(url, context, nextLoad) {
     return { ...loaded, source: reencodeSource(loaded.source, source.replace(placement, '= undefined')) }
   }
   if (!url.endsWith('/dist/OpenCode/Plugin/PluginTransforms.js')) return loaded
-  const guidance = 'caps.InjectPairGuideline(projectionSessionIdOpt, sessionStartedAt, outObj)'
-  const grounding = 'caps.ProjectRequirementGrounding(projectionSessionIdOpt, outObj)'
   const source = decodeSource(loaded.source)
-  assert.equal(source.split(guidance).length - 1, 1, 'mutation identifies the actual production guidance call')
-  assert.equal(source.split(grounding).length - 1, 1, 'mutation identifies the actual production grounding call')
+  const guidanceMatches = source.match(/caps\.InjectPairGuideline\([^)]*\)/g) ?? []
+  const groundingMatches = source.match(/caps\.ProjectRequirementGrounding\([^)]*\)/g) ?? []
+  assert.equal(guidanceMatches.length, 1, 'mutation identifies the actual production guidance call')
+  assert.equal(groundingMatches.length, 1, 'mutation identifies the actual production grounding call')
+  const guidance = guidanceMatches[0]
+  const grounding = groundingMatches[0]
   mutatedUrls.add(url)
   switch (mutation) {
     case 'missing-guidance':

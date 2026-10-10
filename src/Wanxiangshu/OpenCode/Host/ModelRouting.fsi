@@ -73,6 +73,8 @@ module ModelRouting =
 
         member internal CancelContinuationInput: sessionId: string * physicalUserMessageId: string -> unit
 
+        member internal CancelRetainedInputsForSession: sessionId: string -> unit
+
         member CommitExecutionAdmission:
             lease: ExecutionAdmissionLease * observed: ExecutionAdmissionExactIdentity -> CapacityTransitionOutcome
 
@@ -201,8 +203,12 @@ module ModelRouting =
     val internal retainContinuationInput:
         previous: ExecutionAdmissionLease -> key: ChatExecutionKey -> ModelRoutingTarget
 
+    val internal retainContinuationInputForPhysical:
+        previous: ExecutionAdmissionLease -> physicalUserMessageId: PhysicalUserMessageId -> ModelRoutingTarget
+
     val internal tryContinuationInput: key: ChatExecutionKey -> ExecutionAdmissionLease option
     val internal cancelContinuationInput: key: ChatExecutionKey -> unit
+    val internal cancelRetainedInputsForSession: sessionId: SessionId -> unit
 
     val internal wasExecutionSuperseded: key: ChatExecutionKey -> bool
 

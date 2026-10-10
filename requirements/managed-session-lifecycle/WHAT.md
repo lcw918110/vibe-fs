@@ -113,3 +113,24 @@ Finalize 恒带 exact Inspector identity，commitment 闭合为 `Finalized | Not
 ## [025] DevOps 每次工作返回即排空 PTY
 
 固定 DevOps 每次 run 终态结算，立即收束其拥有的全部 PTY：TERM 后等待真实退出，必要时升级 KILL，随后清除记账。不得留到下次 resume，不因 Manager 退休触发，不影响其他会话的资源和生命周期。
+
+## [026] Main 收束级联 Attached InternalLeaf 的 execution 结算
+
+Main session 收束（宿主 `SessionDeleted` 事件，且存在 durable Attached Companion 关联 `CompanionBloggerLinked` 作为 linked InternalLeaf 证据）时，lifecycle owner 除排空 Main 自身已准入 execution 外，还必须对每个 linked Attached InternalLeaf（Blogger）名下全部已准入 execution 逐一完成 typed terminal 与 exact capacity 归还：
+
+- 未终态 execution 先写 typed `Cancelled` terminal：pre-provider 阶段复用 `PreProviderSettlement.settle`，after-provider-start 阶段复用 `ManagedChatProviderLifecycle.terminal`；两者都等待 durable 提交确认后才可归还。
+- 已 terminal 但物理容量仍 held 的 execution 直接请求 exact release（`ModelRouting.releasePhysicalExecution`）；`AlreadyApplied` 与 `StaleFence` 按幂等结果接受，`Conflict` 不得吞没。
+- 只允许 exact per-execution fence 释放。禁止 session-wide blind release、计数减一、以错误文本或超时猜测释放。
+- 归还完成后，该 execution 不得再出现在 shared capacity 快照中。
+- 重复收束幂等：重放不得产生第二份 terminal、第二次释放副作用或抛错；已归还容量的 execution 再次处理为 no-op。
+- Main 自身与 linked InternalLeaf 各自的 execution 只由自己的 exact key 结算；本条款不改变 Main 自身容量的既有结算路径。
+
+## [027] Session 收束取消作用域保留并完成延后归还
+
+Session 收束（`PluginSessionScope.ClearSession`，覆盖宿主 `SessionDeleted` 的 Main 收束与 linked Attached InternalLeaf 的自删）时，lifecycle owner 除按 [026] 结算该作用域名下已准入 execution 外，还必须取消该作用域名下的全部 retained continuation input（`execution-model-routing` [006] 的「作用域关闭均须清理自己的保留」在删除链上的落地），并完成由此解锁的旧 exact capacity 归还；对 Main 自身与每个 linked Attached InternalLeaf（Blogger）都执行。
+
+- 触发：作用域收束调用发生时，该 session 名下仍存在 retained continuation input（含其保留键没有对应 durable execution 的残余形态）。取消在自身与每个 linked leaf 上各自先于该 leaf 的 exact release 请求执行。
+- 允许后果：取消只移除该 session 名下的保留，并以 exact `admissionOwner.ReleasePhysical` 路径回放其挂起的旧 key 归还；最后一份保留撤销后旧 credit 立即归还，borrowed credit 不退休 lender。归还完成后旧 execution 不得再出现在 shared capacity 快照中。
+- 禁止后果：不得使用 `ReleaseExecution`/`ReleaseSession` 等 force 路径；不得 session-wide blind release、计数减一或以时间猜测释放；保留未取消时不得宣称归还完成；取消操作不得取消无关的 pending demand 或触碰其他 session 的保留。
+- 失败后果：取消回放对 `AlreadyApplied` 与 `StaleFence` 按幂等结果接受，视同归还完成并清除挂起记录；对 `Conflict` 不得吞没——以带 exact key 信息文本的 `InvalidOperationException` 显式暴露（风格对齐 [026] 的 `SessionRecoveryHost.release`），且暴露时保留挂起记录，使「取消已完成、归还未完成」的状态不被静默吞掉。重复收束幂等：保留已取消时不产生第二次释放副作用；除真实所有权冲突外不抛错。
+- 失败隔离：收束链的任一步失败只隔离该步自身，不得跳过其余独立义务。`ClearSession` 内，Main 自身的结算、保留取消或释放失败不得跳过 linked Attached InternalLeaf 的结算、保留取消与 exact 释放；任一作用域的失败也不得跳过本次收束的无条件 per-session 清理组（registry 条目、quiescence、join-interrupt、companion 等）。`PluginRuntimeScope.DisposeSession` 承接 `ClearSession` 失败后仍必须执行其后续清理组（recovery scope、attempt plan、Blogger parked/episodes、LoopSensor 等）。失败在完成其余义务后仍显式暴露：首个真实失败被保留并在其余义务完成后重新抛出；上一段的真冲突例外语义不因隔离被吞掉或降级。重复收束继续幂等，已消费的失败源不得在第二次收束中再次产生副作用或吞掉新的失败。

@@ -11,6 +11,11 @@ open Wanxiangshu.Process
 /// OpenCode/Wanxiangshu never owns user fetch/pull/push triggers.
 type GitGatewayRunner = string list -> Task<int * string * string>
 
+/// Work that runs while the cross-process store lock is held: local writer
+/// reads, union validation, remote import and the final materialization.
+/// Discovery, remote object reads and publication stay outside the lock.
+type GitGatewayLocalStage = unit -> Task<Result<StoreSnapshot, ConvergeError>>
+
 [<RequireQualifiedAccess>]
 module GitGateway =
     let private trackingRef remote = StoreRef.remoteTracking remote
@@ -135,6 +140,10 @@ module GitGateway =
     /// Full bidirectional convergence. `observedRemote` is only an optimization
     /// for reference-transaction: the algorithm after root discovery is identical
     /// to pre-push. Lease races refetch and repeat boundedly.
+    ///
+    /// `withLocalLock` covers exactly the local byte boundary. Remote discovery,
+    /// remote object reads and publication run outside the lock; the budget
+    /// bounds the whole pass so a hung transport cannot hold the store open.
     let converge
         (raw: IGitRawStore)
         (commonDir: string)
@@ -142,46 +151,119 @@ module GitGateway =
         (maxRetries: int)
         (remote: string)
         (observedRemote: StoreSnapshot option)
+        (withLocalLock: GitGatewayLocalStage -> Task<Result<StoreSnapshot, ConvergeError>>)
+        (deadline: Deadline)
+        (clock: unit -> DateTimeOffset)
         : Task<Result<StoreSnapshot, ConvergeError>> =
-        let rec loop remoteSnapshot expectedRemote remoteKnownCurrent retriesLeft =
-            taskResult {
-                let! merged = WriterStreamSync.syncWriterStreams raw commonDir remoteSnapshot
+        let currentTimeMs () =
+            (clock ()).ToUnixTimeMilliseconds() |> float
 
-                let! pushResult =
-                    publishIfNeeded run remote remoteKnownCurrent expectedRemote merged
-                    |> TaskResultCE.ofTask
+        let budgetExhausted () = Deadline.isExpired clock deadline
 
+        let readRemoteAndMerge snapshot nowMs =
+            task {
+                let! remoteWriters = WriterStreamSync.readRemoteStreamsAt raw commonDir nowMs snapshot
+
+                match remoteWriters with
+                | Error error -> return Error error
+                | Ok writers ->
+                    return!
+                        withLocalLock (fun () ->
+                            WriterStreamSync.mergeRemoteStreamsUnderLock raw commonDir nowMs writers)
+            }
+
+        let syncWithRemoteSnapshot snapshot nowMs =
+            task {
+                match WriterStreamSync.tryCachedMergedAt commonDir nowMs snapshot with
+                | Some cached -> return Ok cached
+                | None -> return! readRemoteAndMerge snapshot nowMs
+            }
+
+        let syncUnderBoundary remoteSnapshot nowMs =
+            task {
+                match remoteSnapshot with
+                | None ->
+                    return! withLocalLock (fun () -> WriterStreamSync.syncWithoutRemoteUnderLock raw commonDir nowMs)
+                | Some snapshot -> return! syncWithRemoteSnapshot snapshot nowMs
+            }
+
+        let rec loop
+            (remoteSnapshot: StoreSnapshot option)
+            (expectedRemote: GitObjectId option)
+            (remoteKnownCurrent: bool)
+            (retriesLeft: int)
+            =
+            task {
+                if budgetExhausted () then
+                    return Error ConvergeError.ConvergeBudgetExhausted
+                else
+                    return! convergePass remoteSnapshot expectedRemote remoteKnownCurrent retriesLeft
+            }
+
+        and convergePass
+            (remoteSnapshot: StoreSnapshot option)
+            (expectedRemote: GitObjectId option)
+            (remoteKnownCurrent: bool)
+            (retriesLeft: int)
+            =
+            task {
+                let! merged = syncUnderBoundary remoteSnapshot (currentTimeMs ())
+
+                match merged with
+                | Error error -> return Error error
+                | Ok mergedSnapshot ->
+                    let! pushResult = publishIfNeeded run remote remoteKnownCurrent expectedRemote mergedSnapshot
+                    return! resolvePushOutcome retriesLeft pushResult mergedSnapshot
+            }
+
+        and resolvePushOutcome
+            (retriesLeft: int)
+            (pushResult: Result<unit, ConvergeError>)
+            (mergedSnapshot: StoreSnapshot)
+            =
+            task {
                 match pushResult with
-                | Ok() -> return merged
-                | Error _ when retriesLeft > 0 ->
-                    let! nextSnapshot, nextExpected = discoverRemote run remote
-                    return! loop nextSnapshot nextExpected true (retriesLeft - 1)
-                | Error _ when maxRetries <= 0 -> return! Error ConvergeError.ConvergeCasRejected
-                | Error _ -> return! Error ConvergeError.ConvergeRetryExhausted
+                | Ok() -> return Ok mergedSnapshot
+                | Error _ when budgetExhausted () -> return Error ConvergeError.ConvergeBudgetExhausted
+                | Error _ when retriesLeft > 0 -> return! rediscoverAndContinue retriesLeft
+                | Error _ when maxRetries <= 0 -> return Error ConvergeError.ConvergeCasRejected
+                | Error _ -> return Error ConvergeError.ConvergeRetryExhausted
+            }
+
+        and rediscoverAndContinue (retriesLeft: int) =
+            task {
+                let! discovered = discoverRemote run remote
+
+                match discovered with
+                | Error error -> return Error error
+                | Ok(nextSnapshot, nextExpected) -> return! loop nextSnapshot nextExpected true (retriesLeft - 1)
             }
 
         let convergeWithoutObservedRemote () =
-            taskResult {
-                let! snapshot, expected = readTrackedRemote raw remote |> TaskResultCE.ofTask
+            task {
+                let! tracked = readTrackedRemote raw remote
+                let trackedSnapshot, expected = tracked
 
-                match snapshot, WriterStreamSync.tryCachedLocalSnapshot commonDir with
-                | Some tracked, Some cached when sameSnapshot tracked cached -> return cached
-                | _ -> return! loop snapshot expected false maxRetries
+                match trackedSnapshot, WriterStreamSync.tryCachedLocalSnapshot commonDir with
+                | Some trackedValue, Some cached when sameSnapshot trackedValue cached -> return Ok cached
+                | _ -> return! loop trackedSnapshot expected false maxRetries
             }
 
-        taskResult {
-            match observedRemote with
-            | Some snapshot ->
-                let expected = Some(RootOid.value snapshot.RootOid)
-                return! loop (Some snapshot) expected true maxRetries
-            | None -> return! convergeWithoutObservedRemote ()
-        }
+        match observedRemote with
+        | Some snapshot ->
+            let expected = Some(RootOid.value snapshot.RootOid)
+            loop (Some snapshot) expected true maxRetries
+        | None -> convergeWithoutObservedRemote ()
 
-    /// Estimate for hook-process Git transport (fetch / push / ls-remote).
-    /// 5-minute runtime budget under the 1-hour administrator ceiling — network
-    /// operations are slower than the local Orchestrator-side git verbs.
-    let private transportEstimate =
-        { EstimatedRuntime = RuntimeSeconds 300.0
+    /// Per-command hook budget: discovery fails fast, fetch/push may take longer.
+    /// These are the hook-process limits under the administrator ceiling.
+    let private estimateFor (args: string list) =
+        let seconds =
+            match args with
+            | "ls-remote" :: _ -> 30.0
+            | _ -> 120.0
+
+        { EstimatedRuntime = RuntimeSeconds seconds
           EstimatedOutput = OutputBytes 65536L
           EstimatedMemory = EstimatedMemory.Medium }
 
@@ -201,14 +283,13 @@ module GitGateway =
                       WorkingDirectory = Some repoPath
                       Environment = None
                       Stdin = None
-                      Deadline = None
                       PtyOptions = None }
 
                 let ctx =
                     { WorkingDirectory = Some repoPath
                       HardLimit = ProcessEstimate.DefaultHardLimit }
 
-                let! res = ProcessRunner.run cmd transportEstimate ctx CancellationToken.None
+                let! res = ProcessRunner.run cmd (estimateFor args) ctx CancellationToken.None
 
                 match res with
                 | Ok(ProcessOutcome.Completed(code, stdout, stderr, _)) -> return (code, stdout, stderr)

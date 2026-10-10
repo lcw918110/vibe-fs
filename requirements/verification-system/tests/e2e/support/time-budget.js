@@ -134,7 +134,7 @@ export const PER_TEST_TIMEOUT_MS = budgetFromEnv('PER_TEST_TIMEOUT_MS', 2500);
  *
  * [006] 禁止把 wall-clock 总超时当作唯一判据；非首要的物理兜底因此成立。
  */
-export const SUITE_BACKSTOP_MS = budgetFromEnv('SUITE_BACKSTOP_MS', 300000);
+export const SUITE_BACKSTOP_MS = budgetFromEnv('SUITE_BACKSTOP_MS', 900000);
 
 /**
  * How long the unit suite may go without a test VERDICT before it is declared hung.

@@ -13,8 +13,10 @@ open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host
+open Wanxiangshu.Interaction.Attention
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Interaction.Dispatch
+open Wanxiangshu.Interaction.Dispatch.OpenCode
 open Wanxiangshu.Interaction.Repair
 open Wanxiangshu.OpenCode
 open Wanxiangshu.Participant.Persona
@@ -186,6 +188,79 @@ module OrdinaryTurnWorkflow =
                 | _ -> ()
         }
 
+    /// ATTENTION-005: after an Engineer, DevOps or Orchestrator run reaches
+    /// its natural terminal, pending deferred work is presented once through a
+    /// same-run continuation and then consumed durably. Presentation and
+    /// receipt are idempotent: a replayed terminal finds nothing pending, and a
+    /// failed send leaves the entries for the next terminal.
+    let private presentPendingDeferredWork
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (journal: AgentJournal)
+        (turn: ReconciledTurn)
+        (items: DeferredWorkItem list)
+        =
+        task {
+            let attention = AttentionConcernJournalAdapter.forAttention journal
+
+            let guidance =
+                ProviderProse.render
+                    (ProviderProse.languageOf turn.SessionId)
+                    "attention-regulation/defer-presentation"
+                    Map.empty
+
+            let entries = items |> List.map (fun item -> "- " + item.Text) |> String.concat "\n"
+
+            let prompt = guidance + "\n\n" + entries
+
+            let! sent =
+                HostSessionNudge.sendContinuation
+                    sessionPort
+                    rootWorkspace
+                    turn.SessionId
+                    prompt
+                    PromptAuthority.ContinuationKind.DeferredWorkPresentation
+                    turn.Directory
+                    (Some journal)
+
+            match sent with
+            | Error _ -> return ()
+            | Ok _ ->
+                let fact =
+                    AttentionFactCases.DeferredWorkConsumed
+                        {| SessionId = turn.SessionId
+                           OccurrenceIds = (items |> List.map (fun item -> item.OccurrenceId)) |}
+
+                let! _ = attention.Append turn.SessionId (Some turn.ProviderRun) fact
+                return ()
+        }
+
+    let private presentDeferredWork
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (journal: AgentJournal)
+        (turn: ReconciledTurn)
+        =
+        task {
+            let attention = AttentionConcernJournalAdapter.forAttention journal
+            let pending = AttentionProjection.pending turn.SessionId (attention.Read())
+
+            match pending with
+            | [] -> return ()
+            | items -> return! presentPendingDeferredWork sessionPort rootWorkspace journal turn items
+        }
+
+    let private presentDeferredWorkForRole
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (journal: AgentJournal option)
+        (turn: ReconciledTurn)
+        =
+        match journal, turn.Role with
+        | Some durable, Some(Role.Engineer | Role.DevOps | Role.Orchestrator) ->
+            presentDeferredWork sessionPort rootWorkspace durable turn
+        | _ -> Task.FromResult(())
+
     let private handleCompleted
         (sessionPort: ISessionHostPort)
         (rootWorkspace: IRootWorkspaceReader)
@@ -228,6 +303,8 @@ module OrdinaryTurnWorkflow =
             elif joinOutstanding then
                 return!
                     applyJoinGuardNudge sessionPort rootWorkspace eventPort journal joinGuardNudges quiescence context
+            elif terminalValid then
+                return! presentDeferredWorkForRole sessionPort rootWorkspace journal turn
             else
                 return ()
         }

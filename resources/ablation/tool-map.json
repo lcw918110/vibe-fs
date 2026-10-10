@@ -34,6 +34,9 @@
     "js-devops": "process-execution",
     "js-blogger": "context-compression",
     "js-bookkeeper": "knowledge-reuse",
-    "sphinx": "epistemic-reasoning"
+    "js-plan": "planning",
+    "ask": "planning",
+    "handoff": "planning",
+    "deliver": "planning"
   }
 }

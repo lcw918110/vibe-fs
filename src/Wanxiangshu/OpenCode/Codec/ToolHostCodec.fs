@@ -353,17 +353,6 @@ module ToolHostCodec =
     [<Emit("$0.schema.string().optional().describe($1)")>]
     let private rawOptionalStringSchemaDescribed (tool: obj) (description: string) : obj = jsNative
 
-    [<Emit("""$0.schema.object({
-        tipName: $0.schema.string(),
-        enforcerTextEn: $0.schema.string(),
-        enforcerTextZh: $0.schema.string(),
-        mainTextEn: $0.schema.string(),
-        mainTextZh: $0.schema.string(),
-        trigger: $0.schema.string(),
-        negative: $0.schema.string()
-    }).describe($1).optional()""")>]
-    let private rawBirthCandidateSchema (tool: obj) (description: string) : obj = jsNative
-
     [<Emit("$0.schema.number().optional()")>]
     let private rawOptionalNumberSchema (tool: obj) : obj = jsNative
 
@@ -525,9 +514,6 @@ module ToolHostCodec =
     let optionalStringSchemaDescribed description (HostToolFactory factory) =
         HostSchema(rawOptionalStringSchemaDescribed factory description)
 
-    let birthCandidateSchemaDescribed description (HostToolFactory factory) =
-        HostSchema(rawBirthCandidateSchema factory description)
-
     let optionalNumberSchema (HostToolFactory factory) =
         HostSchema(rawOptionalNumberSchema factory)
 
@@ -545,9 +531,7 @@ module ToolHostCodec =
 
     let objectSchemaOf fields (HostToolFactory factory) =
         let fieldsObj =
-            fields
-            |> List.map (fun (name, HostSchema schema) -> name, schema)
-            |> createObj
+            fields |> List.map (fun (name, HostSchema schema) -> name, schema) |> createObj
 
         HostSchema(rawObjectSchemaOf factory fieldsObj)
 

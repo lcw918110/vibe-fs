@@ -26,17 +26,63 @@ module StaticTools =
         | ToolPermission.BashHoneypot -> [ "bash-honeypot" ]
         | ToolPermission.Exec -> [ "run" ]
         | ToolPermission.Pty -> [ "open-terminal"; "send-terminal"; "read-terminal"; "signal-terminal" ]
-        | ToolPermission.Sphinx -> [ "sphinx" ]
         | ToolPermission.ReviewAssessment -> [ "review" ]
         | ToolPermission.Chronicle -> [ "chronicle" ]
         | ToolPermission.Fetch -> [ "fetch" ]
         | ToolPermission.Finality -> [ "suicide" ]
+        | ToolPermission.JsPlan -> [ "js-plan" ]
+        | ToolPermission.Ask -> [ "ask" ]
+        | ToolPermission.Handoff -> [ "handoff" ]
+        | ToolPermission.Deliver -> [ "deliver" ]
 
     /// Primary name for permissions with a single verb (tests / simple maps).
     let toolName (p: ToolPermission) =
         match toolNames p with
         | name :: _ -> name
         | [] -> invalidOp "ToolPermission must expand to at least one provider name"
+
+    /// The complete constructor list of ToolPermission. It enumerates the
+    /// catalog type for the reverse lookup; the name↔permission mapping itself
+    /// stays in `toolNames`.
+    let private allPermissions =
+        [ ToolPermission.Fork
+          ToolPermission.Resume
+          ToolPermission.Join
+          ToolPermission.Horizon
+          ToolPermission.Fission
+          ToolPermission.Read
+          ToolPermission.Write
+          ToolPermission.Edit
+          ToolPermission.Glob
+          ToolPermission.Grep
+          ToolPermission.Move
+          ToolPermission.Remove
+          ToolPermission.Exec
+          ToolPermission.Pty
+          ToolPermission.ReviewAssessment
+          ToolPermission.Chronicle
+          ToolPermission.Fetch
+          ToolPermission.Finality
+          ToolPermission.BashHoneypot
+          ToolPermission.JsPlan
+          ToolPermission.Ask
+          ToolPermission.Handoff
+          ToolPermission.Deliver ]
+
+    /// capability-enforcement-012: the sole reverse lookup for tool name →
+    /// permission. The schema projection, the dispatch tool map and the
+    /// execute gate all read this, so no consumer keeps a second
+    /// name→permission table.
+    let permissionOfToolName (name: string) : ToolPermission option =
+        allPermissions
+        |> List.tryFind (fun permission -> toolNames permission |> List.contains name)
+
+    /// The office projection of one name: true only when the role's permission
+    /// set owns the permission this exact name maps to.
+    let admitsToolForRole (role: Role) (name: string) : bool =
+        permissionOfToolName name
+        |> Option.exists (fun permission -> OfficeCapability.permissions role |> Set.contains permission)
+
 
     /// JS-001: the generated js-ROLE tool name for a role.
     let jsToolName (role: Role) : string =
@@ -91,7 +137,6 @@ module StaticTools =
           "rm"
           "bash-honeypot"
           "run"
-          "sphinx"
           "review"
           "chronicle"
           "fetch"
@@ -101,15 +146,17 @@ module StaticTools =
           "js-orchestrator"
           "js-devops"
           "js-blogger"
-          "js-bookkeeper" ]
-
-    let private namesForPermissions (allowed: Set<ToolPermission>) : Set<string> =
-        allowed |> Set.toList |> List.collect toolNames |> Set.ofList
+          "js-bookkeeper"
+          "js-plan"
+          "ask"
+          "handoff"
+          "deliver" ]
 
     /// PROMPT-012: an explicit complete allow/deny map for PromptInput.tools.
+    /// The office half comes from the one reverse lookup; utility tools keep
+    /// their own predicates.
     let requestToolMap (allowed: Set<ToolPermission>) : Map<string, bool> =
         let registry = AblationGate.registry ()
-        let allowedNames = namesForPermissions allowed
 
         knownToolNames
         |> List.map (fun name ->
@@ -119,15 +166,22 @@ module StaticTools =
              || name = "assume"
              || name = "defer"
              || name = "publish"
-             || Set.contains name allowedNames))
+             || (permissionOfToolName name
+                 |> Option.exists (fun permission -> Set.contains permission allowed))))
         |> Map.ofList
         |> AblationGate.filterToolPermissionMap registry
 
-    let private defaultPermission allowed name =
-        if Set.contains name allowed then "allow" else "deny"
+    let private defaultPermission (allowed: Set<ToolPermission>) name =
+        let admitted =
+            permissionOfToolName name
+            |> Option.exists (fun permission -> Set.contains permission allowed)
+
+        if admitted then "allow" else "deny"
 
     let private jsPermission role name =
         if name = "js-manager" && role = Role.Manager then
+            "allow"
+        elif name = "js-plan" && role = Role.Plan then
             "allow"
         elif name = jsToolName role && hasFsCapability role then
             "allow"
@@ -137,6 +191,8 @@ module StaticTools =
     let private permissionFor (registry: AblationRegistry) allowed role name =
         match not (AblationGate.toolSchemaDenied registry name), name, role with
         | false, _, _ -> "deny"
+        | true, ("ask" | "handoff" | "deliver" | "js-plan"), Role.Plan -> "allow"
+        | true, "resume", Role.Plan -> "allow"
         | true, "fission", Role.Manager -> "deny"
         | true, "commission", Role.Manager -> "deny"
         | true, ("read" | "grep" | "glob"), Role.Manager -> "deny"
@@ -159,7 +215,7 @@ module StaticTools =
 
     let permissionObj (role: Role) : obj =
         let registry = AblationGate.registry ()
-        let allowed = OfficeCapability.permissions role |> namesForPermissions
+        let allowed = OfficeCapability.permissions role
 
         // Host defaults set external_directory:* = ask (agent.ts). Rulesets merge by
         // flat concat + findLast, so this trailing allow cancels the Host ask and
@@ -226,3 +282,5 @@ module StaticTools =
               "options", box (createObj [ "temperature", box 1.0 ]) ]
 
     let devopsAgentConfig (prompt: string option) : obj = primaryAgent Role.DevOps prompt
+
+    let planAgentConfig (prompt: string option) : obj = primaryAgent Role.Plan prompt

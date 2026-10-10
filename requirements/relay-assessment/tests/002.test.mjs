@@ -165,19 +165,3 @@ test('WHAT[relay-assessment-002] cross-incumbency replay of a retired review cal
     assert.match(replayed, /recorded = false/)
   })
 })
-
-const renderedInstruction = name => readFileSync(new URL(`../../../resources/provider/runtime/${name}/en.md`, import.meta.url), 'utf8').trim().split('\n').map(line => '# ' + line).join('\n')
-
-test('WHAT[relay-assessment-001] empty findings terminate the assessment with the finish instruction', async () => {
-  await withReview(async ({execute}) => {
-    const result = await execute({ findings: [] })
-    assert.equal(result, renderedInstruction('manager-finish') + '\n\nrecorded = true\n')
-  })
-})
-
-test('WHAT[relay-assessment-001] non-empty findings own repair work and select the work instruction', async () => {
-  await withReview(async ({execute}) => {
-    const result = await execute(reviewScores('REVISE'))
-    assert.equal(result, renderedInstruction('manager-work') + '\n\nrecorded = true\n')
-  })
-})

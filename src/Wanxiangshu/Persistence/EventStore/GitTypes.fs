@@ -108,3 +108,4 @@ type ConvergeError =
     | Transport of reason: string
     | ConvergeCasRejected
     | ConvergeRetryExhausted
+    | ConvergeBudgetExhausted

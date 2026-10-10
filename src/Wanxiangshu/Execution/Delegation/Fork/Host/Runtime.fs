@@ -172,6 +172,12 @@ type HostForkRuntime
     let children = Dictionary<string, SessionId>()
     // DSL-MUTABLE: resource — process-owned agent handle set
     let processOwnedAgents = HashSet<string>()
+
+    /// participant-horizon-011 / WP-025: agents this process established (fork,
+    /// adoption, dormant activation) stay established even after their runtime is
+    /// replaced by a cancellation. This is process-local and never persisted: a
+    /// restarted process still sees nothing from the previous one.
+    let processEstablishedAgents = HashSet<string>()
     // DSL-MUTABLE: resource — dormant /continue child registry by agent id
     let dormantChildren = Dictionary<string, SessionId>()
     // DSL-MUTABLE: resource — pending host run registry by agent id
@@ -522,7 +528,8 @@ type HostForkRuntime
     member internal _.AdoptChild(agentId: string, childId: SessionId) : unit =
         lock gate (fun () ->
             children.[agentId] <- childId
-            processOwnedAgents.Add agentId |> ignore)
+            processOwnedAgents.Add agentId |> ignore
+            processEstablishedAgents.Add agentId |> ignore)
 
     member internal _.ObservePromptSend
         (
@@ -726,7 +733,9 @@ type HostForkRuntime
             authorityRoot: AuthorityRootUserMessageId,
             ?preparedHandoff: PreparedDelegationHandoff
         ) =
-        lock gate (fun () -> processOwnedAgents.Add agentId |> ignore)
+        lock gate (fun () ->
+            processOwnedAgents.Add agentId |> ignore
+            processEstablishedAgents.Add agentId |> ignore)
 
         let run =
             HostForkRunLifecycle.installRun
@@ -885,6 +894,19 @@ type HostForkRuntime
     member internal _.OwnsAgent(agentId: string) =
         lock gate (fun () -> processOwnedAgents.Contains agentId)
 
+    /// participant-horizon-011 / WP-025: established-by-this-process is not
+    /// currently-driven-by-this-process. A child cancelled by its own process stays
+    /// visible to that process' horizon/join (durable Abandoned, consequence not
+    /// yet consumed) without widening OwnsAgent, which remains the driving predicate.
+    member internal _.EstablishedByProcess(agentId: string) =
+        lock gate (fun () -> processEstablishedAgents.Contains agentId)
+
+    member internal _.EstablishedAgentIds: string list =
+        lock gate (fun () -> processEstablishedAgents |> Seq.toList)
+
+    member internal _.RestoreEstablishedAgents(agentIds: string list) =
+        lock gate (fun () -> processEstablishedAgents.UnionWith agentIds)
+
     /// crash-reconciliation-018: explicit /continue may discover a physically surviving child.
     /// It stays dormant: addressable by a later explicit reuse, but excluded from
     /// this process's cancellation/teardown ownership until that reuse begins.
@@ -968,7 +990,8 @@ type HostForkRuntime
         lock gate (fun () ->
             dormantChildren.Remove agentId |> ignore
             children.[agentId] <- childId
-            processOwnedAgents.Add agentId |> ignore)
+            processOwnedAgents.Add agentId |> ignore
+            processEstablishedAgents.Add agentId |> ignore)
 
         childCreated agentId role childId
 

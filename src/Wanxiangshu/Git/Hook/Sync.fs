@@ -7,6 +7,7 @@ open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Git
 open Wanxiangshu.Persistence.EventStore
+open Wanxiangshu.Process
 
 /// Standalone hook-process entry functions. They depend only on `.git/wanxiang`,
 /// Git transport and WriterStreamSync — never PluginHost/WorkspaceEventStore/
@@ -16,6 +17,11 @@ module HookSync =
 
     [<Literal>]
     let private MaxRetries = 3
+
+    /// Whole-pass hook budget. Single git commands carry their own limits in
+    /// GitGateway; this bounds the retry/refresh loop across all of them.
+    [<Literal>]
+    let private ConvergeBudgetSeconds = 600.0
 
     [<Emit("process.env.WANXIANG_GIT_SYNC_ACTIVE = '1'")>]
     let private markSyncActive () : unit = jsNative
@@ -39,12 +45,10 @@ module HookSync =
     let private formatError remote error =
         sprintf "Wanxiang EventStore sync failed for remote '%s': %A" remote error
 
-    let private convergeUnderLock gitCommonDir raw run remote observed =
-        ProcessEventLog.withStoreLock gitCommonDir (fun () ->
-            GitGateway.converge raw gitCommonDir run MaxRetries remote observed
-            |> TaskValue.map (function
-                | Ok _ -> None
-                | Error error -> Some(formatError remote error)))
+    let private failureMessage remote result =
+        match result with
+        | Ok _ -> None
+        | Error error -> Some(formatError remote error)
 
     let private converge remote observed =
         task {
@@ -54,7 +58,26 @@ module HookSync =
                 let gitCommonDir = commonDir repo
                 let raw = ProcessGitRawStore.create repo
                 let run = GitGateway.createDefaultRunner repo
-                return! convergeUnderLock gitCommonDir raw run remote observed
+
+                let clockPort = NodeTiming.nodeClockPort ()
+                let clock () = clockPort.UtcNow()
+
+                let deadline =
+                    Deadline.ofBudget (clock ()) (TimeSpan.FromSeconds ConvergeBudgetSeconds)
+
+                let! result =
+                    GitGateway.converge
+                        raw
+                        gitCommonDir
+                        run
+                        MaxRetries
+                        remote
+                        observed
+                        (fun stage -> ProcessEventLog.withStoreLock gitCommonDir stage)
+                        deadline
+                        clock
+
+                return failureMessage remote result
             with ex ->
                 return Some(sprintf "Wanxiang EventStore sync failed: %s" ex.Message)
         }

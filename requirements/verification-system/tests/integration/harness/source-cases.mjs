@@ -192,7 +192,7 @@ delivery = "provider-error"
     name: 'COMPANION-002 every scenario declares its Companion turn',
     fn: () => {
       const missing = walk(SCENARIO_ROOT, ['.toml']).filter(
-        (file) => !readFileSync(file, 'utf8').includes('# Write the dense work-log continuation now'),
+        (file) => !readFileSync(file, 'utf8').includes('# Call the chronicle tool exactly once now'),
       );
 
       assertEq(missing.length, 0, `no Companion turn declared in: ${missing.join(', ')}`);

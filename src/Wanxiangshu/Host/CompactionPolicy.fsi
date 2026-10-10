@@ -8,6 +8,12 @@ type CompactionSetting =
       Clause: string
       Reason: string }
 
+/// HOST-006 startup probe: one Host message reduced to the two facts the
+/// first-turn window needs.
+type CompactionWindowMessage =
+    { CompletedAssistant: bool
+      Compaction: bool }
+
 [<RequireQualifiedAccess>]
 type CompactionGateVerdict =
     | Satisfied
@@ -22,6 +28,8 @@ module HostCompactionPolicy =
 
     val nextReanchor:
         observed: ProviderRunIdentity list -> isReanchored: (ProviderRunIdentity -> bool) -> ProviderRunIdentity option
+
+    val firstTurnCompactionRuns: messages: CompactionWindowMessage list -> int option
 
     val judgeFirstTurn:
         unavailable: CompactionSetting option ->

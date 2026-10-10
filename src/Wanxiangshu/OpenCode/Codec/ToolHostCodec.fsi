@@ -77,7 +77,6 @@ module ToolHostCodec =
     val managedOrHandleSchema: values: string list -> factory: HostToolFactory -> HostSchema
     val optionalStringSchema: factory: HostToolFactory -> HostSchema
     val optionalStringSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
-    val birthCandidateSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
     val optionalNumberSchema: factory: HostToolFactory -> HostSchema
     val optionalNonNegativeIntegerSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
     val optionalStringArraySchema: factory: HostToolFactory -> HostSchema

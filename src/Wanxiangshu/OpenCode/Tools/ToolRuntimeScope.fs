@@ -221,13 +221,24 @@ type ToolRuntimeScope
             drainChildPtys = drainChildPtysFor
         )
 
+    let establishedAgentsOf ownerKey =
+        match runtimes.TryGetValue ownerKey with
+        | true, previous -> previous.EstablishedAgentIds
+        | false, _ -> []
+
     let getOrCreateRuntime ownerKey =
         lock gate (fun () ->
             match disposed, runtimes.TryGetValue ownerKey with
             | true, _ -> Error "Tool runtime scope is disposed"
             | false, (true, runtime) when not runtime.IsCancelled -> Ok runtime
             | false, _ ->
+                // participant-horizon-011 / WP-025: a replaced (cancelled) runtime must
+                // inherit the agents this process established; otherwise a cancelled child
+                // would vanish from its own process' horizon/join.
+                let inheritedEstablished = establishedAgentsOf ownerKey
+
                 let runtime = createRuntime ownerKey
+                runtime.RestoreEstablishedAgents inheritedEstablished
                 runtimes.[ownerKey] <- runtime
                 Ok runtime)
 
@@ -462,9 +473,7 @@ type ToolRuntimeScope
                 let facts: ManagerCapabilityFacts =
                     { HasActiveIncumbency = true
                       HasAssessment = road.AcceptedAssessmentTransport.IsSome
-                      IsFinalIncumbent =
-                        road.AcceptedAssessmentFindings
-                        |> Option.exists AssessmentFindings.isEmpty
+                      IsFinalIncumbent = road.AcceptedAssessmentFindings |> Option.exists AssessmentFindings.isEmpty
                       CleanupBlockerDigest = road.ActiveCleanupBlockerDigest }
 
                 Some facts)

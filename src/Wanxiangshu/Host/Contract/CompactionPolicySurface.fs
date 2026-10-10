@@ -1,5 +1,6 @@
 namespace Wanxiangshu.Host.Contract
 
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host
 
@@ -68,6 +69,22 @@ module CompactionPolicySurface =
 
         match HostCompactionPolicy.nextReanchor typed predicate with
         | Some runId -> box (ProviderRunIdentity.value runId)
+        | None -> null
+
+    /// HOST-006 startup probe: compaction pseudo-runs inside the first-turn window.
+    ///
+    /// `messages` is an array of `{ completedAssistant, compaction }` booleans,
+    /// oldest first. Returns the count, or null while the first turn is open.
+    let firstTurnCompactionRuns (messages: obj array) : obj =
+        let window =
+            messages
+            |> Array.toList
+            |> List.map (fun raw ->
+                { CompletedAssistant = unbox<bool> raw?completedAssistant
+                  Compaction = unbox<bool> raw?compaction })
+
+        match HostCompactionPolicy.firstTurnCompactionRuns window with
+        | Some count -> box count
         | None -> null
 
     /// HOST-006 startup probe verdict as JSON:

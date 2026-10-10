@@ -309,7 +309,6 @@ module ExecutorTool =
                   WorkingDirectory = directory
                   Environment = None
                   Stdin = None
-                  Deadline = None
                   PtyOptions = None }
 
             use cancellation = new CancellationTokenSource()

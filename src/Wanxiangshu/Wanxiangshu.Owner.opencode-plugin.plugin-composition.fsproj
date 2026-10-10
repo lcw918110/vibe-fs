@@ -93,6 +93,8 @@
     <ProjectReference Include="Wanxiangshu.Owner.guidance-delivery.opencode-host-pairprogrammingcalibration.fsproj"/>
 <Compile Include="OpenCode/Host/PluginHostInterop.fsi"/>
     <Compile Include="OpenCode/Host/PluginHostInterop.fs"/>
+    <Compile Include="OpenCode/Host/ProtocolArgumentStash.fsi"/>
+    <Compile Include="OpenCode/Host/ProtocolArgumentStash.fs"/>
     <Compile Include="OpenCode/Host/ManagerReviewContract.fsi"/>
     <Compile Include="OpenCode/Host/ManagerReviewContract.fs"/>
     <Compile Include="OpenCode/Host/ToolSchemaJson.fsi"/>

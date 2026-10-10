@@ -43,7 +43,6 @@ test('WHAT[capability-enforcement-025] P02_review_accepted_facts_exclude_review_
   assert.equal(isAllowedForManagerFacts(facts, 'Join'), true, 'Join must remain allowed after assessment accepted')
   assert.equal(isAllowedForManagerFacts(facts, 'Horizon'), true, 'Horizon must remain allowed after assessment accepted')
   assert.equal(isAllowedForManagerFacts(facts, 'Finality'), true, 'Finality must remain allowed after assessment accepted')
-  assert.equal(isAllowedForManagerFacts(facts, 'Sphinx'), true, 'Sphinx must remain allowed after assessment accepted')
 })
 
 test('WHAT[capability-enforcement-025] P08_manager_native_read_glob_grep_projected_as_deny', () => {
@@ -184,9 +183,9 @@ test('WHAT[capability-enforcement-025] P16_final_incumbent_keeps_read_cleanup_an
 })
 
 test('WHAT[capability-enforcement-025] P17_final_incumbent_loses_every_new_work_capability', () => {
-  // 末任不得开新工作：委托、续做、评审与 Sphinx 一律拒绝。
+  // 末任不得开新工作：委托、续做与评审一律拒绝。
   const facts = managerFacts(true, true, true, undefined)
-  for (const permission of ['Fork', 'Resume', 'ReviewAssessment', 'Sphinx']) {
+  for (const permission of ['Fork', 'Resume', 'ReviewAssessment']) {
     assert.equal(
       isAllowedForManagerFacts(facts, permission),
       false,

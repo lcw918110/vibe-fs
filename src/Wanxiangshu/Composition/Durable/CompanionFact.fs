@@ -44,3 +44,6 @@ module ContextFact =
 
     let inline ContextReanchored payload =
         AgentFact.Context(ContextFactCases.ContextReanchored payload)
+
+    let inline TenureReanchored payload =
+        AgentFact.Context(ContextFactCases.TenureReanchored payload)

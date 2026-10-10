@@ -231,6 +231,12 @@ module HookDispatcher =
     let private legacyManagedControlPath commonDir =
         joinPath (joinPath commonDir "wanxiang") "ssh-%C"
 
+    let private legacyManagedSshWrapperPath commonDir =
+        joinPath (joinPath commonDir "wanxiang") "ssh-command"
+
+    let private legacyManagedSshWrapperCommand commonDir =
+        shellQuote (legacyManagedSshWrapperPath commonDir)
+
     let private repoSshKey commonDir =
         HostDigest.sha256Hex commonDir |> fun digest -> digest.Substring(0, 12)
 
@@ -246,15 +252,40 @@ module HookDispatcher =
     let private managedSshWrapperCommand commonDir =
         shellQuote (managedSshWrapperPath commonDir)
 
-    let private tryStripManagedCommand commonDir (command: string) =
-        [ legacyManagedControlPath commonDir; managedControlPath commonDir ]
-        |> List.tryPick (fun controlPath ->
-            let suffix = " " + multiplexSuffix controlPath
+    let private isLegacyWrapperCommand commonDir (command: string) =
+        command = legacyManagedSshWrapperCommand commonDir
+        || command = legacyManagedSshWrapperPath commonDir
 
-            if command.EndsWith(suffix, StringComparison.Ordinal) then
-                Some(command.Substring(0, command.Length - suffix.Length))
+    let private normalizeBaseCommand commonDir baseCommand =
+        if isLegacyWrapperCommand commonDir baseCommand then
+            "ssh"
+        else
+            baseCommand
+
+    let private stripSuffixToBase commonDir (command: string) controlPath =
+        let suffix = " " + multiplexSuffix controlPath
+        let hit = command.EndsWith(suffix, StringComparison.Ordinal)
+
+        let baseCommand =
+            if hit then
+                command.Substring(0, command.Length - suffix.Length)
             else
-                None)
+                ""
+
+        (hit, baseCommand)
+
+    let private pickSuffixBase commonDir (command: string) (hit: bool, baseCommand: string) =
+        match hit with
+        | false -> None
+        | true -> Some(normalizeBaseCommand commonDir baseCommand)
+
+    let private tryStripManagedCommand commonDir (command: string) =
+        match isLegacyWrapperCommand commonDir command with
+        | true -> Some "ssh"
+        | false ->
+            [ legacyManagedControlPath commonDir; managedControlPath commonDir ]
+            |> List.map (stripSuffixToBase commonDir command)
+            |> List.tryPick (pickSuffixBase commonDir command)
 
     let private managedSshWrapperBody commonDir baseCommand =
         let socketDirectory = managedSocketDirectory commonDir
@@ -307,12 +338,31 @@ module HookDispatcher =
         | None when hasUserSshMultiplex current -> None
         | None -> Some current
 
+    let private wrapperBodyReferencesLegacyRoot commonDir =
+        try
+            let body = readFileSync (managedSshWrapperPath commonDir) "utf8"
+
+            body.Contains("/wanxiang/ssh-")
+            || body.Contains(legacyManagedSshWrapperPath commonDir)
+        with _ ->
+            false
+
+    let private rewriteStaleOwnedWrapper workspace commonDir =
+        installManagedSshCommand workspace commonDir "ssh"
+
+    let private refreshOwnedWrapper workspace commonDir =
+        match wrapperBodyReferencesLegacyRoot commonDir with
+        | true -> rewriteStaleOwnedWrapper workspace commonDir
+        | false -> ensureOwnedSshWrapperStillPresent commonDir
+
+    let private refreshForeignCommand workspace commonDir current =
+        oldManagedCommandBase commonDir current
+        |> Option.iter (installManagedSshCommand workspace commonDir)
+
     let private ensureManagedSshCommand workspace commonDir current =
-        if current = managedSshWrapperCommand commonDir then
-            ensureOwnedSshWrapperStillPresent commonDir
-        else
-            oldManagedCommandBase commonDir current
-            |> Option.iter (installManagedSshCommand workspace commonDir)
+        match current = managedSshWrapperCommand commonDir with
+        | true -> refreshOwnedWrapper workspace commonDir
+        | false -> refreshForeignCommand workspace commonDir current
 
     let private ensureUnixSshMultiplex workspace =
         let commonDir = gitCommonDir workspace

@@ -72,3 +72,13 @@ Recovery Surface 的 port observation 必须逐次追加每个真实 invocation�
 Incident envelope 必须 versioned、确定序列化且只包含 canonical serialized ChatExecution facts/status、immutable capacity snapshot 与 reconciliation decision、causal diagnostics、exact public Host version/contract evidence、typed recovery observation/decision。capture 必须复用 owner projection 并拒绝未知字段；diagnostic owner 负责清除 credential、path、stack、prompt/content/payload。replay 必须重新折叠 canonical projection、重跑 capacity reconciliation 与同一 `ChatExecutionRecoveryRuntime` representation，tamper、未知 schema/字段、缺证据、Host contract 不受支持或 observation 不匹配时 fail closed。
 
 Replay 只返回 typed owner effect request；不得写 fact、清 counter、释放 fence、改变 queue/capacity、执行 retry/fallback 或把 operator 变成 recovery authority。相同 envelope 重放必须幂等。若 exact accepted-message public replay capability 没有 Host canary evidence，operator 必须升级处理，禁止重发或手工补状态。
+
+## [015] Provider 启动边界拒绝的精确定夺
+
+transform 在 provider 启动边界拒绝某个 exact execution 时（例如 attempt plan freeze 失败：`accepted-execution-missing`、`frozen-attempt-plan-missing`、`attempt-plan-freeze-failed`、`blogger-request-missing`、`authority-evidence-invalid`、`persistence-failed`），该拒绝必须作为一次 typed pre-provider failure 报告给 settlement owner；报告携带 exact `(SessionId, PhysicalUserMessageId)` 与诊断码，free-form 文本只作诊断，不决定 disposition。
+
+- projection 中该 exact key 处于 `Accepted ∧ ¬ProviderStarted ∧ ¬Terminal` 时，settlement owner 写入 typed pre-provider terminal `Failed`，并在 durable 提交确认后精确归还该执行持有的 exact capacity fence；定夺为终局，同一 key 的重复报告幂等（已 terminal 为 no-op，terminal 已存在而容量仍 held 时只请求精确 release）。
+- projection 中不存在该 exact key（`AcceptedExecutionMissing`）时，不得伪造执行或结算，也不得登记非本 owner 的 manual；保留原始拒绝与诊断，交准入 owner 处置。
+- 禁止以 session-wide release、计数减一、idle/time 猜测代替 exact settlement；禁止调用 provider；禁止终结同一 session 的其他 execution；原始拒绝异常仍按既有 hook 失败路径上报，不得被定夺吞没。
+- terminal 提交未知时保留显式未知，不释放；诊断不改变定夺。
+

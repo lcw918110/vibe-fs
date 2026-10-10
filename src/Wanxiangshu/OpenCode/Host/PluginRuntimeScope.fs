@@ -402,36 +402,70 @@ type PluginRuntimeScope(journal: AgentJournal option, isModelLeaseExternallyOwne
 
     member this.DisposeSession(sessionId: string) : Task =
         task {
+            // managed-session-lifecycle-027: per-session teardown is
+            // best-effort-complete but never error-silent — the first real
+            // failure is remembered, every independent cleanup group below
+            // still runs, and the first failure is rethrown last.
+            // DSL-MUTABLE: algorithm-scratch — first per-session teardown failure accumulator.
+            let mutable firstFailure: exn option = None
+
+            let remember (failure: exn) =
+                firstFailure <- Option.orElse firstFailure (Some failure)
+
+            let attempt (work: unit -> Task) =
+                task {
+                    try
+                        do! work ()
+                    with failure ->
+                        remember failure
+                }
+
+            let attemptSync (work: unit -> unit) =
+                try
+                    work ()
+                with failure ->
+                    remember failure
+
             let owner = lock toolRuntimeGate (fun () -> toolRuntime)
 
             match owner with
-            | Some active -> do! active.DisposeSession sessionId
+            | Some active -> do! attempt (fun () -> active.DisposeSession sessionId)
             | None -> ()
 
             // C6 item 27: waiters are keyed by BloggerSessionId. When the MAIN is
             // deleted, cancel the linked Blogger's parked waiter + request slots too.
-            let linkedBloggerKeys = sessions.LinkedBloggerKeys sessionId
+            let linkedBloggerKeys =
+                try
+                    sessions.LinkedBloggerKeys sessionId
+                with failure ->
+                    remember failure
+                    []
+
             // managed-chat-execution-010: a session delete may not be declared
             // drained until this scope's unfinished executions carry a durable
             // terminal and their exact capacity is back, so ClearSession is awaited.
-            do! sessions.ClearSession sessionId
-            recovery.ClearSession sessionId
+            do! attempt (fun () -> sessions.ClearSession sessionId)
+
+            attemptSync (fun () -> recovery.ClearSession sessionId)
 
             for cleanup in List.rev sessionCleanups do
-                cleanup sessionId
+                attemptSync (fun () -> cleanup sessionId)
 
-            this.LoopSensor.DropSession(SessionId.create sessionId)
+            attemptSync (fun () -> this.LoopSensor.DropSession(SessionId.create sessionId))
 
             // Always cancel the deleted id; also cancel linked Blogger keys.
             let cancelKeys = (sessionId :: linkedBloggerKeys) |> List.distinct
 
             for key in cancelKeys do
-                (blogger :> IBloggerRuntimeHost).CancelParked key
-                blogger.CancelEpisodesForSession key
+                attemptSync (fun () -> (blogger :> IBloggerRuntimeHost).CancelParked key)
+                attemptSync (fun () -> blogger.CancelEpisodesForSession key)
 
-                lock SharedState.BloggerFlightGate (fun () -> SharedState.BloggerFlights.Remove key |> ignore)
+                attemptSync (fun () ->
+                    lock SharedState.BloggerFlightGate (fun () -> SharedState.BloggerFlights.Remove key |> ignore))
 
-                recovery.ClearAttemptPlansFor key
+                attemptSync (fun () -> recovery.ClearAttemptPlansFor key)
+
+            this.RethrowFirstFailure firstFailure
         }
         :> Task
 

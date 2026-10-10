@@ -14,11 +14,17 @@ type Role =
     | DevOps
     | Distiller
     | Blogger
+    | Plan
 
 module Roles =
 
     let all: Role list =
-        [ Role.Orchestrator; Role.Manager; Role.Engineer; Role.DevOps; Role.Blogger ]
+        [ Role.Orchestrator
+          Role.Manager
+          Role.Engineer
+          Role.DevOps
+          Role.Blogger
+          Role.Plan ]
 
     /// Canonical wire label for a role (lowercase, AGENT-001 vocabulary).
     let roleLabel (role: Role) : string =
@@ -28,6 +34,7 @@ module Roles =
         | Role.Engineer -> "engineer"
         | Role.DevOps -> "devops"
         | Role.Blogger -> "blogger"
+        | Role.Plan -> "plan"
         | Role.Coder -> "coder"
         | Role.Inspector -> "inspector"
         | Role.Browser -> "browser"
@@ -41,6 +48,7 @@ module Roles =
         | "engineer" -> Some Role.Engineer
         | "devops" -> Some Role.DevOps
         | "blogger" -> Some Role.Blogger
+        | "plan" -> Some Role.Plan
         | "coder" -> Some Role.Coder
         | "inspector" -> Some Role.Inspector
         | "browser" -> Some Role.Browser

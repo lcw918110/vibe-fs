@@ -28,4 +28,8 @@ module BloggerAbandon =
         projections: Wanxiangshu.Composition.Durable.AgentProjectionSet ->
             (SessionId * OpenBloggerRequest) list
 
-    val settleStaleOpenAtLoad: liveFlight: (SessionId -> BloggerRequestId -> bool) -> journal: AgentJournal -> Task
+    /// Returns the Blogger session ids whose stale open request was abandoned
+    /// here, so the load phase can decide their same-source accepted
+    /// executions (provider-attempt-recovery-024).
+    val settleStaleOpenAtLoad:
+        liveFlight: (SessionId -> BloggerRequestId -> bool) -> journal: AgentJournal -> Task<SessionId list>

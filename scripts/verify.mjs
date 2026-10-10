@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// verify.mjs — the fixed verification pipeline. `verify:daily` is the developer
+// verify.mjs — the fixed verification pipeline. `format-build-test` is the developer
 // entry; `verify:release` adds release-only proofs (compiler-boundary canary,
 // repo-wide envelope oracle, Long Stroke, real package) after the shared
 // format/check/build/unit phases.

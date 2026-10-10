@@ -781,12 +781,7 @@ module ForkTool =
     /// commission calling derives to the single Manager persona.
     let private derivedCommissionCalling = "lead"
 
-    let private commissionNewCalling
-        (scope: ToolRuntimeScope)
-        (context: HostToolContext)
-        (request: Request)
-        language
-        =
+    let private commissionNewCalling (scope: ToolRuntimeScope) (context: HostToolContext) (request: Request) language =
         match tryCalling orchestratorCallingBindings derivedCommissionCalling with
         | None -> Task.FromResult(consequence (prose language Path.Commission.UnknownCalling))
         | Some managed -> finishCommissionNew scope context request language managed
@@ -834,8 +829,7 @@ module ForkTool =
             Task.FromResult(consequence (prose language Path.Commission.UnknownCalling))
         else
             match existingByname with
-            | Some _ when hasCalling ->
-                Task.FromResult(consequence (prose language Path.Commission.NameAlreadyBelongs))
+            | Some _ when hasCalling -> Task.FromResult(consequence (prose language Path.Commission.NameAlreadyBelongs))
             | Some job -> continueExistingCommission scope context request language job
             | None -> commissionNewCalling scope context request language
 
@@ -855,6 +849,9 @@ module ForkTool =
 
     let managerAdmission: ToolAdmission =
         ToolAdmission.OfficeRole(fun _ r -> r = Role.Manager)
+
+    let resumeAdmission: ToolAdmission =
+        ToolAdmission.OfficeRole(fun _ r -> r = Role.Manager || r = Role.Plan)
 
     let orchestratorAdmission: ToolAdmission =
         ToolAdmission.OfficeRole(fun _ r -> r = Role.Orchestrator)
@@ -897,7 +894,7 @@ module ForkTool =
               "keywords", ToolHostCodec.optionalStringSchemaDescribed (prose language Path.Fork.ArgKeywords) factory
               "attach", ToolHostCodec.optionalStringSchemaDescribed (prose language Path.Fork.ArgAttach) factory
               "expected_tool_calls", DelegatedToolEstimate.schema language factory ]
-          Admission = managerAdmission
+          Admission = resumeAdmission
           Execute =
             fun args context ->
                 task {

@@ -49,7 +49,6 @@ module LargeGateSurface =
               WorkingDirectory = None
               Environment = None
               Stdin = None
-              Deadline = None
               PtyOptions = None }
 
         let estimate =

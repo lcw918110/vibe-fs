@@ -38,7 +38,10 @@ module AttemptPlannerSurface =
         | ToolPermission.Fetch -> "Fetch"
         | ToolPermission.Finality -> "Finality"
         | ToolPermission.BashHoneypot -> "BashHoneypot"
-        | ToolPermission.Sphinx -> "Sphinx"
+        | ToolPermission.JsPlan -> "JsPlan"
+        | ToolPermission.Ask -> "Ask"
+        | ToolPermission.Handoff -> "Handoff"
+        | ToolPermission.Deliver -> "Deliver"
 
     let private requestKindOf (label: string) : ProviderRequestKind option =
         match label.ToLowerInvariant() with

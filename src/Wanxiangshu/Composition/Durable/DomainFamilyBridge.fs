@@ -219,4 +219,7 @@ module ContextProjectionBridge =
         | ContextFactCases.ContextReanchored payload ->
             foldOwned projection fact
             |> Result.map (fun updated -> clearCheckpointGeneration updated payload.SessionId)
+        | ContextFactCases.TenureReanchored payload ->
+            foldOwned projection fact
+            |> Result.map (fun updated -> clearCheckpointGeneration updated payload.SessionId)
         | _ -> foldOwned projection fact

@@ -1,18 +1,5 @@
 namespace Wanxiangshu.OpenCode.Host
 
-open Wanxiangshu.Foundation.Identity
-
-type ProtocolArgumentCall =
-    { SessionId: SessionId
-      ToolCallId: ToolCallId
-      Tool: string }
-
-[<RequireQualifiedAccess>]
-type HiddenProtocolArguments =
-    | NotHidden
-    | SameCall
-    | DifferentCallOrChangedArguments
-
 module ManagerReviewContract =
 
     /// Decorates the tool definition for the four manager review tools by adding

@@ -10,4 +10,4 @@ module ConcernTools =
         factory: HostToolFactory ->
         journal: ConcernJournalPort option ->
         toast: (string -> string -> unit) option ->
-        ToolSpec list
+            ToolSpec list

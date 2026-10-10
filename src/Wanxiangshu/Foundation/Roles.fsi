@@ -12,6 +12,7 @@ type Role =
     | DevOps
     | Distiller
     | Blogger
+    | Plan
 
 module Roles =
     val all: Role list

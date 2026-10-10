@@ -24,6 +24,13 @@ module AttentionSurface =
         |> AttentionProjection.consume (SessionId.create session) (Array.toList workIds)
         |> boxed
 
+    /// ATTENTION-004: close one life, leaving its remaining work as
+    /// consumption receipts so replay cannot resurrect it.
+    let closeLife (session: string) (state: obj) =
+        stateOf state
+        |> AttentionProjection.closeLife (SessionId.create session)
+        |> boxed
+
     let pending (session: string) (state: obj) : obj =
         stateOf state
         |> AttentionProjection.pending (SessionId.create session)

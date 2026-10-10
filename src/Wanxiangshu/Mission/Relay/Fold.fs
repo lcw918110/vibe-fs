@@ -453,8 +453,7 @@ module private Internal =
         (retirement: RetirementSummary)
         =
         match retirement.Outcome with
-        | RetirementOutcome.Accepted certificateId ->
-            admitAcceptedOutcome current active certificateId
+        | RetirementOutcome.Accepted certificateId -> admitAcceptedOutcome current active certificateId
         | RetirementOutcome.Continue -> admitContinueOutcome ()
 
     let private admitOutcome (current: RoadState) (active: ActiveIncumbency) (retirement: RetirementSummary) =
@@ -599,8 +598,7 @@ module private Internal =
     let private decideRetirementReopen roadId state (current: RoadState) incumbentId snapshotId retirement =
         match retirement.Outcome with
         | RetirementOutcome.Continue -> commitPendingIncumbency roadId state current incumbentId snapshotId
-        | RetirementOutcome.Accepted _ ->
-            decideAcceptedReopen roadId state current incumbentId snapshotId
+        | RetirementOutcome.Accepted _ -> decideAcceptedReopen roadId state current incumbentId snapshotId
 
     let private decideInactiveReopen roadId state (current: RoadState) incumbentId snapshotId =
         match current.LatestRetirement with
@@ -679,7 +677,8 @@ module private Internal =
             let! active = requireBlockTarget current incumbencyId
 
             match active.Confirmation with
-            | Some existing when existing.ProviderRunId = providerRunId && existing.ToolCallId = toolCallId -> return state
+            | Some existing when existing.ProviderRunId = providerRunId && existing.ToolCallId = toolCallId ->
+                return state
             | Some _ -> return! Error "RetirementConfirmationReplayConflict"
             | None ->
                 return
@@ -880,10 +879,7 @@ module Decision =
         match Fold.view state roadId with
         | None -> Error "RoadNotOpen"
         | Some view when view.ActiveIncumbency = Some incumbentId ->
-            commit
-                state
-                roadId
-                [ RelayEvent.RetirementConfirmationCommitted(incumbentId, providerRunId, toolCallId) ]
+            commit state roadId [ RelayEvent.RetirementConfirmationCommitted(incumbentId, providerRunId, toolCallId) ]
         | Some _ -> Error "IncumbencyNotActive"
 
     let retire state roadId incumbentId retirement =

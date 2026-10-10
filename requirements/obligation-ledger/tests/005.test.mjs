@@ -182,16 +182,21 @@ const { renameSync, writeFileSync } = await import("node:fs");
 // directory even when the tested operation fails.
 const withBlockedEvents = async (directory, action) => {
   const eventsDir = join(directory, '.git', 'wanxiangshu', 'events')
-  const { mkdtempSync: mkStash, rmSync: rmStash } = await import("node:fs")
+  const { mkdtempSync: mkStash, mkdirSync, readdirSync, rmSync: rmStash } = await import("node:fs")
   const osModule = await import('node:os')
   const stash = mkStash(join(osModule.tmpdir(), 'wxs-005-stash-'))
-  renameSync(eventsDir, join(stash, 'events'))
-  writeFileSync(eventsDir, 'blocked: not a directory')
+  // Replace each existing writer file with a same-named directory: the events
+  // directory stays usable, so the fault lands in PhysicalAppend
+  // (AppendAllText against a directory) and reports an unknown outcome.
+  const writers = readdirSync(eventsDir).filter(name => name.endsWith('.ndjson'))
+  const stashed = writers.map(name => ({ live: join(eventsDir, name), held: join(stash, name) }))
+  for (const writer of stashed) renameSync(writer.live, writer.held)
+  for (const writer of stashed) mkdirSync(writer.live)
   try {
     return await action()
   } finally {
-    rmStash(eventsDir, { force: true })
-    renameSync(join(stash, 'events'), eventsDir)
+    for (const writer of stashed) rmStash(writer.live, { recursive: true, force: true })
+    for (const writer of stashed) renameSync(writer.held, writer.live)
     rmStash(stash, { recursive: true, force: true })
   }
 }

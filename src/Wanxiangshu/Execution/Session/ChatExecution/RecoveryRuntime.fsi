@@ -22,6 +22,16 @@ type ChatExecutionRecoveryLifecycleEvent =
     /// 逐一定夺（resume 或终态），不得留成悬空态。
     | SessionQuiesced of SessionId
 
+    /// managed-chat-execution-015：transform 在 provider 启动边界拒绝 exact 执行时
+    /// 发出的 typed 报告，携带 exact key 与诊断码；settlement 由 recovery owner
+    /// 按 durable projection 分流，不携带 free-form 决策。
+    | ProviderStartBoundaryRejected of ChatExecutionKey * string
+
+    /// provider-attempt-recovery-024：加载期废弃了该 Blogger session 的 stale open
+    /// request；recovery owner 定夺同源 `Accepted ∧ ¬ProviderStarted ∧ ¬Terminal`
+    /// 的执行（terminal Failed + exact release），不动已启动或已终态的执行。
+    | BloggerStaleRequestAbandoned of SessionId
+
 type ChatExecutionRecoveryActionPorts =
     { ReconcilePhysical: PhysicalReconciliationRequest -> Task
       ResumePreProvider: PreProviderResumeRequest -> Task

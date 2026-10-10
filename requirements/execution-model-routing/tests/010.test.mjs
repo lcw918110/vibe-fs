@@ -689,37 +689,37 @@ test('WHAT[execution-model-routing-010] EMR_010_managed_tool_execution_ends_the_
   assert.ok(boundaryIndex >= 0, 'ToolRegistry must cross the provider→tool capacity boundary')
   assert.match(
     registry,
-    /let endObservedStep[\s\S]*ModelRouting\.tryProviderStepIdentity[\s\S]*ModelRouting\.endProviderStep/,
+    /let (?:private )?endObservedStep[\s\S]*ModelRouting\.tryProviderStepIdentity[\s\S]*ModelRouting\.endProviderStep/,
     'the tool boundary resolves the run physical message from the exact run-to-physical relation',
   )
   assert.match(
     registry,
-    /let providerToolBoundary[\s\S]*endObservedStep/,
+    /let (?:private )?providerToolBoundary[\s\S]*endObservedStep/,
     'provider-to-tool handoff is a named stage resolving the run physical message',
   )
   assert.match(
     registry,
-    /match providerToolBoundary ctx with[\s\S]*\| Ok\(\) -> return! execute(?:Tracked|AfterBoundary) args ctx/,
+    /match providerToolBoundary ctx with[\s\S]*\| Ok\(\) ->[\s\S]*accountingStage gate ctx[\s\S]*runBoundaryStages gate spec managerPermission args ctx/,
     'all later gates execute only after the provider boundary succeeds',
   )
   assert.match(
     registry,
-    /let executeAfterBoundary[\s\S]*if isStrengthReplica ctx then[\s\S]*else[\s\S]*return! executeEstablished args ctx/,
+    /let (?:private )?runAfterAblation[\s\S]*match! replicaStage gate spec ctx with[\s\S]*admissionStage gate spec managerPermission args ctx[\s\S]*let (?:private )?runBoundaryStages[\s\S]*match! ablationStage spec ctx with[\s\S]*runAfterAblation gate spec managerPermission args ctx/,
     'strength and role/admission gates remain downstream of the provider boundary',
   )
   assert.match(
     registry,
-    /match spec\.Admission with[\s\S]*OfficeRole[\s\S]*executeOffice[\s\S]*PrivateAttachment[\s\S]*executePrivateAttachment/,
+    /match spec\.Admission with[\s\S]*OfficeRole[\s\S]*officeStage[\s\S]*PrivateAttachment[\s\S]*attachmentStage/,
     'the declared tool authority, not a guessed one, selects the admission path downstream of the boundary',
   )
   assert.match(
     registry,
-    /let executeKnownRole[\s\S]*officeAdmission ctx role[\s\S]*return! original args ctx/,
+    /let (?:private )?executeAdmittedRole[\s\S]*spec\.Execute args ctx/,
     'after the outer handoff and gates, ToolRegistry still delegates to the original tool body',
   )
   assert.match(
     registry,
-    /let executePrivateAttachment[\s\S]*if attachmentAdmission ctx then[\s\S]*return! original args ctx/,
+    /let (?:private )?attachmentStage[\s\S]*attachmentAdmission ctx[\s\S]*spec\.Execute args ctx/,
     'an internal leaf tool also reaches the original body only after the provider boundary',
   )
 

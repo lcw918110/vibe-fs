@@ -1,4 +1,9 @@
 {
   "version": 1,
-  "files": {}
+  "files": {
+    "src/Wanxiangshu/Composition/Durable/AttentionConcernJournalAdapter.fs": 1,
+    "src/Wanxiangshu/Enforcer/InstitutionalLearning/Enhancer.fs": 1,
+    "src/Wanxiangshu/Execution/Delegation/Handle/Controller.fs": 2,
+    "src/Wanxiangshu/Mission/Relay/OpenCode/ReviewTool.fs": 1
+  }
 }

@@ -108,10 +108,22 @@ module BloggerAbandon =
 
     /// Settle those requests once, at load, before any session runs. Abandoning is the
     /// whole settlement: the interrupted cycle produced nothing, so it owes nothing.
-    let settleStaleOpenAtLoad (liveFlight: SessionId -> BloggerRequestId -> bool) (journal: AgentJournal) : Task =
+    /// Returns the Blogger session ids whose open request was abandoned here, so the
+    /// load phase can decide their same-source accepted executions
+    /// (provider-attempt-recovery-024).
+    let settleStaleOpenAtLoad
+        (liveFlight: SessionId -> BloggerRequestId -> bool)
+        (journal: AgentJournal)
+        : Task<SessionId list> =
         task {
             let projections = (AgentJournal.snapshot journal).AgentProjections
+            let stale = staleOpenRequests liveFlight projections
 
-            for mainSessionId, openReq in staleOpenRequests liveFlight projections do
+            for mainSessionId, openReq in stale do
                 do! byRequestId journal openReq.RequestId mainSessionId openReq.BloggerSessionId "stale-open-at-load"
+
+            return
+                stale
+                |> List.map (fun (_, openReq) -> openReq.BloggerSessionId)
+                |> List.distinct
         }

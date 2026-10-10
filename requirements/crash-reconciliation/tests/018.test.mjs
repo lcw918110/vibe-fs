@@ -167,7 +167,18 @@ test('WHAT[crash-reconciliation-018] CRASH_018_replayed_request_yields_byte_iden
     const first = await transform(hooks, runtime, session, structuredClone(request))
     const replay = await transform(hooks, runtime, session, structuredClone(request))
 
-    assert.deepEqual(replay, first)
+    // guidance-delivery-011 freezes the delivered guidance bytes, not the whole
+    // Host message object: `info.model` / `info.tools` are the one-shot
+    // `chat.message` admission projection (execution-model-routing-009 owns that
+    // write; the transform side reads the committed lease without rewriting it).
+    const guidanceOf = (messages) =>
+      hints(messages.filter((message) => message.info?.id === 'restart-root-1'))
+
+    const firstGuidance = guidanceOf(first)
+    const replayGuidance = guidanceOf(replay)
+
+    assert.match(firstGuidance.join('\n'), GUIDANCE_MARKER)
+    assert.deepEqual(replayGuidance, firstGuidance)
   })
 })
 }

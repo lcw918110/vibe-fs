@@ -23,6 +23,7 @@ module PluginTransforms =
             /// the Host persisted away into the provider-facing request.
             RestoreProtocolArguments: obj -> Task<unit>
             ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
+            ApplyTenureIsolation: string option -> obj -> Task<unit>
             CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
             CommitStrengthTrace: string option -> XTraceProjectionState option -> StrengthReplayPlan list -> Task<unit>
             RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit

@@ -511,6 +511,18 @@ module ModelRoutingSurface =
             ModelRouting.releaseExecutionAdmissionBeforeProvider lease (admissionIdentityOf observed)
             |> transitionOutcomeObject
 
+    /// The shared-runtime retention wrapper. Production retains the old opaque
+    /// lease for an accepted continuation input on the process-shared runtime
+    /// (HostSignalBootstrap PublishInput), and clearSession releases against
+    /// that same runtime, so this is the shared face of the same operation the
+    /// isolated wrapper exposes for an isolated runtime.
+    let sharedRetainContinuationInput (token: obj) (physicalUserMessageId: string) : obj =
+        match leaseOf token with
+        | None -> invalidArg "token" "retention requires an opaque admission lease"
+        | Some lease ->
+            ModelRouting.retainContinuationInputForPhysical lease (PhysicalUserMessageId.create physicalUserMessageId)
+            |> targetObject
+
     /// Release only the process-shared execution proven to belong to this exact
     /// physical user material. A stale terminal observation for an older turn is
     /// therefore harmless after the SessionId has been reused.

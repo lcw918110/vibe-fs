@@ -16,22 +16,26 @@ module AttentionToolSurface =
     let create (toolModule: obj) (snapshot: unit -> obj) (append: string -> string -> obj -> Task<bool>) =
         let appendFact sessionId providerRun fact =
             task {
-                let (AttentionFactCases.DeferredWorkRecorded work) = fact
+                match fact with
+                | AttentionFactCases.DeferredWorkConsumed _ ->
+                    // Consumption receipts are appended by their owning carriers;
+                    // this test surface only drives the `defer` tool.
+                    return Ok()
+                | AttentionFactCases.DeferredWorkRecorded work ->
+                    let! accepted =
+                        append
+                            (SessionId.value sessionId)
+                            (providerRun |> Option.map ProviderRunIdentity.value |> Option.toObj)
+                            (box
+                                {| session = SessionId.value work.SessionId
+                                   occurrence = work.OccurrenceId
+                                   text = work.Text |})
 
-                let! accepted =
-                    append
-                        (SessionId.value sessionId)
-                        (providerRun |> Option.map ProviderRunIdentity.value |> Option.toObj)
-                        (box
-                            {| session = SessionId.value work.SessionId
-                               occurrence = work.OccurrenceId
-                               text = work.Text |})
-
-                return
-                    if accepted then
-                        Ok()
-                    else
-                        Error AttentionAppendFailure.DurabilityUnavailable
+                    return
+                        if accepted then
+                            Ok()
+                        else
+                            Error AttentionAppendFailure.DurabilityUnavailable
             }
 
         let port =

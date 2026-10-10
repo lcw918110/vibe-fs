@@ -6,7 +6,7 @@ test('WHAT[intra-participant-parallelism-012] the role component of Fission perm
   assert.equal(rolePredicate('fission', 'Engineer'), true)
   for (const role of [
     'Manager', 'DevOps', 'Orchestrator', 'Blogger', 'Bookkeeper', 'Predictor',
-    'Coder', 'Inspector', 'Browser', 'Inquiry', 'Reviewer', 'Distiller', 'Sphinx',
+    'Coder', 'Inspector', 'Browser', 'Inquiry', 'Reviewer', 'Distiller',
     'engineer-alias', 'ManagerWithWorkRecord', 'DevOpsEngineer', 'CustomSubagent', 'self-claimed-engineer',
   ]) {
     assert.equal(rolePredicate('fission', role), false, role)

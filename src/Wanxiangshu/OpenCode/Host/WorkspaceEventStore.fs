@@ -22,6 +22,7 @@ module WorkspaceEventStore =
         @ Wanxiangshu.Sphinx.V2.Composition.Bind.rules
         @ Wanxiangshu.Repository.Knowledge.Casebook.CasebookIntegrationRules.rules
         @ Wanxiangshu.Repository.Programming.Js.JsTransactionIntegrationRules.rules
+        @ Wanxiangshu.Mission.Planning.PlanIntegrationRules.rules
 
     /// durable-events-019 registration-necessity seam: the production history
     /// program with exactly one named registration removed. Every other

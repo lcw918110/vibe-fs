@@ -12,7 +12,7 @@ test('WHAT[office-capability-018] Sphinx and historical Inquiry have no public o
 })
 
 test('WHAT[office-capability-018] the standard Engineer entitlement includes source work and fission but no execution or DevOps dispatch', () => {
-  for (const permission of ['Read', 'Write', 'Edit', 'Fission', 'Sphinx']) {
+  for (const permission of ['Read', 'Write', 'Edit', 'Fission']) {
     assert.equal(isAllowed('engineer', permission), true, permission)
   }
   for (const permission of ['Exec', 'Pty', 'Fork', 'Resume']) {

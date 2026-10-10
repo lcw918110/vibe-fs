@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { Worker } from 'node:worker_threads'
 import { encode } from 'gpt-tokenizer/encoding/o200k_base'
+import { materializeLoopDetectorEnvelope } from '../../../scripts/build.mjs'
 import { deriveLoopDetectorEnvelope, encodeParallel, loadLoopDetectorRepositoryCorpusV1 } from '../../../scripts/lib/derive-loop-detector-envelope.mjs'
+import {
+  loopDetectorEnvelopeDistPath,
+  loopDetectorEnvelopeRepositoryPath,
+} from '../../../scripts/lib/loop-detector-envelope-paths.mjs'
 import { loopDetectorRepositoryInputFiles } from '../../../scripts/lib/loop-detector-repository-corpus.mjs'
 
 test('WHAT[degeneration-guard-004] selector admits tracked source documents and excludes generated vendor fixture structured deleted and untracked paths', () => {
@@ -83,6 +88,38 @@ test('WHAT[degeneration-guard-004] worker failure rejects only after all spawned
   }), /loop detector tokenize worker exited with 42/)
   assert.ok(spawned.length > 0)
   for (const worker of spawned) assert.equal(worker.threadId, -1)
+})
+
+test('WHAT[degeneration-guard-004] derived envelope bytes stay out of the corpus via the generated marker', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'wanxiangshu-loop-envelope-'))
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    mkdirSync(path.dirname(path.join(root, loopDetectorEnvelopeRepositoryPath)), { recursive: true })
+    writeFileSync(path.join(root, loopDetectorEnvelopeRepositoryPath), '// auto-generated from the repository SSOT; do not edit by hand.\nexport const normalWeightedDistinctCount = 1\n')
+    mkdirSync(path.join(root, 'src'), { recursive: true })
+    writeFileSync(path.join(root, 'src/keep.fs'), 'module Keep\n')
+    execFileSync('git', ['add', '-f', loopDetectorEnvelopeRepositoryPath, 'src/keep.fs'], { cwd: root })
+    const corpus = loadLoopDetectorRepositoryCorpusV1(root)
+    assert.deepEqual(corpus.selectedInputs.map(({ path: inputPath }) => inputPath), [loopDetectorEnvelopeRepositoryPath, 'src/keep.fs'])
+    assert.deepEqual(corpus.texts, ['module Keep\n'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('WHAT[degeneration-guard-004] build materializes the tracked repository envelope artifact into dist', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'wanxiangshu-loop-materialize-'))
+  try {
+    const source = path.join(root, loopDetectorEnvelopeRepositoryPath)
+    const target = path.join(root, loopDetectorEnvelopeDistPath)
+    mkdirSync(path.dirname(source), { recursive: true })
+    assert.throws(() => materializeLoopDetectorEnvelope(root), /missing repository loop detector envelope artifact/)
+    writeFileSync(source, '// auto-generated from the repository SSOT; do not edit by hand.\nexport const minimumWeightedDistinctCount = 0.5\n')
+    materializeLoopDetectorEnvelope(root)
+    assert.equal(readFileSync(target, 'utf8'), readFileSync(source, 'utf8'))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test.todo('WHAT[degeneration-guard-004] actual build binds generator selector selected bytes and runtime traversal to one staged input (GAP-145)')

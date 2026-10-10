@@ -65,7 +65,7 @@
 - 目的：给多人协作施工提供完整流程。每条意见一张工作包卡。无遗漏。
 - 边界：本文不是产品规范。产品语义只由 `requirements/<包>/WHAT.md` 定义。冲突时，以规范与源码为准，并修正本文。
 - 基线：`6f4a1a99a`。写作时工作树干净。文中行号与锚点按此基线。动工前必须重读当前源码。
-- 状态：第一稿。尚未施工。本文只写「怎么做」，不写「做了什么」。
+- 状态：施工完成（2026-10-10）。逐条落实状态见 §4「状态」列；指南意见块已同步标注。本文只写「怎么做」，不写「做了什么」。
 
 ---
 
@@ -272,50 +272,50 @@ F8. [终止.] 算法终止。
 
 ## §4 意见台账（42 条全覆盖）
 
-| WP | 行 | 主题 | 类型 | 波次 | 规范包 |
-|---|---|---|---|---|---|
-| 001 | 45 | 路径统一 `.git/wanxiangshu/…` | 裁决 → 实施 | W1 | durable-events |
-| 002 | 56 | 会话准入简化评估 | 裁决 | W0 | managed-chat-execution |
-| 003 | 84 | 漂移校验退役，转 fast-check | 实施 | W2 | execution-model-routing |
-| 004 | 109 | `messages.transform` 洋葱式 | 重构 | W5 | provider-projection |
-| 005 | 153 | `tool.definition` 洋葱式 + DRY | 重构 | W5 | host-boundary |
-| 006 | 175 | `tool.execute` 洋葱式 + DRY | 重构 | W5 | host-boundary |
-| 007 | 207 | 工具面洋葱式 + DRY | 重构 | W5 | capability-enforcement |
-| 008 | 264 | 事件与调和 KISS 评估 | 裁决 | W0 | host-boundary |
-| 009 | 381 | fork 的 calling 可选 | 实施 | W3 | delegation |
-| 010 | 388 | keyword / attach 必要性 | 裁决 | W0 | delegation |
-| 011 | 402 | commission 的 calling 可选 | 实施 | W3 | delegation |
-| 012 | 416 | 底层 id 概念去除 | 裁决 → 实施 | W3 | participant-horizon |
-| 013 | 458 | Road 概念评估 | 裁决 | W0 | relay-incumbency |
-| 014 | 465 | 评审对象重定义 | 实施 | W4 | relay-assessment |
-| 015 | 469 | review 返回 pairs，空集终止 | 实施 | W4 | relay-assessment |
-| 016 | 487 | 最后一任收尾 | 实施 | W4 | relay-assessment |
-| 017 | 494 | 快照机制去除 | 裁决 → 实施 | W4 | relay-assessment |
-| 018 | 499 | 两次 suicide | 实施 | W4 | relay-retirement |
-| 019 | 503 | 证书去形式主义 | 裁决 → 实施 | W4 | relay-assessment |
-| 020 | 509 | 重启状态指导 prepend | 实施 | W2 | crash-reconciliation |
-| 021 | 600 | ndjson 内嵌 payload | 实施 | W1 | durable-events |
-| 022 | 601 | UTC 日期分组 GC | 实施 | W1 | durable-events |
-| 023 | 602 | 性能问题排查 | 裁决 → 实施 | W1 | durable-events |
-| 024 | 627 | git hook 修复后重开 | 实施 | W1 | durable-convergence |
-| 025 | 639 | horizon 泄露重置 | 裁决 → 实施 | W2 | crash-reconciliation |
-| 026 | 662 | 「证据」措辞清理 | 实施 | W2 | provider 文本面（多包） |
-| 027 | 668 | 失败恢复优雅化 | 实施 | W2 | execution-failure-policy |
-| 028 | 715 | assume 不被 LWR 替换（核对） | 核对 | W2 | context-compression |
-| 029 | 724 | enough / abandon 合入 assume | 实施 | W3 | attention-regulation |
-| 030 | 731 | defer 新语义 | 实施 | W3 | attention-regulation |
-| 031 | 732 | orchestrator 的 defer | 实施 | W3 | attention-regulation |
-| 032 | 733 | Pair Hint 鼓励 defer | 实施 | W3 | cognitive-environment |
-| 033 | 740 | 自动 subscribe 自身名字 | 实施 | W3 | concern-routing |
-| 034 | 741 | 只有 publish；user 弹窗 | 实施 | W3 | concern-routing |
-| 035 | 742 | 向 LLM 解释邮箱语义 | 实施 | W3 | concern-routing |
-| 036 | 748 | 删除 celebrate / regret | 实施 | W3 | institutional-learning |
-| 037 | 808 | 环境变量 KISS | 实施 | W6 | 多包（见卡） |
-| 038 | 825 | 验证入口 KISS | 实施 | W6 | verification-system |
-| 039 | 840 | Sphinx 恢复 | 裁决 → 实施 | W5 | sphinx-v2 |
-| 040 | 846 | query-shell 丢弃 | 删除 | W5 | process-execution |
-| 041 | 853 | CHANGELOG 遗骸丢弃 | 删除 | W5 | action-affordance |
-| 042 | 863 | envelope 手动更新 | 实施 | W1 | degeneration-guard |
+| WP | 行 | 主题 | 类型 | 波次 | 规范包 | 状态 |
+|---|---|---|---|---|---|---|
+| 001 | 45 | 路径统一 `.git/wanxiangshu/…` | 裁决 → 实施 | W1 | durable-events | 已落实（`d5f0c9366`） |
+| 002 | 56 | 会话准入简化评估 | 裁决 | W0 | managed-chat-execution | 裁决保留 |
+| 003 | 84 | 漂移校验退役，转 fast-check | 实施 | W2 | execution-model-routing | 已落实（`5fcb495b3`） |
+| 004 | 109 | `messages.transform` 洋葱式 | 重构 | W5 | provider-projection | 已落实（`2575c5baa`） |
+| 005 | 153 | `tool.definition` 洋葱式 + DRY | 重构 | W5 | host-boundary | 已落实（`1d38aa294`） |
+| 006 | 175 | `tool.execute` 洋葱式 + DRY | 重构 | W5 | host-boundary | 已落实（`d2bf95fcf`） |
+| 007 | 207 | 工具面洋葱式 + DRY | 重构 | W5 | capability-enforcement | 已落实（`b2d0ff36b`） |
+| 008 | 264 | 事件与调和 KISS 评估 | 裁决 | W0 | host-boundary | 裁决保留 |
+| 009 | 381 | fork 的 calling 可选 | 实施 | W3 | delegation | 已落实（`e20725307`） |
+| 010 | 388 | keyword / attach 必要性 | 裁决 | W0 | delegation | 裁决保留 |
+| 011 | 402 | commission 的 calling 可选 | 实施 | W3 | delegation | 已落实（`e20725307`） |
+| 012 | 416 | 底层 id 概念去除 | 裁决 → 实施 | W3 | participant-horizon | 已落实（`9e087469d`；可见面核对零改动） |
+| 013 | 458 | Road 概念评估 | 裁决 | W0 | relay-incumbency | 裁决保留 |
+| 014 | 465 | 评审对象重定义 | 实施 | W4 | relay-assessment | 已落实（`30f53445e`） |
+| 015 | 469 | review 返回 pairs，空集终止 | 实施 | W4 | relay-assessment | 已落实（`30f53445e`） |
+| 016 | 487 | 最后一任收尾 | 实施 | W4 | relay-assessment | 已落实（`7ebe9e749`） |
+| 017 | 494 | 快照机制去除 | 裁决 → 实施 | W4 | relay-assessment | 已落实（`694750f00`） |
+| 018 | 499 | 两次 suicide | 实施 | W4 | relay-retirement | 已落实（`694750f00`） |
+| 019 | 503 | 证书去形式主义 | 裁决 → 实施 | W4 | relay-assessment | 已落实（`694750f00`） |
+| 020 | 509 | 重启状态指导 prepend | 实施 | W2 | crash-reconciliation | 已落实（`6e5cbd442`） |
+| 021 | 600 | ndjson 内嵌 payload | 实施 | W1 | durable-events | 已落实（`734a6bce0`） |
+| 022 | 601 | UTC 日期分组 GC | 实施 | W1 | durable-events | 已落实（`fdfab580d`） |
+| 023 | 602 | 性能问题排查 | 裁决 → 实施 | W1 | durable-events | 已落实（`a0d3344c5`；数字对比未验证） |
+| 024 | 627 | git hook 修复后重开 | 实施 | W1 | durable-convergence | 已落实（`cda78e0d2`） |
+| 025 | 639 | horizon 泄露重置 | 裁决 → 实施 | W2 | crash-reconciliation | 已落实（`c9be6e3c7`） |
+| 026 | 662 | 「证据」措辞清理 | 实施 | W2 | provider 文本面（多包） | 已落实（`d36d41b82`） |
+| 027 | 668 | 失败恢复优雅化 | 实施 | W2 | execution-failure-policy | 已落实（`5faaf81ea`） |
+| 028 | 715 | assume 不被 LWR 替换（核对） | 核对 | W2 | context-compression | 已落实（`ecdd82d7a`） |
+| 029 | 724 | enough / abandon 合入 assume | 实施 | W3 | attention-regulation | 已落实（`b15a3d01a`） |
+| 030 | 731 | defer 新语义 | 实施 | W3 | attention-regulation | 已落实（`b15a3d01a`） |
+| 031 | 732 | orchestrator 的 defer | 实施 | W3 | attention-regulation | 已落实（`b15a3d01a`） |
+| 032 | 733 | Pair Hint 鼓励 defer | 实施 | W3 | cognitive-environment | 已落实（`b15a3d01a`） |
+| 033 | 740 | 自动 subscribe 自身名字 | 实施 | W3 | concern-routing | 已落实（`877b8b8ad`） |
+| 034 | 741 | 只有 publish；user 弹窗 | 实施 | W3 | concern-routing | 已落实（`877b8b8ad`） |
+| 035 | 742 | 向 LLM 解释邮箱语义 | 实施 | W3 | concern-routing | 已落实（`877b8b8ad`） |
+| 036 | 748 | 删除 celebrate / regret | 实施 | W3 | institutional-learning | 已落实（`a66f204dc`） |
+| 037 | 808 | 环境变量 KISS | 实施 | W6 | 多包（见卡） | 已落实（`b35ad48ea`） |
+| 038 | 825 | 验证入口 KISS | 实施 | W6 | verification-system | 已落实（`b35ad48ea`） |
+| 039 | 840 | Sphinx 恢复 | 裁决 → 实施 | W5 | sphinx-v2 | 已落实（`b97845a49`） |
+| 040 | 846 | query-shell 丢弃 | 删除 | W5 | process-execution | 已落实（`c5109e6ae`） |
+| 041 | 853 | CHANGELOG 遗骸丢弃 | 删除 | W5 | action-affordance | 已落实（`b35ad48ea`） |
+| 042 | 863 | envelope 手动更新 | 实施 | W1 | degeneration-guard | 已落实（`c557749c5`） |
 
 # 断言：本表 42 行。每行对应指南一条意见。
 
@@ -1059,7 +1059,7 @@ D6. [终止.] 算法终止。
 ### WP-037 · L808 · 环境变量 KISS
 
 - 类型：实施。波次：W6。
-- 现状清点：读取点约 9 个（`WANXIANGSHU_PROVIDER_LANGUAGE`、`WANXIANGSHU_SKIP_AUTO_INJECTED`、`WANXIANGSHU_PROCESS_HARD_LIMIT_SECS`、`WANXIANGSHU_ADMISSION_TIMEOUT_MS`、`WANXIANGSHU_DIAG`、`WANXIANGSHU_NO_FATAL_EXIT`、`WANXIANGSHU_ABLATION_PROFILE`、`WANXIANGSHU_ABLATION_<node>`、`WANXIANG_GIT_SYNC`）。另有 `SPHINX_COMMON_DIR`（独立 MCP 进程，`Sphinx/V2/ServeEntry.fs` 约 43、59）。文档：`README.md`（约 79-89）。
+- 现状清点：生产读取点 8 个（`WANXIANGSHU_PROVIDER_LANGUAGE`、`WANXIANGSHU_SKIP_AUTO_INJECTED`、`WANXIANGSHU_PROCESS_HARD_LIMIT_SECS`、`WANXIANGSHU_ADMISSION_TIMEOUT_MS`、`WANXIANGSHU_DIAG`、`WANXIANGSHU_NO_FATAL_EXIT`、`WANXIANGSHU_ABLATION_PROFILE`、`WANXIANGSHU_ABLATION_<node>`）。另有 `SPHINX_COMMON_DIR`（`Sphinx/V2/ServeEntry.fs` 约 46、`Sphinx/V2/Composition/Bind.fs` 约 36）与 `SPHINX_START_CONFIG`（`Sphinx/V2/Hosts/Mcp/Server.fs` 约 513），属独立 MCP 进程；`SEMBLE_*`、`WANXIANGSHU_TEST` 为内部/测试变量（`Repository/Investigation/Semble/Mcp.fs` 约 54-57）。`WANXIANG_GIT_SYNC` 已由 WP-024 删除。文档：`README.md`（约 79-89）。
 
 ```
 Algorithm V（环境变量）。输入：全部变量与读取点。输出：最小集合。
@@ -1325,6 +1325,7 @@ Z5. [终止.] 算法终止。
 4. 建 journal。路径为 `<git-common-dir>/wanxiangshu-next/runtimes/`。取不到 common dir 时退到 XDG state home。（action-affordance / persistence）
 
 > {开发者认为应该统一使用 .git/wanxiangshu/... }
+> 状态：已落实（WP-001，`d5f0c9366`）
 
 5. 注册全部 Hook，并逐行登记 Hook 元数据。（host-boundary-024）
    - 每行声明 criticality、允许的 context/effect、retry 权限、容量 owner、失败处置。
@@ -1336,6 +1337,7 @@ Z5. [终止.] 算法终止。
 ## 2. 会话准入 
 
 > {开发者认为有简化空间——如果按照存在即合理的逻辑，是否能简化架构，还是说反而造成了退化？开放讨论}
+> 状态：裁决保留（WP-002）
 
 `procedure AdmitChat(input, output)` ← `chat.message`
 
@@ -1364,6 +1366,7 @@ Z5. [终止.] 算法终止。
 2. durable 已接受执行 + 有租约 → 校验 agent 与 model/reasoning 不漂移。
 
 > {开发者认为 agent 与 model/reasoning 不漂移应该由测试期强 fast-check 保证，运行时作为不变量但不再校验。}
+> 状态：已落实（WP-003，`5fcb495b3`）
 
 3. durable 已接受执行 + 无租约 → fail closed。拒绝时宿主输出不被改写。
 4. 无 durable 已接受执行 → 完全留给宿主。
@@ -1389,6 +1392,7 @@ Z5. [终止.] 算法终止。
 3. 普通分支，按下述固定次序执行。次序是合同，不得重排（host-boundary-019）：
 
 > {开发者认为此处可以重构成洋葱式 decorator 模型，而不是大泥球架构}
+> 状态：已落实（WP-004，`2575c5baa`）
 
    1. 开物理 provider attempt。这是 durable 证据门。
    2. 绑定会话起点时间。失败 → 终止会话。
@@ -1404,7 +1408,10 @@ Z5. [终止.] 算法终止。
        - 选中前缀探针 → 本次请求为 tentative cold horizon。（prefix-stability-003）
    11. 冻结 provider attempt plan；确认宿主真实 assistant 身份与 durable `ProviderStarted`。
    12. 应用 Enforcer 续行决策。
-   13. 仅当 horizon 为 Current 时，依次做：注入 Pair 指引、投影 requirement grounding、捕获并启动只读委托。
+   13. 仅当 horizon 为 Current 时，依次做：
+       1. 注入 Pair 指引。
+       2. 投影 requirement grounding。
+       3. 捕获并启动只读委托。
        - horizon 为 TentativeCold → 跳过本步，避免旧 horizon 材料穿透新前缀。（context-compression-019）
    14. 注入 Blogger 纪事文本。
    15. 重放替换后的检查结果。
@@ -1433,6 +1440,7 @@ Z5. [终止.] 算法终止。
 `procedure DefineTool(toolInput, toolOutput)` ← `tool.definition`
 
 > {开发者认为此处可以重构成洋葱式 decorator 模型，而不是大泥球架构，并且洋葱式作为 higher-order design pattern 与之前的进行 DRY}
+> 状态：已落实（WP-005，`1d38aa294`）
 
 1. 若工具是 `js-manager`：
    - 追加必填 `contract` 字段，取值 `do-not-use-except-for-review`。
@@ -1455,6 +1463,7 @@ Z5. [终止.] 算法终止。
 `procedure ExecuteTool(spec, args, ctx)`
 
 > {开发者认为此处可以重构成洋葱式 decorator 模型，而不是大泥球架构，并且洋葱式作为 higher-order design pattern 与之前的进行 DRY}
+> 状态：已落实（WP-006，`d2bf95fcf`）
 
 1. `tool.execute.before` 阶段：
    1. requirement grounding 决策。修改触碰受覆盖路径时补入规范。（requirement-grounding-007）
@@ -1487,6 +1496,7 @@ Z5. [终止.] 算法终止。
 ## 8. 工具面
 
 > {开发者认为此处可以重构成洋葱式 decorator 模型，而不是大泥球架构，并且洋葱式作为 higher-order design pattern 与之前的进行 DRY}
+> 状态：已落实（WP-007，`b2d0ff36b`）
 
 `procedure Tools()`
 
@@ -1497,19 +1507,19 @@ Z5. [终止.] 算法终止。
 | 编排 | `commission` | Orchestrator |
 | 编排 | `fork`、`resume` | Manager |
 | 编排 | `join`、`horizon` | Manager、DevOps |
+| 评审 | `review`、`suicide` | Manager（按当前 facts 收口） |
 | 分裂 | `fission` | 仅 Engineer |
 | 执行 | `run` | 仅 DevOps |
 | 执行 | `open-terminal`、`send-terminal`、`read-terminal`、`signal-terminal` | 仅 DevOps |
 | 文件 | `mv`、`rm` | Engineer、DevOps |
-| 认知 | `assume` | 除 Blogger、Distiller 外 |
-| 认知 | `enough`、`abandon`、`defer` | 除 Blogger、Distiller 外 |
-| 通信 | `subscribe`、`publish` | 除 Blogger、Distiller 外 |
-| 学习 | `celebrate`、`regret` | 除 Blogger、Distiller 外 |
+| 认知 | `assume`、`defer` | 除 Blogger、Distiller 外 |
+| 通信 | `publish` | 除 Blogger、Distiller 外 |
 | 监督 | `chronicle` | 仅 Blogger（按附着） |
 | 记忆 | `fetch` | Engineer（有 Fetch 权能） |
 | 记忆 | `js-bookkeeper` | 私有附着 |
-| 编程 | `js-engineer`、`js-devops`、`js-manager`、`js-orchestrator`、`js-blogger` | 按角色能力生成 |
-| 编程 | `js-predictor` | 仅只读副本 |
+| 编程 | `js-engineer`、`js-devops`、`js-manager` | 按角色能力生成 |
+| 编程 | `js-orchestrator`、`js-blogger` | deny 投影（保留在权限映射，不生成工具） |
+| 编程 | `js-predictor` | 仅只读副本（私有附着） |
 | 陷阱 | `bash-honeypot` | 有该权能的角色 |
 
 1. `bash-honeypot` 只返回明确拒绝。永不执行 shell。
@@ -1544,6 +1554,7 @@ Z5. [终止.] 算法终止。
 ## 10. 事件与调和
 
 > {开发者认为此处完全是为了自身自洽，没有用户可见的作用，因此需要做 KISS 评估}
+> 状态：裁决保留（WP-008）
 
 `procedure ObserveEvent(raw)` ← `event`
 
@@ -1661,6 +1672,7 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
    - 必填 `calling`。Manager 只能 fork `engineer`。（delegation-003）
 
 > {开发者认为 calling 其实可以不写，如果 name != devops 则 calling 必然等于 engineer。}
+> 状态：已落实（WP-009，`e20725307`）
 
    - `name` 解析为角色与身份。
    - `keywords` 只对 Engineer、DevOps 生成低信任定位提示。
@@ -1668,6 +1680,7 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
    - `attach` 只把指定同伴的历史 WorkRecord 作只读背景，不克隆 authority。
 
 > {开发者质疑 keyword, attach 功能的必要性}
+> 状态：裁决保留（WP-010）
 
    - 成功只表示该 Byname 已承接 charge。返回不携带物理拓扑。（delegation-005/006）
 
@@ -1682,6 +1695,7 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
 3. `commission(calling?, name, charge, expected_tool_calls?)`
 
 > {开发者认为 calling 其实可以不写}
+> 状态：已落实（WP-011，`e20725307`）
    - Orchestrator 专用。只委任 Manager。（office-capability-012）
 
 4. `join()`
@@ -1696,6 +1710,7 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
    - 只显示稳定 Byname 与 TerminalName。不暴露底层 id。（participant-horizon-010/011）
 
 > {开发者认为底层 id 的概念本身都应该去掉，因为本身有系统 id，原有的底层 id 只是脚手架}
+> 状态：已落实（WP-012，`9e087469d`；可见面核对零改动）
 
    - 内部角色（Blogger、Bookkeeper、Predictor 等）永不出现。
 
@@ -1738,6 +1753,7 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
 `procedure ManagerRelay()`
 
 > {开发者认为 Road 的概念也许是奥卡姆剃刀的使用对象}
+> 状态：裁决保留（WP-013）
 
 1. 每条 open Road 至多一个 active 任期。（relay-incumbency-001）
 2. 开启任期用统一的 `IncumbencyOpened(IncumbencyId, WorkspaceSnapshotId)`。
@@ -1745,10 +1761,12 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
 3. 新任期先独立评审接手的工作。不做规划先行。
 
 > {开发者认为，独立评审的对象不是“上一任的工作”，而是写出 1. 目标状态的形式化 2. 当前与目标的 GAP 3. 是否 GAP 非空集。八维评估只是对 1 & 2 & 3 的抓手，而不是死板标准。}
+> 状态：已落实（WP-014，`30f53445e`）
 
 4. `review(八维)` 每维只取三态。
 
 > {开发者认为应该让 review() 返回 [(验收标准, 工作计划)...] 的 array of pairs，而不是八维向量。终止条件是，返回空集。提示词中建议原则上第一个 Manager 不返回空集。}
+> 状态：已落实（WP-015，`30f53445e`）
 
 | 维度 | 字段名 |
 |---|---|
@@ -1767,6 +1785,7 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
    - 全 `PERFECT/N/A` → 生成证书。本任立即失去工作区修改能力，只留读、清理与 `suicide`。（relay-assessment-005）
 
 > {开发者认为，即使通过评审，也允许当前 Manager 继续做收尾工作，只是立刻通知他就是最后一任，负责收尾，他将明知自己是最后一任并且后继无人。}
+> 状态：已落实（WP-016，`7ebe9e749`）
 
 6. 同一任期至多一次评估。
    - 重放幂等；异载荷拒绝；已接纳评估后本任永久失去 review 能力。（relay-assessment-002/006）
@@ -1774,21 +1793,25 @@ route(role, running, previous, purpose) -> { model, reasoning } | null
    - 快照一变，旧测试结果、评估与证书立即失效。（relay-assessment-010）
 
 > {开发者认为无必要使用快照机制，此处乐观认为不会出问题即可。}
+> 状态：已落实（WP-017，`694750f00`）
 
 8. `suicide()`：唯一正常退场。
    - 先冻结本任新工作准入，再读精确递归 ownership。
    - 唯一业务 blocker 是递归 live 资源：child、后台作业、PTY/进程、活跃工具、副作用租约、未见终态的 cancel/join。（relay-retirement-001/003/004）
 > {开发者认为第一次 suicide 时固定返回 review() 当时的承诺供核对，并要求 LLM 继续工作，附言：当你无任何工作可做时，调用第二次 suicide 以确认。第二次不再拦截。}
+> 状态：已落实（WP-018，`694750f00`）
 
 9. 原子提交退休事实与唯一结果 `Continue | Accepted certificateId`。
 
 > {开发者认为之前的万象术处处要证书是形式主义。不变量应该由万象术流程 + fast-check 保证而不是靠运行时到处 fail-closed。}
+> 状态：已落实（WP-019，`694750f00`）
    - 退休不可逆。已退休任期不得复活。（relay-incumbency-005/006）
 10. 资源交接：
     - `Continue` 保留 Road 与逻辑执行。固定 DevOps、已接收工作与持久后台进程继续运行，交给后继接管。
     - 不得隐式孤儿化，也不得强制销毁。（relay-retirement-009）
 
 > {开发者认为进程重启后的任何用户输入的新指令之前会自动 prepend 一次状态指导，描述万象术已经被重启，并点出这意味着什么，让 LLM 知情。}
+> 状态：已落实（WP-020，`6e5cbd442`）
 
 ---
 
@@ -1880,8 +1903,11 @@ desired cutoff exclusive = Bj
 ## 21. 持久化
 
 > {开发者认为 ndjson 是唯一载体，不要产生额外的非内嵌的 payloads，否则不利于简单 GC。}
+> 状态：已落实（WP-021，`734a6bce0`）
 > {开发者认为按照 UTC 日期进行分组，昨天和今天保留，前天或之前无使用的内容即删除。日期只用于 GC，和语义无关。允许在日期之间移动数据，日期是“最近修改”语义。}
+> 状态：已落实（WP-022，`fdfab580d`）
 > {开发者发现随着时间和内容积累有性能问题，需要排查。}
+> 状态：已落实（WP-023，`a0d3344c5`；数字对比未验证）
 
 `procedure Persist(fact)`
 
@@ -1907,6 +1933,7 @@ desired cutoff exclusive = Bj
    - 首次激活持久化能力才装 `reference-transaction` 与 `pre-push`。（durable-convergence-008）
 
 > {开发者发现了 `reference-transaction` 与 `pre-push` 有严重的性能问题，已禁用。未来将优化性能修复缺陷后重开。}
+> 状态：已落实（WP-024，`cda78e0d2`）
 
 8. 同步：
    - 只由用户 Git 操作启动独立 Hook 进程。
@@ -1919,6 +1946,7 @@ desired cutoff exclusive = Bj
 ## 22. 崩溃恢复
 
 > {开发者发现 DevOps 在崩溃前的工作内容会泄露到 horizon。如果确实如此，应该重置。结果：horizon 应该为空，join 应该立刻返回无。这不是公理，是推论。}
+> 状态：已落实（WP-025，`c9be6e3c7`）
 `procedure Recover()`
 
 1. 进程内状态全部丢弃：armed anomaly、`QuiescencePermit`、detector、容量租约。
@@ -1942,12 +1970,14 @@ desired cutoff exclusive = Bj
 7. 证据不足、冲突或缺失 → 停在 `Waiting`、`Blocked` 或 `RecoveryIncomplete`。不猜。（crash-reconciliation-005）
 
 > {开发者认为："证据" 一词应该不要在生产环境出现，存在即合理，存在即证据，不要用 fail-closed 掩盖 fast-check 的无能。}
+> 状态：已落实（WP-026，`d36d41b82`）
 
 ---
 
 ## 23. 失败恢复
 
 > {开发者认为：不要用 fail-closed 掩盖 fast-check 的无能。本节是形式主义重灾区，要保持 user facing 的行为，但不要用“刻板实现”代替“优雅实现”。}
+> 状态：已落实（WP-027，`5faaf81ea`）
 
 `procedure ResolveFailure()`
 
@@ -1995,6 +2025,7 @@ desired cutoff exclusive = Bj
    - 成功返回固定笃定提示，不回显 `assumption`。（action-affordance-014）
 
 > {开发者认为 assume 从不被替换成 LWR 压缩版，这个规则可能已经实现。}
+> 状态：已落实（WP-028，`ecdd82d7a`）
 
 2. `enough(decision)`
    - 声明当前信息足以支持下一步。成功后停止重搜或重开同一判断。
@@ -2004,6 +2035,7 @@ desired cutoff exclusive = Bj
    - 不取消真实任务义务，不撤销用户授权，不删除工作产物。（attention-regulation-002）
 
 > {开发者认为，这两个工具可以合入 assume，只是教育 LLM 可以把 assume 当作这两个用即可。}
+> 状态：已落实（WP-029，`b15a3d01a`）
 
 4. `defer(new_work)`
    - 把新发现的非阻塞工作登记为 DeferredWork。继续当前主线。
@@ -2011,8 +2043,11 @@ desired cutoff exclusive = Bj
    - 下次成功 `celebrate` 时在结果尾部一次性弹出。
 
 > {开发者认为对 manager 而言 defer 就是把某一项加入第一次 suicide 返回的待办事项里。而对 DevOps/Engineer 则是如果在自然终止时存在 defer 项，将 defer 作为 user prompt 触发回合，同时消灭 defer。}
+> 状态：已落实（WP-030，`b15a3d01a`）
 > {orchestrator 等其他角色如果有 defer 反推以上精神并照猫画虎定义。}
+> 状态：已落实（WP-031，`b15a3d01a`）
 > {开发者认为应该非常积极地在 Pair Hint 中鼓励 defer 的使用。}
+> 状态：已落实（WP-032，`b15a3d01a`）
 
 5. `subscribe(id, concern)` / `publish(id, message)`
    - 语义地址邮箱。同一 workspace 内 `id → concern` 永久不变。
@@ -2020,14 +2055,18 @@ desired cutoff exclusive = Bj
    - 公告与消息不创建或延续 user interaction authority。（concern-routing-001/004/005）
 
 > {开发者认为任意 session 启动时自动 subscribe 自身名字 (名字就是上级对他的命名)，user-facing 的没有名字就叫 "root"，同时还有一个叫 "user" 的地址。}
+> 状态：已落实（WP-033，`877b8b8ad`）
 > {不再有 subscribe 工具，只有 publish 工具，publish 给其他 agent 就是 fire forget，publish 给 "user" 就是给用户右上角弹窗，同时视为复制给 "root"。}
+> 状态：已落实（WP-034，`877b8b8ad`）
 > {以上语义向 LLM 解释清楚。}
+> 状态：已落实（WP-035，`877b8b8ad`）
 
 6. `celebrate(experience)` / `regret(experience)`
    - 私有 Enhancer 把经验压成单一结论：`ABSORB | BIRTH | DISCARD`。
    - `BIRTH` 需唯一 TipName 与中英双语 EnforcerText/MainText，并过准入后才持久化。（institutional-learning-002/004）
    - 不设第四种结论，不设评分阈值。（institutional-learning-002）
 > {开发者认为此工具删除，太重，且难以维护。}
+> 状态：已落实（WP-036，`a66f204dc`）
 
 7. `fetch(shelfmark)`
    - 只接受公开 Shelfmark。不暴露内部会话标识。
@@ -2073,7 +2112,7 @@ desired cutoff exclusive = Bj
 
 ## 26. 环境变量
 
-仅列常用项。全集见 README。
+仅列常用项与内部/测试项；用户可见项见 README。
 
 | 变量 | 作用 |
 |---|---|
@@ -2082,12 +2121,16 @@ desired cutoff exclusive = Bj
 | `WANXIANGSHU_PROCESS_HARD_LIMIT_SECS` | executor 单进程硬超时上限。默认 1 小时 |
 | `WANXIANGSHU_ADMISSION_TIMEOUT_MS` | prompt 物理 acceptance 等待超时。默认 10000 |
 | `WANXIANGSHU_DIAG=1` | 内部诊断经 stderr 可见。只观测，不改决策 |
-| `WANXIANGSHU_NO_FATAL_EXIT=1` | 诊断路径禁止 `process.exit`。测试用 |
+| `WANXIANGSHU_NO_FATAL_EXIT=1` | 抑制 fatal 的物理进程退出（`SIGKILL` / `process.exit`）。测试用 |
 | `WANXIANGSHU_ABLATION_PROFILE` | 消融拓扑 profile 选择 |
 | `WANXIANGSHU_ABLATION_<node>` | 单节点三态覆盖 |
 | `SPHINX_COMMON_DIR` | Sphinx MCP 的 durable workspace。缺失即启动失败 |
+| `SPHINX_START_CONFIG` | Sphinx MCP start 配置。缺失只允许读取类工具 |
+| `SEMBLE_*` | 内部/测试：Semble MCP 集成（`SEMBLE_MCP_DISABLED`、`SEMBLE_MCP_FIXTURE`、`SEMBLE_MCP_REF`） |
+| `WANXIANGSHU_TEST` | 内部/测试 |
 
 > {开发者认为要降低此部分的复杂度，保持 KISS}
+> 状态：已落实（WP-037，`b35ad48ea`）
 ---
 
 ## 27. 验证入口
@@ -2105,6 +2148,7 @@ npm run verify:release                    # 发布验证
 - 条款与测试文件的映射由用例标题中的 `WHAT[<包>-NNN]` 锚点定义。
 
 > {开发者认为要降低此部分的复杂度，保持 KISS}
+> 状态：已落实（WP-038，`b35ad48ea`）
 
 ---
 
@@ -2120,12 +2164,14 @@ npm run verify:release                    # 发布验证
    - [INFERENCE] 未注册不等于被删。可能属未施工切片。台账见 `requirements/GAP.md` 的 GAP-219 / GAP-222。
 
 > {开发者认为 Sphinx 被某次大重构改坏了，需要在 git 中 cherry-pick 历史各实现来恢复。}
+> 状态：已落实（WP-039，`b97845a49`）
 
 2. **`query-shell` 未注册。**
    - `ExecutorTool.queryShellSpec` 存在，Inspector 准入也在。
    - `ToolRegistry` 不产出它。当前活动角色集合 `Roles.all` 也不含 Inspector。
 
 > {开发者认为这是遗骸，应该丢弃。}
+> 状态：已落实（WP-040，`c5109e6ae`）
 
 3. **CHANGELOG 陈旧条目。**
    - `CHANGELOG.md` 的「todowrite 列表的 provider 名与 Host 名分离」一节描述 provider 面字段改名为 `obligations`。
@@ -2133,6 +2179,7 @@ npm run verify:release                    # 发布验证
    - HEAD 源码与 `requirements/action-affordance/tests/015.test.mjs` 断言的都是宿主原样 `todos`。上文第 10 节按 HEAD 事实写。
 
 > {开发者认为这是遗骸，应该丢弃。}
+> 状态：已落实（WP-041，`b35ad48ea`）
 
 4. **验证边界。**
    - 本文未运行测试，未接真实宿主。
@@ -2143,10 +2190,43 @@ npm run verify:release                    # 发布验证
    - 新增一个 tracked `.md` 文件会改变派生值。
    - 该文件即属此类。
 > {开发者认为可以派生，但不要自动派生，也不要检查是否改变，应该只允许手动更新。}
+> 状态：已落实（WP-042，`c557749c5`）
 
 # 施工进度（checkpoint，2026-10-10）
 
 本节记录已落地的产品变更与验证证据。产品语义只由 `requirements/<包>/WHAT.md` 定义；本节只记进度，不复述条款。
+
+**收尾更新（2026-10-10，算法 F）**：42 条开发者意见已全部施工完结，各条落实状态见指南块尾 `> 状态：` 标注与 `000.md` §4「状态」列；下方「已完成并已提交 / 本轮完成，待提交 / 尚未完成」为当时截面，保留为历史记录。遗留边界：WP-023 修复前后同输入的数字对比未验证；WP-017/019 的 fast-check 性质证明未成文；prefix-stability-012 既有欠账记 GAP-226 另案 OPEN；工作树另有 WP-037/038 的未提交修订（README、verify.mjs、指南 §26）。
+
+## 最终交付状态（2026-10-10 收束）
+
+本节记录 mission 收束时的最终交付状态；已写下的历史更新保留不动。
+
+**收尾段提交链（自 `bcb40ea7b` 起）**：`bcb40ea7b`（EMR-010 修复）→ `8a7ddaca3`（WP-037/038）→ `e106426c8`（算法 F）→ `8af52eb71`（fantomas 全量格式化）→ `aedcea492`（WP-024 时钟注入/锚点）→ `4ead6bfc0`（WP-042 envelope 入库）→ `307e3eb74`（格式化）→ `ff110e8fa`（WP-023 数字对比）→ `ca742b408`（prefix-stability-012 收口）→ `06b492aa6`（crash-020 / ol005 注入修正）→ `e0b86b509`（defer 资源对）→ `699330f6a`（WP-032 注释）→ `7bf37b01a`（fa002）→ `ae8516392`（Long Stroke e2e 声明矩阵）→ `7bb1942f1`（e2e preflow 分层断言）→ `32b4270db`（e2e 失败现场自证）。
+
+**工作包状态**：42 卡全部闭环：38 卡已落实，4 卡裁决保留（WP-002、WP-008、WP-010、WP-013）。
+- WP-023 数字对比已测（真实存储复制，357,806,571 字节）：热读 16409 ms → 4 ms（约 4000×）；RSS 峰值 1884.1 MB → 1226.5 MB（约 −658 MB）。
+- prefix-stability-012 已收口：连续三次 35/35/0。
+- fa002、crash-020、obligation-ledger-005、TC004、RS017、EMR-010、envelope 全部修复。
+- defer 中英资源对与 WP-032 注释落地。
+- language-parity 门禁通过，323 个语义资源全绿。
+
+**验证基线**：
+- `node scripts/build.mjs`：generation 185。
+- `node scripts/check.mjs`：18 门禁全过，pyramid 计数 0。
+- 全量 unit 在本机 Node 26 下剩 12 条 `verification-system-016` 工具链环境红与 2 条 021 负控 fixture（设计内）；CI 的 Node 22 为权威环境。
+- `npm run verify:release`：format、check、build 通过；unit 同上；integration 的 crash-020、ol005 已修；package 通过。
+
+**Long Stroke e2e 现状**：
+- 声明矩阵六轮对齐（manager lane、seal、Blogger bootstrap、owner 捕获载体、oracle 计数、preflow 分层断言）全部实证有效，并已提交。
+- 场景现停在产品侧疑点：preflow 读到 `DelegationRequested = 0`。现场自证：events 目录、文件与计数均正确；journal 无该 fact；stderr 有 `no-completed-source-batch`（canary owner 侧）与两次 `owner provider run is not uniquely bound`（另一会话）。
+- 一处未解矛盾：`strength-canary-replica.0` 曾匹配 ≥1 与 `DelegationBound = 0` 不能同真。需要下一层现场取证：完整 stderr 的 `strength-delegation-requested` 行与 journal 完整内容。
+
+**遗留边界**：
+1. 上述 e2e 产品侧疑点（独立议题；入手点：三条 skip 的条件链与 canary 会话映射）。
+2. `VS016` 12 条本机 Node 26 环境红（CI 的 Node 22 权威；修法建议已报告：环境对齐或测试矩阵参数化）。
+3. 021 两条负控 fixture 为设计内。
+4. `/tmp/wxs-perf-old` 等测量现场未入库（复核后可清）。
 
 ## 已完成并已提交
 

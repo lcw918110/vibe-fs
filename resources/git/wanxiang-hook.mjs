@@ -9,6 +9,17 @@ if (process.env.WANXIANG_GIT_SYNC_ACTIVE === '1') {
   process.exit(0)
 }
 
+// Hard fallback for a hung converge child: the in-process budget is 600 s
+// (Wanxiangshu.Git.Hook.Sync ConvergeBudgetSeconds); if it could not fire,
+// stop the hook process. The store lock recovers through proper-lockfile
+// staleness after exit.
+const fallbackMs = 660000
+const fallbackTimer = setTimeout(() => {
+  console.error('Wanxiang hook runner exceeded the ' + fallbackMs + ' ms converge fallback; aborting')
+  process.exit(1)
+}, fallbackMs)
+fallbackTimer.unref()
+
 const [kind, arg1] = process.argv.slice(2)
 let referenceTransactionInput = null
 

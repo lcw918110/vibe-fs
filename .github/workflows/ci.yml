@@ -24,6 +24,7 @@ jobs:
         env:
           NODE_TEST_CONCURRENCY: 2
           UNIT_VERDICT_SILENCE_MS: 30000
+          WXS_ACCEPT_TODO: "1"
         run: |
           set -x
           if npm run verify:release; then

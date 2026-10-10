@@ -11,6 +11,7 @@ open Wanxiangshu.Git
 open Wanxiangshu.Host
 open Wanxiangshu.Mission.Relay
 open Wanxiangshu.OpenCode
+open Wanxiangshu.Interaction.Attention
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Persistence.Journal
 
@@ -74,8 +75,7 @@ module SuicideTool =
 
     let private qualityCandidate (view: RoadView) incumbent =
         view.Certificate
-        |> Option.filter (fun certificate ->
-            certificate.Valid && certificate.IncumbencyId = incumbent)
+        |> Option.filter (fun certificate -> certificate.Valid && certificate.IncumbencyId = incumbent)
 
     let private retirementTransaction roadId incumbent providerRun toolCallId snapshot authority (view: RoadView) =
         let candidate = qualityCandidate view incumbent
@@ -253,8 +253,7 @@ module SuicideTool =
             |> Option.map AssessmentFindings.values
             |> Option.defaultValue []
             |> List.mapi (fun index finding ->
-                string index,
-                ToolHostCodec.TString(finding.AcceptanceCriteria + " => " + finding.WorkPlan))
+                string index, ToolHostCodec.TString(finding.AcceptanceCriteria + " => " + finding.WorkPlan))
 
         let deferred =
             pending
@@ -285,6 +284,26 @@ module SuicideTool =
             return blockedResult blockers
         }
 
+    /// ATTENTION-005: a completed retirement consumes this life's remaining
+    /// deferred work and leaves a durable consumption receipt, so a replayed
+    /// `DeferredWorkRecorded` cannot resurrect it after restart.
+    let private consumePendingDeferred (prepared: PreparedRetirement) =
+        task {
+            let port = AttentionConcernJournalAdapter.forAttention prepared.Bound.Journal
+            let pending = AttentionProjection.pending prepared.SessionId (port.Read())
+
+            match pending with
+            | [] -> return ()
+            | items ->
+                let fact =
+                    AttentionFactCases.DeferredWorkConsumed
+                        {| SessionId = prepared.SessionId
+                           OccurrenceIds = (items |> List.map (fun item -> item.OccurrenceId)) |}
+
+                let! _ = port.Append prepared.SessionId (Some prepared.Bound.ProviderRun) fact
+                return ()
+        }
+
     let private runRetirement (prepared: PreparedRetirement) =
         taskResult {
             let! transaction =
@@ -304,11 +323,29 @@ module SuicideTool =
             return retiredResult ()
         }
 
-    let private runRetirementOrBlocked (scope: ToolRuntimeScope) (context: HostToolContext) (prepared: PreparedRetirement) =
+    // ATTENTION-005: the completed retirement consumes this life's
+    // remaining deferred work. An append failure leaves the outcome
+    // unchanged; `RetirementCommitted` stays durable either way.
+    let private completeRetirement (prepared: PreparedRetirement) =
+        task {
+            let! outcome = runRetirement prepared
+
+            match outcome with
+            | Ok value ->
+                do! consumePendingDeferred prepared
+                return Ok value
+            | Error error -> return Error error
+        }
+
+    let private runRetirementOrBlocked
+        (scope: ToolRuntimeScope)
+        (context: HostToolContext)
+        (prepared: PreparedRetirement)
+        =
         let blockers = scope.RetirementBlockersFor context.SessionId
 
         if List.isEmpty blockers then
-            runRetirement prepared
+            completeRetirement prepared
         else
             runBlocked prepared blockers
 
@@ -341,11 +378,7 @@ module SuicideTool =
             taskResult {
                 let! transaction =
                     RelayTransaction.create
-                        [ RelayEvent.RetirementConfirmationCommitted(
-                              prepared.Incumbent,
-                              providerRunId,
-                              toolCallId
-                          ) ]
+                        [ RelayEvent.RetirementConfirmationCommitted(prepared.Incumbent, providerRunId, toolCallId) ]
                     |> Result.mapError (fun _ -> text Path.FinishFailed)
 
                 let! _ = appendPrepared prepared transaction

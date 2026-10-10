@@ -134,3 +134,12 @@ module ContextFact =
                NextEpochId: PrefixEpochId
                ObservedCompactionRun: ProviderRunIdentity |} ->
             AgentFact
+
+    val inline TenureReanchored:
+        payload:
+            {| SessionId: SessionId
+               PreviousEpochId: PrefixEpochId
+               NextEpochId: PrefixEpochId
+               WorkId: string
+               IncumbencyId: string |} ->
+            AgentFact

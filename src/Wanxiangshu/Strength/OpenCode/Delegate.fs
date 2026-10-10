@@ -210,6 +210,61 @@ module StrengthDelegate =
             | Error err -> return Error(sprintf "owner snapshot reread failed: %s" err)
         }
 
+    /// Diagnostic-only projection of a failed ProviderRun binding decision. It
+    /// reads the same public snapshot the decision saw and returns a string;
+    /// the binding decision and its exact Error stay unchanged.
+    let private describeRunBindingFailure
+        (physical: PhysicalUserMessageId)
+        (messages: SessionMessage list)
+        (observation: ProviderRunBinding.Observation)
+        : string =
+        let assistants = messages |> List.filter (fun message -> message.Role = "assistant")
+        let incomplete = assistants |> List.filter (fun message -> not message.Completed)
+        let parent = Some(PhysicalUserMessageId.value physical)
+
+        let classification =
+            match observation with
+            | ProviderRunBinding.Observation.Bound _ -> "bound"
+            | ProviderRunBinding.Observation.ProjectionNotVisibleYet -> "projection-not-visible-exhausted"
+            | ProviderRunBinding.Observation.Rejected(ProviderRunBinding.Rejection.NoBindableRun) ->
+                "rejected:no-bindable-run"
+            | ProviderRunBinding.Observation.Rejected(ProviderRunBinding.Rejection.AmbiguousRun count) ->
+                sprintf "rejected:ambiguous-run:%d" count
+            | ProviderRunBinding.Observation.Rejected ProviderRunBinding.Rejection.NotLatestRun ->
+                "rejected:not-latest-run"
+            | ProviderRunBinding.Observation.Rejected ProviderRunBinding.Rejection.InsufficientSequence ->
+                "rejected:insufficient-sequence"
+
+        let countWhere predicate values =
+            values |> List.filter predicate |> List.length
+
+        String.concat
+            ";"
+            [ classification
+              sprintf "assistants=%d" assistants.Length
+              sprintf "incomplete=%d" incomplete.Length
+              sprintf "parent_match=%d" (countWhere (fun message -> message.ParentId = parent) incomplete)
+              sprintf
+                  "parent_completed=%d"
+                  (countWhere (fun message -> message.Completed && message.ParentId = parent) assistants)
+              sprintf
+                  "compaction_parent=%b"
+                  (incomplete
+                   |> List.exists (fun message -> message.IsCompaction && message.ParentId = parent))
+              sprintf "sequence_complete=%b" (assistants |> List.forall (fun message -> message.CreatedAt.IsSome)) ]
+
+    let private emitProviderRunUnbound
+        (owner: SessionId)
+        (physical: PhysicalUserMessageId)
+        (messages: SessionMessage list)
+        (observation: ProviderRunBinding.Observation)
+        : unit =
+        Diagnostic.emit
+            "strength-provider-run-unbound"
+            [ "session_id", SessionId.value owner
+              "physical_user_message_id", PhysicalUserMessageId.value physical
+              "result", describeRunBindingFailure physical messages observation ]
+
     let private tryResolveAssistantRun
         (ports: BoundPorts)
         (owner: SessionId)
@@ -226,8 +281,21 @@ module StrengthDelegate =
                         return Ok(currentMessages, ProviderRunIdentity.create assistant.Id)
                     | ProviderRunBinding.Observation.ProjectionNotVisibleYet when readsLeft > 0 ->
                         return! rereadOwnerMessagesAfterCatchup ports owner readsLeft loop
-                    | ProviderRunBinding.Observation.ProjectionNotVisibleYet
-                    | ProviderRunBinding.Observation.Rejected _ ->
+                    | ProviderRunBinding.Observation.ProjectionNotVisibleYet ->
+                        emitProviderRunUnbound
+                            owner
+                            physical
+                            currentMessages
+                            ProviderRunBinding.Observation.ProjectionNotVisibleYet
+
+                        return Error "owner provider run is not uniquely bound"
+                    | ProviderRunBinding.Observation.Rejected rejection ->
+                        emitProviderRunUnbound
+                            owner
+                            physical
+                            currentMessages
+                            (ProviderRunBinding.Observation.Rejected rejection)
+
                         return Error "owner provider run is not uniquely bound"
                 }
 
@@ -796,12 +864,115 @@ module StrengthDelegate =
         else
             Ok()
 
+    /// Diagnostic-only explanation of why no completed source batch could be
+    /// resolved: tail class, raw tool completion, wire tail pairing and which
+    /// pairing step came up empty. It never changes the capture decision.
+    let private describeSourceBatchFailure
+        (rawMessages: obj list)
+        (wire: ProviderProjection.ProviderWireProjection)
+        : string =
+        let tailClass =
+            match classifySourceAssistantTail rawMessages with
+            | SourceAssistantTail.Completed _ -> "completed"
+            | SourceAssistantTail.Incomplete -> "incomplete"
+            | SourceAssistantTail.Absent -> "absent"
+
+        let tailAssistant =
+            rawMessages
+            |> List.filter isAssistantRawMessage
+            |> List.rev
+            |> List.tryFind (fun raw -> not (List.isEmpty (ProviderWireDecode.rawPartsOf raw)))
+
+        let rawTools = tailAssistant |> Option.map rawToolParts |> Option.defaultValue []
+        let completedTools = rawTools |> List.filter isToolPartCompleted
+        let tailComplete = tailBatchIsComplete rawMessages wire
+
+        let noRawAssistant =
+            rawMessages |> List.filter isAssistantRawMessage |> List.isEmpty
+
+        let wireBatch = tryExtractWireCompletedBatch wire
+
+        let wireResultsOfCalls (calls: SourceToolCall list) (index: int) : string =
+            match collectWireResults (List.toArray wire.Messages) (callIdSet calls) (index + 1) with
+            | Error() -> "error"
+            | Ok(results, _) -> string (Map.count results)
+
+        let wireResultsLabel (calls: SourceToolCall list) (index: int) : string =
+            if List.isEmpty calls then
+                "n/a"
+            else
+                wireResultsOfCalls calls index
+
+        let wireTail =
+            match tryLastWireAssistant wire.Messages with
+            | None -> "wire_tail=absent"
+            | Some(index, message) ->
+                let calls = extractWireToolCalls message.Parts
+
+                sprintf "wire_tail=calls:%d;results:%s" calls.Length (wireResultsLabel calls index)
+
+        let pairing =
+            match classifySourceAssistantTail rawMessages with
+            | SourceAssistantTail.Incomplete -> "calls=no;run=no"
+            | SourceAssistantTail.Completed raw ->
+                let calls =
+                    tryExtractRawAssistantBatch raw
+                    |> Option.orElseWith (fun () -> tryExtractWireCompletedBatch wire)
+
+                let run = providerRunOfRawAssistant raw
+
+                sprintf "calls=%s;run=%s" (if calls.IsSome then "yes" else "no") (if run.IsSome then "yes" else "no")
+            | SourceAssistantTail.Absent ->
+                let run =
+                    rawMessages
+                    |> List.filter isAssistantRawMessage
+                    |> List.tryLast
+                    |> Option.bind providerRunOfRawAssistant
+
+                sprintf
+                    "calls=%s;run=%s"
+                    (if wireBatch.IsSome then "yes" else "no")
+                    (if run.IsSome then "yes" else "no")
+
+        let reason =
+            match classifySourceAssistantTail rawMessages with
+            | SourceAssistantTail.Incomplete when List.isEmpty rawTools -> "incomplete-text-tail"
+            | SourceAssistantTail.Incomplete -> "incomplete-tool-tail"
+            | SourceAssistantTail.Absent when not tailComplete -> "absent-wire-tail-incomplete"
+            | SourceAssistantTail.Absent when noRawAssistant -> "absent-no-assistant"
+            | SourceAssistantTail.Absent when wireBatch.IsNone -> "absent-no-wire-batch"
+            | SourceAssistantTail.Absent -> "absent-no-provider-run"
+            | SourceAssistantTail.Completed raw when not tailComplete && List.isEmpty (rawToolParts raw) ->
+                "completed-wire-tail-incomplete"
+            | SourceAssistantTail.Completed _ when not tailComplete -> "completed-raw-tools-incomplete"
+            | SourceAssistantTail.Completed raw ->
+                let calls =
+                    tryExtractRawAssistantBatch raw
+                    |> Option.orElseWith (fun () -> tryExtractWireCompletedBatch wire)
+
+                if calls.IsNone then "no-calls" else "no-provider-run"
+
+        String.concat
+            ";"
+            [ "tail=" + tailClass
+              sprintf "raw_tools=%d/%d" completedTools.Length rawTools.Length
+              wireTail
+              pairing
+              "reason=" + reason ]
+
     let private tryResolveSourceCalls
         (surface: OwnerSurface)
         : Result<SourceToolCall list * ProviderRunIdentity, string> =
         match resolveCompletedSourceBatch surface.RawMessages surface.Wire with
         | Some(calls, sourceRun) -> Ok(calls, sourceRun)
-        | None -> Error "no-completed-source-batch"
+        | None ->
+            Diagnostic.emit
+                "strength-source-batch-unresolved"
+                [ "session_id", SessionId.value surface.Owner
+                  "physical_user_message_id", PhysicalUserMessageId.value surface.SourcePhysicalUserMessageId
+                  "result", describeSourceBatchFailure surface.RawMessages surface.Wire ]
+
+            Error "no-completed-source-batch"
 
     let private tryResolveCaptureCallsAndBudget
         (surface: OwnerSurface)

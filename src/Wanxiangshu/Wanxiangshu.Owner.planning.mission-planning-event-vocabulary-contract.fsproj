@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <WanxiangshuSubsystem>planning</WanxiangshuSubsystem>
+    <WanxiangshuCompileShard>plan-event-vocabulary-contract</WanxiangshuCompileShard>
+    <WanxiangshuSemanticOwner>planning</WanxiangshuSemanticOwner>
+    <WanxiangshuOwnerLocality>mission-planning-event-vocabulary-contract</WanxiangshuOwnerLocality>
+    <WanxiangshuOwnerLocalityKind>contract</WanxiangshuOwnerLocalityKind>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Mission/Planning/EventVocabulary.fsi"/>
+    <Compile Include="Mission/Planning/EventVocabulary.fs"/>
+  </ItemGroup>
+</Project>

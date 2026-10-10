@@ -50,6 +50,12 @@ module PrefixSurface =
         | None -> null
         | Some item -> box item
 
+    let private tenuresOfJs (value: obj) : Set<string> =
+        if isNullish value then
+            Set.empty
+        else
+            value |> unbox<obj array> |> Array.map string |> Set.ofArray
+
     let private runsOfJs (value: obj) : Set<ProviderRunIdentity> =
         if isNullish value then
             Set.empty
@@ -66,13 +72,15 @@ module PrefixSurface =
                 None
             else
                 Some(snapshotOfJs value?snapshot)
-          ReanchoredRuns = runsOfJs value?reanchoredRuns }
+          ReanchoredRuns = runsOfJs value?reanchoredRuns
+          ReanchoredTenures = tenuresOfJs value?reanchoredTenures }
 
     let private stateToJs (state: ActivePrefixEpoch) : obj =
         box
             {| epoch = PrefixEpochId.value state.EpochId
                snapshot = state.Snapshot |> Option.map snapshotToJs |> optionObj
-               reanchoredRuns = state.ReanchoredRuns |> Set.toArray |> Array.map ProviderRunIdentity.value |}
+               reanchoredRuns = state.ReanchoredRuns |> Set.toArray |> Array.map ProviderRunIdentity.value
+               reanchoredTenures = state.ReanchoredTenures |> Set.toArray |}
 
     let private rejectionName (rejection: PrefixFoldRejection) : string =
         match rejection with
@@ -81,6 +89,7 @@ module PrefixSurface =
         | PrefixFoldRejection.CutoffRetreated _ -> "CutoffRetreated"
         | PrefixFoldRejection.CandidateNotNew -> "CandidateNotNew"
         | PrefixFoldRejection.CompactionAlreadyReanchored _ -> "CompactionAlreadyReanchored"
+        | PrefixFoldRejection.TenureAlreadyReanchored _ -> "TenureAlreadyReanchored"
 
     let private resultToJs (result: Result<ActivePrefixEpoch, PrefixFoldRejection>) : obj =
         match result with
@@ -94,7 +103,8 @@ module PrefixSurface =
         box
             {| epoch = 0L
                snapshot = null
-               reanchoredRuns = [||] |}
+               reanchoredRuns = [||]
+               reanchoredTenures = [||] |}
 
     let snapshot (value: obj) : obj = snapshotOfJs value |> snapshotToJs
 
@@ -219,6 +229,14 @@ module PrefixSurface =
             (stateOfJs state)
         |> resultToJs
 
+    let applyTenureReanchor (request: obj) (state: obj) : obj =
+        PrefixEpochProjection.applyTenureReanchor
+            (PrefixEpochId.create (int64Value request?previousEpoch))
+            (PrefixEpochId.create (int64Value request?nextEpoch))
+            (string request?incumbencyId)
+            (stateOfJs state)
+        |> resultToJs
+
     let applyReanchor (request: obj) (state: obj) : obj =
         PrefixEpochProjection.applyReanchor
             (PrefixEpochId.create (int64Value request?previousEpoch))
@@ -232,6 +250,12 @@ module PrefixSurface =
 
     let hasSnapshot (state: obj) : bool =
         PrefixEpochProjection.hasSnapshot (stateOfJs state)
+
+    let isTenureReanchored (incumbencyId: string) (state: obj) : bool =
+        PrefixEpochProjection.isTenureReanchored incumbencyId (stateOfJs state)
+
+    let reanchoredTenures (state: obj) : string array =
+        (stateOfJs state).ReanchoredTenures |> Set.toArray
 
     let reanchoredRuns (state: obj) : string array =
         (stateOfJs state).ReanchoredRuns

@@ -1314,7 +1314,10 @@ module PairProgrammingThoughtTransform =
 
     /// crash-reconciliation-018: the restart status guidance is one more
     /// instruction of the same marker; it is never a second physical payload.
-    let private withRestartGuidance (restartGuidance: string option) (document: LlmFacing.Document) : LlmFacing.Document =
+    let private withRestartGuidance
+        (restartGuidance: string option)
+        (document: LlmFacing.Document)
+        : LlmFacing.Document =
         match restartGuidance with
         | Some text when not (String.IsNullOrWhiteSpace text) -> LlmFacing.withInstruction text document
         | _ -> document
@@ -1453,7 +1456,14 @@ module PairProgrammingThoughtTransform =
 
             let! injectResult = tryInjectCore journal projectionSessionIdOpt markerText concernPlacement messages
 
-            do! applyInjectResult outObj projectionSessionIdOpt restartGuidance markRestartGuidanceDelivered terminateSession injectResult
+            do!
+                applyInjectResult
+                    outObj
+                    projectionSessionIdOpt
+                    restartGuidance
+                    markRestartGuidanceDelivered
+                    terminateSession
+                    injectResult
         }
 
     let maybeInjectGuideline

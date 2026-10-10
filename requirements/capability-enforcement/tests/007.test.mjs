@@ -4,6 +4,8 @@ import test from 'node:test'
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
 const { configure: configureManagedAgents, installDefaultResources } = await import("../../../dist/OpenCode/Host/ManagedAgentConfigSurface.js");
+const { toolSpecNames } = await import("../../../dist/OpenCode/Tools/ToolSurface.js");
+const { permissions } = await import("../../../dist/Participant/Persona/OfficeCapabilitySurface.js");
 
 const permissionKey = 'sphinx_*'
 const ROLES = [
@@ -23,20 +25,26 @@ const buildConfig = () => {
 }
 installDefaultResources()
 
-test('WHAT[capability-enforcement-007] native_sphinx_is_role_gated_and_the_retired_mcp_wildcard_is_absent', () => {
+test('WHAT[capability-enforcement-007] sphinx_native_surface_is_absent_under_mcp_only', () => {
+  // WP-039 守护（MCP-only）：Sphinx 以独立 MCP stdio 服务存在，插件不提供原生
+  // sphinx 工具面。以下断言固定三处现状：ToolRegistry 无 sphinx ToolSpec、
+  // 能力词表无 Sphinx、provider schema 无 sphinx。
+  assert.equal(toolSpecNames().includes('sphinx'), false, 'ToolRegistry must not produce a sphinx ToolSpec')
+
   const config = buildConfig()
   assert.equal(configureManagedAgents(config).ok, true)
 
   for (const role of ROLES) {
     const name = agentName(role)
+    assert.equal(permissions(name).includes('Sphinx'), false, `${name} capability catalog must not contain the retired Sphinx permission`)
     const permission = config.agent[name].permission
     assert.equal(
       permission[permissionKey],
       undefined,
       `${name} must not install the retired sphinx_* permission`,
     )
+    assert.equal(permission.sphinx, undefined, `${name} must not expose any sphinx tool in the provider schema`)
     assert.equal(permission['*'], 'deny', 'retired and unknown tool names remain denied by default')
-    assert.equal(permission.sphinx, ['manager', 'orchestrator', 'engineer'].includes(name) ? 'allow' : 'deny')
   }
 })
 }

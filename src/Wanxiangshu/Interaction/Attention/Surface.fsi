@@ -8,4 +8,8 @@ module AttentionSurface =
 
     val consume: session: string -> workIds: string array -> state: obj -> obj
 
+    /// ATTENTION-004: close one life, leaving its remaining work as
+    /// consumption receipts so replay cannot resurrect it.
+    val closeLife: session: string -> state: obj -> obj
+
     val pending: session: string -> state: obj -> obj

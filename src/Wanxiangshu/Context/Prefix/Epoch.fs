@@ -34,6 +34,7 @@ type ActivePrefixEpoch =
         ///
         /// Bounded by the number of compactions in one session, not by turns.
         ReanchoredRuns: Set<ProviderRunIdentity>
+        ReanchoredTenures: Set<string>
     }
 
 /// Why a prefix-epoch line was refused. One case per PERSIST-010 rule.
@@ -55,13 +56,15 @@ type PrefixFoldRejection =
     /// accept a second reanchor for one compaction whenever any other epoch change
     /// happened in between.
     | CompactionAlreadyReanchored of run: ProviderRunIdentity
+    | TenureAlreadyReanchored of incumbencyId: string
 
 module PrefixEpochProjection =
 
     let empty =
         { EpochId = PrefixEpochId.initial
           Snapshot = None
-          ReanchoredRuns = Set.empty }
+          ReanchoredRuns = Set.empty
+          ReanchoredTenures = Set.empty }
 
     let private rebaseSnapshot
         (nextEpoch: PrefixEpochId)
@@ -135,7 +138,8 @@ module PrefixEpochProjection =
             Ok
                 { EpochId = nextEpoch
                   Snapshot = None
-                  ReanchoredRuns = Set.add observedRun state.ReanchoredRuns }
+                  ReanchoredRuns = Set.add observedRun state.ReanchoredRuns
+                  ReanchoredTenures = state.ReanchoredTenures }
 
     /// HOST-006: has this compaction pseudo-run already been reanchored.
     ///
@@ -143,6 +147,28 @@ module PrefixEpochProjection =
     /// so the adapter reads it from the projection rather than keeping a runtime set
     /// that a restart would lose.
     let isReanchored (run: ProviderRunIdentity) (state: ActivePrefixEpoch) = Set.contains run state.ReanchoredRuns
+
+    let applyTenureReanchor
+        (previousEpoch: PrefixEpochId)
+        (nextEpoch: PrefixEpochId)
+        (incumbencyId: string)
+        (state: ActivePrefixEpoch)
+        : Result<ActivePrefixEpoch, PrefixFoldRejection> =
+        if Set.contains incumbencyId state.ReanchoredTenures then
+            Error(PrefixFoldRejection.TenureAlreadyReanchored incumbencyId)
+        elif previousEpoch <> state.EpochId then
+            Error(PrefixFoldRejection.StalePrefixEpoch(state.EpochId, previousEpoch))
+        elif nextEpoch <> PrefixEpochId.next previousEpoch then
+            Error PrefixFoldRejection.NonSequentialPrefixEpoch
+        else
+            Ok
+                { EpochId = nextEpoch
+                  Snapshot = None
+                  ReanchoredRuns = state.ReanchoredRuns
+                  ReanchoredTenures = Set.add incumbencyId state.ReanchoredTenures }
+
+    let isTenureReanchored (incumbencyId: string) (state: ActivePrefixEpoch) =
+        Set.contains incumbencyId state.ReanchoredTenures
 
     /// COMPANION-009: is a companion-memory prefix in force for this session.
     let hasSnapshot (state: ActivePrefixEpoch) = Option.isSome state.Snapshot
@@ -166,6 +192,7 @@ module PrefixEpochProjection =
         // the observation repeats on every reconcile because the compaction message
         // stays in the transcript, so this is the expected steady state, not corruption.
         | PrefixFoldRejection.CompactionAlreadyReanchored _ -> None
+        | PrefixFoldRejection.TenureAlreadyReanchored _ -> None
         | PrefixFoldRejection.NonSequentialPrefixEpoch ->
             Some "prefix epoch is not the successor of the previous one (PERSIST-010)"
         | PrefixFoldRejection.CutoffRetreated(committed, proposed) ->

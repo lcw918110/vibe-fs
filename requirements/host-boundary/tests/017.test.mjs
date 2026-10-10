@@ -42,8 +42,8 @@ test('WHAT[host-boundary-017] HOST_CTX_roleOf_rejects_absent_and_blank_agents', 
 test('WHAT[host-boundary-017] HOST_CTX_roleOf_resolves_managed_identity_and_rejects_aliases', () => {
   assert.equal(labelOf(roleOf('coder')), 'coder')
   assert.equal(labelOf(roleOf('inspector')), 'inspector')
+  assert.equal(labelOf(roleOf('plan')), 'plan')
   assert.equal(roleOf('build'), undefined)
-  assert.equal(roleOf('plan'), undefined)
   assert.equal(roleOf('reviewer'), undefined)
 })
 test('WHAT[host-boundary-017] HOST_CTX_read_tolerates_null_and_shapeless_events', () => {

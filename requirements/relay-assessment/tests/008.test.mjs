@@ -97,4 +97,18 @@ for (const grade of ['REVISE', 'PERFECT', 'N/A']) {
   })
 }
 
+test('WHAT[relay-assessment-008] empty findings terminate the assessment with the finish instruction', async () => {
+  await withReview(async ({execute}) => {
+    const result = await execute({ findings: [] })
+    assert.equal(result, renderedInstruction('manager-finish') + '\n\nrecorded = true\n')
+  })
+})
+
+test('WHAT[relay-assessment-008] non-empty findings own repair work and select the work instruction', async () => {
+  await withReview(async ({execute}) => {
+    const result = await execute(scores('REVISE'))
+    assert.equal(result, renderedInstruction('manager-work') + '\n\nrecorded = true\n')
+  })
+})
+
 test('WHAT[relay-assessment-008] every pre-assessment role ledger and tool surface conceals later assignments and loop mechanics', {todo: 'GAP-193: actual accepted result selection is tested; all earlier surfaces require projection and semantic audit'})

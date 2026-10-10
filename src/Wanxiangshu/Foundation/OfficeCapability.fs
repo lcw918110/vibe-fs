@@ -27,17 +27,21 @@ type ToolPermission =
     | Finality
     /// Engineer honeypot: visible as `bash-honeypot`, never a real shell.
     | BashHoneypot
-    /// Program-owned inquiry through the native sphinx(question) tool.
-    | Sphinx
+    | JsPlan
+    | Ask
+    | Handoff
+    | Deliver
 
 [<RequireQualifiedAccess>]
 type ManagerCapabilityFacts =
-    { HasActiveIncumbency: bool
-      HasAssessment: bool
-      /// True when the active incumbency's accepted assessment has empty
-      /// findings: the final incumbent who settles and retires with no successor.
-      IsFinalIncumbent: bool
-      CleanupBlockerDigest: string option }
+    {
+        HasActiveIncumbency: bool
+        HasAssessment: bool
+        /// True when the active incumbency's accepted assessment has empty
+        /// findings: the final incumbent who settles and retires with no successor.
+        IsFinalIncumbent: bool
+        CleanupBlockerDigest: string option
+    }
 
 [<RequireQualifiedAccess>]
 module OfficeCapability =
@@ -48,7 +52,7 @@ module OfficeCapability =
     /// capability-enforcement-025 / relay-assessment-005: the final incumbent's
     /// read/cleanup/close-out surface. It keeps reading, horizon, join and the
     /// suicide finality, and drops every new-work capability (fork, resume,
-    /// review, sphinx).
+    /// review).
     let managerFinishPermissions: ToolPermission Set =
         set
             [ ToolPermission.Read
@@ -68,16 +72,10 @@ module OfficeCapability =
                   ToolPermission.Horizon
                   ToolPermission.ReviewAssessment
                   ToolPermission.Finality
-                  ToolPermission.Sphinx
                   ToolPermission.Read
                   ToolPermission.Glob
                   ToolPermission.Grep ]
-        | Role.Orchestrator ->
-            set
-                [ ToolPermission.Fork
-                  ToolPermission.Join
-                  ToolPermission.Horizon
-                  ToolPermission.Sphinx ]
+        | Role.Orchestrator -> set [ ToolPermission.Fork; ToolPermission.Join; ToolPermission.Horizon ]
         | Role.Engineer ->
             set
                 [ ToolPermission.Read
@@ -89,8 +87,7 @@ module OfficeCapability =
                   ToolPermission.Remove
                   ToolPermission.BashHoneypot
                   ToolPermission.Fetch
-                  ToolPermission.Fission
-                  ToolPermission.Sphinx ]
+                  ToolPermission.Fission ]
         | Role.Coder -> Set.empty
         | Role.Inspector -> Set.empty
         | Role.Browser -> Set.empty
@@ -109,6 +106,13 @@ module OfficeCapability =
                   ToolPermission.Join
                   ToolPermission.Horizon ]
         | Role.Distiller -> Set.empty
+        | Role.Plan ->
+            set
+                [ ToolPermission.JsPlan
+                  ToolPermission.Ask
+                  ToolPermission.Resume
+                  ToolPermission.Handoff
+                  ToolPermission.Deliver ]
         // ENFORCER-010: Blogger's tool set is exactly { chronicle }.
         | Role.Blogger -> set [ ToolPermission.Chronicle ]
 
@@ -160,7 +164,10 @@ module OfficeCapability =
         | ToolPermission.Fetch -> "Fetch"
         | ToolPermission.Finality -> "Finality"
         | ToolPermission.BashHoneypot -> "BashHoneypot"
-        | ToolPermission.Sphinx -> "Sphinx"
+        | ToolPermission.JsPlan -> "JsPlan"
+        | ToolPermission.Ask -> "Ask"
+        | ToolPermission.Handoff -> "Handoff"
+        | ToolPermission.Deliver -> "Deliver"
 
     /// Unknown labels are not a permission.
     let permissionOfLabel (label: string) : ToolPermission option =
@@ -184,5 +191,8 @@ module OfficeCapability =
         | "Fetch" -> Some ToolPermission.Fetch
         | "Finality" -> Some ToolPermission.Finality
         | "BashHoneypot" -> Some ToolPermission.BashHoneypot
-        | "Sphinx" -> Some ToolPermission.Sphinx
+        | "JsPlan" -> Some ToolPermission.JsPlan
+        | "Ask" -> Some ToolPermission.Ask
+        | "Handoff" -> Some ToolPermission.Handoff
+        | "Deliver" -> Some ToolPermission.Deliver
         | _ -> None

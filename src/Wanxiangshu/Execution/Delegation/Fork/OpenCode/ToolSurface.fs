@@ -767,7 +767,9 @@ module ForkToolSurface =
         : Task<string> =
         task {
             let harness = unbox<ForkHarness> value
-            let spec = ForkTool.orchestratorSpec (ToolHostCodec.factory toolModule) harness.Scope
+
+            let spec =
+                ForkTool.orchestratorSpec (ToolHostCodec.factory toolModule) harness.Scope
 
             let args =
                 HostToolArguments(
@@ -973,6 +975,12 @@ module ForkToolSurface =
         let harness = unbox<ForkHarness> value
         harness.Sessions.SetNextSendOutcome(SendOutcome.AdmittedWithReceipt(TransportReceipt.create receipt))
 
+    /// Parent cancellation runs the production cancel chain: Scope.CancelSessionChildren
+    /// -> HostForkRuntime.CancelAndDrain -> HostForkChildDispatch.cancelParent. That
+    /// chain commits durable HandleAbandoned (filtered by its process-owned active-work
+    /// rule) before its teardown abort, so the harness must not repeat the durable
+    /// abandon itself: an early abandon would leave the chain nothing to cancel and the
+    /// physical AbortSession would never run.
     let cancelOwnerChildren (value: obj) (owner: string) : Task =
         let harness = unbox<ForkHarness> value
         harness.Scope.CancelSessionChildren(SessionId.value (harness.OwnerSession owner))

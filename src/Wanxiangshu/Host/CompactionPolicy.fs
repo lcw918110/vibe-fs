@@ -18,6 +18,15 @@ type CompactionSetting =
         Reason: string
     }
 
+/// HOST-006 startup probe: one Host message reduced to the two facts the
+/// first-turn window needs.
+///
+/// A record rather than a tuple, so the two flags cannot silently swap at a
+/// call site.
+type CompactionWindowMessage =
+    { CompletedAssistant: bool
+      Compaction: bool }
+
 /// HOST-006 startup probe verdict.
 [<RequireQualifiedAccess>]
 type CompactionGateVerdict =
@@ -116,6 +125,27 @@ module HostCompactionPolicy =
         (isReanchored: ProviderRunIdentity -> bool)
         : ProviderRunIdentity option =
         observed |> List.filter (isReanchored >> not) |> List.tryLast
+
+    /// HOST-006 startup probe: how many compaction pseudo-runs sit inside the
+    /// first-turn window.
+    ///
+    /// The window runs from the start of the session to the first completed assistant
+    /// message, inclusive. That boundary is the earliest observable end of the first
+    /// turn; a first turn is necessarily far below any threshold, so a compaction
+    /// inside the window cannot come from the setting the plugin already disabled.
+    ///
+    /// A pseudo-run after the window is containment work: a user's `/compact` or a
+    /// later-round compaction must reanchor, not refuse startup. `None` means the
+    /// first turn is still open and the probe stays armed.
+    let firstTurnCompactionRuns (messages: CompactionWindowMessage list) : int option =
+        match messages |> List.tryFindIndex (fun message -> message.CompletedAssistant) with
+        | None -> None
+        | Some boundary ->
+            messages
+            |> List.take (boundary + 1)
+            |> List.filter (fun message -> message.Compaction)
+            |> List.length
+            |> Some
 
     /// HOST-006: the startup probe judgement.
     ///

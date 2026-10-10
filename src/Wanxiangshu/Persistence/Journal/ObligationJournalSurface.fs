@@ -107,9 +107,9 @@ module ObligationJournalSurface =
             let findings =
                 Wanxiangshu.Mission.Relay.AssessmentFindings.tryCreate
                     [ { Wanxiangshu.Mission.Relay.AssessmentFinding.AcceptanceCriteria =
-                            "the delivery reaches the requested target state"
+                          "the delivery reaches the requested target state"
                         Wanxiangshu.Mission.Relay.AssessmentFinding.WorkPlan =
-                            "close the remaining gap before the next review" } ]
+                          "close the remaining gap before the next review" } ]
                 |> Result.defaultWith (fun _ -> failwith "findings")
 
             let assessment incumbent snapshot revision =

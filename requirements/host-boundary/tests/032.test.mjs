@@ -1500,7 +1500,7 @@ test('WHAT[host-boundary-032] C46_before_hide_failure_restores_the_already_hidde
 // automatable assertion already lives in the canary; the remaining narrow
 // face (C44 in-memory restore absent on the throw path) cannot be made green
 // from the plugin side and is kept here as the T180 record anchor.
-test.todo('WHAT[host-boundary-032] installed Host executor throw path: after not invoked, durable error materialized, wire contract preserved (Host physical boundary contracted by the clause 019 executorThrow canary; narrow face: C44 in-memory restore absent on the throw path)')
+test.todo('WHAT[host-boundary-032] installed Host executor throw path: after not invoked, durable error materialized, wire contract preserved (Host physical boundary contracted by the 019 executorThrow canary; narrow face: C44 in-memory restore absent on the throw path)')
 
 test('WHAT[host-boundary-032] C47_interrupted_field_deletion_restores_arguments_and_rethrows_the_original_error', async () => {
   setPredictorState('configured')
@@ -2331,18 +2331,19 @@ test('WHAT[host-boundary-032] C42_mid_flight_predictor_revocation_restores_param
   //      `InvestigationToolPolicy.EstimateAfterCall` 与 `classifyTool`。
   //    - 独立佐证 B：src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs:458-467 内部实读：
   //      恢复仅依据 `isParticipatingTool`，完全不调用也不受 `readonlyDelegationPredictorConfigured ()` 约束！
-  // 2. ReadonlyDelegationContract.restore 私有 Symbol 恢复机制：
-  //    - 源码位置：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fs:17
-  //      `let private savedArgsKey: obj = emitJsExpr () "Symbol('readonly-delegation-args')"`
-  //    - 源码位置：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fs:181-187 (`hideProtocolFields`)
-  //      使用 `defineProperty args savedArgsKey symbolDescriptor` 将原始 descriptor 存入私有 Symbol；
-  //    - 源码位置：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fs:223-228 (`restore`)
+  // 2. ReadonlyDelegationContract.restore 私有 Symbol 恢复机制（以符号名定位，行号随重构漂移）：
+  //    - 源码位置：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fs · `stash`
+  //      私有 Symbol：`Symbol = emitJsExpr () "Symbol('readonly-delegation-args')"`
+  //    - 源码位置：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fs · `hide`
+  //      经共享原语 `ProtocolArgumentStash.hide stash args` 用 `defineProperty args Symbol symbolDescriptor`
+  //      将原始 descriptor 存入私有 Symbol，再删除协议字段；
+  //    - 源码位置：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fs · `restore`
   //      ```fsharp
   //      let restore (args: obj) : unit =
-  //          if not (isNull args) && isPlainObject args && hasOwn args savedArgsKey then
-  //              restoreProtocolFields args
+  //          ProtocolArgumentStash.restore stash args
   //      ```
-  //    - 独立佐证：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fsi:39-43 明确保证：
+  //      `ProtocolArgumentStash.restore` 以 `hasOwn args spec.Symbol` 判定存在后同源恢复。
+  //    - 独立佐证：src/Wanxiangshu/OpenCode/Host/ReadonlyDelegationContract.fsi · `val restore` 明确保证：
   //      `val restore: args: obj -> unit`
   //      "Restores both protocol fields from the private module Symbol on the args object. Idempotent..."
   //      恢复过程完全基于对象自有私有 Symbol，与任何外部全局配置无关。
