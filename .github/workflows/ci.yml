@@ -27,6 +27,7 @@ jobs:
           WXS_ACCEPT_TODO: "1"
         run: |
           set -x
+          export WXS_VERIFICATION_NPM_CLI="$(npm root -g)/npm/bin/npm-cli.js"
           if npm run verify:release; then
             exit 0
           else
