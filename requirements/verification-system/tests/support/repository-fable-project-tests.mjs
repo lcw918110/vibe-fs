@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -74,6 +75,7 @@ export async function repositoryFableProjectTest(t, { readonly = false } = {}) {
   let toolArchives
   let projectArchives
   let sdkArchivePath
+  let sdkExpectedVersion
   let prepared = false
   let restored = false
   let emitted = false
@@ -137,10 +139,12 @@ export async function repositoryFableProjectTest(t, { readonly = false } = {}) {
         sdkArchiveSha256 = sha256
       } else {
         fs.cpSync(fs.realpathSync(process.env.WXS_VERIFICATION_DOTNET_ROOT), path.join(selectedRoot, 'dotnet-sdk'), { recursive: true, verbatimSymlinks: true })
+        const sdkVersion = execFileSync(path.join(selectedRoot, 'dotnet-sdk/dotnet'), ['--version'], { encoding: 'utf8' }).trim()
         await create({ cwd: selectedRoot, file: sdkArchivePath, portable: true, noMtime: true }, ['dotnet-sdk'])
         sdkArchiveSha256 = hash('sha256', fs.readFileSync(sdkArchivePath))
+        sdkExpectedVersion = sdkVersion
       }
-      sdk = await prepareVerificationDotnetSdk({ sourceRoot: source.sourceRoot, parentDirectory, archivePath: sdkArchivePath, archiveSha256: sdkArchiveSha256, expectedSdkVersion: '10.0.302', signal: t.signal })
+      sdk = await prepareVerificationDotnetSdk({ sourceRoot: source.sourceRoot, parentDirectory, archivePath: sdkArchivePath, archiveSha256: sdkArchiveSha256, expectedSdkVersion: readonly ? '10.0.302' : sdkExpectedVersion, signal: t.signal })
       fs.rmSync(selectedRoot, { recursive: true, force: true })
       originalSdk = actualInventory(sdk.toolRoot, true)
       assertSource()

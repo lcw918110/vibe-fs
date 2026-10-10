@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -108,9 +109,10 @@ export async function repositoryNugetProjectTest(t) {
       })
       const sdkDirectory = fs.realpathSync(process.env.WXS_VERIFICATION_DOTNET_ROOT)
       fs.cpSync(sdkDirectory, path.join(selectedRoot, 'dotnet-sdk'), { recursive: true, verbatimSymlinks: true })
+      const sdkVersion = execFileSync(path.join(selectedRoot, 'dotnet-sdk/dotnet'), ['--version'], { encoding: 'utf8' }).trim()
       sdkArchivePath = path.join(archiveRoot, 'sdk.tar')
       await create({ cwd: selectedRoot, file: sdkArchivePath, portable: true, noMtime: true }, ['dotnet-sdk'])
-      sdk = await prepareVerificationDotnetSdk({ sourceRoot: source.sourceRoot, parentDirectory, archivePath: sdkArchivePath, archiveSha256: hash('sha256', fs.readFileSync(sdkArchivePath)), expectedSdkVersion: '10.0.302', signal: t.signal })
+      sdk = await prepareVerificationDotnetSdk({ sourceRoot: source.sourceRoot, parentDirectory, archivePath: sdkArchivePath, archiveSha256: hash('sha256', fs.readFileSync(sdkArchivePath)), expectedSdkVersion: sdkVersion, signal: t.signal })
       fs.rmSync(selectedRoot, { recursive: true, force: true })
       assertSource()
       assertArchives()

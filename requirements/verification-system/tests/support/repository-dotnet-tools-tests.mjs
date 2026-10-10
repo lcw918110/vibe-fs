@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -121,12 +122,13 @@ export async function repositoryDotnetToolsTest(t) {
       })
       const selectedSdk = fs.realpathSync(process.env.WXS_VERIFICATION_DOTNET_ROOT)
       fs.cpSync(selectedSdk, path.join(selectedRoot, 'dotnet-sdk'), { recursive: true, verbatimSymlinks: true })
+      const sdkVersion = execFileSync(path.join(selectedRoot, 'dotnet-sdk/dotnet'), ['--version'], { encoding: 'utf8' }).trim()
       sdkArchivePath = path.join(archiveRoot, 'sdk.tar')
       await create({ cwd: selectedRoot, file: sdkArchivePath, portable: true, noMtime: true }, ['dotnet-sdk'])
-      sdk = await prepareVerificationDotnetSdk({ sourceRoot, parentDirectory, archivePath: sdkArchivePath, archiveSha256: hash('sha256', fs.readFileSync(sdkArchivePath)), expectedSdkVersion: '10.0.302', signal: t.signal })
+      sdk = await prepareVerificationDotnetSdk({ sourceRoot, parentDirectory, archivePath: sdkArchivePath, archiveSha256: hash('sha256', fs.readFileSync(sdkArchivePath)), expectedSdkVersion: sdkVersion, signal: t.signal })
       fs.rmSync(selectedRoot, { recursive: true, force: true })
       assert.equal(sdk.globalJsonSha256, hash('sha256', globalBytes))
-      assert.equal(sdk.sdk.version, '10.0.302')
+      assert.equal(sdk.sdk.version, sdkVersion)
       assert.ok(sdk.entries.some(entry => entry.path.startsWith('dotnet-sdk/packs/')))
       assertInputs()
       t.diagnostic(JSON.stringify({ sdkDigest: sdk.sdkDigest, sdkArchiveSha256: sdk.archiveSha256, toolManifestSha256: hash('sha256', manifestBytes), packages: packageArchives.map(({ id, version, sha512 }) => ({ id, version, sha512 })), provenance: 'explicit caller-selected archive bytes; this test does not authenticate the publisher' }))

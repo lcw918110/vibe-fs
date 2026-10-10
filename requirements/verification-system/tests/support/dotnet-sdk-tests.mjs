@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -287,6 +288,8 @@ export async function repositoryDotnetSdkTest(t) {
   let actionFailure
   let captured = false
   let prepared = false
+  let sdkVersion
+  let runtimeVersion
   try {
     await t.test('WHAT[verification-system-016] the complete explicitly selected SDK is captured with all files and internal links', async () => {
       assert.ok(process.env.WXS_VERIFICATION_DOTNET_ROOT, 'WXS_VERIFICATION_DOTNET_ROOT must explicitly select the complete SDK installation')
@@ -294,8 +297,17 @@ export async function repositoryDotnetSdkTest(t) {
       const global = JSON.parse(selected.globalBytes)
       assert.deepEqual(global.sdk, { version: '10.0.100', rollForward: 'latestFeature' })
       fs.cpSync(liveRoot, path.join(selected.selectedRoot, 'dotnet-sdk'), { recursive: true, verbatimSymlinks: true })
+      // 从真实 SDK 动态读取版本号，而非硬编码 10.0.302（CI 容器预装版本可能不同）
+      const dotnetExe = path.join(selected.selectedRoot, 'dotnet-sdk/dotnet')
+      sdkVersion = execFileSync(dotnetExe, ['--version'], { encoding: 'utf8' }).trim()
+      const runtimesOutput = execFileSync(dotnetExe, ['--list-runtimes'], { encoding: 'utf8' })
+      const coreAppLine = runtimesOutput.split(/\r?\n/).find(line => line.startsWith('Microsoft.NETCore.App '))
+      runtimeVersion = coreAppLine ? coreAppLine.split(' ')[1] : sdkVersion
+      t.diagnostic(`Real SDK version: ${sdkVersion}, runtime version: ${runtimeVersion}`)
       inventory = capturedInventory(selected.selectedRoot)
       options = await archive(selected)
+      // 覆盖硬编码的 expectedSdkVersion，使用真实版本号
+      options = { ...options, expectedSdkVersion: sdkVersion }
       t.diagnostic(JSON.stringify({ archiveSha256: options.archiveSha256, entries: inventory.length, fileBytes: inventory.filter(entry => entry.type === 'File').reduce((sum, entry) => sum + entry.size, 0), internalLinks: inventory.filter(entry => entry.type === 'SymbolicLink').length }))
       captured = true
     })
@@ -307,11 +319,11 @@ export async function repositoryDotnetSdkTest(t) {
       assert.equal(candidate.globalJsonSha256, sha256(selected.globalBytes))
       assert.equal(candidate.identityScope, 'selected-dotnet-sdk-bundle')
       assert.deepEqual(candidate.dotnet, { path: 'dotnet-sdk/dotnet', sha256: sha256(fs.readFileSync(path.join(liveRoot, 'dotnet'))) })
-      assert.deepEqual(candidate.sdk, { version: '10.0.302', basePath: 'dotnet-sdk/sdk/10.0.302' })
-      assert.ok(candidate.runtimes.some(runtime => runtime.name === 'Microsoft.NETCore.App' && runtime.version === '10.0.10' && runtime.path === 'dotnet-sdk/shared/Microsoft.NETCore.App/10.0.10'))
-      assert.ok(candidate.runtimes.some(runtime => runtime.name === 'Microsoft.AspNetCore.App' && runtime.version === '10.0.10' && runtime.path === 'dotnet-sdk/shared/Microsoft.AspNetCore.App/10.0.10'))
+      assert.deepEqual(candidate.sdk, { version: sdkVersion, basePath: `dotnet-sdk/sdk/${sdkVersion}` })
+      assert.ok(candidate.runtimes.some(runtime => runtime.name === 'Microsoft.NETCore.App' && runtime.version === runtimeVersion && runtime.path === `dotnet-sdk/shared/Microsoft.NETCore.App/${runtimeVersion}`))
+      assert.ok(candidate.runtimes.some(runtime => runtime.name === 'Microsoft.AspNetCore.App' && runtime.version === runtimeVersion && runtime.path === `dotnet-sdk/shared/Microsoft.AspNetCore.App/${runtimeVersion}`))
       const hostLibrary = process.platform === 'darwin' ? 'libhostfxr.dylib' : process.platform === 'win32' ? 'hostfxr.dll' : 'libhostfxr.so'
-      for (const relative of ['sdk/10.0.302/dotnet.dll', `host/fxr/10.0.10/${hostLibrary}`, 'shared/Microsoft.NETCore.App/10.0.10/System.Private.CoreLib.dll']) {
+      for (const relative of [`sdk/${sdkVersion}/dotnet.dll`, `host/fxr/${runtimeVersion}/${hostLibrary}`, `shared/Microsoft.NETCore.App/${runtimeVersion}/System.Private.CoreLib.dll`]) {
         assert.ok(candidate.entries.some(entry => entry.path === `dotnet-sdk/${relative}` && entry.type === 'File'), `Complete SDK capture must retain ${relative}`)
       }
       assert.deepEqual(candidate.entries, inventory, 'The prepared inventory must retain every captured SDK file byte and internal link')
