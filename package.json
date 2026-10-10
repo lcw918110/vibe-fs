@@ -21,7 +21,10 @@
   "allowScripts": {
     "@waishnav/devspace": true,
     "better-sqlite3": true,
-    "node-pty": true
+    "node-pty": true,
+    "fsevents@2.3.3": true,
+    "msgpackr-extract@3.0.4": true,
+    "opencode-ai@1.18.29": true
   },
   "packageManager": "npm@11.12.1",
   "publishConfig": {

@@ -55,6 +55,38 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// ── Permissions Normalization ────────────────────────────────────────────────
+
+/**
+ * Fable 5.13.0 on Linux can emit 0-byte .js files with write-only permissions
+ * (0o200). These files fail readFileSync in collectOutputs with EACCES.
+ * Normalize the entire emitted tree to readable before hashing.
+ */
+function normalizeEmittedPermissions(dir) {
+  if (!fs.existsSync(dir)) return
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name)
+      try {
+        // Ensure owner read+write on every entry
+        const stat = fs.statSync(full)
+        const needed = (stat.mode & 0o600) !== 0o600
+        if (needed) {
+          fs.chmodSync(full, stat.mode | 0o600)
+        }
+      } catch {
+        // If even stat fails (e.g. dangling symlink), skip
+      }
+      if (entry.isDirectory()) {
+        normalizeEmittedPermissions(full)
+      }
+    }
+  } catch {
+    // Directory read failed — skip
+  }
+}
+
 // ── Build Serialization ──────────────────────────────────────────────────────
 
 function isPidRunning(pid) {
@@ -414,6 +446,10 @@ export function stageDistForFullRebuild(targetDist) {
 // backup back into place. Without a backup (dist was already missing before
 // staging), dropping the half-built dist restores the prior state.
 export function restoreStagedDist(targetDist, backupDir) {
+  // Fable 5.13.0 on Linux can emit write-only files that survive rmSync
+  // even with force:true inside Docker volume mounts. Normalize permissions
+  // before removal so the half-built dist can be dropped cleanly.
+  normalizeEmittedPermissions(targetDist)
   fs.rmSync(targetDist, { recursive: true, force: true })
   if (fs.existsSync(backupDir)) {
     fs.renameSync(backupDir, targetDist)
@@ -579,6 +615,12 @@ export async function runBuild({
     }
 
     // Collect final outputs
+    // Fable 5.13.0 on Linux can emit 0-byte files with write-only (0200)
+    // permissions (e.g. FsToolkit.ErrorHandling's ParallelAsyncValidationCE.fs.js),
+    // which makes readFileSync in collectOutputs fail with EACCES. Normalize
+    // permissions across the emitted tree before hashing so the manifest
+    // snapshot is platform-independent.
+    normalizeEmittedPermissions(targetDist)
     const outputs = collectOutputs(targetDist)
     const nextGeneration = (existingManifest?.generation ?? 0) + 1
 

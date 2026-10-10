@@ -231,12 +231,12 @@ module ReadonlyDelegationContract =
     /// Only the budget joins required; the note never does. Original required
     /// entries are preserved. A non-array required fails loudly.
     let private ensureRequiredBudget (schemaObj: obj) (toolId: string) : unit =
-        let required = schemaObj?required
+        let required = emitJsExpr (schemaObj, "required") "$0[$1]"
 
         if isNull required then
-            schemaObj?required <- box [| box roundsField |]
+            emitJsExpr (schemaObj, "required", box [| box roundsField |]) "$0[$1] = $2" |> ignore
         elif isArray required then
-            schemaObj?required <- box (appendBudgetIfMissing (unbox<obj array> required))
+            emitJsExpr (schemaObj, "required", box (appendBudgetIfMissing (unbox<obj array> required))) "$0[$1] = $2" |> ignore
         else
             raise (InvalidOperationException(sprintf "Tool %s parameters schema required field is not an array" toolId))
 

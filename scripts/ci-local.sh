@@ -14,8 +14,13 @@ if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
     docker build -t "${IMAGE_NAME}" -f "${ROOT_DIR}/Dockerfile.ci" "${ROOT_DIR}"
 fi
 
+# 在宿主机侧先修复 macOS Fable 产物可能留下的只写权限文件（--w-------），
+# 否则 Linux 容器通过 bind mount 无法 stat 这些文件，rm -rf 会失败。
+echo "🧹 宿主机侧预清理：修复 dist/ artifacts/ .fable-build/ 的只写权限文件..."
+chmod -R u+rw "${ROOT_DIR}/dist" "${ROOT_DIR}/artifacts" "${ROOT_DIR}/.fable-build" 2>/dev/null || true
+
 echo "🧪 正在进入纯净 Linux 容器执行 GitHub 完整 CI 门禁..."
-echo "   步骤 0: 清理宿主机残留产物 (dist/ node_modules/，避免 macOS 权限异常产物污染容器)"
+echo "   步骤 0: 清理宿主机残留产物 (dist/ node_modules/ artifacts/ .fable-build/，避免 macOS 产物污染容器)"
 echo "   步骤 1: npm ci"
 echo "   步骤 2: dotnet tool restore"
 echo "   步骤 3: npm run verify:release (全部 7 级质量门禁)"
@@ -28,7 +33,7 @@ docker run --rm \
     -e NODE_TEST_CONCURRENCY=2 \
     -e UNIT_VERDICT_SILENCE_MS=30000 \
     "${IMAGE_NAME}" \
-    /bin/bash -c "rm -rf /workspace/dist /workspace/node_modules && npm ci && dotnet tool restore && npm run verify:release"
+    /bin/bash -c "rm -rf /workspace/dist /workspace/node_modules /workspace/artifacts /workspace/.fable-build && npm ci && dotnet tool restore && npm run verify:release"
 
 echo "------------------------------------------------------------"
 echo "🎉 [CI 1:1 本地全真模拟] 容器环境 7 级门禁全部通过！"
