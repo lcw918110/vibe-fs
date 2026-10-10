@@ -672,6 +672,24 @@ module PluginTransforms =
         let emitTenureReanchorSkipped (reason: string) : unit =
             Diagnostic.emit "plan-tenure-reanchor-skipped" [ "result", reason ]
 
+        let handleReanchorTarget (requested: bool) : unit =
+            if requested then
+                emitTenureReanchorSkipped "no-journal-or-session"
+            else
+                ()
+
+        let reportTenureReanchorAppend (appendTask: Task<Result<ProjectionSet, JournalAppendFailure>>) (workId: string) (incumbencyId: string) : Task<unit> =
+            task {
+                match! appendTask with
+                | Ok _ -> ()
+                | Error failure ->
+                    Diagnostic.emit
+                        "plan-tenure-reanchor-append-failed"
+                        [ "work_id", workId
+                          "incumbency_id", incumbencyId
+                          "result", JournalAppendFailure.describe failure ]
+            }
+
         let fireTenureReanchor
             (durable: AgentJournal)
             (sessionId: SessionId)
@@ -692,26 +710,19 @@ module PluginTransforms =
                 let appendTask =
                     AgentJournal.appendAgent (StreamId.Session sessionId) None fact durable
 
-                task {
-                    match! appendTask with
-                    | Ok _ -> ()
-                    | Error failure ->
-                        Diagnostic.emit
-                            "plan-tenure-reanchor-append-failed"
-                            [ "work_id", workId
-                              "incumbency_id", incumbencyId
-                              "result", JournalAppendFailure.describe failure ]
-                }
-                |> ignore
+                reportTenureReanchorAppend appendTask workId incumbencyId |> ignore
+
+        let tryReadReanchorRequested (result: obj) : bool =
+            try
+                unbox<bool> result?reanchorRequested
+            with _ ->
+                false
 
         let isTenureReanchorRequested (result: obj) : bool =
             if isNull result then
                 false
             else
-                try
-                    unbox<bool> result?reanchorRequested
-                with _ ->
-                    false
+                tryReadReanchorRequested result
 
         let assembleAndRewrite
             (sidOpt: string option)
@@ -738,11 +749,7 @@ module PluginTransforms =
                 | _ -> None
 
             match target with
-            | None ->
-                if requested then
-                    emitTenureReanchorSkipped "no-journal-or-session"
-                else
-                    ()
+            | None -> handleReanchorTarget requested
             | Some(durable, sessionId) -> fireTenureReanchor durable sessionId tenure.WorkId tenure.IncumbencyId
 
         let applyResolvedTenure (sidOpt: string option) (outObj: obj) : unit =
