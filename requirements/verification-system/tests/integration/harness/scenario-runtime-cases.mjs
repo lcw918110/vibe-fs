@@ -266,11 +266,14 @@ reason = "epoch-switch"
       // A declaration that never fires is worse than a missing one: the author believes a
       // cold boundary is covered and the scenario silently stopped exercising it. Same
       // reasoning as an empty `attempts` list in a fault.
+      // `epoch-switch` is excluded here because it shares the multi-delivery shape
+      // with `prefix-probe`/`frame-commit`/`manager-loop`: append-only deliveries
+      // are legal and held, not `boundary-not-reached`. Use `fallback-side` instead.
       const runtime = runtimeOf(`${TWO_STEPS}
 [[epoch]]
 turn = "mgr"
 step = 1
-reason = "epoch-switch"
+reason = "fallback-side"
 `);
 
       deliver(runtime, request([user('Ship the parser fix.')]));
