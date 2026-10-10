@@ -678,7 +678,11 @@ module PluginTransforms =
             else
                 ()
 
-        let reportTenureReanchorAppend (appendTask: Task<Result<ProjectionSet, JournalAppendFailure>>) (workId: string) (incumbencyId: string) : Task<unit> =
+        let reportTenureReanchorAppend
+            (appendTask: Task<Result<ProjectionSet, JournalAppendFailure>>)
+            (workId: string)
+            (incumbencyId: string)
+            : Task<unit> =
             task {
                 match! appendTask with
                 | Ok _ -> ()
