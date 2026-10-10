@@ -323,7 +323,7 @@ module SuicideTool =
             return retiredResult ()
         }
 
-// ATTENTION-005: the completed retirement consumes this life's
+    // ATTENTION-005: the completed retirement consumes this life's
     // remaining deferred work. An append failure leaves the outcome
     // unchanged; `RetirementCommitted` stays durable either way.
     let private completeRetirement (prepared: PreparedRetirement) =
