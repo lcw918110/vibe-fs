@@ -15,6 +15,7 @@ if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
 fi
 
 echo "🧪 正在进入纯净 Linux 容器执行 GitHub 完整 CI 门禁..."
+echo "   步骤 0: 清理宿主机残留产物 (dist/ node_modules/，避免 macOS 权限异常产物污染容器)"
 echo "   步骤 1: npm ci"
 echo "   步骤 2: dotnet tool restore"
 echo "   步骤 3: npm run verify:release (全部 7 级质量门禁)"
@@ -27,7 +28,7 @@ docker run --rm \
     -e NODE_TEST_CONCURRENCY=2 \
     -e UNIT_VERDICT_SILENCE_MS=30000 \
     "${IMAGE_NAME}" \
-    /bin/bash -c "npm ci && dotnet tool restore && npm run verify:release"
+    /bin/bash -c "rm -rf /workspace/dist /workspace/node_modules && npm ci && dotnet tool restore && npm run verify:release"
 
 echo "------------------------------------------------------------"
 echo "🎉 [CI 1:1 本地全真模拟] 容器环境 7 级门禁全部通过！"
