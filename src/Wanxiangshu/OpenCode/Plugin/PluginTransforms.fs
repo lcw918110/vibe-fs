@@ -499,13 +499,21 @@ module PluginTransforms =
 
         let tryRestoreSnapshot (part: obj) (snapshot: ProtocolArgumentVault.Snapshot) : obj =
             let state = ProviderWireDecode.readField part "state"
-            let hasStateInput = not (isNull state) && not (isNull (ProviderWireDecode.readField state "input"))
+
+            let hasStateInput =
+                not (isNull state) && not (isNull (ProviderWireDecode.readField state "input"))
+
             let hasTopLevelArgs = not (isNull (ProviderWireDecode.readField part "args"))
 
             if not hasStateInput && not hasTopLevelArgs then
                 part
             else
-                let current = if hasStateInput then ProviderWireDecode.readField state "input" else ProviderWireDecode.readField part "args"
+                let current =
+                    if hasStateInput then
+                        ProviderWireDecode.readField state "input"
+                    else
+                        ProviderWireDecode.readField part "args"
+
                 let merged = ProtocolArgumentVault.restoreArguments snapshot current
                 restoreMergedPart part state hasStateInput current merged
 

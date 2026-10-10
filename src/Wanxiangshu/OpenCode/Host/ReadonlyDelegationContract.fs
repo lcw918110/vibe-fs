@@ -234,9 +234,11 @@ module ReadonlyDelegationContract =
         let required = emitJsExpr (schemaObj, "required") "$0[$1]"
 
         if isNull required then
-            emitJsExpr (schemaObj, "required", box [| box roundsField |]) "$0[$1] = $2" |> ignore
+            emitJsExpr (schemaObj, "required", box [| box roundsField |]) "$0[$1] = $2"
+            |> ignore
         elif isArray required then
-            emitJsExpr (schemaObj, "required", box (appendBudgetIfMissing (unbox<obj array> required))) "$0[$1] = $2" |> ignore
+            emitJsExpr (schemaObj, "required", box (appendBudgetIfMissing (unbox<obj array> required))) "$0[$1] = $2"
+            |> ignore
         else
             raise (InvalidOperationException(sprintf "Tool %s parameters schema required field is not an array" toolId))
 
