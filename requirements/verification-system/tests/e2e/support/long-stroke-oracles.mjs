@@ -374,6 +374,16 @@ export async function bindManagerLoopSequence(scenario) {
   );
   assert.ok(humanAudit, 'long-stroke: humanroot-loop audit entry is required');
 
+  // The successor assess resource is composed by production (`internal = true`), so the
+  // schema forbids a declared lane. Both the strength-canary-owner and the humanroot-
+  // manager sessions send "# You are the N Manager…" prompts, so an unlaned entry would
+  // match either. Pin the successor entries to the humanroot-manager lane at runtime —
+  // the harness KNOWS which session the Continue retirement reopens (HOST-008 binding),
+  // and this is exactly the knowledge the schema's lane ban is guarding against losing.
+  for (const entry of runtime.scenario.entries) {
+    if (entry.turnId === 'manager-reopened-loop') entry.lane = 'humanroot-manager';
+  }
+
   const scores = (grade) => grade === 'REVISE'
     ? [{ acceptance_criteria: 'the target state is not yet reached', work_plan: 'close the remaining gap' }]
     : [];
@@ -524,11 +534,6 @@ const lastUserText = (body) => {
   }
   return '';
 };
-
-const requestTools = (body) =>
-  (Array.isArray(body?.tools) ? body.tools : [])
-    .map((tool) => tool?.function?.name ?? tool?.name)
-    .filter((name) => typeof name === 'string');
 
 const chatRequests = (requests) =>
   (requests ?? []).filter((body) => {

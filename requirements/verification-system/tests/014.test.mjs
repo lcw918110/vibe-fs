@@ -168,7 +168,7 @@ test('WHAT[verification-system-014] the compiled Long Stroke scenario preserves 
       ...Array.from({ length: step }, (_, index) => ({ role: 'assistant', content: `reply-${index}` }))],
     tools: tools.map((name) => ({ name })),
   })
-  const bindings = new Map([['manager', 'ses_manager']])
+  const bindings = new Map([['manager', 'ses_manager'], ['humanroot-manager', 'ses_manager']])
   const context = { sessionId: 'ses_manager' }
   assert.equal(resolveEntry(request('# Delegated work you sent out has not come back yet. Continue the work.', 1, managerTools), result.scenario.entries, bindings, context).matched?.id,
     'manager-join-guard.0')

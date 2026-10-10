@@ -57,6 +57,47 @@ module RelayNarrativeTransform =
                 gateKind
                 terminalRun)
 
+    let private managerLoopGateAdmitted (journal: AgentJournal) (sessionId: SessionId) (retirement: RetirementSummary) =
+        let gateKind = ManagerLoopGate.gateKind retirement.Id
+        let terminalRun = ProviderRunIdentity.create retirement.ProjectionCut.ProviderRunId
+        let payloadDigest = PromptAuthority.gateNudgePayloadDigest gateKind terminalRun
+
+        let snapshot = AgentJournal.snapshot journal
+
+        let authority =
+            AgentProjection.tryFind sessionId snapshot.AgentProjections
+            |> Option.bind (fun s -> s.PromptAuthority)
+
+        let pendingKeys =
+            authority
+            |> Option.map (fun a ->
+                a.PendingClaims
+                |> Map.toList
+                |> List.map (fun (_, claim) -> claim.PayloadDigest))
+            |> Option.defaultValue []
+
+        let acceptedKeys =
+            authority
+            |> Option.map (fun a ->
+                a.AcceptedDispatches
+                |> Map.toList
+                |> List.map (fun (_, dispatch) -> dispatch.PayloadDigest))
+            |> Option.defaultValue []
+
+        let hasProfile =
+            PromptAuthorityProjectionQueries.activeProfile sessionId snapshot.AgentProjections
+            |> Option.isSome
+
+        PromptAuthorityProjectionQueries.activeProfile sessionId snapshot.AgentProjections
+        |> Option.map (fun profile ->
+            (PromptDispatcher.forPrompts (PromptJournalAdapter.create journal))
+                .GateNudgeAlreadyAdmitted
+                profile
+                PromptAuthority.ContinuationKind.ManagerGuard
+                gateKind
+                terminalRun)
+        |> Option.defaultValue false
+
     let private cutToolIndex (cut: ProjectionCut) messages =
         messages
         |> List.tryFindIndex (fun message ->
@@ -75,12 +116,23 @@ module RelayNarrativeTransform =
         |> Option.map (fun _ -> RelayProjectionDisposition.CurrentIteration)
         |> Option.defaultValue RelayProjectionDisposition.Unchanged
 
-    let private requestBelongsToSuccessor (physical: string option) afterCut freshRoot acceptedRequest gatePhysical =
+    let private requestBelongsToSuccessor
+        (physical: string option)
+        afterCut
+        freshRoot
+        acceptedRequest
+        gatePhysical
+        gateAdmitted
+        cutMissing
+        isFreshPhysical
+        =
         match physical with
         | Some current ->
             freshRoot = Some current
             || gatePhysical = Some current
             || (afterCut && acceptedRequest)
+            || (gateAdmitted && isFreshPhysical && not afterCut)
+            || (gateAdmitted && cutMissing)
         | _ -> false
 
     let private isSuccessorRequest
@@ -101,10 +153,14 @@ module RelayNarrativeTransform =
                     None)
             |> List.tryLast
 
+        let cutIndex = cutToolIndex retirement.ProjectionCut messages
+
         let afterCut =
-            match cutToolIndex retirement.ProjectionCut messages, currentUser with
+            match cutIndex, currentUser with
             | Some toolIndex, Some(userIndex, _) -> userIndex > toolIndex
             | _ -> false
+
+        let cutMissing = cutIndex.IsNone
 
         let projection =
             AgentProjection.tryFind sessionId (AgentJournal.snapshot journal).AgentProjections
@@ -125,7 +181,30 @@ module RelayNarrativeTransform =
             managerLoopGatePhysical journal sessionId retirement
             |> Option.map Wanxiangshu.Foundation.Identity.PhysicalUserMessageId.value
 
-        requestBelongsToSuccessor physical afterCut freshRoot acceptedRequest gatePhysical
+        let gateAdmitted = managerLoopGateAdmitted journal sessionId retirement
+
+        // A gate nudge is admitted (pending) before its physical prompt lands on
+        // the wire, so `gateAdmitted` alone cannot distinguish the nudge's own
+        // prompt from a stale pre-retirement request. Only treat an admitted gate
+        // as successor evidence when the current physical is not one of the road's
+        // already-consumed authority messages (i.e. a genuinely fresh head).
+        let isFreshPhysical =
+            physical
+            |> Option.map (fun current ->
+                road.AuthorityMessageIds
+                |> List.exists (fun oldRoot -> PhysicalUserMessageId.value oldRoot = current)
+                |> not)
+            |> Option.defaultValue false
+
+        requestBelongsToSuccessor
+            physical
+            afterCut
+            freshRoot
+            acceptedRequest
+            gatePhysical
+            gateAdmitted
+            cutMissing
+            isFreshPhysical
 
     let private staleRetirement journal sessionId (road: RoadView) acceptedRequest messages =
         road.LatestRetirement

@@ -333,7 +333,7 @@ module HandleProjection =
                 accepted.SessionId = binding.ChildSessionId
                 && accepted.IdentitySeed = profile.IdentitySeed
                 && accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
-                                         PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
+                    PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
 
         let exactOwner =
             PromptAuthority.identitySeedOwner profile.IdentitySeed

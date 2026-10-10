@@ -117,7 +117,7 @@ test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two e
     ],
     tools: managerTools.map((name) => ({ name })),
   });
-  const bindings = new Map([['manager', 'ses_manager']]);
+  const bindings = new Map([['manager', 'ses_manager'], ['humanroot-manager', 'ses_manager']]);
   const context = { sessionId: 'ses_manager' };
 
   assert.equal(

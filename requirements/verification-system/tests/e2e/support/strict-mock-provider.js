@@ -266,7 +266,6 @@ export class StrictMockProvider {
    */
   _dispatchScenario(res, parsed, context) {
     const selection = this._scenario.select(parsed, context);
-
     if (selection.unmatched !== undefined) {
       const key = selection.unmatched.key;
       return this._recordUnexpected(

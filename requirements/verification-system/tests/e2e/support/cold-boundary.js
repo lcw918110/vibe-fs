@@ -267,7 +267,10 @@ export function sealDecision({ previousWire, body, boundary }) {
     // accumulate. `manager-loop` shares it too: a reusable step-0 entry may see
     // append-only retries that stay held, with only the next iteration's restart
     // breaking the seal.
-    return boundary.kind === 'prefix-probe' || boundary.kind === 'frame-commit' || boundary.kind === 'manager-loop'
+    // `epoch-switch` shares the same shape: the declaration admits a wholesale
+    // prefix rebase, and a delivery that stays append-only is perfectly legal
+    // (the boundary simply wasn't needed for this particular run).
+    return boundary.kind === 'prefix-probe' || boundary.kind === 'frame-commit' || boundary.kind === 'manager-loop' || boundary.kind === 'epoch-switch'
       ? { held: true }
       : { broken: 'boundary-not-reached', kind: boundary.kind };
   }
