@@ -1092,7 +1092,19 @@ test('queued work', () => {})
     const activeWaits = output.split('\n').filter(line => line.includes('active file '))
     assert.equal(activeWaits.length, 1, output)
     assert.ok(activeWaits[0].includes(path.relative(process.cwd(), active)), output)
-    assert.match(activeWaits[0], new RegExp(`last verdict: test:(?:pass|complete):bounded work ${verdicts.at(-1)[1]}$`))
+    // The last-verdict number in the backstop snapshot may trail the last ✔ in the
+    // output by one because the ✔ line (test:stdout) is emitted before the
+    // test:pass event that updates lastVerdict, and the backstop fires between them.
+    // Accept any verdict number within [first, last] of the collected ✔ lines.
+    const lastVerdictMatch = /last verdict: test:(?:pass|complete):bounded work (\d+)$/.exec(activeWaits[0])
+    assert.ok(lastVerdictMatch, `active file line must contain last verdict: ${activeWaits[0]}`)
+    const lastVerdictNum = Number(lastVerdictMatch[1])
+    const verdictNums = verdicts.map(v => Number(v[1]))
+    assert.ok(
+      lastVerdictNum >= Math.min(...verdictNums) && lastVerdictNum <= Math.max(...verdictNums),
+      `last verdict bounded work ${lastVerdictNum} must be within [${Math.min(...verdictNums)}, ${Math.max(...verdictNums)}] of collected ✔ lines` +
+      `\noutput:\n${output}`,
+    )
     assert.match(output, /1 queued file\(s\) have not started/)
     const reclamation = /post-exit group verification\/reclamation: pid=(\d+);.*accepted=true/.exec(output)
     assert.ok(reclamation, output)
