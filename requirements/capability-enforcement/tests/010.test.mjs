@@ -340,10 +340,11 @@ const PLUGIN_TOOL_NAMES = [
   'mv', 'rm', 'bash-honeypot', 'assume', 'chronicle',
   'defer',  'publish',
   'js-engineer', 'js-devops', 'js-manager', 'js-predictor',
+  'ask', 'handoff', 'deliver', 'js-plan',
 ]
 const HOST_OWNED_TOOL_NAMES = [ 'read', 'write', 'edit', 'glob', 'grep', 'skill', 'todowrite',
 ]
-const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops', 'blogger']
+const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops', 'blogger', 'plan']
 const COGNITIVE_TOOLS = ['defer',  'publish']
 const ALLOWED = {
   orchestrator: ['commission', 'join', 'horizon', 'assume', 'todowrite', ...COGNITIVE_TOOLS],
