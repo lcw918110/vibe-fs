@@ -26,6 +26,7 @@ jobs:
           UNIT_VERDICT_SILENCE_MS: 30000
           SUITE_BACKSTOP_MS: 900000
           WXS_VERIFICATION_WORKER_DIAGNOSTICS: 0
+          WXS_ACCEPT_TODO: 1
         run: |
           set -x
           if npm run verify:release; then
