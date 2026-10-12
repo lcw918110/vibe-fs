@@ -255,7 +255,8 @@ export async function verify({
     }
   }
 
-  const initialDigest = computeDigest(beforeInputs).slice(0, 16)
+  const fullDigest = computeDigest(beforeInputs)
+  const initialDigest = fullDigest.slice(0, 16)
   output.write(`\n=== verify: ${mode}  inputs=${initialDigest} ===\n`)
 
   const stepResults = []
@@ -367,6 +368,7 @@ export async function verify({
       mode,
       steps: stepResults,
       outcome: 'fail',
+      candidateDigest: fullDigest,
       ...(failureReason ? { failureReason } : {}),
       ...(inputChanges ? { inputChanges } : {}),
       wallMs,
@@ -388,6 +390,7 @@ export async function verify({
     mode,
     steps: stepResults,
     outcome: 'pass',
+    candidateDigest: fullDigest,
     wallMs,
     logDirectory: runLogDir,
     exitCode: 0,
