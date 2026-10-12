@@ -84,4 +84,65 @@ test('WHAT[host-boundary-019] ordinary transform runs companion and prefix compr
   const prefixIndex = current.indexOf('prefix')
   assert.ok(companionIndex < prefixIndex, 'companion runs before prefix compression')
 })
-test.todo('WHAT[host-boundary-019] every required Host capability needs a real supported-Host canary; injected transform ports prove only composition')
+import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
+import { spawnSync, execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const here = path.dirname(fileURLToPath(import.meta.url))
+const runnerPath = path.join(here, 'support/run-manager-review-tools-canary.mjs')
+const repoRoot = path.resolve(here, '../../..')
+const OPENCODE_BIN = process.env.OPENCODE_BIN ?? 'opencode'
+
+const checkOpencodeExecutable = () => {
+  if (process.env.OPENCODE_BIN && existsSync(process.env.OPENCODE_BIN)) return true
+  const localBin = path.join(repoRoot, 'node_modules/.bin/opencode')
+  if (existsSync(localBin)) return true
+  try {
+    execFileSync(OPENCODE_BIN, ['--version'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+integrationTest(
+  'WHAT[host-boundary-019] every required Host capability needs a real supported-Host canary; injected transform ports prove only composition',
+  async (t) => {
+    if (!checkOpencodeExecutable()) {
+      return t.skip(
+        `OpenCode binary not executable at ${OPENCODE_BIN}; requires real OpenCode host to execute canary runner`,
+      )
+    }
+
+    const launched = spawnSync(process.execPath, [runnerPath], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      timeout: 120000,
+    })
+
+    let stdoutSummary = null
+    try {
+      stdoutSummary = JSON.parse(launched.stdout.trim())
+    } catch {
+      stdoutSummary = launched.stdout
+    }
+
+    const failureMessage = [
+      `Real host canary runner exited with code ${launched.status}.`,
+      `[Runner Stderr]:\n${launched.stderr || '(empty)'}`,
+      `[Runner Stdout Summary]:\n${typeof stdoutSummary === 'object' ? JSON.stringify(stdoutSummary, null, 2) : stdoutSummary}`,
+    ].join('\n')
+
+    assert.equal(launched.status, 0, failureMessage)
+    assert.ok(stdoutSummary, 'Canary runner must produce JSON summary output')
+    assert.equal(stdoutSummary.versions?.plugin, '1.18.29', 'plugin version must match fixture')
+    assert.ok(stdoutSummary.wireInspection, 'wireInspection evidence required')
+    assert.equal(stdoutSummary.wireInspection?.contractRequired, true, 'wire contract must be required')
+    assert.ok(stdoutSummary.calls?.normal, 'normal call evidence required')
+    assert.equal(stdoutSummary.calls.normal.status, 'completed')
+    assert.ok(stdoutSummary.calls?.executorThrow, 'executorThrow boundary canary evidence required')
+    assert.equal(stdoutSummary.calls.executorThrow.status, 'error')
+  },
+)
