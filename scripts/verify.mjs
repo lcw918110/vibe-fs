@@ -57,6 +57,9 @@ export function verificationSteps({ root = ROOT, release = false, verbose = fals
         hostEnv,
         extra: {
           ...(process.env.UNIT_VERDICT_SILENCE_MS ? { UNIT_VERDICT_SILENCE_MS: process.env.UNIT_VERDICT_SILENCE_MS } : {}),
+          ...(process.env.SUITE_BACKSTOP_MS ? { SUITE_BACKSTOP_MS: process.env.SUITE_BACKSTOP_MS } : {}),
+          ...(process.env.WXS_VERIFICATION_WORKER_DIAGNOSTICS ? { WXS_VERIFICATION_WORKER_DIAGNOSTICS: process.env.WXS_VERIFICATION_WORKER_DIAGNOSTICS } : {}),
+          ...(process.env.NODE_TEST_CONCURRENCY ? { NODE_TEST_CONCURRENCY: process.env.NODE_TEST_CONCURRENCY } : {}),
         },
       }),
     },
