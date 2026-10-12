@@ -1,7 +1,5 @@
 import test from 'node:test'
 
-test.todo('WHAT[host-boundary-029] real rejection, stale-callback and exhaustion paths must prove nonfatal process completion; previous fixtures only printed success')
-
 {
 const { default: assert } = await import("node:assert/strict");
 const { spawn } = await import("node:child_process");
@@ -9,7 +7,6 @@ const { mkdtempSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
 const { fileURLToPath } = await import("node:url");
-const { default: test } = await import("node:test");
 const journal = await import("../../../dist/Persistence/Journal/Surface.js");
 
 const here = fileURLToPath(new URL('.', import.meta.url))
@@ -43,6 +40,19 @@ const assertHardExit = (result, mode) => {
   assert.match(result.stdout, /before-fatal/, `${mode}: must report before killing`)
   assert.doesNotMatch(result.stdout, /after-fatal/, `${mode}: must never return past the fuse`)
 }
+
+test('WHAT[host-boundary-029] real rejection, stale-callback and exhaustion paths must prove nonfatal process completion; previous fixtures only printed success', async () => {
+  for (const nonfatalMode of ['rejection', 'stale-callback', 'exhaustion']) {
+    const result = await runChild([nonfatalMode])
+    assert.equal(result.signal, null, `${nonfatalMode}: nonfatal path must not be killed by signal`)
+    assert.equal(result.code, 0, `${nonfatalMode}: nonfatal path must exit with code 0`)
+    assert.doesNotMatch(result.stderr, /fatal|kill/i, `${nonfatalMode}: must not report fatal incidents`)
+    const line = result.stdout.trim().split('\n').pop()
+    const outcome = JSON.parse(line)
+    assert.equal(outcome.mode, nonfatalMode)
+    assert.equal(outcome.nonfatal, true)
+  }
+})
 
 test('WHAT[host-boundary-029] fatal child reports once then dies without returning', async () => {
   const result = await runChild(['trip'])
