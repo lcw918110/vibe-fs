@@ -49,7 +49,7 @@ export const budgetCases = [
         Object.entries({ ...budget }).filter(([, value]) => typeof value === 'number'),
       );
 
-      // CI may inject UNIT_VERDICT_SILENCE_MS (ci.yml hang headroom). Frozen
+      // CI may inject UNIT_VERDICT_SILENCE_MS or SUITE_BACKSTOP_MS (ci.yml hang headroom). Frozen
       // table asserts committed fallbacks; prove the override applied, then
       // compare the rest against defaults (no product-logic change).
       if (process.env.UNIT_VERDICT_SILENCE_MS !== undefined) {
@@ -59,6 +59,14 @@ export const budgetCases = [
           'UNIT_VERDICT_SILENCE_MS env override must apply at runtime',
         );
         actual.UNIT_VERDICT_SILENCE_MS = expected.UNIT_VERDICT_SILENCE_MS;
+      }
+      if (process.env.SUITE_BACKSTOP_MS !== undefined) {
+        assertEq(
+          actual.SUITE_BACKSTOP_MS,
+          Number(process.env.SUITE_BACKSTOP_MS),
+          'SUITE_BACKSTOP_MS env override must apply at runtime',
+        );
+        actual.SUITE_BACKSTOP_MS = expected.SUITE_BACKSTOP_MS;
       }
 
       const canonical = (table) =>

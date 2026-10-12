@@ -10,6 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import { collectVerificationInputs, computeDigest, diffVerificationInputs } from './lib/build-state.mjs'
+import { ensureNativeOpencode } from './lib/ensure-native-opencode.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -227,6 +228,7 @@ export async function verify({
   env: hostEnv = process.env,
 } = {}) {
   const resolvedRoot = path.resolve(root)
+  ensureNativeOpencode({ root: resolvedRoot })
   const baseLogDir = logDirectory ? path.resolve(logDirectory) : path.join(resolvedRoot, '.fable-build', 'verify-logs')
   const runLogDir = allocateRunLogDir(baseLogDir)
 

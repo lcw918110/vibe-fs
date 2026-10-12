@@ -37,12 +37,18 @@ registerDotnetSdkTests()
 registerDotnetToolRestoreTests()
 registerNugetProjectTests()
 registerFableProjectTests()
-integrationTest('WHAT[verification-system-016] exact repository Git inputs install through a selected npm 11.12.1 bundle and real JavaScript consumers', repositoryNpmInstallTest)
-integrationTest('WHAT[verification-system-016] a complete selected SDK archive resolves the captured repository global.json and reclaims its owned roots', repositoryDotnetSdkTest)
-integrationTest('WHAT[verification-system-016] selected complete SDK restores original repository local tools from explicitly identified NuGet archives', repositoryDotnetToolsTest)
-integrationTest('WHAT[verification-system-016] selected complete Git source and SDK restore the original foundation identity project through a fresh-cache locked NuGet graph', repositoryNugetProjectTest)
-integrationTest('WHAT[verification-system-016] four selected input owners compile the original foundation identity project with Fable into isolated outputs', repositoryFableProjectTest)
-integrationTest('WHAT[verification-system-016] mac readonly views protect actual original-project Fable inputs and restore all prepared owners', { skip: process.platform !== 'darwin' }, repositoryReadonlyFableProjectTest)
+const hasExplicitReadonlyContext = () => Boolean(
+  process.env.WXS_VERIFICATION_DOTNET_ROOT &&
+  process.env.WXS_VERIFICATION_NUGET_PROJECT_TREE_ID &&
+  process.env.WXS_VERIFICATION_NPM_CLI
+)
+
+integrationTest('WHAT[verification-system-016] exact repository Git inputs install through a selected npm 11.12.1 bundle and real JavaScript consumers', { skip: !process.env.WXS_VERIFICATION_NPM_CLI }, repositoryNpmInstallTest)
+integrationTest('WHAT[verification-system-016] a complete selected SDK archive resolves the captured repository global.json and reclaims its owned roots', { skip: !process.env.WXS_VERIFICATION_DOTNET_ROOT }, repositoryDotnetSdkTest)
+integrationTest('WHAT[verification-system-016] selected complete SDK restores original repository local tools from explicitly identified NuGet archives', { skip: !process.env.WXS_VERIFICATION_DOTNET_ROOT }, repositoryDotnetToolsTest)
+integrationTest('WHAT[verification-system-016] selected complete Git source and SDK restore the original foundation identity project through a fresh-cache locked NuGet graph', { skip: !hasExplicitReadonlyContext() }, repositoryNugetProjectTest)
+integrationTest('WHAT[verification-system-016] four selected input owners compile the original foundation identity project with Fable into isolated outputs', { skip: !hasExplicitReadonlyContext() }, repositoryFableProjectTest)
+integrationTest('WHAT[verification-system-016] mac readonly views protect actual original-project Fable inputs and restore all prepared owners', { skip: process.platform !== 'darwin' || !hasExplicitReadonlyContext() }, repositoryReadonlyFableProjectTest)
 
 test.todo('WHAT[verification-system-016] the actual verification run binds its evidence to the same immutable candidate snapshot')
 import { collectGeneratedInputs, collectVerificationInputs, computeDigest, diffVerificationInputs } from '../../../scripts/lib/build-state.mjs'
