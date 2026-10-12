@@ -179,6 +179,12 @@ module LoopSensorSurface =
     let resetDetector (sensor: obj) (session: string) : unit =
         (sensor :?> SensorHandle).Sensor.ResetDetector(SessionId.create session)
 
+    let continuationResourcePath (kindName: string) : string =
+        match kindName with
+        | "TooRepetitive" -> LoopSensor.continuationPath DegenerationKind.TooRepetitive
+        | "TooRandom" -> LoopSensor.continuationPath DegenerationKind.TooRandom
+        | unknown -> invalidArg "kindName" (sprintf "unknown DegenerationKind: %s" unknown)
+
     /// Streaming delta for the exact provider run. A nullish message id
     /// produces a delta without a run: observed into detector scratch only,
     /// never arming an anomaly.

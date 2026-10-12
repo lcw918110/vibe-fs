@@ -9,4 +9,5 @@ module LoopSensorSurface =
     val activeTask: sensor: obj -> session: string -> run: string -> obj
     val dropSession: sensor: obj -> session: string -> unit
     val resetDetector: sensor: obj -> session: string -> unit
+    val continuationResourcePath: kindName: string -> string
     val textDelta: session: string -> text: string -> messageId: obj -> obj
