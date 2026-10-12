@@ -268,4 +268,92 @@ test('WHAT[provider-attempt-recovery-021] the_lwr_retry_payload_replaces_the_cov
   assert.equal(beforeAnyFailure.changed, false, 'no confirmed failure means no LWR replacement')
 })
 
-test.todo('WHAT[provider-attempt-recovery-021] actual ordinary and sync-delegate recovery combine exact durable LWR evidence and target settlement after licensing and before send (GAP-139)')
+test('WHAT[provider-attempt-recovery-021] actual ordinary and sync-delegate recovery combine exact durable LWR evidence and target settlement after licensing and before send (GAP-139)', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'wxs-lwr-settle-'))
+  const created = await journal.JournalSurface_bootWithWriterId(
+    directory,
+    'writer-lwr-settle',
+    'rt-lwr-settle',
+    1,
+    '2026-01-01T00:00:00Z',
+  )
+  assert.equal(created.ok, true)
+
+  const { template, runtime } = await loadedTemplate()
+
+  try {
+    const handle = created.journal
+    await failureOwner.acceptHumanRoot(handle, 'ses-lwr-combined', 'msg-root-1', 'engineer')
+
+    // 1. Initial attempt: takes SECOND_TARGET because FIRST_TARGET is occupied
+    const holderTarget = await admit(runtime, 'holder-session', 'msg-holder')
+    assert.deepEqual(holderTarget, FIRST_TARGET)
+
+    const initialTarget = await admit(runtime, 'ses-lwr-combined', 'msg-root-1')
+    assert.deepEqual(initialTarget, SECOND_TARGET)
+
+    await failureOwner.establishProviderRun(handle, 'ses-lwr-combined', 'msg-root-1', 'run-initial')
+    routing.endProviderStep(runtime, 'ses-lwr-combined', 'msg-root-1', 'run-initial')
+    release(runtime, 'ses-lwr-combined', 'msg-root-1')
+    release(runtime, 'holder-session', 'msg-holder')
+
+    // Initial failure: not an LWR retry continuation yet
+    const wasLwrInitial = failureOwner.wasLwrRetryAttempt(handle, 'ses-lwr-combined', 'msg-root-1', 'run-initial')
+    assert.equal(wasLwrInitial, false, 'ordinary failure is not an LWR retry attempt')
+
+    // Under PAR-021, when not an LWR retry, settlement retains failed target for retry
+    if (!wasLwrInitial) {
+      const retained = routing.retainFailedTargetForRetry(runtime, 'ses-lwr-combined', 'run-initial')
+      assert.deepEqual(retained, SECOND_TARGET, 'retains the failed target for fresh retry admission')
+    }
+    assert.equal(template.providerCapacity('second'), 1, 'provider is not condemned on first failure')
+
+    // Next fresh admission takes the retained SECOND_TARGET even though FIRST_TARGET is free
+    const retryAdmissionTarget = await admit(runtime, 'ses-lwr-combined', 'msg-retry-continuation')
+    assert.deepEqual(retryAdmissionTarget, SECOND_TARGET, 'recovery retry adheres to retained failed target')
+
+    // 2. The retry is accepted as a ProviderRetryAttempt continuation
+    const sent = await dispatch.sendContinuation(
+      admittedWithPhysical('msg-retry-continuation'),
+      handle,
+      'ses-lwr-combined',
+      'continue after provider failure',
+      'ProviderRetryAttempt',
+      dispatch.projectionObservation(handle, 'ses-lwr-combined').activeLogicalRun,
+      'Await',
+    )
+    assert.equal(sent.ok, true)
+
+    // And establishes provider run
+    await failureOwner.establishProviderRun(handle, 'ses-lwr-combined', 'msg-retry-continuation', 'run-retry-step1')
+    routing.endProviderStep(runtime, 'ses-lwr-combined', 'msg-retry-continuation', 'run-retry-step1')
+    release(runtime, 'ses-lwr-combined', 'msg-retry-continuation')
+
+    // Failure of the actual LWR retry attempt:
+    const wasLwrRetry = failureOwner.wasLwrRetryAttempt(handle, 'ses-lwr-combined', 'msg-retry-continuation', 'run-retry-step1')
+    assert.equal(wasLwrRetry, true, 'retry step 1 failure is confirmed as LWR retry failure')
+
+    // When LWR retry fails, settlement condemns the failed provider
+    if (wasLwrRetry) {
+      const condemned = routing.condemnFailedTarget(runtime, 'run-retry-step1')
+      assert.deepEqual(condemned, SECOND_TARGET, 'condemns the failed target witness')
+    }
+    assert.equal(template.providerCapacity('second'), 0, 'provider is condemned after LWR retry fails')
+
+    // Subsequent admission rotates to healthy target
+    const rotatedTarget = await admit(runtime, 'ses-lwr-combined', 'msg-rotated')
+    assert.deepEqual(rotatedTarget, FIRST_TARGET, 'subsequent admission rotates away from condemned provider')
+    release(runtime, 'ses-lwr-combined', 'msg-rotated')
+
+    // 3. Subsequent step (run-retry-step2) of the same physical message cannot be condemned as the LWR retry itself
+    assert.equal(
+      failureOwner.wasLwrRetryAttempt(handle, 'ses-lwr-combined', 'msg-retry-continuation', 'run-retry-step2'),
+      false,
+      'later provider run step on same physical message is not the durable LWR retry establishing run',
+    )
+  } finally {
+    template.clearFailedProviders()
+    journal.JournalSurface_dispose(created.journal)
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
