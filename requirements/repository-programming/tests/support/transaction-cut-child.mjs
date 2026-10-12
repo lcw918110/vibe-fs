@@ -5,7 +5,15 @@ import { syncBuiltinESMExports } from 'node:module'
 
 const [mode, commonDir, writerId, phase, scenario, requestJson] = process.argv.slice(2)
 const request = JSON.parse(requestJson)
-const file = path.join(commonDir, 'wanxiangshu', 'events', `${writerId}.ndjson`)
+const resolveWriterFile = (dir, id) => {
+  const eventsDir = path.join(dir, 'wanxiangshu', 'events')
+  const legacy = path.join(eventsDir, `${id}.ndjson`)
+  if (fs.existsSync(legacy)) return legacy
+  const segment0 = path.join(eventsDir, `${id}-0000.ndjson`)
+  if (fs.existsSync(segment0)) return segment0
+  return segment0
+}
+const file = resolveWriterFile(commonDir, writerId)
 const lock = path.join(commonDir, 'wanxiangshu.lock')
 const store = await import('../../../../dist/Persistence/EventStore/Surface.js')
 const transaction = await import('../../../../dist/Repository/Programming/Js/TransactionSurface.js')
@@ -20,11 +28,15 @@ const canonical = value => Array.isArray(value) ? value.map(canonical)
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value
 const dto = event => ({ id: event.event_id, stream: event.stream_id, type: event.event_type,
   parents: event.parents, payload: event.payload, payloadRefs: event.payload_refs })
-const ownsFile = value => typeof value === 'string' && path.resolve(value) === file
+const ownsFile = value => {
+  if (typeof value !== 'string') return false
+  const resolved = path.resolve(value)
+  return resolved === path.resolve(file) || resolved.startsWith(path.resolve(path.join(commonDir, 'wanxiangshu', 'events', `${writerId}`)))
+}
 
 try {
   if (mode === 'cold') {
-    const source = path.join(commonDir, 'wanxiangshu', 'events', `${request.sourceWriter}.ndjson`)
+    const source = resolveWriterFile(commonDir, request.sourceWriter)
     assert.notEqual(writerId, request.sourceWriter)
     assert.equal(fs.readFileSync(source, 'base64'), request.bytes)
     for (const fact of request.facts) {

@@ -54,9 +54,9 @@ test('WHAT[behavior-diagnosis-009] raw cardinality precedes decode filtering on 
 
 {
 const { default: assert } = await import('node:assert/strict')
-const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = await import('node:fs')
+const { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } = await import('node:fs')
 const { tmpdir } = await import('node:os')
-const { join } = await import('node:path')
+const { basename, dirname, join } = await import('node:path')
 const blog = await import('../../../dist/Enforcer/BlogSurface.js')
 const journal = await import('../../../dist/Persistence/Journal/Surface.js')
 const runtime = await import('../../../dist/Context/Companion/RuntimeSurface.js')
@@ -181,12 +181,40 @@ const isObservationLine = line => {
     && fact[1][1][0] === 'BlogObservationCommitted'
 }
 
-const committedCount = (writerFile) => {
-  return readFileSync(writerFile, 'utf8')
+const countFile = (file) => {
+  return readFileSync(file, 'utf8')
     .split('\n')
     .filter(line => line.trim() !== '')
     .filter(isObservationLine)
     .length
+}
+
+const committedCount = (writerPrefix) => {
+  const dir = dirname(writerPrefix)
+  const base = basename(writerPrefix)
+  const writerId = base.endsWith('.ndjson') ? base.slice(0, -'.ndjson'.length) : base
+  if (existsSync(writerPrefix)) {
+    return countFile(writerPrefix)
+  }
+  if (!existsSync(dir)) {
+    const error = new Error(`ENOENT: no such file or directory, open '${writerPrefix}'`)
+    error.code = 'ENOENT'
+    throw error
+  }
+  const files = readdirSync(dir)
+    .filter(name => name === `${writerId}.ndjson` || name.startsWith(`${writerId}-`))
+    .map(name => join(dir, name))
+  if (files.length === 0) {
+    // If testing explicit path that doesn't exist, throw ENOENT
+    const error = new Error(`ENOENT: no such file or directory, open '${writerPrefix}'`)
+    error.code = 'ENOENT'
+    throw error
+  }
+  let total = 0
+  for (const file of files) {
+    total += countFile(file)
+  }
+  return total
 }
 
 const undecodableChronicle = callID => ({

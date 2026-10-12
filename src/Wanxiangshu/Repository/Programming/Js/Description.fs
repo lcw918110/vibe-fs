@@ -461,7 +461,11 @@ module JsCanonicalDescription =
             raiseFailure
 
     let private publicPlanFileAlgorithm (prose: Prose) (readSourceLine: string) (raiseFailure: string) =
-        fileAlgorithmCore prose "  async file(matches = []) {\n    const path = \"plan.md\";" readSourceLine raiseFailure
+        fileAlgorithmCore
+            prose
+            "  async file(matches = []) {\n    const path = \"plan.md\";"
+            readSourceLine
+            raiseFailure
 
 
     let private globStub (prose: Prose) =
@@ -1139,7 +1143,12 @@ const err = new Error(reason); err.__jsFailure = { code, reason }; throw err;"""
 
         String.concat "\n\n" (classOpen :: methods @ [ "}" ])
 
-    let private contractFor (prose: Prose) (tutorial: TutorialSurface) (toolName: string) (capabilities: Set<JsCapability>) =
+    let private contractFor
+        (prose: Prose)
+        (tutorial: TutorialSurface)
+        (toolName: string)
+        (capabilities: Set<JsCapability>)
+        =
         let verbs =
             List.concat
                 [ if has capabilities JsCapability.Read then
@@ -1254,25 +1263,13 @@ const err = new Error(reason); err.__jsFailure = { code, reason }; throw err;"""
         String.concat "\n\n" blocks
 
     let render (prose: Prose) (roleName: string) (toolName: string) (capabilities: Set<JsCapability>) : string =
-        renderFor
-            prose
-            repositoryTutorial
-            roleName
-            toolName
-            capabilities
-            (publicBaseClass prose capabilities)
+        renderFor prose repositoryTutorial roleName toolName capabilities (publicBaseClass prose capabilities)
 
     let renderPlan (prose: Prose) (scope: string) : string =
         let planCapabilities = set [ JsCapability.Read; JsCapability.Edit ]
 
         let blocks =
             [ scope
-              renderFor
-                  prose
-                  planTutorial
-                  "plan"
-                  "js-plan"
-                  planCapabilities
-                  (publicPlanBaseClass prose) ]
+              renderFor prose planTutorial "plan" "js-plan" planCapabilities (publicPlanBaseClass prose) ]
 
         String.concat "\n\n" blocks

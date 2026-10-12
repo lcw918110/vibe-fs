@@ -6,7 +6,15 @@ import {syncBuiltinESMExports} from 'node:module'
 
 const [mode, commonDir, writerId, scenario, input] = process.argv.slice(2)
 const H = text => createHash('sha256').update(text).digest('hex')
-const file = path.join(commonDir, 'wanxiangshu', 'events', `${writerId}.ndjson`)
+const resolveWriterFile = (dir, id) => {
+  const eventsDir = path.join(dir, 'wanxiangshu', 'events')
+  const legacy = path.join(eventsDir, `${id}.ndjson`)
+  if (fs.existsSync(legacy)) return legacy
+  const segment0 = path.join(eventsDir, `${id}-0000.ndjson`)
+  if (fs.existsSync(segment0)) return segment0
+  return segment0
+}
+const file = resolveWriterFile(commonDir, writerId)
 const lock = path.join(commonDir, 'wanxiangshu.lock')
 const EventStore = await import('../../../../dist/Persistence/EventStore/Surface.js')
 const Strength = await import('../../../../dist/Strength/Surface.js')
@@ -29,7 +37,7 @@ try {
   if (mode === 'cold') {
     const request = JSON.parse(input)
     assert.notEqual(writerId, request.sourceWriter)
-    const source = path.join(commonDir, 'wanxiangshu', 'events', `${request.sourceWriter}.ndjson`)
+    const source = resolveWriterFile(commonDir, request.sourceWriter)
     assert.equal(fs.readFileSync(source, 'base64'), request.bytes)
     assert.deepEqual(EventStore.read(handle, request.event.id), request.event)
     assert.equal(EventStore.head(handle, request.event.stream), request.event.id)
@@ -58,9 +66,14 @@ try {
         replicaSessionId: 'replica', anchorDigest: 'anchor', bundle: built.value}
     }
     const before = fs.existsSync(file) ? fs.readFileSync(file) : Buffer.alloc(0)
+    const ownsFile = value => {
+      if (typeof value !== 'string') return false
+      const resolved = path.resolve(value)
+      return resolved === path.resolve(file) || resolved.startsWith(path.resolve(path.join(commonDir, 'wanxiangshu', 'events', `${writerId}`)))
+    }
     fs.appendFileSync = function (...args) {
       const result = Reflect.apply(originalAppend, this, args)
-      if (armed && typeof args[0] === 'string' && path.resolve(args[0]) === file) {
+      if (armed && ownsFile(args[0])) {
         appendCalls += 1
         const appended = Buffer.from(args[1]).toString('utf8').trimEnd().split('\n').map(JSON.parse)
         appendedTypes.push(...appended.map(event => event.event_type))

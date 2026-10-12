@@ -46,7 +46,13 @@ test('WHAT[requirement-grounding-012] a legacy inline carrier is restored verbat
     })
     assert.equal(historicalEvents.length, 3)
     const writerId = randomUUID()
-    const writerFile = join(dir, 'wanxiangshu', 'events', writerId + '.ndjson')
+    const resolveWriterFile = () => {
+      const eventsDir = join(dir, 'wanxiangshu', 'events')
+      const legacy = join(eventsDir, writerId + '.ndjson')
+      if (existsSync(legacy)) return legacy
+      return join(eventsDir, writerId + '-0000.ndjson')
+    }
+    const writerFile = resolveWriterFile()
     assert.equal(existsSync(writerFile), false, 'this process creates a new physical fixture writer')
     const activity = { id: randomUUID(), stream: 'grounding-fixture/activity', type: 'JobRequested', parents: [], payload: {}, payloadRefs: [] }
     const writer = eventStore.create(dir, writerId)
@@ -55,7 +61,7 @@ test('WHAT[requirement-grounding-012] a legacy inline carrier is restored verbat
       const appendedHistory = await eventStore.append(writer, historicalEvents)
       assert.equal(appendedHistory.ok, true, JSON.stringify(appendedHistory.error))
       assert.deepEqual(appendedHistory.cuts, [])
-      assert.deepEqual(readFileSync(writerFile), historicalBytes, 'the real append preserves the actual old canonical bytes')
+      assert.deepEqual(readFileSync(resolveWriterFile()), historicalBytes, 'the real append preserves the actual old canonical bytes')
       for (const event of historicalEvents) assert.deepEqual(eventStore.read(writer, event.id), event)
       const appendedActivity = await eventStore.append(writer, [activity])
       assert.equal(appendedActivity.ok, true, JSON.stringify(appendedActivity.error))
@@ -65,7 +71,7 @@ test('WHAT[requirement-grounding-012] a legacy inline carrier is restored verbat
     } finally {
       eventStore.dispose(writer)
     }
-    const retained = readFileSync(writerFile)
+    const retained = readFileSync(resolveWriterFile())
     assert.deepEqual(retained.subarray(0, historicalBytes.length), historicalBytes)
     assert.equal(retained.subarray(historicalBytes.length).toString('utf8'), eventCodec.encode(activity), 'only the current owner activity extends the old bytes')
     assert.deepEqual(retention.retainedWriterIdsAt(dir, Date.now()), [writerId], 'cold boot receives a nonempty retained historical fixture')

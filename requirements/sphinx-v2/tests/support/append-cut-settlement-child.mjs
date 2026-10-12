@@ -11,7 +11,15 @@ const request = JSON.parse(requestJson)
 const store = await import('../../../../dist/Persistence/EventStore/Surface.js')
 const persistence = await import('../../../../dist/Sphinx/V2/Persistence/Surface.js')
 const digest = value => createHash('sha256').update(value).digest('hex')
-const file = path.join(commonDir, 'wanxiangshu', 'events', `${writerId}.ndjson`)
+const resolveWriterFile = (dir, id) => {
+  const eventsDir = path.join(dir, 'wanxiangshu', 'events')
+  const legacy = path.join(eventsDir, `${id}.ndjson`)
+  if (fs.existsSync(legacy)) return legacy
+  const segment0 = path.join(eventsDir, `${id}-0000.ndjson`)
+  if (fs.existsSync(segment0)) return segment0
+  return segment0
+}
+const file = resolveWriterFile(commonDir, writerId)
 const lock = path.join(commonDir, 'wanxiangshu.lock')
 const handle = store.create(commonDir, writerId)
 const handles = [handle]
@@ -28,7 +36,7 @@ const dto = event => ({ id: event.event_id, stream: event.stream_id, type: event
 try {
   if (mode === 'cold') {
     assert.notEqual(writerId, request.sourceWriter)
-    const source = path.join(commonDir, 'wanxiangshu', 'events', `${request.sourceWriter}.ndjson`)
+    const source = resolveWriterFile(commonDir, request.sourceWriter)
     assert.equal(fs.readFileSync(source, 'base64'), request.bytes)
     for (const fact of request.facts) {
       assert.deepEqual(store.read(handle, fact.id), fact)
@@ -48,7 +56,11 @@ try {
     const descriptors = new Set()
     const synced = new Set()
     const counts = { append: 0, fsync: 0, close: 0, release: 0, injected: 0 }
-    const ownsFile = value => typeof value === 'string' && path.resolve(value) === file
+    const ownsFile = value => {
+      if (typeof value !== 'string') return false
+      const resolved = path.resolve(value)
+      return resolved === path.resolve(file) || resolved.startsWith(path.resolve(path.join(commonDir, 'wanxiangshu', 'events', `${writerId}`)))
+    }
 
     fs.appendFileSync = function (...args) {
       const result = Reflect.apply(originals.appendFileSync, this, args)

@@ -40,12 +40,18 @@ async function contender() {
     const before = current(handle, input.inquiry)
     const event = mustOk(persistence.prepareTransition(handle, digest, input.raw))
     assert.deepEqual(current(handle, input.inquiry), before, 'Each contender independently seals without publishing')
+    const eventsDir = join(input.commonDir, 'wanxiangshu', 'events')
+    const resolveWriterFile = () => {
+      const legacy = join(eventsDir, `${input.writerId}.ndjson`)
+      if (existsSync(legacy)) return legacy
+      return join(eventsDir, `${input.writerId}-0000.ndjson`)
+    }
     await waitForGo({ phase: 'sealed', writerId: input.writerId, pid: process.pid,
       event, before, heads: store.heads(handle, event.stream),
-      writerFileExists: existsSync(join(input.commonDir, 'wanxiangshu', 'events', `${input.writerId}.ndjson`)) })
+      writerFileExists: existsSync(resolveWriterFile()) })
     const receipt = await store.append(handle, [event])
     await send({ phase: 'appended', writerId: input.writerId, pid: process.pid, event, receipt,
-      writerBytes: readFileSync(join(input.commonDir, 'wanxiangshu', 'events', `${input.writerId}.ndjson`)).toString('base64'),
+      writerBytes: readFileSync(resolveWriterFile()).toString('base64'),
       current: current(handle, input.inquiry), heads: store.heads(handle, event.stream) })
   } finally {
     store.dispose(handle)

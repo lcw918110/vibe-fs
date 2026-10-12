@@ -335,6 +335,7 @@ const TOOL_NAMES = [
   'review', 'chronicle', 'fetch', 'suicide',
 ]
 const PLUGIN_TOOL_NAMES = [
+  'ask', 'deliver', 'js-plan',
   'fork', 'resume', 'commission', 'open-terminal', 'send-terminal', 'read-terminal', 'signal-terminal',
   'join', 'horizon', 'fission', 'review', 'suicide', 'run',
   'mv', 'rm', 'bash-honeypot', 'assume', 'chronicle',

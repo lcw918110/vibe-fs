@@ -488,24 +488,33 @@ module PluginTransforms =
                 part
             elif hasStateInput then
                 let stateCopy = shallowCopyObj state
-                stateCopy?input <- merged
+                emitJsExpr (stateCopy, "input", merged) "$0[$1] = $2" |> ignore
                 let partCopy = shallowCopyObj part
-                partCopy?state <- stateCopy
+                emitJsExpr (partCopy, "state", stateCopy) "$0[$1] = $2" |> ignore
                 partCopy
             else
                 let partCopy = shallowCopyObj part
-                partCopy?args <- merged
+                emitJsExpr (partCopy, "args", merged) "$0[$1] = $2" |> ignore
                 partCopy
+
+        let readRestoreCurrent (state: obj) (part: obj) (hasStateInput: bool) : obj =
+            if hasStateInput then
+                ProviderWireDecode.readField state "input"
+            else
+                ProviderWireDecode.readField part "args"
 
         let tryRestoreSnapshot (part: obj) (snapshot: ProtocolArgumentVault.Snapshot) : obj =
             let state = ProviderWireDecode.readField part "state"
-            let hasStateInput = not (isNull state) && not (isNull state?input)
-            let hasTopLevelArgs = not (isNull part?args)
+
+            let hasStateInput =
+                not (isNull state) && not (isNull (ProviderWireDecode.readField state "input"))
+
+            let hasTopLevelArgs = not (isNull (ProviderWireDecode.readField part "args"))
 
             if not hasStateInput && not hasTopLevelArgs then
                 part
             else
-                let current = if hasStateInput then state?input else part?args
+                let current = readRestoreCurrent state part hasStateInput
                 let merged = ProtocolArgumentVault.restoreArguments snapshot current
                 restoreMergedPart part state hasStateInput current merged
 
@@ -892,6 +901,12 @@ module PluginTransforms =
                             |> Option.isSome
                         | _ -> false
 
+                    let handleInterruptionError (error: string) : unit =
+                        if error.Contains "MANAGED-SESSION-016" then
+                            ()
+                        else
+                            invalidOp ("MANAGER-LOOP-004: retired attempt interrupt failed: " + error)
+
                     return!
                         RelayNarrativeTransform.apply
                             journal
@@ -917,13 +932,7 @@ module PluginTransforms =
 
                                                 let! interruption = sessionPort.InterruptAttempt exactSessionId
 
-                                                return
-                                                    interruption
-                                                    |> Result.defaultWith (fun error ->
-                                                        invalidOp (
-                                                            "MANAGER-LOOP-004: retired attempt interrupt failed: "
-                                                            + error
-                                                        ))
+                                                return interruption |> Result.defaultWith handleInterruptionError
                                         })
                                     sid)
                             sidOpt

@@ -10,6 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import { collectVerificationInputs, computeDigest, diffVerificationInputs } from './lib/build-state.mjs'
+import { ensureNativeOpencode } from './lib/ensure-native-opencode.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -56,7 +57,11 @@ export function verificationSteps({ root = ROOT, release = false, verbose = fals
         verbose,
         hostEnv,
         extra: {
-          ...(process.env.UNIT_VERDICT_SILENCE_MS ? { UNIT_VERDICT_SILENCE_MS: process.env.UNIT_VERDICT_SILENCE_MS } : {}),
+          ...(hostEnv.UNIT_VERDICT_SILENCE_MS ? { UNIT_VERDICT_SILENCE_MS: hostEnv.UNIT_VERDICT_SILENCE_MS } : {}),
+          ...(hostEnv.SUITE_BACKSTOP_MS ? { SUITE_BACKSTOP_MS: hostEnv.SUITE_BACKSTOP_MS } : {}),
+          ...(hostEnv.WXS_VERIFICATION_WORKER_DIAGNOSTICS ? { WXS_VERIFICATION_WORKER_DIAGNOSTICS: hostEnv.WXS_VERIFICATION_WORKER_DIAGNOSTICS } : {}),
+          ...(hostEnv.NODE_TEST_CONCURRENCY ? { NODE_TEST_CONCURRENCY: hostEnv.NODE_TEST_CONCURRENCY } : {}),
+          ...(hostEnv.WXS_ACCEPT_TODO ? { WXS_ACCEPT_TODO: hostEnv.WXS_ACCEPT_TODO } : {}),
         },
       }),
     },
@@ -223,6 +228,7 @@ export async function verify({
   env: hostEnv = process.env,
 } = {}) {
   const resolvedRoot = path.resolve(root)
+  ensureNativeOpencode({ root: resolvedRoot })
   const baseLogDir = logDirectory ? path.resolve(logDirectory) : path.join(resolvedRoot, '.fable-build', 'verify-logs')
   const runLogDir = allocateRunLogDir(baseLogDir)
 

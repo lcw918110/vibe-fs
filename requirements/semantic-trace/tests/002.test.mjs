@@ -204,7 +204,7 @@ const { default: assert } = await import('node:assert/strict')
 const trace = await import('../../../dist/Context/Trace/SemanticTraceSurface.js')
 const { PlanningSurface } = await import('../../../dist/Mission/Planning/Surface.js')
 
-test('WHAT[semantic-trace-002] WHAT[planning-017] later parts and reanchor copies cannot move a retired physical exchange into the current tenure', () => {
+test('WHAT[semantic-trace-002] later parts and reanchor copies cannot move a retired physical exchange into the current tenure', () => {
   let projection = trace.emptyProjection()
   for (const [sequence, messageId, generation, kind] of [
     [1, 'user-opening', 0, 'text'],

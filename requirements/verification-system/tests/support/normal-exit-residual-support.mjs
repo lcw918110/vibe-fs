@@ -142,6 +142,7 @@ async function holdResource(directory) {
 async function superviseResidual(directory, fixture) {
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
+  delete env.WXS_VERIFICATION_WORKER_DIAGNOSTICS
   const foreignOwner = ownChild(spawn(process.execPath, [nativePath, 'resource', directory], {
     env, detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
   }))

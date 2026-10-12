@@ -556,7 +556,7 @@ integrationTest('WHAT[durable-events-022] pure append results compile every sett
     '    let missing = AppendReceipt.cutFor eventId AppendReceipt.empty',
     '    let envelope: EventEnvelope =',
     '        { EventId = eventId; StreamId = streamId; EventType = "probe";',
-    '          Parents = []; Payload = Thoth.Json.Encode.object []; PayloadRefs = [] }',
+    '          Parents = []; Payload = Thoth.Json.Encode.object []; PayloadRefs = []; Payloads = Map.empty }',
     '    let prepared: PreparedAppend = { DurableEvents = [envelope]; Cuts = [cut] }',
     '    let cause = System.InvalidOperationException "native cause"',
     '    let phases =',

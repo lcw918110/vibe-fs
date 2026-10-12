@@ -15,8 +15,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureNativeOpencode } from './lib/ensure-native-opencode.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+ensureNativeOpencode({ root })
 
 function resolveBin() {
   if (process.env.OPENCODE_BIN) return process.env.OPENCODE_BIN

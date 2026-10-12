@@ -566,7 +566,7 @@ test('WHAT[dispatch-protocol-007] fresh claim projection begins with no observed
 {
 const { default: assert } = await import("node:assert/strict");
 const { execFileSync } = await import("node:child_process");
-const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+const { existsSync, mkdtempSync, readFileSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
 const { default: test } = await import("node:test");
@@ -651,10 +651,14 @@ const waitForSettledClaims = async (handle, session, count, message) => {
     await new Promise((resolve) => setImmediate(resolve))
   }
 }
-const journalLines = (base, writerId) =>
-  readFileSync(join(base, '.git', 'wanxiangshu', 'events', `${writerId}.ndjson`), 'utf8')
+const journalLines = (base, writerId) => {
+  const eventsDir = join(base, '.git', 'wanxiangshu', 'events')
+  const legacy = join(eventsDir, `${writerId}.ndjson`)
+  const target = existsSync(legacy) ? legacy : join(eventsDir, `${writerId}-0000.ndjson`)
+  return readFileSync(target, 'utf8')
     .trim()
     .split('\n')
+}
 const openGitJournal = async (base, writerId, runtimeId) => {
   execFileSync('git', ['init', '--quiet', base])
   const opened = await journal.JournalSurface_bootWithWriterId(

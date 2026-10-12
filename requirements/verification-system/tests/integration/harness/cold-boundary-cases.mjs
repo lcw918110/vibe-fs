@@ -477,7 +477,10 @@ export const coldBoundaryCases = [
     fn: () => {
       // Nothing is sealed yet, so no break can happen there. Accepting it silently
       // would make the declaration decorative.
-      assertEq(decide(null, FIRST, at('epoch-switch')).broken, 'boundary-not-reached');
+      // Note: epoch-switch/prefix-probe/frame-commit/manager-loop are multi-delivery
+      // held exemptions. A single-delivery boundary like fallback-side must report
+      // boundary-not-reached on first request.
+      assertEq(decide(null, FIRST, at('fallback-side')).broken, 'boundary-not-reached');
     },
   },
 

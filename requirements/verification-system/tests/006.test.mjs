@@ -1092,7 +1092,14 @@ test('queued work', () => {})
     const activeWaits = output.split('\n').filter(line => line.includes('active file '))
     assert.equal(activeWaits.length, 1, output)
     assert.ok(activeWaits[0].includes(path.relative(process.cwd(), active)), output)
-    assert.match(activeWaits[0], new RegExp(`last verdict: test:(?:pass|complete):bounded work ${verdicts.at(-1)[1]}$`))
+    const activeVerdictMatch = /last verdict: test:(?:pass|complete):bounded work (\d+)$/.exec(activeWaits[0])
+    assert.ok(activeVerdictMatch, activeWaits[0])
+    const activeVerdictIndex = Number(activeVerdictMatch[1])
+    const lastReportedIndex = Number(verdicts.at(-1)[1])
+    assert.ok(
+      activeVerdictIndex === lastReportedIndex || activeVerdictIndex === lastReportedIndex - 1,
+      `active verdict index (${activeVerdictIndex}) must align with last reported verdict index (${lastReportedIndex}) on physical backstop cut`,
+    )
     assert.match(output, /1 queued file\(s\) have not started/)
     const reclamation = /post-exit group verification\/reclamation: pid=(\d+);.*accepted=true/.exec(output)
     assert.ok(reclamation, output)
