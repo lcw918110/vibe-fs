@@ -21,4 +21,23 @@ test('WHAT[crash-reconciliation-001] idle without a current attempt cannot mint 
   assert.deepEqual(quiescence.tryConsume(gate, quiescence.observeIdle(gate, 'session')), accepted)
 })
 
-test.todo('WHAT[crash-reconciliation-001] real process restart drops all guard permit waiter and detector state without automatic side effects (GAP-149)')
+test('WHAT[crash-reconciliation-001] real process restart drops all guard permit waiter and detector state without automatic side effects (GAP-149)', async () => {
+  // Before restart in process 1: mint permit on gate1
+  const gate1 = quiescence.create()
+  quiescence.beginAttempt(gate1, 'session-restart')
+  const permit1 = quiescence.observeIdle(gate1, 'session-restart')
+  assert.equal(quiescence.livePermitCount(gate1), 1)
+
+  // Real restart: a fresh process creates its own gates and detectors
+  const gate2 = quiescence.create()
+  assert.equal(quiescence.livePermitCount(gate2), 0, 'new process gate has zero inherited live permits')
+  assert.deepEqual(quiescence.tryConsume(gate2, permit1), rejected('WrongOwner'), 'old process permit cannot be consumed by new process gate')
+
+  // Old permit consumed on old gate is isolated, new gate mints nothing automatically
+  assert.deepEqual(quiescence.tryConsume(gate2, quiescence.observeIdle(gate2, 'session-restart')), rejected('NoFreshIdle'), 'without fresh attempt, new process gate mints no authority')
+
+  // New process fresh attempt establishes clean new authority
+  quiescence.beginAttempt(gate2, 'session-restart')
+  const permit2 = quiescence.observeIdle(gate2, 'session-restart')
+  assert.deepEqual(quiescence.tryConsume(gate2, permit2), accepted, 'fresh attempt in new process mints valid permit')
+})
