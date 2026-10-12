@@ -231,7 +231,7 @@ const withAdmissionFixture = async (status, body) => {
       targetBranch: 'main',
       orchestratorId: 'orchestrator-clean-gate',
     })
-    const writerFile = join(fx.repo, '.git', 'wanxiangshu', 'events', 'writer-clean-gate.ndjson')
+    const writerFile = join(fx.repo, '.git', 'wanxiangshu', 'events', 'writer-clean-gate-0000.ndjson')
     const readHistory = () => {
       try {
         return readFileSync(writerFile, 'utf8')
