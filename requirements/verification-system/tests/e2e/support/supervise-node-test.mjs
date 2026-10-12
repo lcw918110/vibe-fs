@@ -379,8 +379,10 @@ async function superviseOwnedNodeTest({ files, label, silenceMs, env, logPrefix,
   const backstop = setTimeout(() => {
     backstopFired = true
     console.error(`${logPrefix}: suite exceeded the ${SUITE_BACKSTOP_MS}ms physical backstop`)
-    reportFileWaits()
-    requestTermination()
+    setImmediate(() => {
+      reportFileWaits()
+      requestTermination()
+    })
   }, SUITE_BACKSTOP_MS)
   backstop.unref()
 
