@@ -50,7 +50,34 @@ integrationTest('WHAT[verification-system-016] selected complete Git source and 
 integrationTest('WHAT[verification-system-016] four selected input owners compile the original foundation identity project with Fable into isolated outputs', { skip: !hasExplicitReadonlyContext() }, repositoryFableProjectTest)
 integrationTest('WHAT[verification-system-016] mac readonly views protect actual original-project Fable inputs and restore all prepared owners', { skip: process.platform !== 'darwin' || !hasExplicitReadonlyContext() }, repositoryReadonlyFableProjectTest)
 
-test.todo('WHAT[verification-system-016] the actual verification run binds its evidence to the same immutable candidate snapshot')
+test('WHAT[verification-system-016] the actual verification run binds its evidence to the same immutable candidate snapshot', async () => {
+  const fixture = setupFixtureRepo()
+  const tmpLogs = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-candidate-logs-'))
+  let buf = ''
+  const sink = { write(chunk) { buf += chunk } }
+
+  try {
+    const expectedInputs = collectVerificationInputs(fixture)
+    const expectedDigest = computeDigest(expectedInputs)
+
+    const cleanStep = async ({ label }) => ({ label, ok: true, exitCode: 0, signal: null, durationMs: 2 })
+    const result = await verify({
+      root: fixture,
+      release: false,
+      runStep: cleanStep,
+      output: sink,
+      logDirectory: tmpLogs,
+    })
+
+    assert.equal(result.exitCode, 0)
+    assert.equal(result.outcome, 'pass')
+    assert.equal(typeof result.candidateDigest, 'string', 'verification result must carry candidateDigest evidence')
+    assert.equal(result.candidateDigest, expectedDigest, 'candidateDigest must match the exact immutable snapshot digest')
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true })
+    fs.rmSync(tmpLogs, { recursive: true, force: true })
+  }
+})
 import { collectGeneratedInputs, collectVerificationInputs, computeDigest, diffVerificationInputs } from '../../../scripts/lib/build-state.mjs'
 import { verify } from '../../../scripts/verify.mjs'
 

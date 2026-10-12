@@ -61,6 +61,39 @@ if (mode === 'pipe-close') {
   try { process.stderr.destroy() } catch {}
 }
 
+if (mode === 'rejection') {
+  const hooks = await import('../../../../dist/OpenCode/Host/PluginHooksSurface.js')
+  const policy = hooks.hookFailurePolicy('ProtocolRejection', 'NoOwnedExecution')
+  if (policy !== 'RethrowUnchanged') {
+    throw new Error(`Expected RethrowUnchanged policy for ProtocolRejection, got ${policy}`)
+  }
+  console.log(JSON.stringify({ mode, nonfatal: true, policy }))
+  process.exit(0)
+}
+
+if (mode === 'stale-callback') {
+  const hooks = await import('../../../../dist/OpenCode/Host/PluginHooksSurface.js')
+  const policy = hooks.hookFailurePolicy('Superseded', 'ExactSettlementComplete')
+  if (policy !== 'RethrowUnchanged') {
+    throw new Error(`Expected RethrowUnchanged policy for Superseded, got ${policy}`)
+  }
+  console.log(JSON.stringify({ mode, nonfatal: true, policy }))
+  process.exit(0)
+}
+
+if (mode === 'exhaustion') {
+  const budgetModule = await import('../../../../dist/Participant/Provider/Attempt/FailureBudget.js')
+  let budget = budgetModule.ProviderFailureBudget_initial
+  budget = budgetModule.ProviderFailureBudget_recordFailure(budget)
+  budget = budgetModule.ProviderFailureBudget_recordFailure(budget)
+  const verdict = budgetModule.ProviderFailureBudget_verdict(2, budget)
+  if (verdict.tag !== 1) { // 1 = Exhausted
+    throw new Error(`Expected Exhausted verdict, got tag=${verdict.tag}`)
+  }
+  console.log(JSON.stringify({ mode, nonfatal: true, verdict: 'Exhausted' }))
+  process.exit(0)
+}
+
 if (mode === 'diagnostic' || mode === 'diagnostic-console-throw') {
   const { fatal } = await import('../../../../dist/OpenCode/Host/Diagnostic.js')
   console.log('before-fatal')
