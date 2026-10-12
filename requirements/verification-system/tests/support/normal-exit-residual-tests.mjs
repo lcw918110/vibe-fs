@@ -28,6 +28,7 @@ test('actual same-group resource outlives its normally passing leaf', () => leav
 `)
       const env = { ...process.env, TMPDIR: directory }
       delete env.NODE_TEST_CONTEXT
+      delete env.WXS_VERIFICATION_WORKER_DIAGNOSTICS
       launcher = spawn(process.execPath, [fileURLToPath(support), 'supervise', directory, fixture], {
         env, stdio: ['ignore', 'pipe', 'pipe'],
       })
