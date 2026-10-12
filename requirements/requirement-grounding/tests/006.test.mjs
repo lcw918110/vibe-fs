@@ -419,7 +419,13 @@ test('WHAT[requirement-grounding-006] historical material observations retain th
       return decoded.event
     })
     const writerId = randomUUID()
-    const writerFile = join(dir, 'wanxiangshu', 'events', writerId + '.ndjson')
+    const resolveWriterFile = () => {
+      const eventsDir = join(dir, 'wanxiangshu', 'events')
+      const legacy = join(eventsDir, writerId + '.ndjson')
+      if (existsSync(legacy)) return legacy
+      return join(eventsDir, writerId + '-0000.ndjson')
+    }
+    const writerFile = resolveWriterFile()
     assert.equal(existsSync(writerFile), false, 'this process creates a new physical fixture writer')
     const activity = {
       id: 'd'.repeat(40),
@@ -435,7 +441,7 @@ test('WHAT[requirement-grounding-006] historical material observations retain th
       const appendedHistory = await eventStore.append(writer, historicalEvents)
       assert.equal(appendedHistory.ok, true, JSON.stringify(appendedHistory.error))
       assert.deepEqual(appendedHistory.cuts, [])
-      assert.deepEqual(readFileSync(writerFile), Buffer.from(frozen))
+      assert.deepEqual(readFileSync(resolveWriterFile()), Buffer.from(frozen))
       for (const event of historicalEvents) assert.deepEqual(eventStore.read(writer, event.id), event)
       const appended = await eventStore.append(writer, [activity])
       assert.equal(appended.ok, true, JSON.stringify(appended.error))
@@ -445,7 +451,7 @@ test('WHAT[requirement-grounding-006] historical material observations retain th
     } finally {
       eventStore.dispose(writer)
     }
-    const retained = readFileSync(writerFile)
+    const retained = readFileSync(resolveWriterFile())
     const prefix = Buffer.from(frozen)
     assert.deepEqual(retained.subarray(0, prefix.length), prefix, 'new activity must preserve every historical byte')
     const tail = retained.subarray(prefix.length).toString('utf8').trim().split('\n').map(JSON.parse)

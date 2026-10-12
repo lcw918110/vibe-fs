@@ -31,6 +31,7 @@ try {
   // payloads directory must never exist.
   assert.equal(existsSync(join(commonDir, 'wanxiangshu', 'payloads')), false)
   assert.equal(existsSync(join(eventsDirectory, 'd0g-independent-cold.ndjson')), false)
+  assert.equal(existsSync(join(eventsDirectory, 'd0g-independent-cold-0000.ndjson')), false)
   assert.equal(existsSync(join(commonDir, 'wanxiangshu.lock')), false)
   process.stdout.write(JSON.stringify({ pid: process.pid, verified: true }) + '\n')
 } finally {

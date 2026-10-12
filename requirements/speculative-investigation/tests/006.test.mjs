@@ -349,7 +349,7 @@ test('WHAT[speculative-investigation-006] STRENGTH_006_authorization_payload_has
 
 {
 const {default: assert} = await import('node:assert/strict')
-const {mkdtempSync, realpathSync, readFileSync, rmSync} = await import('node:fs')
+const {existsSync, mkdtempSync, realpathSync, readFileSync, rmSync} = await import('node:fs')
 const {randomUUID} = await import('node:crypto')
 const {tmpdir} = await import('node:os')
 const {join} = await import('node:path')
@@ -386,7 +386,11 @@ for (const scenario of ['store', 'append', 'prepared', 'duplicate']) {
       assert.notEqual(cold.pid, measured.pid)
       assert.deepEqual(cold.event, measured.event)
       assert.deepEqual(cold.candidate, measured.candidate)
-      assert.equal(readFileSync(join(commonDir, 'wanxiangshu', 'events', `${sourceWriter}.ndjson`), 'base64'), measured.bytes)
+      const eventsDir = join(commonDir, 'wanxiangshu', 'events')
+      const actualFile = existsSync(join(eventsDir, `${sourceWriter}.ndjson`))
+        ? join(eventsDir, `${sourceWriter}.ndjson`)
+        : join(eventsDir, `${sourceWriter}-0000.ndjson`)
+      assert.equal(readFileSync(actualFile, 'base64'), measured.bytes)
       t.diagnostic(JSON.stringify({scenario, physicalAndCold: true, measurePid: measured.pid, coldPid: cold.pid}))
       assert.equal(measured.threw, false, 'The consumer returns the settled outcome after the original Release failure')
       assert.equal(measured.causeSame, true)

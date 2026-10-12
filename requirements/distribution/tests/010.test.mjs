@@ -21,20 +21,21 @@ test('WHAT[distribution-010] repository resources and emitted role/tool declarat
     'engineer',
     'manager',
     'orchestrator',
+    'plan',
   ].sort()
 
   assert.deepEqual(
     actualRoles,
     expectedActiveRoles,
-    'resources/provider/role must strictly equal the 6 active roles with zero legacy residue',
+    'resources/provider/role must strictly equal the 7 active roles with zero legacy residue',
   )
 
-  // 2. RolesSurface 必须包含 5 个公开活跃角色，且严格排除全部 5 个已废止角色
+  // 2. RolesSurface 必须包含 6 个公开活跃角色，且严格排除全部 5 个已废止角色
   const rolesSurface = await import('../../../dist/Foundation/RolesSurface.js')
-  const activeRoles5 = ['manager', 'orchestrator', 'engineer', 'devops', 'blogger']
+  const activeRoles = ['manager', 'orchestrator', 'engineer', 'devops', 'blogger', 'plan']
   const deprecatedRoles5 = ['coder', 'inspector', 'browser', 'inquiry', 'distiller']
 
-  for (const role of activeRoles5) {
+  for (const role of activeRoles) {
     assert.ok(
       rolesSurface.allRoleLabels.includes(role),
       `Roles surface must contain active role ${role}`,

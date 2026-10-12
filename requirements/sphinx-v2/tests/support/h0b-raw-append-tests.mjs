@@ -126,7 +126,9 @@ export function registerH0bRawAppendTests({ inquiry, seed, request }) {
         assert.deepEqual(completed.event, sealed.event)
         assert.deepEqual(completed.receipt, { ok: true, cuts: [] })
         assert.equal(completed.writerBytes, Buffer.from(codec.encode(sealed.event), 'utf8').toString('base64'))
-        assert.equal(filesAt(commonDir)[`${sealed.writerId}.ndjson`], completed.writerBytes,
+        const allFiles = filesAt(commonDir)
+        const writtenBytes = allFiles[`${sealed.writerId}.ndjson`] ?? allFiles[`${sealed.writerId}-0000.ndjson`]
+        assert.equal(writtenBytes, completed.writerBytes,
           'Each actual OS contender appended its original complete canonical bytes to its own writer')
         expectPending(completed.current, request)
         assert.deepEqual(completed.heads, [sealed.event.id])

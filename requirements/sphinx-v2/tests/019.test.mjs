@@ -527,7 +527,12 @@ for (const scenario of ['valid', 'malformed', 'valid-release', 'malformed-releas
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'sphinx-append-cut-')))
     const commonDir = join(root, '.git')
     const sourceWriter = randomUUID()
-    const sourceFile = join(commonDir, 'wanxiangshu', 'events', `${sourceWriter}.ndjson`)
+    const eventsDir = join(commonDir, 'wanxiangshu', 'events')
+    const resolveSourceFile = () => {
+      const legacy = join(eventsDir, `${sourceWriter}.ndjson`)
+      if (existsSync(legacy)) return legacy
+      return join(eventsDir, `${sourceWriter}-0000.ndjson`)
+    }
     const raw = batch('native-cut-' + scenario, 'native-settlement-' + scenario, [createdBody(text)])
     const malformed = scenario.startsWith('malformed')
     const release = scenario.endsWith('-release')
@@ -562,7 +567,7 @@ for (const scenario of ['valid', 'malformed', 'valid-release', 'malformed-releas
       assert.equal(measured.causeSame, release)
       assert.equal(measured.originalErrorSame, release ? true : null)
       assert.equal(measured.cutIds.length, malformed ? 1 : 0)
-      assert.equal(readFileSync(sourceFile, 'base64'), measured.bytes)
+      assert.equal(readFileSync(resolveSourceFile(), 'base64'), measured.bytes)
       assert.equal(existsSync(join(commonDir, 'wanxiangshu.lock')), false)
 
       const coldWriter = randomUUID()
@@ -575,7 +580,7 @@ for (const scenario of ['valid', 'malformed', 'valid-release', 'malformed-releas
       assert.equal(cold.writerId, coldWriter)
       assert.equal(cold.preserved, true)
       assert.deepEqual(cold.current, measured.current)
-      assert.equal(readFileSync(sourceFile, 'base64'), measured.bytes)
+      assert.equal(readFileSync(resolveSourceFile(), 'base64'), measured.bytes)
       assert.equal(existsSync(join(commonDir, 'wanxiangshu', 'events', `${coldWriter}.ndjson`)), false)
       t.diagnostic(JSON.stringify({ scenario, measurePid: measured.pid, coldPid: cold.pid,
         physicalAndCold: true, ...measured.counts, kind: measured.kind, cutIds: measured.cutIds }))

@@ -6,7 +6,7 @@ afterEach(() => new Promise(resolve => setImmediate(resolve)))
 {
 const { default: assert } = await import('node:assert/strict')
 const { default: fc } = await import('fast-check')
-const { chmodSync, mkdtempSync, rmSync } = await import('node:fs')
+const { chmodSync, existsSync, mkdtempSync, rmSync } = await import('node:fs')
 const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const blog = await import('../../../dist/Enforcer/BlogSurface.js')
@@ -130,7 +130,12 @@ const setupOwner = async (t) => {
     ports,
     calls,
     dir,
-    writerFile: join(dir, 'wanxiangshu', 'events', `writer-blog-${n}.ndjson`),
+    get writerFile() {
+      const eventsDir = join(dir, 'wanxiangshu', 'events')
+      const legacy = join(eventsDir, `writer-blog-${n}.ndjson`)
+      if (existsSync(legacy)) return legacy
+      return join(eventsDir, `writer-blog-${n}-0000.ndjson`)
+    },
   }
 }
 const idleObservation = (ports, ids, run, { quiescent = true } = {}) => ({

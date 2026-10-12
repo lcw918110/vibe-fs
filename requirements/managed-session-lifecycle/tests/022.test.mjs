@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -366,8 +366,14 @@ test('WHAT[managed-session-lifecycle-022] original child and owner deletion arch
     }
     let completedBookkeeper = false
     try {
+      const eventsDir = join(directory, '.git', 'wanxiangshu', 'events')
+      const resolveDecoyFile = () => {
+        const legacy = join(eventsDir, 'd0g-decoy.ndjson')
+        if (existsSync(legacy)) return legacy
+        return join(eventsDir, 'd0g-decoy-0000.ndjson')
+      }
       assert.deepEqual(dispatch.projectionObservation(runtime.journal, sent.child).activeLogicalRun, childProfile)
-      assert.deepEqual(readFileSync(join(directory, '.git', 'wanxiangshu', 'events', 'd0g-decoy.ndjson')), decoy.bytes)
+      assert.deepEqual(readFileSync(resolveDecoyFile()), decoy.bytes)
       await hooks.event({ event: { type: 'session.deleted',
         properties: { sessionID: sent.child, parentID: manager } } })
       assert.equal(pluginLifecycle.attachedEngineer(originalRuntime, manager), null)
@@ -408,7 +414,8 @@ test('WHAT[managed-session-lifecycle-022] original child and owner deletion arch
         assert.equal(Buffer.from(heldFiles[file], 'base64').subarray(0, prefix.length).equals(prefix), true,
           `${file} retains its original canonical prefix while child cleanup may append`)
       }
-      assert.equal(heldFiles['d0g-decoy.ndjson'], decoy.bytes.toString('base64'))
+      const heldKey = Object.keys(heldFiles).find(k => k === 'd0g-decoy.ndjson' || k.startsWith('d0g-decoy-'))
+      assert.equal(heldFiles[heldKey], decoy.bytes.toString('base64'))
       assert.equal(d0Facts(heldFiles).filter(({ event }) => event.event_type === 'EngineerCaseCaptured'
         && event.payload.identity === sent.child).length, 0)
       assert.deepEqual(casebookIndex.tryGet(), beforeIndex)
@@ -432,7 +439,8 @@ test('WHAT[managed-session-lifecycle-022] original child and owner deletion arch
         assert.equal(Buffer.from(afterFiles[file], 'base64').subarray(0, Buffer.from(encoded, 'base64').length)
           .equals(Buffer.from(encoded, 'base64')), true, `${file} retains its original canonical prefix`)
       }
-      assert.equal(afterFiles['d0g-decoy.ndjson'], decoy.bytes.toString('base64'))
+      const afterKey = Object.keys(afterFiles).find(k => k === 'd0g-decoy.ndjson' || k.startsWith('d0g-decoy-'))
+      assert.equal(afterFiles[afterKey], decoy.bytes.toString('base64'))
       const cases = d0Facts(afterFiles).filter(({ event }) => event.event_type === 'EngineerCaseCaptured')
       assert.equal(cases.length, 2)
       const captured = cases.find(({ event }) => event.payload.identity === sent.child).event
@@ -468,7 +476,7 @@ test('WHAT[managed-session-lifecycle-022] original child and owner deletion arch
       assert.notEqual(observation.pid, process.pid)
       assert.equal(observation.verified, true)
       assert.deepEqual(d0EventFiles(directory), afterFiles)
-      assert.deepEqual(readFileSync(join(directory, '.git', 'wanxiangshu', 'events', 'd0g-decoy.ndjson')), decoy.bytes)
+      assert.deepEqual(readFileSync(resolveDecoyFile()), decoy.bytes)
       assert.ok(result.workRecord.includes(answer))
     } finally {
       release.resolve()
@@ -489,10 +497,14 @@ test('WHAT[managed-session-lifecycle-022] original child and owner deletion arch
       const baseline = await casebook.freezeCompletionState(handle, directory, ['d0g-decoy.txt'])
       assert.equal((await casebook.finalizeEngineerCase(handle, decoyIdentity, 'd0g-decoy-trace',
         'D0-G prior decoy question', 'D0-G prior decoy answer', ['d0g-decoy.txt'], baseline)).kind, 'finalized')
+      const eventsDir = join(directory, '.git', 'wanxiangshu', 'events')
+      const decoyFile = existsSync(join(eventsDir, 'd0g-decoy.ndjson'))
+        ? join(eventsDir, 'd0g-decoy.ndjson')
+        : join(eventsDir, 'd0g-decoy-0000.ndjson')
       decoy = { current: await casebook.fetchCaseByIdentity(handle, decoyIdentity),
         fact: eventStore.read(handle, eventStore.head(handle, 'casebook')),
         payloadRef: JSON.parse(baseline)['d0g-decoy.txt'].payloadRef,
-        bytes: readFileSync(join(directory, '.git', 'wanxiangshu', 'events', 'd0g-decoy.ndjson')) }
+        bytes: readFileSync(decoyFile) }
       assert.equal(Buffer.from(await eventStore.readPayload(handle, decoy.payloadRef)).toString('utf8'), decoyText)
     } finally {
       eventStore.dispose(handle)

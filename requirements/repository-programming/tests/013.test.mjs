@@ -2,7 +2,7 @@ import test from 'node:test'
 
 {
 const { default: assert } = await import('node:assert/strict')
-const { mkdtempSync, readFileSync, rmSync } = await import('node:fs')
+const { existsSync, mkdtempSync, readFileSync, rmSync } = await import('node:fs')
 const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const { fileURLToPath } = await import('node:url')
@@ -38,7 +38,11 @@ for (const phase of ['Prepared', 'Committed']) {
         }))
         assert.notEqual(cold.pid, settled.pid)
         assert.equal(cold.preserved, true, 'a separate process accepts the exact JS fact and actual cut tail')
-        assert.equal(readFileSync(join(commonDir, 'wanxiangshu', 'events', `${writer}.ndjson`), 'base64'), settled.bytes)
+        const eventsDir = join(commonDir, 'wanxiangshu', 'events')
+        const actualFile = existsSync(join(eventsDir, `${writer}.ndjson`))
+          ? join(eventsDir, `${writer}.ndjson`)
+          : join(eventsDir, `${writer}-0000.ndjson`)
+        assert.equal(readFileSync(actualFile, 'base64'), settled.bytes)
         t.diagnostic(JSON.stringify({ phase, scenario, physicalPreconditions: true, measurePid: settled.pid, coldPid: cold.pid }))
         if (scenario === 'valid') {
           assert.equal(outcome.exitCode, 0)
