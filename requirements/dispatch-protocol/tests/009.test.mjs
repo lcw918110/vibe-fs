@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -81,10 +81,14 @@ const waitForSettledClaims = async (handle, session, count, message) => {
   }
 }
 
-const journalLines = (base, writerId) =>
-  readFileSync(join(base, '.git', 'wanxiangshu', 'events', `${writerId}.ndjson`), 'utf8')
+const journalLines = (base, writerId) => {
+  const eventsDir = join(base, '.git', 'wanxiangshu', 'events')
+  const legacy = join(eventsDir, `${writerId}.ndjson`)
+  const target = existsSync(legacy) ? legacy : join(eventsDir, `${writerId}-0000.ndjson`)
+  return readFileSync(target, 'utf8')
     .trim()
     .split('\n')
+}
 
 const openGitJournal = async (base, writerId, runtimeId) => {
   execFileSync('git', ['init', '--quiet', base])

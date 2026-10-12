@@ -430,6 +430,7 @@ module ToolRegistry =
                 | Ok c -> c
                 | Error _ -> ""
 
+            // DSL-MUTABLE: algorithm-scratch — staged mutation accumulator for Plan sandbox
             let stagedMutation = ref None
             let api = createPlanSandboxApi currentContent stagedMutation
             let baseClassSource = JsCanonicalDescription.runtimePlanBaseClass prose
@@ -836,9 +837,9 @@ module ToolRegistry =
         let planningSpecs () =
             [ { Name = "js-plan"
                 Description =
-                    JsCanonicalDescription.renderPlan
-                        jsProse
-                        (ProviderProse.render providerLanguage "tool/js-plan" Map.empty)
+                  JsCanonicalDescription.renderPlan
+                      jsProse
+                      (ProviderProse.render providerLanguage "tool/js-plan" Map.empty)
                 Arguments =
                   [ "program",
                     ToolHostCodec.stringSchemaDescribed

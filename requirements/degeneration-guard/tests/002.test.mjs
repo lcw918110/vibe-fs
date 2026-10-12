@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as detector from '../../../dist/Execution/Session/LoopDetectorSurface.js'
 import * as sensor from '../../../dist/OpenCode/Host/LoopSensorSurface.js'
+import * as HostSignalSurface from '../../../dist/OpenCode/Host/HostSignalSurface.js'
 import { awaitOwned, createSensor, rawDelta, repetitiveText } from './support/stream.mjs'
 
 test('WHAT[degeneration-guard-002] delta codec accepts textual fields and rejects unrelated events and fields', () => {
@@ -27,4 +28,11 @@ test('WHAT[degeneration-guard-002] non-text deltas cause no interruption before 
   assert.deepEqual(aborts, ['session'])
 })
 
-test.todo('WHAT[degeneration-guard-002] actual Host only supplies assistant text streams and cannot turn deltas into terminal authority or journal facts (GAP-145)')
+test('WHAT[degeneration-guard-002] actual Host only supplies assistant text streams and cannot turn deltas into terminal authority or journal facts (GAP-145)', () => {
+  const delta = rawDelta('session', 'text', repetitiveText(), 'run')
+  assert.equal(HostSignalSurface.tryDecode(delta), null)
+  assert.equal(HostSignalSurface.tryDecodePhysicalExecutionEnd(delta), null)
+  assert.equal(HostSignalSurface.tryDecodeExactProviderTerminal(delta), null)
+  assert.equal(HostSignalSurface.tryDecodeProviderStepEnd(delta), null)
+  assert.equal(HostSignalSurface.tryDecodeExactProviderStart(delta), null)
+})

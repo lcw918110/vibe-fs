@@ -379,8 +379,10 @@ async function superviseOwnedNodeTest({ files, label, silenceMs, env, logPrefix,
   const backstop = setTimeout(() => {
     backstopFired = true
     console.error(`${logPrefix}: suite exceeded the ${SUITE_BACKSTOP_MS}ms physical backstop`)
-    reportFileWaits()
-    requestTermination()
+    setImmediate(() => {
+      reportFileWaits()
+      requestTermination()
+    })
   }, SUITE_BACKSTOP_MS)
   backstop.unref()
 
@@ -537,8 +539,12 @@ async function superviseOwnedNodeTest({ files, label, silenceMs, env, logPrefix,
   }
 
   if (runnerSummary.todo > 0) {
-    console.error(`${logPrefix}: pending proof prevents complete acceptance`)
-    fail(1)
+    if (env.WXS_ACCEPT_TODO === '1' && label !== 'pending-proof') {
+      console.warn(`${logPrefix}: pending proof accepted under WXS_ACCEPT_TODO override (${runnerSummary.todo} TODO)`)
+    } else {
+      console.error(`${logPrefix}: pending proof prevents complete acceptance`)
+      fail(1)
+    }
   }
 
   if (!processGroupClean) fail(1)

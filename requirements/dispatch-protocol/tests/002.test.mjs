@@ -417,7 +417,7 @@ test('WHAT[dispatch-protocol-002] the exact claim is already durable while the t
 
 {
 const { default: assert } = await import('node:assert/strict')
-const { mkdtempSync, readFileSync, rmSync } = await import('node:fs')
+const { existsSync, mkdtempSync, readFileSync, rmSync } = await import('node:fs')
 const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const dispatch = await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
@@ -472,7 +472,10 @@ for (const newPhysicalInput of [false, true]) {
       })
       if (newPhysicalInput) {
         assert.equal(projection.pendingClaims.length, 0, 'the rejected dispatch must leave no pending claim')
-        const facts = readFileSync(join(base, 'wanxiangshu', 'events', `${writer}.ndjson`), 'utf8')
+        const eventsDir = join(base, 'wanxiangshu', 'events')
+        const legacy = join(eventsDir, `${writer}.ndjson`)
+        const target = existsSync(legacy) ? legacy : join(eventsDir, `${writer}-0000.ndjson`)
+        const facts = readFileSync(target, 'utf8')
           .trim().split('\n').map(line => JSON.parse(line).payload.Fact)
           .filter(fact => fact[0] === 'Agent' && fact[1][0] === 'Prompt')
           .map(fact => fact[1][1])

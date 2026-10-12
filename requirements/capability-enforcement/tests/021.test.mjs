@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test, { afterEach } from 'node:test'
 import fc from 'fast-check'
-import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as blog from '../../../dist/Enforcer/BlogSurface.js'
@@ -143,7 +143,12 @@ const setupOwner = async (t) => {
     ports,
     calls,
     dir,
-    writerFile: join(dir, 'wanxiangshu', 'events', `writer-blog-${n}.ndjson`),
+    get writerFile() {
+      const eventsDir = join(dir, 'wanxiangshu', 'events')
+      const legacy = join(eventsDir, `writer-blog-${n}.ndjson`)
+      if (existsSync(legacy)) return legacy
+      return join(eventsDir, `writer-blog-${n}-0000.ndjson`)
+    },
   }
 }
 

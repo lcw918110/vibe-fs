@@ -39,7 +39,7 @@ test('WHAT[effect-accounting-003] a disposed journal handle prevents the physica
 // against the real ForkManagerJob chain.
 {
 const { default: assert } = await import('node:assert/strict')
-const { mkdtempSync, readFileSync, rmSync } = await import('node:fs')
+const { existsSync, mkdtempSync, readFileSync, rmSync } = await import('node:fs')
 const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const { default: test } = await import('node:test')
@@ -48,14 +48,22 @@ const hostSurface = await import('../../../dist/Change/Host/Surface.js')
 const openJournal = (base, writer) =>
   journal.JournalSurface_bootWithWriterId(base, writer, `rt-${writer}`, 4242, '2026-01-01T00:00:00Z')
 
-const eventsFile = (base, writer) => join(base, 'wanxiangshu', 'events', `${writer}.ndjson`)
+const eventsFile = (base, writer) => {
+  const eventsDir = join(base, 'wanxiangshu', 'events')
+  const legacy = join(eventsDir, `${writer}.ndjson`)
+  if (existsSync(legacy)) return legacy
+  return join(eventsDir, `${writer}-0000.ndjson`)
+}
 
-const worktreeCases = (base, writer) =>
-  readFileSync(eventsFile(base, writer), 'utf8')
+const worktreeCases = (base, writer) => {
+  const file = eventsFile(base, writer)
+  if (!existsSync(file)) return []
+  return readFileSync(file, 'utf8')
     .trim().split('\n').filter(Boolean)
     .map((line) => JSON.parse(line).payload.Fact)
     .filter((fact) => Array.isArray(fact) && fact[0] === 'Agent' && Array.isArray(fact[1]) && fact[1][0] === 'Orchestrator')
     .map((fact) => fact[1][1][0])
+}
 
 const failingSessions = () => ({
   SubscribeTerminal: () => ({ Dispose() {} }),

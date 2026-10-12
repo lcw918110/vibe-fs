@@ -571,6 +571,7 @@ export function assertActiveRegistrations({ extractedPackageDir, root }) {
     'engineer',
     'manager',
     'orchestrator',
+    'plan',
   ].sort()
 
   if (JSON.stringify(actualRoles) !== JSON.stringify(expectedActiveRoles)) {

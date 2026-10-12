@@ -239,6 +239,14 @@ export class ProcessHost {
                 timeout: 2000,
               });
             } catch {}
+          } else if (process.platform === 'darwin') {
+            try {
+              const { execSync } = await import('node:child_process');
+              execSync(`lsof -ti tcp:${port} | xargs kill -9`, {
+                stdio: 'ignore',
+                timeout: 2000,
+              });
+            } catch {}
           }
           await checkSocketClosed(port, SOCKET_CHECK_TIMEOUT_MS);
         }
