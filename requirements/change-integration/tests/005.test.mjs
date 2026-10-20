@@ -443,7 +443,7 @@ const workspaceSurface = await import('../../../dist/OpenCode/Host/WorkspaceEven
 
 const withSeededRoad = async (sessionId, outcome, body) => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-conflict-handoff-'))
-  const stateRoot = journalSurface.JournalSurface_initializeStateRoot(root)
+  const stateRoot = await journalSurface.JournalSurface_initializeStateRoot(root)
   const store = workspaceSurface.acquire(stateRoot)
   try {
     const opened = await lifecycle.seedOpen(store, 'S4', sessionId, root, 0n)
@@ -472,7 +472,7 @@ test('WHAT[change-integration-005] a delivered tenure hands the road on instead 
     assert.equal(view.Delivered, true, 'the hand-off starts from a delivered retirement')
     assert.equal(view.ActiveId ?? null, null, 'a delivery leaves no open tenure')
 
-    const receipt = hostSurface.handOffDeliveredTenure(root, 'ses-conflict-handoff', 'hand-off:conflict-1', 3)
+    const receipt = await hostSurface.handOffDeliveredTenure(root, 'ses-conflict-handoff', 'hand-off:conflict-1', 3)
     assert.equal(receipt.ok, true, receipt.error)
     assert.equal(receipt.kind, 'HandOff')
 
@@ -488,9 +488,9 @@ test('WHAT[change-integration-005] a delivered tenure hands the road on instead 
     // The program reads this signal before it waits. The delivered candidate is
     // consumed by the open next tenure, so a conflict continuation cannot
     // re-prepare the same refused candidate in an unbounded loop.
-    assert.equal(hostSurface.loopSignalOf(root, 'ses-conflict-handoff').kind, 'None')
+    assert.equal((await hostSurface.loopSignalOf(root, 'ses-conflict-handoff')).kind, 'None')
 
-    const again = hostSurface.handOffDeliveredTenure(root, 'ses-conflict-handoff', 'hand-off:conflict-1', 3)
+    const again = await hostSurface.handOffDeliveredTenure(root, 'ses-conflict-handoff', 'hand-off:conflict-1', 3)
     assert.equal(again.ok, true, again.error)
     assert.equal(again.kind, 'AlreadyWalking', 'a repeated hand-off opens no second tenure')
     assert.equal(again.incumbencyId, receipt.incumbencyId)
@@ -500,7 +500,7 @@ test('WHAT[change-integration-005] a delivered tenure hands the road on instead 
 
 test('WHAT[change-integration-005] the hand-off refuses to invent the cursor it never observed', async () => {
   await withSeededRoad('ses-conflict-no-cursor', 'Promoted', async ({ root, stateRoot, view }) => {
-    const refused = hostSurface.handOffDeliveredTenure(root, 'ses-conflict-no-cursor', 'hand-off:conflict-2', null)
+    const refused = await hostSurface.handOffDeliveredTenure(root, 'ses-conflict-no-cursor', 'hand-off:conflict-2', null)
     assert.equal(refused.ok, false)
     assert.equal(refused.kind, 'Refused')
     assert.match(refused.error, /observed head cursor/)
@@ -515,7 +515,7 @@ test('WHAT[change-integration-005] the hand-off refuses to invent the cursor it 
 test('WHAT[change-integration-005] a relayed tenure needs no hand-off: its successor already walks', async () => {
   await withSeededRoad('ses-conflict-relayed', 'Stayed', async ({ root, stateRoot, view }) => {
     assert.equal(view.ActiveId.length > 0, true, 'a relay opens its successor in the same record')
-    const observed = hostSurface.handOffDeliveredTenure(root, 'ses-conflict-relayed', 'hand-off:relayed', 3)
+    const observed = await hostSurface.handOffDeliveredTenure(root, 'ses-conflict-relayed', 'hand-off:relayed', 3)
     assert.equal(observed.ok, true, observed.error)
     assert.equal(observed.kind, 'AlreadyWalking')
     assert.equal(observed.incumbencyId, view.ActiveId, 'the relay successor stays the active tenure')
@@ -545,7 +545,7 @@ const workspaceSurface = await import('../../../dist/OpenCode/Host/WorkspaceEven
 test('WHAT[change-integration-005] the publish gate reads the review of the tenure that delivered the candidate', async () => {
   const sessionId = 'ses-conflict-publish-review'
   const root = mkdtempSync(join(tmpdir(), 'wxs-conflict-publish-'))
-  const stateRoot = journalSurface.JournalSurface_initializeStateRoot(root)
+  const stateRoot = await journalSurface.JournalSurface_initializeStateRoot(root)
   const store = workspaceSurface.acquire(stateRoot)
   try {
     const opened = await lifecycle.seedOpen(store, 'S4', sessionId, root, 0n)
@@ -557,24 +557,24 @@ test('WHAT[change-integration-005] the publish gate reads the review of the tenu
     // open, and the gate must still see the Promoted review that produced it.
     await lifecycle.seedDeliver(store, sessionId, 'run-2', 'call-2', 2n)
     assert.equal(lifecycle.inspected(stateRoot, sessionId).Delivered, true)
-    const delivered = hostSurface.publishReviewOf(root, sessionId)
+    const delivered = await hostSurface.publishReviewOf(root, sessionId)
     assert.equal(delivered.kind, 'Reviewed', 'the delivering round review must qualify publishing')
     assert.equal(delivered.outcome, 'Promoted')
 
     // The hand-off opens the next tenure; until that tenure reviews, the gate refuses.
-    const receipt = hostSurface.handOffDeliveredTenure(root, sessionId, 'hand-off:publish-review', 3)
+    const receipt = await hostSurface.handOffDeliveredTenure(root, sessionId, 'hand-off:publish-review', 3)
     assert.equal(receipt.kind, 'HandOff', receipt.error)
-    assert.equal(hostSurface.publishReviewOf(root, sessionId).kind, 'Refused', 'an unreviewed next tenure cannot publish')
+    assert.equal((await hostSurface.publishReviewOf(root, sessionId)).kind, 'Refused', 'an unreviewed next tenure cannot publish')
 
     // Re-reviewed next tenure: its own review qualifies, and after it delivers the
     // review survives its retirement again.
     assert.equal((await lifecycle.seedReview(store, sessionId, 'Promoted')).ok, true)
-    assert.equal(hostSurface.publishReviewOf(root, sessionId).outcome, 'Promoted')
+    assert.equal((await hostSurface.publishReviewOf(root, sessionId)).outcome, 'Promoted')
     assert.equal((await lifecycle.seedDeliver(store, sessionId, 'run-3', 'call-3', 4n)).ok, true)
     await lifecycle.seedDeliver(store, sessionId, 'run-4', 'call-4', 5n)
     assert.equal(lifecycle.inspected(stateRoot, sessionId).Delivered, true)
     assert.equal(
-      hostSurface.publishReviewOf(root, sessionId).kind,
+      (await hostSurface.publishReviewOf(root, sessionId)).kind,
       'Reviewed',
       'the second delivery must not erase the review evidence the gate needs',
     )
@@ -587,7 +587,7 @@ test('WHAT[change-integration-005] the publish gate reads the review of the tenu
 test('WHAT[change-integration-005] a relayed round review never qualifies a publish', async () => {
   const sessionId = 'ses-conflict-relay-review'
   const root = mkdtempSync(join(tmpdir(), 'wxs-conflict-relay-review-'))
-  const stateRoot = journalSurface.JournalSurface_initializeStateRoot(root)
+  const stateRoot = await journalSurface.JournalSurface_initializeStateRoot(root)
   const store = workspaceSurface.acquire(stateRoot)
   try {
     assert.equal((await lifecycle.seedOpen(store, 'S4', sessionId, root, 0n)).ok, true)
@@ -598,7 +598,7 @@ test('WHAT[change-integration-005] a relayed round review never qualifies a publ
     const view = lifecycle.inspected(stateRoot, sessionId)
     assert.equal(view.ActiveId.length > 0, true, 'the relay opened its successor')
     assert.equal(
-      hostSurface.publishReviewOf(root, sessionId).kind,
+      (await hostSurface.publishReviewOf(root, sessionId)).kind,
       'Refused',
       'a relay hand-off has no delivery whose review could qualify publishing',
     )

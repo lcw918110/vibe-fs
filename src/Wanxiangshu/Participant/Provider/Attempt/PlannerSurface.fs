@@ -1,7 +1,6 @@
 namespace Wanxiangshu.Participant.Provider.Attempt
 
 open Fable.Core.JsInterop
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
@@ -34,7 +33,6 @@ module AttemptPlannerSurface =
         | ToolPermission.Exec -> "Exec"
         | ToolPermission.Pty -> "Pty"
         | ToolPermission.ReviewAssessment -> "ReviewAssessment"
-        | ToolPermission.Chronicle -> "Chronicle"
         | ToolPermission.Fetch -> "Fetch"
         | ToolPermission.Finality -> "Finality"
         | ToolPermission.BashHoneypot -> "BashHoneypot"
@@ -49,25 +47,18 @@ module AttemptPlannerSurface =
         match label.ToLowerInvariant() with
         | "workmain"
         | "work-main" -> Some ProviderRequestKind.WorkMain
-        | "bloggermain"
-        | "blogger-main" -> Some ProviderRequestKind.BloggerMain
         | "interactionrepair"
         | "interaction-repair" -> Some ProviderRequestKind.InteractionRepair
-        | "strengthreplica"
-        | "strength-replica" -> Some ProviderRequestKind.StrengthReplica
         | _ -> None
 
-    let ordinaryRequestPurpose (origin: string) (bloggerPurpose: string) =
+    let ordinaryRequestPurpose (origin: string) =
         let promptOrigin =
             if origin = "InteractionRepair" then
                 PromptAuthority.PromptOrigin.Continuation PromptAuthority.ContinuationKind.InteractionRepair
             else
                 PromptAuthority.PromptOrigin.AuthorityRoot PromptAuthority.RootAuthorityKind.HumanRoot
 
-        let requestKind =
-            match bloggerPurpose with
-            | "main" -> ProviderRequestKind.BloggerMain
-            | _ -> AttemptPlanner.ordinaryRequestKind promptOrigin
+        let requestKind = AttemptPlanner.ordinaryRequestKind promptOrigin
 
         ProviderRequestKind.label requestKind
 
@@ -87,9 +78,7 @@ module AttemptPlannerSurface =
                 (PhysicalUserMessageId.create "surface-user")
                 (ProviderRunIdentity.create "surface-provider-run")
                 (PromptAuthority.PromptOrigin.AuthorityRoot PromptAuthority.RootAuthorityKind.HumanRoot)
-                requestKind
-                false
-                (fun () -> Error NoCandidateReason.NoCoverage))
+                requestKind)
 
     let private participantIdentityToJs (identity: ParticipantIdentityEvidence) : obj =
         let selected = ParticipantIdentity.selectedAgent identity
@@ -134,11 +123,7 @@ module AttemptPlannerSurface =
                         |> List.sort
                         |> List.toArray
                        requestKind = ProviderRequestKind.label profile.RequestKind
-                       clearsFailureCountOnSuccess = ProviderRequestKind.clearsFailureCountOnSuccess profile.RequestKind
-                       projectionChoice =
-                        match profile.ProjectionChoice with
-                        | XProjectionChoice.UseCommittedEpoch -> "UseCommittedEpoch"
-                        | XProjectionChoice.UsePrefixProbe probe -> $"UsePrefixProbe({probe.ProbeId})" |}
+                       clearsFailureCountOnSuccess = ProviderRequestKind.clearsFailureCountOnSuccess profile.RequestKind |}
         | None, _ -> box {| ok = false; error = "unknown role" |}
         | _, None ->
             box

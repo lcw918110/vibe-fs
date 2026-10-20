@@ -6,11 +6,7 @@ open Fable.Core.JsInterop
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Cycle
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
@@ -19,7 +15,6 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Host
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Interaction.Dispatch
-open Wanxiangshu.Mission.WorkRecord
 open Wanxiangshu.Participant.Persona
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt
@@ -125,7 +120,6 @@ module ManagedAgentConfig =
         | Role.Orchestrator -> Some(StaticTools.orchestratorAgentConfig (Some prompts.OrchestratorSystemPrompt))
         | Role.Engineer -> Some(StaticTools.engineerAgentConfig (Some prompts.EngineerSystemPrompt))
         | Role.DevOps -> Some(StaticTools.devopsAgentConfig (Some prompts.DevopsSystemPrompt))
-        | Role.Blogger -> Some(StaticTools.bloggerAgentConfig prompts.BloggerSystemPrompt)
         | Role.Plan -> Some(StaticTools.planAgentConfig (Some prompts.PlanSystemPrompt))
         | Role.Advisor -> Some(StaticTools.advisorAgentConfig prompts.AdvisorSystemPrompt)
         | Role.Coder
@@ -173,7 +167,7 @@ module ManagedAgentConfig =
     /// authority over the Host's own tool registry. Execution stays closed:
     /// `ExternalToolAdmission` refuses these tools at the runtime gate.
     ///
-    /// The internal companion (Blogger, exactly { chronicle }, ENFORCER-010) and
+    /// The internal companion and
     /// the hidden Bookkeeper leaf (deny-all) keep their closed faces, and an
     /// office entry this projection never wrote receives nothing.
     /// `patterns` is this config application's own resolved set — never the

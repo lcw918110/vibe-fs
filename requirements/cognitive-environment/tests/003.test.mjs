@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as prompts from '../../../dist/Resources/PromptSurface.js'
 
-const roles = ['manager', 'engineer', 'devops', 'orchestrator', 'blogger']
+const roles = ['manager', 'engineer', 'devops', 'orchestrator', 'plan']
 const resourceRoot = new URL('../../../resources/provider/', import.meta.url)
 const read = (path, locale) => readFileSync(new URL(`${path}/${locale}.md`, resourceRoot), 'utf8').trim()
 const instructionText = (system) => system.trimEnd().split('\n').map((line) => {

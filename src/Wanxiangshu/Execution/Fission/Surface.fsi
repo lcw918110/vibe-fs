@@ -13,7 +13,7 @@ module FissionSurface =
     val deliveryMark: completionId: string -> laneIndex: int -> delivery: obj -> obj
     val deliveryPendingTargets: completionId: string -> delivery: obj -> int array
     val workBundleEmpty: obj
-    val workBundleAdd: laneIndex: int -> workRecordRef: string -> bundle: obj -> obj
+    val workBundleAdd: laneIndex: int -> viewRef: string -> bundle: obj -> obj
     val workBundleMerge: left: obj -> right: obj -> obj
     val workBundleKeys: bundle: obj -> int array
     val workBundleEntries: bundle: obj -> obj array

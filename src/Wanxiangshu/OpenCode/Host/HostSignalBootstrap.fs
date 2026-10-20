@@ -26,16 +26,7 @@ open Wanxiangshu.Process
 
 module HostSignalBootstrap =
 
-    /// Neutral Strength ports built by plugin composition (`PluginStrengthPorts`)
-    /// from the already-held `PluginStrengthScope` and durability handle.
-    /// The Host boundary never names Strength types; it only invokes these.
-    /// `None` means that Strength aspect is absent (same as before: no scope,
-    /// no durability, or no replica runtime attached at wire time).
-    type StrengthHostPorts =
-        { HandlePreTurn: (ReconciledTurn -> Task<bool>) option
-          ObservePrimaryTurn: (ReconciledTurn -> Task<unit>) option
-          CancelStrengthOwner: (SessionId -> unit) option
-          OnSessionDeleted: (SessionId -> unit) option }
+
 
     type internal ChatAdmissionHookFailure =
         | IntentRejected of ChatAdmissionIntent.Rejection
@@ -85,8 +76,8 @@ module HostSignalBootstrap =
         (eventPort: IEventObservationPort)
         (snapshotOpt: ISessionSnapshotPort option)
         (journal: AgentJournal option)
-        (strengthPorts: StrengthHostPorts)
         (scope: PluginRuntimeScope)
+
         (rootWorkspace: IRootWorkspaceReader)
         (input: obj)
         /// Exact process-local private-agent attachment; it cannot establish a public authority profile.
@@ -151,15 +142,8 @@ module HostSignalBootstrap =
             let binding = TurnBinding.Store()
 
             let onTurn =
-                HostTurnObserver.observe
-                    observeTurnWorkflow
-                    sessionPort
-                    rootWorkspace
-                    eventPort
-                    journal
-                    strengthPorts.HandlePreTurn
-                    strengthPorts.ObservePrimaryTurn
-                    scope
+                HostTurnObserver.observe observeTurnWorkflow sessionPort rootWorkspace eventPort journal scope
+
 
             let compactionProbe: CompactionProbe =
                 { TryClaimStartupProbe = (fun () -> scope.TryClaimStartupProbe())
@@ -262,8 +246,9 @@ module HostSignalBootstrap =
                                     cleanupDelegateDraft
                                     reconciler.Signal
                                     sessionId
-                                    strengthPorts.OnSessionDeleted
+                                    None
                                     deletion
+
                         })
 
 
@@ -322,11 +307,10 @@ module HostSignalBootstrap =
                 match observation.Outcome, ModelRouting.tryReadExecution key with
                 | HostProviderTerminalOutcome.Cancelled _, Some _ ->
                     ProviderAttemptStopFence.shared.Observe(observation.SessionId, observation.ProviderRun)
-                    scope.Sessions.Quiescence.RevokeCurrentAttempt observation.SessionId
+                    scope.Sessions.Quiescence.RevokeCurrentAttempt(observation.SessionId)
 
-                    FissionHost.routeAttemptAborted observation.SessionId ignore (fun () ->
-                        strengthPorts.CancelStrengthOwner
-                        |> Option.iter (fun cancel -> cancel observation.SessionId))
+                    FissionHost.routeAttemptAborted observation.SessionId ignore ignore
+
                 | _ -> ()
 
                 match observation.Outcome, observation.Disposition, startedEvidenceForTerminal observation with
@@ -1137,9 +1121,8 @@ module HostSignalBootstrap =
                 |> Option.filter (fun _ ->
                     ProviderWireDecode.firstString info [ "role" ] = Some "user"
                     && ProviderWireDecode.firstString info [ "sessionID"; "sessionId" ] = Some(
-                                                                                              SessionId.value
-                                                                                                  selected.SessionId
-                                                                                          ))
+                        SessionId.value selected.SessionId
+                    ))
                 |> Option.map (fun physical ->
                     { SessionId = selected.SessionId
                       PhysicalUserMessageId = PhysicalUserMessageId.create physical })

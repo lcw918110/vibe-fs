@@ -45,7 +45,7 @@ module ProviderFailureSurface =
     /// provider-attempt-recovery-003 test seam: the request kind a confirmed failure continues with.
     val requestKindFor: handle: JournalHandle -> session: string -> physicalMessage: string -> string
 
-    val wasLwrRetryAttempt:
+    val wasSameProviderRetryAttempt:
         handle: JournalHandle -> session: string -> physicalMessage: string -> providerRun: string -> bool
 
     val snapshot: handle: JournalHandle -> session: string -> obj

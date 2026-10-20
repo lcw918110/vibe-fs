@@ -148,7 +148,7 @@ module ProviderWireCapture =
                 { Role = message.Role
                   Parts = message.Parts |> List.map (fun part -> part.WirePart) }) }
 
-    /// A plugin-synthesized row (XWire companion memory head, Enforcer repair,
+    /// A plugin-synthesized row
     /// Companion projection rebuild) is not a Host physical user message. Its id
     /// is a content digest, not a Host message identity; admitting it as
     /// PhysicalUserMessageId would look up a ChatExecution that was never

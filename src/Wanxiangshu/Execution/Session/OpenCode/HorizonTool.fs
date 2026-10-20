@@ -4,7 +4,6 @@ open System
 open System.Threading.Tasks
 open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Delegation.Fork
@@ -119,60 +118,32 @@ module HorizonTool =
     let private lineForHandle language (handle: HandleRecord) (runtimeRecord: AgentRecord option) : string =
         labeled language (prosePath (statusForHandle runtimeRecord handle)) (labelForHandle language handle)
 
-    /// The latest durable record frame a participant has, if any.
-    let private latestRecordFrame (snapshot: ProjectionSet) (handle: HandleRecord) : BlogFrame option =
-        AgentProjection.tryFind handle.ChildSessionId snapshot.AgentProjections
-        |> Option.bind (fun session -> session.Blog)
-        |> Option.bind (BlogProjection.frames >> List.tryLast)
+    /// Latest delivered view for one participant. Horizon reads the delivered
+    /// view as it stands and does not advance the returned cursor.
+    let private deliveredView (handle: HandleRecord) : string option =
+        Wanxiangshu.Repository.Programming.Js.JsDeliveredValues.tryPeekRendered (SessionId.value handle.ChildSessionId)
 
-    /// The record body, only when it still hashes to the frame's digest: a
-    /// corrupt latest is never presented as work on either surface.
-    let private tryRecordText (journal: AgentJournal) (frame: BlogFrame) : Task<string option> =
-        task {
-            match! journal.Writer.BlobWriter.Read frame.TextRef with
-            | Ok text when HostDigest.sha256Hex text = BlobDigest.value frame.Digest -> return Some text
-            | _ -> return None
-        }
-
-    let private workRecordText language (journal: AgentJournal) (label: string) (frame: BlogFrame) : Task<string> =
-        task {
-            match! tryRecordText journal frame with
-            | Some text -> return ProviderProse.render language Path.LatestWork (Map [ "label", label; "record", text ])
-            | None -> return labeled language Path.LatestWorkUnavailable label
-        }
-
-    let private workRecordForHandle
+    let private latestViewForHandle
         language
-        (journal: AgentJournal)
-        (snapshot: ProjectionSet)
+        (_journal: AgentJournal)
+        (_snapshot: ProjectionSet)
         (handle: HandleRecord)
         : Task<string> =
         let label = labelForHandle language handle
 
-        match latestRecordFrame snapshot handle with
+        match deliveredView handle with
         | None -> Task.FromResult(labeled language Path.NoWorkYet label)
-        | Some frame -> workRecordText language journal label frame
+        | Some text ->
+            Task.FromResult(ProviderProse.render language Path.LatestWork (Map [ "label", label; "record", text ]))
 
-    /// The same latest record as data: the raw body text when the frame
-    /// verifies, "unavailable" when it does not read back, "none" when the
-    /// participant has no record yet. Never a rendered line.
-    let private workRecordData
-        (journal: AgentJournal)
-        (snapshot: ProjectionSet)
+    let private viewData
+        (_journal: AgentJournal)
+        (_snapshot: ProjectionSet)
         (handle: HandleRecord)
         : Task<string * string> =
-        let dataOf (frame: BlogFrame) : Task<string * string> =
-            task {
-                match! tryRecordText journal frame with
-                | Some text -> return "latest", text
-                | None -> return "unavailable", ""
-            }
-
-        task {
-            match latestRecordFrame snapshot handle with
-            | None -> return "none", ""
-            | Some frame -> return! dataOf frame
-        }
+        match deliveredView handle with
+        | None -> Task.FromResult("none", "")
+        | Some text -> Task.FromResult("latest", text)
 
     /// The terminal name a pty is known by, when the runtime snapshot carries
     /// one. The prose line names a generic terminal when it does not; the data
@@ -198,7 +169,11 @@ module HorizonTool =
     /// delegator's estimate and the participant's own start are known: turns
     /// spent and left, and the wall-clock spent beside the time that remains at
     /// the pace this participant has shown. Absent (never guessed) otherwise.
-    let private calibrationNumbers (journal: AgentJournal) (handle: HandleRecord) : (int * int * float * float) option =
+    let private calibrationNumbers
+        (now: DateTimeOffset)
+        (journal: AgentJournal)
+        (handle: HandleRecord)
+        : (int * int * float * float) option =
         let estimateState =
             AgentJournalPortAdapter.forDelegatedToolEstimate journal
             |> fun port -> DelegatedToolEstimateLedger.tryState port handle.ChildSessionId
@@ -210,12 +185,17 @@ module HorizonTool =
         | Some state, Some bound ->
             let turnsUsed = DelegatedToolEstimateProjection.countedCallCount state
             let turnsLeft = DelegatedToolEstimateProjection.remaining state
-            let timeUsedMs = (DateTimeOffset.UtcNow - bound).TotalMilliseconds
+            let timeUsedMs = (now - bound).TotalMilliseconds
             Some(turnsUsed, turnsLeft, timeUsedMs, timeUsedMs * float turnsLeft / float (max 1 turnsUsed))
         | _ -> None
 
-    let private calibrationLine language (journal: AgentJournal) (handle: HandleRecord) : string option =
-        calibrationNumbers journal handle
+    let private calibrationLine
+        language
+        (now: DateTimeOffset)
+        (journal: AgentJournal)
+        (handle: HandleRecord)
+        : string option =
+        calibrationNumbers now journal handle
         |> Option.map (fun (turnsUsed, turnsLeft, timeUsedMs, _) ->
             HorizonCalibration.render
                 (ProviderLanguage.externalName language)
@@ -238,6 +218,7 @@ module HorizonTool =
         language
         journal
         snapshot
+        (now: DateTimeOffset)
         runtimeByAgentId
         (agentLines: ResizeArray<string>)
         (agentId: string)
@@ -246,10 +227,10 @@ module HorizonTool =
         task {
             agentLines.Add(lineForHandle language handle (Map.tryFind agentId runtimeByAgentId))
 
-            let! workRecord = workRecordForHandle language journal snapshot handle
-            agentLines.Add workRecord
+            let! viewLine = latestViewForHandle language journal snapshot handle
+            agentLines.Add viewLine
 
-            calibrationLine language journal handle |> Option.iter agentLines.Add
+            calibrationLine language now journal handle |> Option.iter agentLines.Add
         }
 
     let private rosterInstructions language (lines: string list) =
@@ -258,10 +239,20 @@ module HorizonTool =
         else
             lines
 
-    let private appendHandleLinesForRoster language journal snapshot runtimeByAgentId runtime agentLines handles =
+    let private appendHandleLinesForRoster
+        language
+        journal
+        snapshot
+        runtimeByAgentId
+        (runtime: HostForkRuntime)
+        agentLines
+        handles
+        =
+        let now = runtime.Now()
+
         task {
             for agentId, handle in rosterEntries runtime handles do
-                do! appendHandleLines language journal snapshot runtimeByAgentId agentLines agentId handle
+                do! appendHandleLines language journal snapshot now runtimeByAgentId agentLines agentId handle
         }
 
     let private executeWithJournal language (runtimeCtx: HorizonRuntimeContext) context (journal: AgentJournal) =
@@ -325,15 +316,16 @@ module HorizonTool =
         (language: ProviderLanguage)
         (journal: AgentJournal)
         (snapshot: ProjectionSet)
+        (now: DateTimeOffset)
         (runtimeByAgentId: Map<string, AgentRecord>)
         (agentId: string)
         (handle: HandleRecord)
         : Task<obj> =
         task {
-            let! workState, recordText = workRecordData journal snapshot handle
+            let! workState, recordText = viewData journal snapshot handle
 
             let turnsUsed, turnsLeft, timeUsedMs, timeLeftMs =
-                calibrationNumbers journal handle |> Option.defaultValue (0, 0, 0.0, 0.0)
+                calibrationNumbers now journal handle |> Option.defaultValue (0, 0, 0.0, 0.0)
 
             return
                 createObj
@@ -372,11 +364,13 @@ module HorizonTool =
             let runtimeByAgentId =
                 agents |> List.map (fun record -> record.AgentId, record) |> Map.ofList
 
+            let now = runtime.Now()
+
             // DSL-MUTABLE: algorithm-scratch — agent row accumulator
             let agentRows = ResizeArray<obj>()
 
             for agentId, handle in rosterEntries runtime durableHandles do
-                let! row = agentRow language journal snapshot runtimeByAgentId agentId handle
+                let! row = agentRow language journal snapshot now runtimeByAgentId agentId handle
                 agentRows.Add row
 
             let ptyRows =

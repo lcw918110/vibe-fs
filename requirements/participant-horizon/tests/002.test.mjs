@@ -25,7 +25,7 @@ test('WHAT[participant-horizon-002] fission lane startup carries no internal lan
   const startups = []
   const runtime = fission.createAdmission({
     parentOf: async () => 'fission-parent',
-    ownerWorkRecord: async () => 'CANONICAL-LWR',
+    ownerView: async () => 'CANONICAL-OWNER-VIEW',
     createLane: async (_owner, _parent, lane) => `lane-${lane.index}`,
     startLane: async (_session, startup) => {
       startups.push(startup)

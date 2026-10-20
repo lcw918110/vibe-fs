@@ -7,7 +7,7 @@ export const deferred = () => {
   const promise = new Promise(done => { resolve = done })
   return { promise, resolve }
 }
-export const harness = ({ failCreateAt, failStartAt, failInterrupt = false, parent = 'old-parent', beforeStart = async () => {} } = {}) => {
+export const harness = ({ failCreateAt, failStartAt, failInterrupt = false, parent = 'old-parent', ownerView = 'CANONICAL-OWNER-VIEW', beforeStart = async () => {} } = {}) => {
   const events = []
   let serial = 0
   let startCursor = -1
@@ -16,9 +16,9 @@ export const harness = ({ failCreateAt, failStartAt, failInterrupt = false, pare
       events.push(['parent', owner])
       return parent
     },
-    ownerWorkRecord: async owner => {
-      events.push(['lwr', owner])
-      return 'CANONICAL-LWR'
+    ownerView: async owner => {
+      events.push(['owner-view', owner])
+      return ownerView
     },
     createLane: async (owner, physicalParent, lane) => {
       events.push(['create', lane.index, physicalParent])

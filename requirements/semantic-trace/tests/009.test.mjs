@@ -30,7 +30,7 @@ test('WHAT[semantic-trace-009] appending a part labelled with a new generation p
   assert.deepEqual(trace.openingEvidence(projection).authoritativeRequirements, ['r1'])
 })
 
-test.todo('WHAT[semantic-trace-009] actual Host compaction and durable reanchor preserve opening, all parts and WorkRecord cursor while resetting prefix coverage; GAP-101')
+test.todo('WHAT[semantic-trace-009] actual Host compaction and durable reanchor preserve opening and all parts while resetting prefix coverage; GAP-101')
 
 test('WHAT[semantic-trace-009] cursor sequence remains global across Host generations', () => {
   let projection = trace.emptyProjection()

@@ -9,11 +9,8 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Change
 open Wanxiangshu.Change.Host
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Participant.Provider.Attempt
-open Wanxiangshu.Context.Companion.Blogger.OpenCode
-open Wanxiangshu.Enforcer
 open Wanxiangshu.Execution.Delegation.Fork.OpenCode
 open Wanxiangshu.Execution.Delegation.Handle.OpenCode
 open Wanxiangshu.Execution.Delegation.OpenCode
@@ -27,8 +24,8 @@ open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Repository.Investigation.Semble
 open Wanxiangshu.Repository.Investigation.WarmStart
 open Wanxiangshu.Resources
-open Wanxiangshu.Strength.OpenCode
-open Wanxiangshu.Strength.Persistence
+
+
 open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Context.Companion
 open Wanxiangshu.Persistence.Journal
@@ -38,10 +35,6 @@ open Wanxiangshu.Repository.Programming.Js
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Cycle
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Delegation.Handle
@@ -56,8 +49,8 @@ open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Interaction.Repair
 open Wanxiangshu.Participant.Persona
 open Wanxiangshu.Participant.Provider
-open Wanxiangshu.Strength
-open Wanxiangshu.Strength.OpenCode
+
+
 open CompanionProjection
 
 module PluginHostInterop =
@@ -445,65 +438,71 @@ module PluginHostInterop =
         (rootWorkspace: IRootWorkspaceReader)
         (journal: AgentJournal option)
         (workspaceDirectory: string option)
-        (strengthScope: PluginStrengthScope option)
         (scope: PluginRuntimeScope)
         (currentPhysicalUserMessage: string -> string option)
         (onRunStarted: (SessionId -> Role -> string option -> unit) option)
-        (parentWorkRecordFor: (string -> Task<string option>) option)
-        (childWorkRecordFor: (string -> Task<string option>) option)
-        (childWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
+        (viewForSession: (string -> Task<string option>) option)
+        (childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
         (snapshot: ISessionSnapshotPort option)
         (cancelSignals: (SessionId seq -> unit) option)
         (eventPort: IEventObservationPort option)
         (casebookToolSpecs: ToolSpec list)
         (continueManagerLoop: SessionId -> string -> Task<Result<unit, string>>)
         (userNotify: (string -> string -> unit) option)
-        : ToolRegistration =
-        let jsTransactionPersistence =
-            workspaceDirectory
-            |> Option.bind (fun workspace -> WorkspaceEventStore.tryCurrent (RuntimePath.stateRoot workspace))
-            |> Option.map JsToolsTransactionStore.createPersistence
+        : Task<ToolRegistration> =
+        task {
+            let! commonDirOpt =
+                match workspaceDirectory with
+                | Some ws ->
+                    task {
+                        let! dir = RuntimePath.stateRoot ws
+                        return Some dir
+                    }
+                | None -> Task.FromResult None
 
-        let jsLifecyclePersistence =
-            workspaceDirectory
-            |> Option.bind (fun workspace -> WorkspaceEventStore.tryCurrent (RuntimePath.stateRoot workspace))
-            |> Option.map JsToolsTransactionStore.createLifecyclePersistence
+            let jsTransactionPersistence =
+                commonDirOpt
+                |> Option.bind WorkspaceEventStore.tryCurrent
+                |> Option.map JsToolsTransactionStore.createPersistence
 
-        let quiescence = scope.Sessions.Quiescence :> ISessionQuiescenceGate
+            let jsLifecyclePersistence =
+                commonDirOpt
+                |> Option.bind WorkspaceEventStore.tryCurrent
+                |> Option.map JsToolsTransactionStore.createLifecyclePersistence
 
-        let registration =
-            ToolRegistry.create
-                toolModule
-                sessionPort
-                waitObserver
-                rootWorkspace
-                journal
-                workspaceDirectory
-                scope.Sessions.SessionParents
-                currentPhysicalUserMessage
-                scope.Sessions.SessionDirectories
-                onRunStarted
-                parentWorkRecordFor
-                childWorkRecordFor
-                snapshot
-                cancelSignals
-                (fun sessionId -> quiescence.BeginToolExecution(SessionId.create sessionId))
-                (fun sessionId -> quiescence.EndToolExecution(SessionId.create sessionId))
-                eventPort
-                (Some scope.BloggerRuntimeHost)
-                scope.SyncDelegateRuntime
-                (strengthScope
-                 |> Option.map (fun s -> fun sid -> s.StrengthRuntime.TryFindByReplica sid |> Option.isSome))
-                casebookToolSpecs
-                jsTransactionPersistence
-                jsLifecyclePersistence
-                continueManagerLoop
-                (Some childWorkRecordForRun)
-                userNotify
+            let quiescence = scope.Sessions.Quiescence :> ISessionQuiescenceGate
 
-        // Process-local join admission: JoinTool RequireCurrentProcessJoin → PluginRuntimeScope.
-        registration.Runtime.AttachCurrentProcessJoin(fun root -> scope.RequireCurrentProcessJoin root)
-        // EXEC-017: JoinTool Begin(user-message wake) shares this process-local
-        // attempt-scoped registry.
-        registration.Runtime.AttachJoinAttempts scope.Sessions.JoinInterrupts
-        registration
+            let registration =
+                ToolRegistry.create
+                    toolModule
+                    sessionPort
+                    waitObserver
+                    rootWorkspace
+                    journal
+                    workspaceDirectory
+                    scope.Sessions.SessionParents
+                    currentPhysicalUserMessage
+                    scope.Sessions.SessionDirectories
+                    onRunStarted
+                    viewForSession
+                    snapshot
+                    cancelSignals
+                    (fun sessionId -> quiescence.BeginToolExecution(SessionId.create sessionId))
+                    (fun sessionId -> quiescence.EndToolExecution(SessionId.create sessionId))
+                    eventPort
+                    scope.SyncDelegateRuntime
+                    casebookToolSpecs
+
+                    jsTransactionPersistence
+                    jsLifecyclePersistence
+                    continueManagerLoop
+                    (Some childViewForRun)
+                    userNotify
+
+            // Process-local join admission: JoinTool RequireCurrentProcessJoin → PluginRuntimeScope.
+            registration.Runtime.AttachCurrentProcessJoin(fun root -> scope.RequireCurrentProcessJoin root)
+            // EXEC-017: JoinTool Begin(user-message wake) shares this process-local
+            // attempt-scoped registry.
+            registration.Runtime.AttachJoinAttempts scope.Sessions.JoinInterrupts
+            return registration
+        }

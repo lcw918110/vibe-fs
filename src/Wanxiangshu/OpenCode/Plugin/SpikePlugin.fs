@@ -29,7 +29,6 @@ module SpikePlugin =
                             rootWorkspace
                             eventPort
                             boot.Journal
-                            boot.Scope.BloggerRuntimeHost
                             boot.Scope.SyncDelegateRuntime
                             boot.Scope.Sessions.NudgeSent
                             boot.Scope.Sessions.JoinGuardNudges

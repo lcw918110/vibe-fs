@@ -8,8 +8,6 @@
 /src/Wanxiangshu/OpenCode/Host/HostSignalBootstrap.fs
 /src/Wanxiangshu/OpenCode/Tools/ToolRuntimeScope.fs
 /src/Wanxiangshu/Execution/Session/Recovery/Model.fs
-/src/Wanxiangshu/Context/Companion/HostBlogger.fs
-/src/Wanxiangshu/Strength/Replica/Runtime.fs
 /src/Wanxiangshu/OpenCode/Host/SessionExecutionBinding.fs
 /src/Wanxiangshu/OpenCode/Host/ChatAdmission/Intent.fs
 /src/Wanxiangshu/OpenCode/Host/ChatAdmission/Intent.fsi

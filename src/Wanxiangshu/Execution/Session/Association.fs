@@ -11,8 +11,8 @@ open Wanxiangshu.Foundation.Identity
 ///
 /// `CompanionSession` carries its main session because the relation must be
 /// answerable in both directions from one keyed lookup (PERSIST-008). Storing only
-/// `WorkSession → BloggerSessionId` would force a scan of every session to discover
-/// whether a given id is somebody's Y.
+/// `WorkSession → main` would force a scan of every session to discover whether a
+/// given id is somebody's Companion.
 ///
 /// Long-lived ownership is `SessionExecutionClass` × `SessionOwnership` /
 /// `AttachmentKind` in `Wanxiangshu.Foundation`. Dedicated SyncInspector/SyncCoder/SyncEngineer are
@@ -29,7 +29,7 @@ type SatelliteKind = | Companion
 /// `SatelliteSession(_, Companion)` ≈ InternalLeaf+Attached(Companion).
 [<RequireQualifiedAccess>]
 type ManagedSessionKind =
-    /// A session that can issue ordinary provider requests. Has exactly one Y.
+    /// A session that can issue ordinary provider requests. Has exactly one Companion.
     /// G2: `SessionExecutionClass.Work` (Root, or Attached Sync* when proven elsewhere).
     | WorkSession
     /// HOST-008: every internal child is a leaf owned by one WorkSession.
@@ -41,17 +41,18 @@ type ManagedSessionKind =
 /// Record fields and FactCodec stay on the ManagedSessionKind model.
 /// Orthogonal ExecutionClass × Ownership is a derived view
 /// (`SessionOwnershipClassification`), not a durable rewrite.
-/// DSL-state-combination: domain — optional Blogger/parent identities are
+/// DSL-state-combination: domain — optional parent identities are
 /// relationship facts on one durable session association, not a workflow state
 /// product.
 type SessionAssociation =
     {
         SessionId: SessionId
         Kind: ManagedSessionKind
-        /// COMPANION-002: `Some` for a Work session once its Y exists, and always
-        /// `None` for a Companion session. The invariant is enforced by
+        /// COMPANION-002: a Companion session's `Some` points at the Work session
+        /// that owns it; a Work session's `Some` points at its own parent when it
+        /// is itself a fork child. The invariant is enforced by
         /// `SessionAssociationProjection.link`, not left to callers.
-        BloggerSessionId: SessionId option
+
         ParentSessionId: SessionId option
     }
 
@@ -62,11 +63,11 @@ type AssociationRejection =
     | CompanionWouldRecurse of companion: SessionId
     /// A session cannot be its own Companion.
     | SelfLink of session: SessionId
-    /// COMPANION-002: this Work session already has a different Y. Creating a second
+    /// COMPANION-002: this Work session already has a different Companion. Creating a second
     /// one is what the lazy-creation rule exists to prevent, so the fold refuses it
     /// rather than silently repointing.
     | AlreadyLinkedToOther of existing: SessionId * proposed: SessionId
-    /// The proposed Y is already the Companion of a different Work session.
+    /// The proposed Companion already belongs to a different Work session.
     | CompanionClaimedByOther of owner: SessionId * proposed: SessionId
     /// A child already has the other Satellite kind or the requested owner/kind differs.
     | SatelliteKindConflict of proposed: SessionId
@@ -74,8 +75,8 @@ type AssociationRejection =
 /// HOST-008. One map, keyed lookup, no scan (PERSIST-008).
 ///
 /// Both sides of a link live in the same map as separate entries, written together
-/// from one fact. That is what makes "is this a Companion" and "which Y does this X
-/// have" both O(1) without a second index that could disagree.
+/// from one fact. That is what makes "is this a Companion" and "which Companion does
+/// this Work session have" both O(1) without a second index that could disagree.
 module SessionAssociationProjection =
 
     let empty: Map<SessionId, SessionAssociation> = Map.empty
@@ -85,10 +86,11 @@ module SessionAssociationProjection =
     /// COMPANION-002: is this session a Companion.
     ///
     /// An unknown session answers `false`. COMPANION-001 gives every managed work
-    /// session a Y, so "no record yet" means a work session whose Y has not been
-    /// lazily created — the state the next transform resolves. It never means "a
-    /// Companion we have not heard of": a Y's association is written before its first
-    /// prompt, so a Y always has a record by the time a transform can fire for it.
+    /// session a Companion, so "no record yet" means a work session whose Companion
+    /// has not been lazily created — the state the next transform resolves. It never
+    /// means "a Companion we have not heard of": a Companion's association is written
+    /// before its first prompt, so a Companion always has a record by the time a
+    /// transform can fire for it.
     let isCompanion (sessionId: SessionId) (current: Map<SessionId, SessionAssociation>) =
         match tryFind sessionId current with
         | Some { Kind = ManagedSessionKind.SatelliteSession(_, SatelliteKind.Companion) } -> true
@@ -105,6 +107,15 @@ module SessionAssociationProjection =
         | ManagedSessionKind.WorkSession -> SessionExecutionClass.Work
         | ManagedSessionKind.SatelliteSession _ -> SessionExecutionClass.InternalLeaf
 
+    /// COMPANION-002: the companion belonging to this work session.
+    let tryCompanionOf (sessionId: SessionId) (current: Map<SessionId, SessionAssociation>) =
+        current
+        |> Map.tryPick (fun candidateId candidate ->
+            match candidate.Kind with
+            | ManagedSessionKind.SatelliteSession(owner, SatelliteKind.Companion) when owner = sessionId ->
+                Some candidateId
+            | _ -> None)
+
     /// COMPANION-002: the main session a Companion belongs to.
     let tryMainSessionOf (sessionId: SessionId) (current: Map<SessionId, SessionAssociation>) =
         match tryFind sessionId current with
@@ -116,25 +127,22 @@ module SessionAssociationProjection =
         | Some { Kind = ManagedSessionKind.SatelliteSession(owner, _) } -> Some owner
         | _ -> None
 
-    /// COMPANION-003: the Y this Work session already has, so a restart reuses it.
-    let tryBloggerOf (sessionId: SessionId) (current: Map<SessionId, SessionAssociation>) =
-        tryFind sessionId current |> Option.bind (fun entry -> entry.BloggerSessionId)
-
-    let private workSession sessionId parent blogger =
+    let private workSession sessionId parent =
         { SessionId = sessionId
           Kind = ManagedSessionKind.WorkSession
-          BloggerSessionId = blogger
           ParentSessionId = parent }
 
     /// HOST-008: record one Work ↔ Companion link, both directions at once.
     ///
     /// One function rather than two writes, because the two entries are one fact. A
-    /// projection holding `X → Y` without `Y → CompanionSession X` would answer
-    /// "is Y a Companion" with `false`, and the next transform on Y would give it a
-    /// Y of its own — the recursion COMPANION-002 forbids.
+    /// projection holding `Work session → Companion` without
+    /// `Companion → CompanionSession Work session` would answer "is this a
+    /// Companion" with `false`, and the next transform on that Companion would give
+    /// it a Companion of its own — the recursion COMPANION-002 forbids.
     ///
-    /// Idempotent for the same pair: re-linking X to the same Y is what restart
-    /// recovery does, and refusing it would turn recovery into a startup failure.
+    /// Idempotent for the same pair: re-linking a Work session to the same
+    /// Companion is what restart recovery does, and refusing it would turn recovery
+    /// into a startup failure.
     let private satelliteKindConflict
         (kind: SatelliteKind)
         (satelliteSessionId: SessionId)
@@ -158,20 +166,13 @@ module SessionAssociationProjection =
             parentOfMain
             |> Option.orElse (owner |> Option.bind (fun e -> e.ParentSessionId))
 
-        let nextBlogger =
-            if kind = SatelliteKind.Companion then
-                Some satelliteSessionId
-            else
-                None
-
         Ok(
             current
-            |> Map.add mainSessionId (workSession mainSessionId parent nextBlogger)
+            |> Map.add mainSessionId (workSession mainSessionId parent)
             |> Map.add
                 satelliteSessionId
                 { SessionId = satelliteSessionId
                   Kind = ManagedSessionKind.SatelliteSession(mainSessionId, kind)
-                  BloggerSessionId = None
                   ParentSessionId = Some mainSessionId }
         )
 
@@ -183,10 +184,8 @@ module SessionAssociationProjection =
         (current: Map<SessionId, SessionAssociation>)
         =
         let existingSatellite =
-            if kind = SatelliteKind.Companion then
-                tryBloggerOf mainSessionId current
-            else
-                None
+            match kind with
+            | SatelliteKind.Companion -> tryCompanionOf mainSessionId current
 
         let existingOwner = tryOwnerOf satelliteSessionId current
         let kindConflict = satelliteKindConflict kind satelliteSessionId current
@@ -213,11 +212,11 @@ module SessionAssociationProjection =
         else
             linkValidated kind mainSessionId satelliteSessionId parentOfMain current
 
-    let link mainSessionId bloggerSessionId parentOfMain current =
-        linkSatellite SatelliteKind.Companion mainSessionId bloggerSessionId parentOfMain current
+    let link mainSessionId companionSessionId parentOfMain current =
+        linkSatellite SatelliteKind.Companion mainSessionId companionSessionId parentOfMain current
 
     /// The Companion child was aborted. The Work session keeps its record and loses
-    /// its Y, so the next transform creates a fresh one.
+    /// its Companion, so the next transform creates a fresh one.
     ///
     /// The Companion's own entry is REMOVED rather than kept as a tombstone. Unlike a
     /// handle (EXEC-009), a Companion session id is never re-presented by the model
@@ -225,15 +224,9 @@ module SessionAssociationProjection =
     /// refuse — and leaving one would make `isCompanion` true for a session that no
     /// longer exists.
     let unlink (mainSessionId: SessionId) (current: Map<SessionId, SessionAssociation>) =
-        match tryBloggerOf mainSessionId current with
+        match tryCompanionOf mainSessionId current with
+        | Some companionId -> Map.remove companionId current
         | None -> current
-        | Some blogger ->
-            let parent =
-                tryFind mainSessionId current |> Option.bind (fun e -> e.ParentSessionId)
-
-            current
-            |> Map.remove blogger
-            |> Map.add mainSessionId (workSession mainSessionId parent None)
 
     let describe (rejection: AssociationRejection) =
         match rejection with
@@ -292,25 +285,3 @@ module SyncDelegateAssociationHints =
 
     let dedicatedOwnership (owner: SessionId) (role: SyncDelegateRole) : SessionOwnership =
         SessionOwnership.Attached(owner, SyncDelegateRole.toAttachmentKind role)
-
-/// StrengthReplica classification (HOST-008 / STRENGTH-014).
-///
-/// StrengthReplica is Universal `InternalLeaf × Attached(_, StrengthReplica)`.
-/// It is NOT a `SatelliteKind` case and is NOT durable on `SessionAssociation` /
-/// FactCodec. Process-local owner→replica indexes live in host/runtime state.
-module StrengthReplicaAssociationHints =
-
-    let executionClass = SessionExecutionClass.InternalLeaf
-
-    let ownership (owner: SessionId) : SessionOwnership =
-        SessionOwnership.Attached(owner, AttachmentKind.StrengthReplica)
-
-    let isStrengthReplicaAttachment =
-        function
-        | AttachmentKind.StrengthReplica -> true
-        | AttachmentKind.Companion
-        | AttachmentKind.SyncInspector
-        | AttachmentKind.SyncCoder
-        | AttachmentKind.SyncEngineer
-        | AttachmentKind.SyncDevOps
-        | AttachmentKind.Bookkeeper _ -> false

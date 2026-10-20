@@ -70,7 +70,7 @@ test('WHAT[effect-accounting-007] P0_CLEAN_BREAK_v2_terminal_decodes_as_joinable
     schemaVersion: 2,
     finality: 'completed',
     run_id: 'run-2',
-    work_record: 'ok',
+    view: 'ok',
     child_session_id: 'child',
     authority_root: 'root',
     provider_run: 'provider',

@@ -13,6 +13,7 @@ module AnchorSurface =
     val anchors: sessionId: string -> obj array
     /// Capture one view declaration for the next request; an invalid
     /// declaration is refused with a stable failure and changes nothing.
+    val parse: declaration: obj -> Result<obj, JsFailure>
     val setView: sessionId: string -> declaration: obj -> Result<unit, JsFailure>
     val takeView: sessionId: string -> obj
     val countTokens: text: string -> int

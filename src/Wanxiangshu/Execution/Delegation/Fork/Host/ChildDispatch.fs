@@ -2,9 +2,6 @@ namespace Wanxiangshu.Execution.Delegation.Fork.Host
 
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Delegation.SyncDelegate
@@ -162,7 +159,7 @@ module HostForkChildDispatch =
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
-        (childWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
+        (childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
         (trackOwnedWork: (unit -> Task) -> unit)
         (runtime: ForkRuntime)
         (onRunStarted: SessionId -> Role -> unit)
@@ -198,7 +195,7 @@ module HostForkChildDispatch =
                         journal
                         parentId
                         sessions
-                        childWorkRecordForRun
+                        childViewForRun
                         trackOwnedWork
                         agentId
                         childId
@@ -222,7 +219,7 @@ module HostForkChildDispatch =
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
-        (childWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
+        (childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
         (trackOwnedWork: (unit -> Task) -> unit)
         (runtime: ForkRuntime)
         (sendChildPrompt:
@@ -254,7 +251,7 @@ module HostForkChildDispatch =
                         journal
                         parentId
                         sessions
-                        childWorkRecordForRun
+                        childViewForRun
                         trackOwnedWork
                         runtime
                         onRunStarted
@@ -281,7 +278,7 @@ module HostForkChildDispatch =
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
-        (childWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
+        (childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
         (trackOwnedWork: (unit -> Task) -> unit)
         (runtime: ForkRuntime)
         (sendChildPrompt:
@@ -322,7 +319,7 @@ module HostForkChildDispatch =
                         journal
                         parentId
                         sessions
-                        childWorkRecordForRun
+                        childViewForRun
                         trackOwnedWork
                         runtime
                         sendChildPrompt

@@ -17,7 +17,7 @@ type HostForkRuntime =
     new:
         parentId: SessionId *
         sessions: ISessionHostPort *
-        childWorkRecordForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) *
+        childViewForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) *
         createMailbox: (obj -> ForkCompletionMailbox) *
         clock: IClockPort *
         raceExit: (Task -> int -> Task<bool>) *
@@ -27,8 +27,6 @@ type HostForkRuntime =
         ?ptyPort: PtyPort *
         ?directoryFor: (string -> string option) *
         ?onRunStarted: (SessionId -> Role -> string option -> unit) *
-        ?parentWorkRecordFor: (SessionId -> Task<string option>) *
-        ?childWorkRecordFor: (SessionId -> Task<string option>) *
         ?sessionSnapshot: ISessionSnapshotPort *
         ?cancelSignals: (SessionId seq -> unit) *
         ?ownership: HandleOwnership *
@@ -55,7 +53,7 @@ type HostForkRuntime =
          >
 
     member internal Clock: IClockPort
-    member internal Now: unit -> DateTimeOffset
+    member Now: unit -> DateTimeOffset
     member internal AdoptChild: agentId: string * childId: SessionId -> unit
 
     member internal ObservePromptSend:
@@ -80,9 +78,7 @@ type HostForkRuntime =
     member internal RunStarted: (SessionId -> Role -> string option -> unit)
     member internal ChildCreated: (string -> Role -> SessionId -> unit)
     member internal ChildCreatedDir: (string -> SessionId -> string option -> unit)
-    member internal ParentWorkRecordOf: (SessionId -> Task<string option>)
-    member internal ChildWorkRecordOf: (SessionId -> Task<string option>)
-    member internal ChildWorkRecordOfRun: (SessionId -> ProviderRunIdentity -> Task<string option>)
+    member internal ChildViewOfRun: (SessionId -> ProviderRunIdentity -> Task<string option>)
     member internal TrackOwnedWork: work: (unit -> Task) -> unit
 
     member internal SendChildPrompt:
@@ -106,7 +102,7 @@ type HostForkRuntime =
 
     member FailRun: run: PendingHostRun * error: string -> Task
     member MarkReady: run: PendingHostRun -> unit
-    member internal AwaitCurrentWorkRecord: agentId: string -> Task<Result<string, string>>
+    member internal AwaitCurrentView: agentId: string -> Task<Result<string, string>>
     member internal EnqueueBufferedJoinItems: items: JoinItem seq -> unit
     member internal DrainBufferedJoinItems: maxCount: int -> JoinItem list
     member internal HasBufferedJoinItems: bool

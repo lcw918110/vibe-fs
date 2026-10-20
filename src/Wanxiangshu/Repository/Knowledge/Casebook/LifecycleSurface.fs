@@ -60,13 +60,15 @@ module CasebookLifecycleSurface =
     let cleanup (sessionId: string) : unit =
         CasebookLifecycle.cleanupDraft sessionId
 
-    let private acquireStore (workspaceRoot: string) : IEventStore =
-        Wanxiangshu.OpenCode.WorkspaceEventStore.acquire (RuntimePath.stateRoot workspaceRoot)
+    let private acquireStore (workspaceRoot: string) : Task<IEventStore> =
+        task {
+            let! commonDir = RuntimePath.stateRoot workspaceRoot
+            return Wanxiangshu.OpenCode.WorkspaceEventStore.acquire commonDir
+        }
 
     let tryFinalize (workspaceRoot: string) (sessionId: string) : Task<obj> =
-        let store = acquireStore workspaceRoot
-
         task {
+            let! store = acquireStore workspaceRoot
             let! settled = CasebookLifecycle.tryFinalizeDraft workspaceRoot store sessionId
 
             return settlementToJs settled
@@ -97,7 +99,9 @@ module CasebookLifecycleSurface =
 
     let touchAccess (workspaceRoot: string) (sessionId: string) : Task<obj> =
         task {
-            match! CasebookLifecycle.touchAccess workspaceRoot (acquireStore workspaceRoot) sessionId with
+            let! store = acquireStore workspaceRoot
+
+            match! CasebookLifecycle.touchAccess workspaceRoot store sessionId with
             | Ok() -> return box {| ok = true |}
             | Error error -> return CasebookAppendSurface.mutationErrorToJs error
         }

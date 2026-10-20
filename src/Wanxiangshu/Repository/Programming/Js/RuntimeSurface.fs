@@ -27,6 +27,7 @@ module JsRuntimeSurface =
                 [ JsCapability.Read
                   JsCapability.Write
                   JsCapability.Glob
+                  JsCapability.Grep
                   JsCapability.Move
                   JsCapability.Remove
                   JsCapability.Exec
@@ -56,6 +57,7 @@ module JsRuntimeSurface =
         | "Write" -> Some JsCapability.Write
         | "Edit" -> Some JsCapability.Edit
         | "Glob" -> Some JsCapability.Glob
+        | "Grep" -> Some JsCapability.Grep
         | "Move" -> Some JsCapability.Move
         | "Remove" -> Some JsCapability.Remove
         | "Exec" -> Some JsCapability.Exec
@@ -110,6 +112,28 @@ module JsRuntimeSurface =
     let clearDelegationHosts () : unit = JsDelegationBridge.clearAll ()
 
     /// Test hook: the raw value a program handed over through `js.deliver`.
+    /// Test hook: record a value with an already-shaped deliver view.
+    let recordDeliveredView (sessionId: string) (value: obj) (view: obj) : unit =
+        JsDeliveredValues.recordView sessionId value (if isNull view then None else Some view)
+
+    /// Test hook: identities already handed back through a deliver view.
+    let deliveredReturned (sessionId: string) : string array =
+        JsDeliveredValues.alreadyReturned sessionId |> Set.toArray
+
+    let clearDeliveredReturned (sessionId: string) : unit =
+        JsDeliveredValues.clearReturned sessionId
+
+    /// Test hook: consume the handoff the completion path reads.
+    let takeDeliveredHandoffWith (sessionId: string) (assistantProse: string option) : obj =
+        match JsDeliveredValues.tryTakeRenderedWith sessionId assistantProse with
+        | Some text -> box text
+        | None -> null
+
+    let takeDeliveredHandoff (sessionId: string) : obj =
+        match JsDeliveredValues.tryTakeRendered sessionId with
+        | Some text -> box text
+        | None -> null
+
     let deliveredValue (sessionId: string) : obj = JsDeliveredValues.peek sessionId
 
     let clearDeliveredValue (sessionId: string) : unit = JsDeliveredValues.clear sessionId

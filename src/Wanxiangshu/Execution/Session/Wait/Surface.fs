@@ -337,9 +337,11 @@ module CausalWaitSurface =
             | Error exit -> return box {| ok = false; reason = exitName exit |}
         }
 
-    let writeSnapshot (workspace: string) (registry: obj) : unit =
-        let handle = registry :?> RuntimeHandle
-        CausalWaitBridge.writeSnapshot workspace (handle.Runtime.SnapshotReader.Snapshot())
+    let writeSnapshot (workspace: string) (registry: obj) : Task<unit> =
+        task {
+            let handle = registry :?> RuntimeHandle
+            do! CausalWaitBridge.writeSnapshot workspace (handle.Runtime.SnapshotReader.Snapshot())
+        }
 
     let bindDiagnosticWorkspace (registry: obj) (workspace: string) : bool =
         let handle = registry :?> RuntimeHandle

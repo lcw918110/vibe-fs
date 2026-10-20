@@ -10,12 +10,11 @@ const eventStore = await import("../../../dist/Persistence/EventStore/Surface.js
 const journal = await import("../../../dist/Persistence/Journal/Surface.js");
 const casebook = await import("../../../dist/Repository/Knowledge/Casebook/Surface.js");
 const transaction = await import("../../../dist/Repository/Programming/Js/TransactionSurface.js");
-const strength = await import("../../../dist/Strength/Surface.js");
-const { strengthDelegationChainEvents } = await import("../../verification-system/tests/support/strength-delegation-chain.mjs");
+
 const workspace = await import("../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js");
 
 const id = (n) => n.toString(16).padStart(40, '0')
-const hash = (text) => `proof-hash(${text})`
+
 const structuralEvent = {
   id: id(1),
   stream: 'canonical-integrator/proof',
@@ -40,33 +39,6 @@ test('WHAT[durable-events-019] every registered business oracle changes its prod
     try {
       mustOk(await eventStore.append(store, [structuralEvent]), 'append Structural fact')
 
-      const payload = mustOk(
-        await strength.storeWritePayload(store, new TextEncoder().encode('canonical strength material')),
-        'write Strength payload',
-      )
-      const delegationChain = strengthDelegationChainEvents(strength, {
-        ownerSessionId: 'canonical-owner',
-        decisionId: 'canonical-decision',
-        targetProviderRun: 'canonical-target-run',
-        replicaSessionId: 'canonical-replica',
-        anchorDigest: 'canonical-anchor',
-      })
-
-      mustOk(await strength.storeAppend(store, hash, delegationChain.requested), 'append Strength Requested fact')
-      mustOk(await strength.storeAppend(store, hash, delegationChain.bound), 'append Strength Bound fact')
-
-      const strengthFact = strength.eventPrepared(
-        'canonical-owner',
-        'canonical-decision',
-        'canonical-target-run',
-        'canonical-replica',
-        'canonical-anchor',
-        'canonical-frame',
-        27,
-        [payload.value],
-      )
-      mustOk(await strength.storeAppend(store, hash, strengthFact), 'append Strength fact')
-
       mustOk(
         await casebook.archive(store, {
           sessionId: 'canonical-case',
@@ -88,20 +60,17 @@ test('WHAT[durable-events-019] every registered business oracle changes its prod
       )
 
       const fetched = mustOk(await casebook.fetchCase(store, 10, 'canonical-case'), 'read Casebook Current')
-      const strengthCurrent = strength.storeCurrent(store)
 
       assert.deepEqual(
         {
           structuralHead: eventStore.head(store, structuralEvent.stream),
           structuralEvent: eventStore.read(store, structuralEvent.id)?.payload?.proof ?? null,
-          strengthDecision: strength.projectionDecisionForTarget('canonical-target-run', strengthCurrent),
           caseAnswer: fetched.value?.a ?? null,
           pendingTransactions: transaction.pending(store).map(({ transactionId }) => transactionId).sort(),
         },
         {
           structuralHead: structuralEvent.id,
           structuralEvent: 'structural',
-          strengthDecision: 'canonical-decision',
           caseAnswer: 'A',
           pendingTransactions: ['canonical-transaction'],
         },
@@ -114,7 +83,6 @@ test('WHAT[durable-events-019] every registered business oracle changes its prod
     try {
       assert.equal(eventStore.head(reopened, structuralEvent.stream), structuralEvent.id)
       assert.equal(eventStore.read(reopened, structuralEvent.id)?.payload?.proof, 'structural')
-      assert.equal(strength.projectionDecisionForTarget('canonical-target-run', strength.storeCurrent(reopened)), 'canonical-decision')
       assert.equal(mustOk(await casebook.fetchCase(reopened, 10, 'canonical-case'), 'replayed Casebook Current').value?.a, 'A')
       assert.deepEqual(transaction.pending(reopened).map(({ transactionId }) => transactionId), ['canonical-transaction'])
     } finally {
@@ -162,9 +130,12 @@ test('WHAT[durable-events-019] every registered business oracle changes its prod
           null,
           {
             family: 'Companion',
-            case: 'CompanionBloggerClosed',
+            case: 'TerminalOutputCaptured',
             payload: {
               SessionId: 'canonical-session',
+              TextRef: 'blob-term',
+              TextDigest: 'sha-term',
+              ProviderRun: 'run-term',
             },
           },
         ),
@@ -223,59 +194,6 @@ test('WHAT[durable-events-019] removing one real hostProgram registration blocks
     return workspace.createIsolatedWithoutRegistration(commonDir, writerId, ruleName)
   }
 
-  {
-    const root = mkdtempSync(join(tmpdir(), 'wxs-integrator-without-strength-'))
-    try {
-      const store = isolatedStore('Strength', 'without-strength', root)
-      try {
-        mustOk(await eventStore.append(store, [structuralEvent]), 'append Structural fact with Strength removed')
-        const payload = mustOk(
-          await strength.storeWritePayload(store, new TextEncoder().encode('isolated strength material')),
-          'write Strength payload with Strength removed',
-        )
-        const delegationChain = strengthDelegationChainEvents(strength, {
-          ownerSessionId: 'isolated-owner',
-          decisionId: 'isolated-decision',
-          targetProviderRun: 'isolated-target-run',
-          replicaSessionId: 'isolated-replica',
-          anchorDigest: 'isolated-anchor',
-        })
-        mustOk(await strength.storeAppend(store, hash, delegationChain.requested), 'append Strength Requested fact with rule removed')
-        mustOk(await strength.storeAppend(store, hash, delegationChain.bound), 'append Strength Bound fact with rule removed')
-        mustOk(
-          await strength.storeAppend(
-            store,
-            hash,
-            strength.eventPrepared(
-              'isolated-owner',
-              'isolated-decision',
-              'isolated-target-run',
-              'isolated-replica',
-              'isolated-anchor',
-              'isolated-frame',
-              27,
-              [payload.value],
-            ),
-          ),
-          'append Strength fact with rule removed',
-        )
-        assert.equal(
-          strength.projectionDecisionForTarget('isolated-target-run', strength.storeCurrent(store)),
-          null,
-          'the Strength Current no longer produces the delegation decision',
-        )
-        assert.equal(
-          eventStore.head(store, structuralEvent.stream),
-          structuralEvent.id,
-          'the kept Structural registration still folds its live fact',
-        )
-      } finally {
-        eventStore.dispose(store)
-      }
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  }
 
   {
     const root = mkdtempSync(join(tmpdir(), 'wxs-integrator-without-casebook-'))

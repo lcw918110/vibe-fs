@@ -3,7 +3,7 @@ import test from 'node:test'
 import * as association from '../../../dist/Execution/Session/AssociationSurface.js'
 
 test('WHAT[session-ontology-002] an actual companion association exposes one owner and one attachment kind', () => {
-  const linked = association.link({ main: 'owner', blogger: 'companion' }, association.empty)
+  const linked = association.link({ main: 'owner', companion: 'companion' }, association.empty)
   assert.equal(linked.ok, true, linked.message)
   assert.deepEqual(association.classify('companion', linked.value), {
     executionClass: 'InternalLeaf',

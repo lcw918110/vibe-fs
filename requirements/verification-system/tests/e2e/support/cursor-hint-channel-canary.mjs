@@ -21,7 +21,7 @@ const routingDir = path.join(home, '.config', 'opencode');
 fs.mkdirSync(routingDir, { recursive: true });
 fs.writeFileSync(
   path.join(routingDir, 'wanxiangshu.mjs'),
-  "export const routingProtocol = 2\nexport const hasTheoreticalCapacity = (role, purpose) => true;\nexport default function route(role, running, previous, purpose) { return { model: 'cursor/default', reasoning: 'none' } }\nexport const predictorConfiguration = () => { const state = globalThis.__wanxiangshu_test_predictor_state ?? 'unconfigured'; if (state === 'configured') return { state: 'configured', reason: null }; if (state === 'invalid') return { state: 'invalid', reason: globalThis.__wanxiangshu_test_predictor_reason ?? 'test Predictor configuration is invalid' }; return { state: 'unconfigured', reason: null } }\n",
+  "export const routingProtocol = 2\nexport const hasTheoreticalCapacity = (role, purpose) => true;\nexport default function route(role, running, previous, purpose) { return { model: 'cursor/default', reasoning: 'none' } }\n",
   'utf8',
 );
 

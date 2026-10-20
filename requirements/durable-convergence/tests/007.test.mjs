@@ -9,8 +9,6 @@ const { default: test } = await import("node:test");
 const eventStore = await import("../../../dist/Persistence/EventStore/Surface.js");
 const casebook = await import("../../../dist/Repository/Knowledge/Casebook/Surface.js");
 const transaction = await import("../../../dist/Repository/Programming/Js/TransactionSurface.js");
-const strength = await import("../../../dist/Strength/Surface.js");
-const { strengthDelegationChainEvents } = await import("../../verification-system/tests/support/strength-delegation-chain.mjs");
 
 const structuralEvent = {
   id: '7'.repeat(40),
@@ -30,7 +28,6 @@ const observe = async (store) => {
   return {
     structuralHead: eventStore.head(store, structuralEvent.stream),
     structuralPayload: eventStore.read(store, structuralEvent.id)?.payload?.proof ?? null,
-    strengthDecision: strength.projectionDecisionForTarget('parity-target', strength.storeCurrent(store)),
     caseAnswer: caseResult.value?.a ?? null,
     pendingTransactions: transaction.pending(store).map(({ transactionId }) => transactionId).sort(),
   }
@@ -47,38 +44,6 @@ test('WHAT[durable-convergence-007] retained rich history rebuilds the exact liv
 
     try {
       mustOk(await eventStore.append(liveStore, [structuralEvent]), 'append Structural fact')
-      const payload = mustOk(
-        await strength.storeWritePayload(liveStore, new TextEncoder().encode('parity strength material')),
-        'write Strength payload',
-      )
-      const delegationChain = strengthDelegationChainEvents(strength, {
-        ownerSessionId: 'parity-owner',
-        decisionId: 'parity-decision',
-        targetProviderRun: 'parity-target',
-        replicaSessionId: 'parity-replica',
-        anchorDigest: 'parity-anchor',
-      })
-
-      mustOk(await strength.storeAppend(liveStore, (text) => `parity-hash(${text})`, delegationChain.requested), 'append Strength Requested fact')
-      mustOk(await strength.storeAppend(liveStore, (text) => `parity-hash(${text})`, delegationChain.bound), 'append Strength Bound fact')
-
-      mustOk(
-        await strength.storeAppend(
-          liveStore,
-          (text) => `parity-hash(${text})`,
-          strength.eventPrepared(
-            'parity-owner',
-            'parity-decision',
-            'parity-target',
-            'parity-replica',
-            'parity-anchor',
-            'parity-frame',
-            24,
-            [payload.value],
-          ),
-        ),
-        'append Strength fact',
-      )
       mustOk(
         await casebook.archive(liveStore, {
           sessionId: 'parity-case',
@@ -105,7 +70,6 @@ test('WHAT[durable-convergence-007] retained rich history rebuilds the exact liv
     assert.deepEqual(live, {
       structuralHead: structuralEvent.id,
       structuralPayload: 'replayed',
-      strengthDecision: 'parity-decision',
       caseAnswer: 'replayed answer',
       pendingTransactions: ['parity-transaction'],
     })

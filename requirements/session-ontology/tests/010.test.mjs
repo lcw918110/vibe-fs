@@ -11,6 +11,5 @@ const linked = (pairs, start = assoc.empty) =>
 
 test('WHAT[session-ontology-010] COMPANION_001_unknown_session_is_not_a_companion', () => {
   assert.equal(assoc.isCompanion('ses_unknown', assoc.empty), false)
-  assert.equal(assoc.bloggerOf('ses_unknown', assoc.empty), null)
   assert.equal(assoc.entry('ses_unknown', assoc.empty), null)
 })

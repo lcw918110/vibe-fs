@@ -151,28 +151,16 @@ module JournalPayloadClosure =
             | Fact.Agent(AgentFact.Companion(CompanionFactCases.XTracePartAppended p)) -> pair p.TextRef p.TextDigest
             | Fact.Agent(AgentFact.Companion(CompanionFactCases.TerminalOutputCaptured p)) ->
                 pair p.TextRef p.TextDigest
-            | Fact.Agent(AgentFact.Context(ContextFactCases.BlogObservationCommitted p)) ->
-                pair p.TextRef p.TextDigest
-                @ (p.TipTextRef |> Option.toList |> List.choose payloadRefOfBlobRef)
-                @ (p.TipTextDigest |> Option.toList |> List.choose payloadRefOfBlobDigest)
-                @ (p.EvidenceRef |> Option.toList |> List.choose payloadRefOfBlobRef)
-            | Fact.Agent(AgentFact.Context(ContextFactCases.BloggerRequestMaterialized p)) ->
-                pair p.ContextRef p.ContextDigest
-                @ (p.SelectedFrameDigests |> List.choose payloadRefOfBlobDigest)
-            | Fact.Agent(AgentFact.Context(ContextFactCases.PrefixRebaseCommitted p)) ->
-                pair p.FrozenRecordPrefixRef p.FrozenRecordPrefixDigest
-            | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionAdmitted p)) ->
-                pair p.OwnerWorkRecordRef p.OwnerWorkRecordDigest
-            | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionLaneMaterialized p)) ->
-                pair p.WorkRecordRef p.WorkRecordDigest
+            | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionAdmitted p)) -> pair p.OwnerViewRef p.OwnerViewDigest
+            | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionLaneMaterialized p)) -> pair p.ViewRef p.ViewDigest
             | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionCompletionCaptured p)) ->
                 pair p.PayloadRef p.PayloadDigest
             | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionTakeoverClaimed p)) ->
-                pair p.AggregateWorkRecordRef p.AggregateWorkRecordDigest
+                pair p.AggregateViewRef p.AggregateViewDigest
             | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionTakeoverStarted p)) ->
-                pair p.AggregateWorkRecordRef p.AggregateWorkRecordDigest
+                pair p.AggregateViewRef p.AggregateViewDigest
             | Fact.Agent(AgentFact.Fission(FissionFactCases.FissionConverged p)) ->
-                pair p.AggregateWorkRecordRef p.AggregateWorkRecordDigest
+                pair p.AggregateViewRef p.AggregateViewDigest
             | _ -> []
 
         PayloadRefs.canonicalize refs

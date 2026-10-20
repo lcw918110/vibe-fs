@@ -352,7 +352,7 @@ module PlanningSurface =
                    error = reason |}
 
     // The delegate argument arrives as a plain JavaScript function
-    // (intent) => Promise<workRecord>; call it through JS interop so currying
+    // (intent) => Promise<view>; call it through JS interop so currying
     // never gets in the way.
     let private delegateOfJs (delegateVal: obj) : string -> Task<string> =
         fun (intent: string) -> unbox<Task<string>> (emitJsExpr (delegateVal, intent) "$0($1)")
@@ -366,7 +366,7 @@ module PlanningSurface =
                     box
                         {| ok = false
                            kind = null
-                           workRecord = null
+                           view = null
                            status = null
                            error = "git common directory is missing" |}
             else
@@ -378,14 +378,14 @@ module PlanningSurface =
                         box
                             {| ok = false
                                kind = null
-                               workRecord = null
+                               view = null
                                status = null
                                error = error |}
                     | Ok asked ->
                         box
                             {| ok = true
                                kind = asked.Kind
-                               workRecord = asked.WorkRecord
+                               view = asked.View
                                status = asked.Status
                                error = null |}
         }

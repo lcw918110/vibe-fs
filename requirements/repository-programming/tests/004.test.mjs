@@ -19,8 +19,7 @@ const isSome = (value) => value !== null
 
 const PERMISSION_NAMES = [
   'Fork', 'Join', 'Horizon', 'TodoWrite', 'Fission', 'Read', 'Write', 'Edit', 'Fetch', 'Glob', 'Grep', 'Move',
-  'Remove', 'Inspect', 'Behavior', 'Exec', 'Pty', 'Network', 'ReviewAssessment', 'Chronicle',
-  'Finality', 'BashHoneypot',
+  'Remove', 'Inspect', 'Behavior', 'Exec', 'Pty', 'Network', 'ReviewAssessment',
 ]
 
 const toolPermissionByName = Object.fromEntries(PERMISSION_NAMES.map((n) => [n, n]))
@@ -35,6 +34,7 @@ const fsPermissionsOf = (role) =>
 const MEMBERS_BY_PERMISSION = {
   Read: ['cat', 'stat', 'whereAll', 'where'],
   Glob: ['ls'],
+  Grep: ['rg'],
   Write: ['write', 'mkdir'],
   Move: ['mv'],
   Remove: ['rm'],
@@ -46,13 +46,14 @@ const BINDING_BY_MEMBER = {
   mv: 'js.mv',
   cat: 'js.cat',
   ls: 'js.ls',
+  rg: 'js.rg',
   stat: 'js.stat',
   mkdir: 'js.mkdir',
   whereAll: 'js.whereAll',
   where: 'js.where',
 }
 
-const MEMBER_ORDER = ['write', 'rm', 'mv', 'cat', 'ls', 'stat', 'mkdir', 'whereAll', 'where']
+const MEMBER_ORDER = ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where']
 
 const layersOf = (s) =>
   Object.fromEntries(

@@ -141,7 +141,7 @@ Stop plugin 可基于 decision-equivalence posterior、tested framing family 内
 
 ## [031] Sphinx 探究流程全程序控制，无 Inquiry 角色与模型驾驶层
 
-Sphinx 探究的预算控制、工作项调度、认识状态推进与终止收束完全由程序控制。Manager、Orchestrator 与 Engineer 通过唯一的 `sphinx(question)` 工具输入问题，即可直接获得有界探究结果、证据界限或明确未决后果；预算由程序拥有，调用方不通过 yield/nextTool/phase 逐轮驾驶探究循环。DevOps、Blogger 无工具调用权。系统不设立 Inquiry 或 Sphinx 角色、Persona、Prompt 及模型槽位，不作为独立参与者存在。
+Sphinx 探究的预算控制、工作项调度、认识状态推进与终止收束完全由程序控制。Manager、Orchestrator 与 Engineer 通过唯一的 `sphinx(question)` 工具输入问题，即可直接获得有界探究结果、证据界限或明确未决后果；预算由程序拥有，调用方不通过 yield/nextTool/phase 逐轮驾驶探究循环。DevOps 无工具调用权。系统不设立 Inquiry 或 Sphinx 角色、Persona、Prompt 及模型槽位，不作为独立参与者存在。
 
 ## [032] 内部 Engineer 使用标准权限且会话压平
 

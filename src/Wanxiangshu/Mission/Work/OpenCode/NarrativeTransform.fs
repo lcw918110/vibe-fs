@@ -15,7 +15,6 @@ open Wanxiangshu.Context.Trace
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Mission.Lifecycle
 open Wanxiangshu.Mission.Planning
-open Wanxiangshu.Mission.WorkRecord
 open Wanxiangshu.Persistence.Journal
 
 [<RequireQualifiedAccess>]
@@ -194,69 +193,16 @@ module RelayNarrativeTransform =
             |> Option.isSome
         | _ -> false
 
-    let private firstCursors (journal: AgentJournal) (sessionId: SessionId) =
-        AgentProjection.tryFind sessionId (AgentJournal.snapshot journal).AgentProjections
-        |> Option.bind (fun session -> session.XTrace)
-        |> Option.map XTraceProjection.hostMessageFirstCursors
-        |> Option.defaultValue Map.empty
-
-    let private earlierAssistantOrTool openingCursor cursors message =
-        match messageRole message, messageId message |> Option.bind (fun id -> Map.tryFind id cursors) with
-        | Some role, Some sequence when
-            (role.ToLowerInvariant() = "assistant" || role.ToLowerInvariant() = "tool")
-            && sequence < openingCursor
-            ->
-            true
-        | _ -> false
-
-    /// Algorithm G1's identity rule, the same one the Plan tenure assembly applies:
-    /// an interaction whose Host id has not been captured yet stays (its cursor is
-    /// unknown, not absent), while a semantic interaction with no Host id at all
-    /// would have to be guessed into a predecessor's row, so the assembly refuses.
-    let private interactionHasNoStableIdentity (message: obj) =
-        messageRole message
-        |> Option.exists (fun role ->
-            let role = role.ToLowerInvariant()
-
-            (role = "assistant" || role = "tool")
-            && (messageId message).IsNone
-            && not (List.isEmpty (ProviderWireDecode.rawPartsOf message)))
-
-    /// Successor visibility. Opening sequence comes from the active lifecycle
-    /// tenure. The other side is the first observation of a captured Host
-    /// message id. A message absent from that map has not been captured yet,
-    /// so it stays. Only assistant and tool interactions strictly earlier
-    /// than the opening are stripped; user input stays. The retirement cut is
-    /// not a strip condition.
+    /// S1/S2/S3/S4 relay no longer clears context. Opening cursor records the
+    /// tenure boundary; it does not strip predecessor assistant or tool
+    /// messages. Retention and truncation belong to the view declaration.
     let private projectActive
-        (journal: AgentJournal)
-        (sessionId: SessionId)
+        (_journal: AgentJournal)
+        (_sessionId: SessionId)
         (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option)
-        outObj
+        _outObj
         =
-        task {
-            let messages = ProviderWireDecode.messagesFromTransformOutput outObj
-
-            let cursors, openingCursor =
-                match work with
-                | Some current when current.ActiveId.IsSome ->
-                    (firstCursors journal sessionId, current.OpeningCursor |> Option.map (fun cursor -> int64 cursor))
-                | _ -> Map.empty, None
-
-            if openingCursor.IsSome && messages |> List.exists interactionHasNoStableIdentity then
-                invalidOp "Manager interaction has no stable XTrace message identity"
-
-            let kept =
-                messages
-                |> List.filter (fun message ->
-                    not (
-                        openingCursor
-                        |> Option.exists (fun opening -> earlierAssistantOrTool opening cursors message)
-                    ))
-
-            HostMessageProjection.replaceMessagesInPlace outObj kept
-            return dispositionAfterProjection work
-        }
+        task { return dispositionAfterProjection work }
 
     let private project
         journal

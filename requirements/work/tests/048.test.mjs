@@ -21,7 +21,7 @@ const accepted = receipt => {
 }
 
 const seedPendingDelivery = async (control, directory, workId, execSessionId, content, bind = true) => {
-  const commonDir = journalSurface.JournalSurface_initializeStateRoot(directory)
+  const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
   await control.withRuntime(async runtime => {
     await acceptAuthorityRoot(runtime, workId, 'manager', `root-${workId}`)
   })

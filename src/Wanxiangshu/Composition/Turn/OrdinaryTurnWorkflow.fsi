@@ -2,7 +2,6 @@ namespace Wanxiangshu.Composition.Turn
 
 open System.Collections.Generic
 open System.Threading.Tasks
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.OpenCode
 open Wanxiangshu.Persistence.Journal
 
@@ -28,7 +27,6 @@ module OrdinaryTurnWorkflow =
         eventPort: IEventObservationPort ->
         journal: AgentJournal option ->
         observation: TurnObservationJournalPort option ->
-        recoveryScope: IBloggerRuntimeHost ->
         joinGuardNudges: HashSet<string> ->
         hasLivePty: (string -> bool) ->
         abortCause: AbortCause ->

@@ -103,7 +103,7 @@ test(`WHAT[host-boundary-033] ${origin} preserves the old lease until the visibl
     }, {})
     assert.equal(runtime.prompts.filter(prompt => prompt.path?.id === sessionID).length, 0,
       'late observation must not dispatch a provider retry to the superseded execution')
-    assert.ok(runtime.prompts.every(prompt => prompt.body?.agent === 'blogger'))
+    assert.ok(runtime.prompts.every(prompt => prompt.path?.id !== sessionID))
   })
 })
 }

@@ -4,7 +4,6 @@ open Wanxiangshu.Persistence.Journal.JournalOutcome
 open System
 open System.Threading.Tasks
 open Fable.Core.JsInterop
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -236,13 +235,7 @@ module SessionRecoveryHostSurface =
             do! seedAccepted handle sessionId physicalUserMessageId
 
             match!
-                ManagedChatProviderLifecycle.providerStarted
-                    journal
-                    key
-                    evidence
-                    run
-                    ProviderRequestKind.WorkMain
-                    XProjectionChoice.UseCommittedEpoch
+                ManagedChatProviderLifecycle.providerStarted journal key evidence run ProviderRequestKind.WorkMain
             with
             | Ok _ -> ()
             | Error error -> return invalidOp $"recovery proof provider-started seeding failed: {error}"
@@ -264,8 +257,7 @@ module SessionRecoveryHostSurface =
             let started =
                 { Accepted = evidence
                   ProviderRun = ProviderRunIdentity.create providerRun
-                  RequestKind = ProviderRequestKind.WorkMain
-                  ProjectionChoice = XProjectionChoice.UseCommittedEpoch }
+                  RequestKind = ProviderRequestKind.WorkMain }
 
             do!
                 handle.Host.Finalize
@@ -370,20 +362,6 @@ module SessionRecoveryHostSurface =
             return
                 box
                     {| result = result
-                       manuals = manualsOf handle.Scope |}
-        }
-
-    /// provider-attempt-recovery-024: the load phase abandoned a stale Blogger
-    /// open request; settle the same-source Accepted-without-ProviderStarted
-    /// executions and report the counts.
-    let settleStaleBloggerAcceptedExecutions (handle: RecoveryHostHandle) (sessionId: string) : Task<obj> =
-        task {
-            let! settled, alreadyTerminal = handle.Host.SettleStaleBloggerAcceptedExecutions(SessionId.create sessionId)
-
-            return
-                box
-                    {| settled = settled
-                       alreadyTerminal = alreadyTerminal
                        manuals = manualsOf handle.Scope |}
         }
 
@@ -525,8 +503,7 @@ module SessionRecoveryHostSurface =
             let started =
                 { Accepted = evidence
                   ProviderRun = ProviderRunIdentity.create providerRun
-                  RequestKind = ProviderRequestKind.WorkMain
-                  ProjectionChoice = XProjectionChoice.UseCommittedEpoch }
+                  RequestKind = ProviderRequestKind.WorkMain }
 
             let terminal =
                 match disposition with

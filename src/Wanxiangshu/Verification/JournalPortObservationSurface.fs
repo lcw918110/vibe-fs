@@ -582,7 +582,11 @@ module JournalPortObservationSurface =
                 AgentJournal.appendAgent
                     (StreamId.Session(SessionId.create "native-settlement"))
                     None
-                    (CompanionFact.CompanionBloggerClosed {| SessionId = SessionId.create "native-settlement" |})
+                    (CompanionFact.OpeningPromptCaptured
+                        {| SessionId = SessionId.create "native-settlement"
+                           AssignmentText = "native settlement"
+                           AuthoritativeRequirements = []
+                           ProviderRun = None |})
                     handle.Journal
 
             match result with

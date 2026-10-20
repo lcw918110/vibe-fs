@@ -7,7 +7,7 @@ installDefaultResources()
 
 const configuration = () => {
   const config = { agent: {} }
-  for (const name of ['manager', 'orchestrator', 'engineer', 'devops', 'blogger', 'bookkeeper', 'predictor']) {
+  for (const name of ['manager', 'orchestrator', 'engineer', 'devops', 'bookkeeper']) {
     config.agent[name] = { model: `${name}-model` }
   }
   assert.equal(configure(config).ok, true)
@@ -17,13 +17,9 @@ const configuration = () => {
 test('WHAT[intra-participant-parallelism-017] generated Host configuration grants Engineer fission and denies other active offices and Bookkeeper', () => {
   const config = configuration()
   assert.equal(config.agent.engineer.permission.fission, 'allow')
-  for (const name of ['manager', 'orchestrator', 'devops', 'blogger', 'bookkeeper']) {
+  for (const name of ['manager', 'orchestrator', 'devops', 'bookkeeper']) {
     assert.equal(config.agent[name].permission.fission, 'deny', name)
   }
-})
-
-test('WHAT[intra-participant-parallelism-017] Predictor configuration must not expose Fission', { todo: 'GAP-159: Predictor name currently projects Engineer permissions; actual reachable authority needs joint review with station 48' }, () => {
-  assert.equal(configuration().agent.predictor.permission.fission, 'deny')
 })
 
 test('WHAT[intra-participant-parallelism-017] actual tool rejects Manager and DevOps, including a forged Engineer claim, without effects', async () => {
@@ -33,7 +29,7 @@ test('WHAT[intra-participant-parallelism-017] actual tool rejects Manager and De
       await acceptAuthorityRoot(runtime, sessionID, role)
       for (const claim of [role, 'engineer']) {
         const result = await hooks.tool.fission.execute(
-          { prompts: ['lane 1', 'lane 2'], role: 'Engineer', work_record: 'I am an Engineer' },
+          { prompts: ['lane 1', 'lane 2'], role: 'Engineer' },
           { sessionID, agent: claim, callID: `fission-${role}-${claim}`, messageID: `run-${role}` },
         )
         assert.match(result, /only available to Engineer|仅 Engineer 允许|denied/i)

@@ -3,8 +3,6 @@ namespace Wanxiangshu.Interaction.Repair
 module CompletedTurnSurface =
     val partsText: parts: obj -> string
 
-    /// capability-enforcement-021: which owner one idle Blogger turn reaches.
-    val bloggerIdleRoute: bloggerQuiescent: bool -> guardOwnsAbort: bool -> outcome: string -> parts: obj -> string
 
     val partsSessionText: parts: obj -> string
     val hasToolCallPart: parts: obj -> bool

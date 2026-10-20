@@ -29,7 +29,7 @@ const remainsPending = async (promise) =>
     new Promise((resolve) => setImmediate(() => resolve({ kind: 'pending' }))),
   ])
 
-test('WHAT[delegation-031] successive completed work reuses the child and delivers each bounded WorkRecord', async () => {
+test('WHAT[delegation-031] successive completed work reuses the child and delivers each bounded view', async () => {
   const owner = 'owner-deleg031-duplicate'
   const h = await live(owner)
   try {

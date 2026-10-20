@@ -8,7 +8,7 @@ open System.Threading.Tasks
 module ForkToolSurface =
 
     val createRuntime: directory: string -> owners: obj -> Task<obj>
-    val createRuntimeWithWorkRecordRead: directory: string -> owners: obj -> beforeRead: (string -> Task) -> Task<obj>
+    val createRuntimeWithViewRead: directory: string -> owners: obj -> beforeRead: (string -> Task) -> Task<obj>
     val createRuntimeWithAbort: directory: string -> owners: obj -> abortSession: (string -> Task<obj>) -> Task<obj>
 
     val createRuntimeWithCancelSignals:

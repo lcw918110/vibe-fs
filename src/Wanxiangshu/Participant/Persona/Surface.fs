@@ -48,10 +48,7 @@ module PersonaSurface =
     let isManagedName (name: string) : bool =
         if isNull name then
             false
-        elif
-            ManagedAgentCatalog.isBookkeeperName name
-            || name.ToLowerInvariant() = "predictor"
-        then
+        elif ManagedAgentCatalog.isBookkeeperName name then
             true
         elif ManagedAgentCatalog.isLegacyAgentName (name.ToLowerInvariant()) then
             false

@@ -13,13 +13,11 @@ open Wanxiangshu.Sphinx.V2.Composition
 module WorkspaceEventStore =
 
     /// The single host-wide store serves the workspace journal, casebook
-    /// lifecycle/fetch, js-transaction durability and strength durable
-    /// promotion, so its history program is the journal spine plus exactly
+    /// lifecycle/fetch and js-transaction durability, so its history program is the journal spine plus exactly
     /// those owning oracles. Registration order matches the historical full
     /// program. Native Sphinx inquiries share this same writer and Current.
     let private hostProgram: IntegrationRule list =
         CanonicalIntegrator.baseRules
-        @ Wanxiangshu.Strength.StrengthIntegrationRules.rules
         @ Wanxiangshu.Sphinx.V2.Composition.Bind.rules
         @ Wanxiangshu.Repository.Knowledge.Casebook.CasebookIntegrationRules.rules
         @ Wanxiangshu.Repository.Programming.Js.JsTransactionIntegrationRules.rules

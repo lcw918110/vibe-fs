@@ -63,9 +63,7 @@ test('WHAT[provider-projection-007] Strength namespace imports are rejected prec
 test('WHAT[provider-projection-007] each foreign owner reference is rejected precisely', () => {
   for (const [source, reference] of [
     ['open Wanxiangshu.Context.Prefix', 'Wanxiangshu.Context.Prefix'],
-    ['open Wanxiangshu.Enforcer', 'Wanxiangshu.Enforcer'],
     ['open Wanxiangshu.Interaction.Dispatch', 'Wanxiangshu.Interaction.Dispatch'],
-    ['let frame = Wanxiangshu.Strength.Frame.empty', 'Wanxiangshu.Strength.Frame.empty'],
     ['open Wanxiangshu.Execution.Session.Recovery', 'Wanxiangshu.Execution.Session.Recovery'],
   ]) {
     assert.deepEqual(
@@ -78,12 +76,9 @@ test('WHAT[provider-projection-007] each foreign owner reference is rejected pre
 test('WHAT[provider-projection-007] each foreign materialization is rejected precisely', () => {
   for (const name of [
     'ActivatePrefixEpoch',
-    'InsertBlogFrames',
-    'BlogFramesIntent',
     'InsertRepair',
     'SuppressTransportOnly',
     'ReanchorAfterCompaction',
-    'CompanionProjectionBuilder',
     'ProjectionConstants.RepairInstruction',
   ]) {
     assert.deepEqual(

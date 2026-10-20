@@ -102,7 +102,6 @@ module OrchestratorHostSurface =
         | "Inquiry" -> Some Role.Inquiry
         | "DevOps" -> Some Role.DevOps
         | "Distiller" -> Some Role.Distiller
-        | "Blogger" -> Some Role.Blogger
         | _ -> None
 
     let private terminalOutcome (value: obj) : TerminalOutcome =
@@ -358,10 +357,7 @@ module OrchestratorHostSurface =
                 fun _ _ _ _ _ _ _ -> Task.FromResult(Error "SendGateContinuation unavailable on harness surface")
               ContinueManagerLoop = fun _ _ -> Task.FromResult(Ok())
               RepoPath = stringOf (field options "repoPath")
-              TargetBranch = stringOf (field options "targetBranch")
-              ParentWorkRecordFor = fun _ -> Task.FromResult None
-              ChildWorkRecordFor = fun _ -> Task.FromResult None
-              ChildWorkRecordForRun = fun _ _ -> Task.FromResult None }
+              TargetBranch = stringOf (field options "targetBranch") }
 
         let host =
             OrchestratorHost(deps, SessionId.create (stringOf (field options "orchestratorId")))
@@ -382,22 +378,25 @@ module OrchestratorHostSurface =
     /// is observable without running the acquisition program — which matters
     /// because the program's whole job in this state is to *not* re-report a
     /// consumed hand-off.
-    let loopSignalOf (workspace: string) (managerSessionId: string) : obj =
-        let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+    let loopSignalOf (workspace: string) (managerSessionId: string) : Task<obj> =
+        task {
+            let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
 
-        let derived =
-            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir managerSessionId
-            |> Option.map DurableLoopSignal.ofWork
+            let derived =
+                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir managerSessionId
+                |> Option.map DurableLoopSignal.ofWork
 
-        match derived with
-        | None -> box {| kind = "NoWork"; detail = "" |}
-        | Some None -> box {| kind = "None"; detail = "" |}
-        | Some(Some ManagerLoopSignal.Continue) -> box {| kind = "Continue"; detail = "" |}
-        | Some(Some ManagerLoopSignal.Candidate) -> box {| kind = "Candidate"; detail = "" |}
-        | Some(Some(ManagerLoopSignal.ExceptionalTerminal reason)) ->
-            box
-                {| kind = "Exceptional"
-                   detail = reason |}
+            match derived with
+            | None -> return box {| kind = "NoWork"; detail = "" |}
+            | Some None -> return box {| kind = "None"; detail = "" |}
+            | Some(Some ManagerLoopSignal.Continue) -> return box {| kind = "Continue"; detail = "" |}
+            | Some(Some ManagerLoopSignal.Candidate) -> return box {| kind = "Candidate"; detail = "" |}
+            | Some(Some(ManagerLoopSignal.ExceptionalTerminal reason)) ->
+                return
+                    box
+                        {| kind = "Exceptional"
+                           detail = reason |}
+        }
 
     /// change-integration-005/013: invoke the exact hand-off the Host applies when
     /// it continues a delivered Manager loop, against durable work the caller
@@ -410,74 +409,85 @@ module OrchestratorHostSurface =
         (managerSessionId: string)
         (requestId: string)
         (observedCursor: obj)
-        : obj =
-        let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+        : Task<obj> =
+        task {
+            let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
 
-        let cursor =
-            if isNullish observedCursor then
-                None
-            else
-                Some(int64 (unbox<float> observedCursor))
+            let cursor =
+                if isNullish observedCursor then
+                    None
+                else
+                    Some(int64 (unbox<float> observedCursor))
 
-        match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir managerSessionId with
-        | None ->
-            box
-                {| ok = false
-                   kind = "NoWork"
-                   incumbencyId = ""
-                   error = "lifecycle work is missing" |}
-        | Some work ->
-            match work.ActiveId, work.Retirements |> List.tryLast with
-            | Some activeId, _ ->
-                box
-                    {| ok = true
-                       kind = "AlreadyWalking"
-                       incumbencyId = activeId
-                       error = "" |}
-            | None, None ->
-                box
-                    {| ok = false
-                       kind = "NoRetirement"
-                       incumbencyId = ""
-                       error = "no committed retirement to continue" |}
-            | None, Some retirement ->
-                match
-                    DeliveredTenureHandOff.continuation commonDir managerSessionId work retirement cursor requestId
-                with
-                | Ok incumbencyId ->
-                    box
-                        {| ok = true
-                           kind = "HandOff"
-                           incumbencyId = IncumbencyId.value incumbencyId
-                           error = "" |}
-                | Error error ->
+            match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir managerSessionId with
+            | None ->
+                return
                     box
                         {| ok = false
-                           kind = "Refused"
+                           kind = "NoWork"
                            incumbencyId = ""
-                           error = error |}
+                           error = "lifecycle work is missing" |}
+            | Some work ->
+                match work.ActiveId, work.Retirements |> List.tryLast with
+                | Some activeId, _ ->
+                    return
+                        box
+                            {| ok = true
+                               kind = "AlreadyWalking"
+                               incumbencyId = activeId
+                               error = "" |}
+                | None, None ->
+                    return
+                        box
+                            {| ok = false
+                               kind = "NoRetirement"
+                               incumbencyId = ""
+                               error = "no committed retirement to continue" |}
+                | None, Some retirement ->
+                    match
+                        DeliveredTenureHandOff.continuation commonDir managerSessionId work retirement cursor requestId
+                    with
+                    | Ok incumbencyId ->
+                        return
+                            box
+                                {| ok = true
+                                   kind = "HandOff"
+                                   incumbencyId = IncumbencyId.value incumbencyId
+                                   error = "" |}
+                    | Error error ->
+                        return
+                            box
+                                {| ok = false
+                                   kind = "Refused"
+                                   incumbencyId = ""
+                                   error = error |}
+        }
 
     /// change-integration-005/013: the durable review evidence the publish gate
     /// reads for one Manager road. `Refused` means the gate refuses publishing with
     /// zero writes.
-    let publishReviewOf (workspace: string) (managerSessionId: string) : obj =
-        let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+    let publishReviewOf (workspace: string) (managerSessionId: string) : Task<obj> =
+        task {
+            let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
 
-        let evidence =
-            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir managerSessionId
-            |> Option.bind PublishReviewEvidence.ofWork
+            let evidence =
+                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir managerSessionId
+                |> Option.bind PublishReviewEvidence.ofWork
 
-        match evidence with
-        | Some(outcome, authority) ->
-            box
-                {| kind = "Reviewed"
-                   outcome = outcome
-                   authority = authority |}
-        | None ->
-            box
-                {| kind = "Refused"
-                   outcome = ""
-                   authority = "" |}
+            match evidence with
+            | Some(outcome, authority) ->
+                return
+                    box
+                        {| kind = "Reviewed"
+                           outcome = outcome
+                           authority = authority |}
+            | None ->
+                return
+                    box
+                        {| kind = "Refused"
+                           outcome = ""
+                           authority = "" |}
+        }
 
     let hasChild (handle: obj) (agentId: string) : bool =
         (handle :?> HostHandle).Host.HasChild agentId

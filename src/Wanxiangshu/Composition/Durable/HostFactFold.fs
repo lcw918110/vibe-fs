@@ -3,8 +3,6 @@ namespace Wanxiangshu.Composition.Durable
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host
 open Wanxiangshu.OpenCode.Host.PairProgramming
-open Wanxiangshu.OpenCode.Host.RequirementGrounding
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Foundation
 
@@ -43,94 +41,6 @@ module HostFactFold =
                             Guidelines = Some updated }))
                 projection
             |> Result.mapError guidelineRejection
-
-        | HostFactCases.RequirementGroundingRequested payload ->
-            Ok(
-                AgentProjection.update
-                    payload.SessionId
-                    (fun session ->
-                        let prior =
-                            session.RequirementGrounding
-                            |> Option.defaultValue RequirementGroundingProjection.empty
-
-                        { session with
-                            RequirementGrounding =
-                                Some(RequirementGroundingProjection.applyRequested payload.Snapshot prior) })
-                    projection
-            )
-
-        | HostFactCases.RequirementGroundingMaterialObserved payload ->
-            Ok(
-                AgentProjection.update
-                    payload.SessionId
-                    (fun session ->
-                        let prior =
-                            session.RequirementGrounding
-                            |> Option.defaultValue RequirementGroundingProjection.empty
-
-                        { session with
-                            RequirementGrounding =
-                                Some(RequirementGroundingProjection.applyMaterialObserved payload.Observation prior) })
-                    projection
-            )
-
-        | HostFactCases.RequirementGroundingReadObserved payload ->
-            Ok(
-                AgentProjection.update
-                    payload.SessionId
-                    (fun session ->
-                        let prior =
-                            session.RequirementGrounding
-                            |> Option.defaultValue RequirementGroundingProjection.empty
-
-                        { session with
-                            RequirementGrounding =
-                                Some(RequirementGroundingProjection.applyReadObserved payload.Observation prior) })
-                    projection
-            )
-
-        | HostFactCases.RequirementGroundingAnchored payload ->
-            AgentProjection.tryUpdate
-                payload.SessionId
-                (fun session ->
-                    session.RequirementGrounding
-                    |> Option.defaultValue RequirementGroundingProjection.empty
-                    |> RequirementGroundingProjection.applyAnchored payload.Occurrence
-                    |> Result.map (fun updated ->
-                        { session with
-                            RequirementGrounding = Some updated }))
-                projection
-            |> function
-                | Ok updated -> Ok updated
-                | Error(RequirementGroundingFoldRejection.NonSequentialOrdinal(expected, actual)) ->
-                    reject
-                        "RequirementGroundingAnchored"
-                        (sprintf "ordinal %d is not the successor of %d" actual expected)
-                | Error(RequirementGroundingFoldRejection.DuplicateIdentity identity) ->
-                    reject "RequirementGroundingAnchored" ("identity already grounded: " + identity)
-                | Error(RequirementGroundingFoldRejection.MissingRequest identity) ->
-                    reject "RequirementGroundingAnchored" ("missing grounding request: " + identity)
-
-        | HostFactCases.TipGuidanceDelivered payload ->
-            // Idempotent: Full records the occurrence frontier (when the fact
-            // carries one) and covers the TipName; IdentityOnly is a no-op.
-            Ok(
-                AgentProjection.update
-                    payload.SessionId
-                    (fun session ->
-                        let prior = session.TipDelivery |> Option.defaultValue TipDeliveryProjection.empty
-
-                        { session with
-                            TipDelivery =
-                                Some(
-                                    TipDeliveryProjection.apply
-                                        payload.TipName
-                                        payload.OccurrenceId
-                                        payload.Presentation
-                                        prior
-                                ) })
-                    projection
-            )
 
         | HostFactCases.SessionStartedAtBound payload ->
             Ok(

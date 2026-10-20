@@ -17,8 +17,6 @@
 /src/Wanxiangshu/OpenCode/Host/SessionQuiescenceGate.fs
 /src/Wanxiangshu/OpenCode/Host/QuiescenceSurface.fs
 /src/Wanxiangshu/OpenCode/Host/PluginRecoveryScope.fs
-/src/Wanxiangshu/Context/Companion/Blogger/Runtime/CycleProjection.fs
-/src/Wanxiangshu/Context/Companion/Blogger/ContextFactFold.fs
 /src/Wanxiangshu/Execution/Session/Recovery/Model.fs
 /src/Wanxiangshu/Execution/Delegation/Fork/ChildRecovery.fs
 /src/Wanxiangshu/Execution/Delegation/ChildRecoveryWorkflow.fs

@@ -40,7 +40,7 @@ module PtyBackend =
 
             try
                 do! ensureSpawn super
-                let term = spawnSync super cmd cwd
+                let! term = spawn super cmd cwd
                 attach super port id term exitTcs
                 return Ok()
             with ex ->

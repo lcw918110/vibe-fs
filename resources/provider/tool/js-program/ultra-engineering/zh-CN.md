@@ -1,16 +1,8 @@
 class Js extends JsProgram {
-  async walk(dir) {
-    const found = [];
-    for (const entry of await this.ls(dir)) {
-      const full = dir === "." ? entry : dir + "/" + entry;
-      if (entry.endsWith("/")) found.push(...await this.walk(full.slice(0, -1)));
-      else found.push(full);
-    }
-    return found;
-  }
   async run() {
-    const paths = (await this.walk("src")).concat(await this.walk("tests"))
-      .filter((path) => path.endsWith(".js") || path.endsWith(".ts"));
+    const found = await this.rg(["oldApi", "src", "tests", "-g", "*.js", "-g", "*.ts"]);
+    const paths = [...new Set(found.messages.flatMap((message) =>
+      message.type === "match" ? [message.data.path.text] : []))];
     let rewritten = 0;
     for (const path of paths) {
       const text = await this.cat(path);

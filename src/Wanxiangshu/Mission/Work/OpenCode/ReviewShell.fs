@@ -146,16 +146,18 @@ module ReviewShell =
 
         let noteArgument = "note", ToolHostCodec.optionalStringSchema factory
 
-        let dispatch args context =
-            let gitCommonDir =
-                scope.WorkspaceDirectory
-                |> Option.map Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot
-                |> Option.defaultValue ""
+        let dispatch args context : Task<string> =
+            task {
+                let! gitCommonDir =
+                    match scope.WorkspaceDirectory with
+                    | Some ws -> Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot ws
+                    | None -> Task.FromResult ""
 
-            if scope.IsRole(context, Role.Plan) then
-                executePlan gitCommonDir args context
-            else
-                ReviewBackendManager.execute scope args context
+                if scope.IsRole(context, Role.Plan) then
+                    return! executePlan gitCommonDir args context
+                else
+                    return! ReviewBackendManager.execute scope args context
+            }
 
         { Name = "review"
           Description = providerText Path.Description Map.empty

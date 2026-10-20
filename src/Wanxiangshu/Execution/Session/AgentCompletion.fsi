@@ -19,7 +19,7 @@ type AgentCompletionPayload =
       Role: Role
       AuthorityRoot: AuthorityRootUserMessageId option
       ProviderRun: ProviderRunIdentity option
-      WorkRecord: string
+      View: string
       Directory: string option }
 
 type AgentCompletionOutcome =
@@ -73,7 +73,7 @@ module AgentCompletion =
         role: Role ->
         authorityRoot: AuthorityRootUserMessageId ->
         providerRun: ProviderRunIdentity ->
-        workRecord: string ->
+        view: string ->
         directory: string option ->
             AgentCompletionOutcome
 

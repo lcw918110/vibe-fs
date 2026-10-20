@@ -11,7 +11,6 @@ const MANAGED = [
   'manager',
   'orchestrator',
   'devops',
-  'blogger',
 ]
 
 test('WHAT[execution-model-routing-001] EMR_001_recommended_resource_is_directly_executable_and_uses_full_model_selectors', async () => {
@@ -28,6 +27,10 @@ test('WHAT[execution-model-routing-001] EMR_001_recommended_resource_is_directly
     assert.ok(selected.reasoning.length > 0)
   }
 
+  for (const retired of ['blogger', 'predictor', 'chronicle']) {
+    const selected = route(retired, [])
+    assert.equal(selected, null, `${retired} must fail closed (return null)`)
+  }
 })
 }
 

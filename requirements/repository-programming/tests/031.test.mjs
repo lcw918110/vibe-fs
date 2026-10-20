@@ -26,7 +26,7 @@ test('WHAT[repository-programming-031] deliver hard gate is wired at the deliver
   assert.match(registry, /if not \(List\.isEmpty parkedHandles\)/)
   assert.match(registry, /parked_handles/, 'refusal must carry the parked handle list')
   assert.match(registry, /Path\.DeliverBlockedByParked/)
-  assert.match(registry, /Some \[ "S1"; "S2"; "S3" \] -> planSpec\.Execute args ctx/)
+  assert.match(registry, /Some \[ "S1"; "S2"; "S3" \] -> return! planSpec\.Execute args ctx/)
 })
 
 test('WHAT[repository-programming-031] parked reminder rides the PairHint composeMarkerDocument', () => {

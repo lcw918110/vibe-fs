@@ -108,8 +108,7 @@ module ProviderLanguageSurface =
             let! _ =
                 Wanxiangshu.OpenCode.ProviderSystemTransform.createWith
                     (fun _ -> None)
-                    (fun _ -> false)
-                    (fun _ -> None)
+                    (fun _ -> Task.FromResult None)
                     input
                     output
 
@@ -130,33 +129,9 @@ module ProviderLanguageSurface =
             let! _ =
                 Wanxiangshu.OpenCode.ProviderSystemTransform.createWith
                     (fun _ -> role)
-                    (fun _ -> false)
-                    (fun _ -> None)
+                    (fun _ -> Task.FromResult None)
                     input
                     output
 
             return box {| system = unbox<string array> output?system |}
         }
-
-    /// Same boundary for a replica session of a public role.
-    let transformReplicaSystem (sessionId: string) (roleLabel: string) (system: string array) : Task<obj> =
-        task {
-
-            let role = Roles.tryParseRole roleLabel
-
-            let input = createObj [ "sessionID" ==> sessionId; "model" ==> createObj [] ]
-            let output = createObj [ "system" ==> system ]
-
-            let! _ =
-                Wanxiangshu.OpenCode.ProviderSystemTransform.createWith
-                    (fun _ -> role)
-                    (fun _ -> true)
-                    (fun _ -> None)
-                    input
-                    output
-
-            return box {| system = unbox<string array> output?system |}
-        }
-
-    let replicaConstraintFor (language: string) : string =
-        ProviderProse.render (languageOf language) "delegation/readonly-investigation" Map.empty

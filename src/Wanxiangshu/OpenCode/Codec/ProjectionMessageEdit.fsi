@@ -5,14 +5,6 @@ open Wanxiangshu.Participant.Provider.Projection
 open Wanxiangshu.Participant.Provider.Projection.ProviderProjection
 
 module ProjectionMessageEdit =
-    val replacePrefixByHostIds:
-        rawMessages: obj list ->
-        coveredHostMessageIds: string list ->
-        insertAfterHostMessageId: string option ->
-        syntheticMessageId: string ->
-        memory: string ->
-            obj list
-
     val suppressHostMessagesByIds: rawMessages: obj list -> messageIds: Set<string> -> obj list
 
     val tryApplyRenderedMessages:

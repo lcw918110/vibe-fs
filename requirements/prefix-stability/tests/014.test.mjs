@@ -109,10 +109,9 @@ test('WHAT[prefix-stability-014] PREFIX_STABILITY_pair_body_stays_out_of_the_tra
   // The only projection the pair fact may grow is Guidelines (HOST-013 recovery).
   assert.equal(flags.guidelines, true, 'the anchored fact must land in Guidelines')
 
-  // This fact fold does not create trace or frame state. Message ingestion is
+  // This fact fold does not create trace state. Message ingestion is
   // a separate path and is not proved by these flags.
   assert.equal(flags.xTrace, false, 'XTrace must not be created by the pair fact')
-  assert.equal(flags.blog, false, 'Companion frame sequence must not be created by the pair fact')
 })
 }
 

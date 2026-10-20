@@ -79,6 +79,19 @@ agents for the Manager to dispatch or join. After all lanes converge and the
 final continuation finishes, return one result. A lane's completion is not the
 completion of the whole assignment.
 
+
+## A string is the only accepted delivery
+
+The accepted return for this assignment is `js.deliver(verboseReport)`.
+`verboseReport` is one string that states what changed, what was established,
+and what remains. Text printed in the assistant message is not a return.
+An object value is not an accepted delivery for this role. Other callers still
+use `deliver(value, view)`; this contract does not narrow that global entry
+to strings only.
+
+A natural stop without that non-empty string is nudged. An empty record is not
+completion.
+
 ## Return without creating another workflow
 
 When this work is complete, or a concrete decision lies outside its authority,

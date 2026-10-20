@@ -27,14 +27,13 @@ module StaticTools =
         | ToolPermission.Move -> []
         | ToolPermission.Remove -> []
         | ToolPermission.BashHoneypot -> [ "bash-honeypot" ]
-        // Exec grants the programming surface's `js.run` loop; the Host-native
+        // Exec grants the programming surface's `js.call` loop; the Host-native
         // `run` tool is retired (repository-programming [050]-[052] supersede it).
         | ToolPermission.Exec -> []
         // Pty is retired: interactive execution is the programming surface's
-        // `js.run` ({ spawn, name } + { send, name, input } + { signal, name }).
+        // `js.call` ({ spawn, name } + { send, name, input } + { signal, name }).
         | ToolPermission.Pty -> []
         | ToolPermission.ReviewAssessment -> [ "review" ]
-        | ToolPermission.Chronicle -> [ "chronicle" ]
         | ToolPermission.Fetch -> [ "fetch" ]
         | ToolPermission.Finality -> [ "deliver" ]
         | ToolPermission.JsPlan -> [ "todowrite-for-plan" ]
@@ -73,7 +72,6 @@ module StaticTools =
           ToolPermission.Exec
           ToolPermission.Pty
           ToolPermission.ReviewAssessment
-          ToolPermission.Chronicle
           ToolPermission.Fetch
           ToolPermission.Finality
           ToolPermission.BashHoneypot
@@ -117,17 +115,15 @@ module StaticTools =
 
     /// Shared office boundary for lightweight cognitive utilities (`assume`) so
     /// schema visibility and execution admission cannot drift.
-    let cognitiveUtilityRoleAllowed (role: Role) : bool =
-        role <> Role.Blogger && role <> Role.Distiller
+    let cognitiveUtilityRoleAllowed (role: Role) : bool = role <> Role.Distiller
 
     /// capability-enforcement-006/007: a Host-declared external (MCP) tool
     /// namespace is not an office capability, so it never enters
     /// `Roles.permissions` (capability-enforcement-006) and no per-source
     /// permission table is kept for it (capability-enforcement-007). It follows
     /// the Host utility surface (`skill`) instead: every projected office role
-    /// keeps it except the internal companion, whose tool face is exactly
-    /// { chronicle }.
-    let hostExternalNamespaceAllowedForRole (role: Role) : bool = role <> Role.Blogger
+    /// keeps it.
+    let hostExternalNamespaceAllowedForRole (role: Role) : bool = true
 
     /// JS-001: a role whose capability set includes any programming-surface
     /// permission gets its todowrite-for-* tool allowed in the permission
@@ -168,14 +164,12 @@ module StaticTools =
           "assume"
           "bash-honeypot"
           "review"
-          "chronicle"
           "fetch"
           "deliver"
           "todowrite-for-engineer"
           "todowrite-for-manager"
           "todowrite-for-orchestrator"
           "todowrite-for-devops"
-          "todowrite-for-blogger"
           "todowrite-for-bookkeeper"
           "todowrite-for-plan"
           "ask"
@@ -228,7 +222,6 @@ module StaticTools =
         | true, "fork", Role.DevOps -> "deny"
         | true, "resume", Role.DevOps -> "deny"
 
-        | true, "skill", Role.Blogger -> "deny"
         | true, "skill", _ -> "allow"
         | true, "assume", role when not (cognitiveUtilityRoleAllowed role) -> "deny"
         | true, "assume", _ -> "allow"
@@ -284,9 +277,7 @@ module StaticTools =
 
     let engineerAgentConfig (prompt: string option) : obj = primaryAgent Role.Engineer prompt
 
-    /// Companion Session Y: tool set is exactly { chronicle } (ENFORCER-010).
-    /// System prompt for B-record distillation with chronicle tool protocol.
-    let bloggerAgentConfig (prompt: string) : obj = hiddenAgent Role.Blogger prompt
+
 
     /// InternalLeaf Bookkeeper Host stub (AGENT-002): hidden; ToolRegistry gates todowrite-for-bookkeeper by attachment.
     let bookkeeperAgentConfig (prompt: string) : obj =

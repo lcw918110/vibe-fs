@@ -33,7 +33,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as ForkModule from '../../../../../dist/Execution/Delegation/Fork/Surface.js';
-import * as BloggerModule from '../../../../../dist/Context/Companion/Blogger/TomlSurface.js';
 import * as SyntheticModule from '../../../../../dist/Foundation/SyntheticTomlSurface.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../..', import.meta.url));
@@ -67,20 +66,18 @@ export const forkBaseInstructions = forkInstructions.Base;
 export const forkCommissionerRecordInstruction = forkInstructions.CommissionerRecord;
 export const forkAttachmentInstruction = forkInstructions.Attachment;
 export const forkRequirementsInstruction = forkInstructions.Requirements;
-/** @deprecated use forkCommissionerRecordInstruction */
-export const forkParentWorkRecordInstruction = forkCommissionerRecordInstruction;
 
 /** Render a forked child's first prompt by field name. */
 export const forkPayload = ({
   assignment,
-  parentWorkRecord,
+  parentRecord,
   commissionerRecord,
   attachment,
   originalUserRequirements = [],
   payload,
 }) => ForkModule.render('en', {
   Assignment: assignment,
-  CommissionerRecord: commissionerRecord ?? parentWorkRecord ?? null,
+  CommissionerRecord: commissionerRecord ?? parentRecord ?? null,
   Attachment: attachment ?? null,
   RootRequirements: originalUserRequirements,
   Payload: payload ?? null,
@@ -97,24 +94,6 @@ export const forkRelay = (assignment, commissionerRecord, requirements = [], pay
 
 /** The anchor a scenario declaration uses: the first base instruction, as it appears rendered. */
 export const forkAnchor = () => comment(forkBaseInstructions[0]);
-
-// ── BloggerToml: the Companion delta ─────────────────────────────────────────
-
-const part = (kind, payload = {}) => ({ Kind: kind, ...payload });
-
-export const bloggerText = (text) => part('text', { Text: text });
-export const bloggerReasoning = (text) => part('reasoning', { Text: text });
-export const bloggerToolCall = (tool, args) => part('toolCall', { Tool: tool, Args: args });
-export const bloggerToolResult = (text) => part('toolResult', { Text: text });
-export const bloggerImageOmitted = (mediaType) => part('imageOmitted', { MediaType: mediaType });
-export const bloggerMediaOmitted = (mediaType) => part('mediaOmitted', { MediaType: mediaType });
-
-export const bloggerItem = ({ role, part: itemPart, truncated = false }) =>
-  ({ Role: role, Part: itemPart, Truncated: truncated });
-
-export const bloggerDocument = (items) => BloggerModule.render(items);
-
-export const bloggerDocumentWith = (instructions, items) => BloggerModule.renderWith(instructions, items);
 
 // ── ManagerLifecyclePrompt: GLORY activation / idle ───────────────────────────
 // Instruction-only SyntheticToml documents (already comment-prefixed).

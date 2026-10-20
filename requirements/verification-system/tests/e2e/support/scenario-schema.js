@@ -449,12 +449,10 @@ export function reachableTurnIds(turns, entries, { flow, prompt, setup } = {}) {
   // not one pass, because forks chain: Manager → Coder → the Coder's own children.
   //
   // `internal = true` opts a turn out. Production composes those prompts itself, so no
-  // scenario text can reach them and the check would have no evidence either way. Three
-  // measured sites, and the third is not a child session at all:
-  //
-  //   `CompanionHostBlogger.fs:72,77,118`  Blogger child, prompt built from the delta
-  //   `ExecutorSummarize.fs:95`            map child, prompt built per output chunk
-  //   `TurnCompletionProgram.fs:92`        continuation, SAME lane, new user message
+  // scenario text can reach them and the check would have no evidence either way. The
+  // measured sites were a child session whose prompt was built from a delta, a map child
+  // whose prompt was built per output chunk, and a continuation that stayed in the SAME
+  // lane under a new user message.
   //
   // That last one is why this is a per-TURN flag rather than a per-lane one.
   const scenarioPrompts = [
@@ -554,8 +552,8 @@ const duplicateDeclarations = (entries) => {
   // are the same declaration and `!==` would not say so.
   const turnDigest = (entry) => JSON.stringify(turnFragments(entry.turn));
   // toolsGate (runtime-key) distinguishes declarations by required/forbidden tools;
-  // compile-time must use the same identity or optional "#" repairs for manager vs
-  // blogger (different tool surfaces, same bare user text) falsely collide.
+  // compile-time must use the same identity or optional "#" repairs for two roles
+  // (different tool surfaces, same bare user text) falsely collide.
   const toolsDigest = (entry) =>
     JSON.stringify({ tools: entry.tools ?? [], forbiddenTools: entry.forbiddenTools ?? [] });
 
@@ -859,13 +857,13 @@ export function compileScenario(source, { name = '<inline>' } = {}) {
     // An internal turn's prompt is composed by production, which decides WHICH session
     // receives it. Pinning it to one alias claims knowledge the scenario does not have.
     //
-    // Measured in K9, three times, each looking like an unrelated conversion bug:
+    // Measured in K9, each case looking like an unrelated conversion bug:
     //
-    //   a Companion prompt is identical across sessions, so a lane-bound blogger turn
-    //   answered one work session out of six (`CompanionHostBlogger.fs:77`)
+    //   a production-composed prompt is identical across sessions, so a lane-bound
+    //   turn answered one work session out of six
     //
-    //   `Submit a structured verdict…` (`HostReviewGuard.fs:164`) arrived at the Reviewer
-    //   the Manager had FORKED, not at the session the scenario created for that purpose
+    //   `Submit a structured verdict…` arrived at the Reviewer the Manager had FORKED,
+    //   not at the session the scenario created for that purpose
     //
     //   `Review is required before completion.` reaches whichever Manager tried to finish
     //

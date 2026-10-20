@@ -77,6 +77,6 @@ test('WHAT[repository-programming-054] deliver without a JSON value fails as an 
 test('WHAT[repository-programming-054] every generated surface carries deliver beside park', async () => {
   const { generateSurfaceForRole } = await import('../../../dist/Repository/Programming/Js/GeneratorSurface.js')
   const surface = generateSurfaceForRole('Engineer', ['Read'])
-  assert.equal(surface.baseClassSource.includes('async deliver(value)'), true)
+  assert.equal(surface.baseClassSource.includes('async deliver(value, view)'), true)
   assert.match(surface.description, /deliver\(value\)/)
 })

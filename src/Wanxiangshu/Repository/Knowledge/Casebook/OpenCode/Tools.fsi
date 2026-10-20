@@ -1,5 +1,6 @@
 namespace Wanxiangshu.Repository.Knowledge.Casebook.OpenCode
 
+open System.Threading.Tasks
 open Wanxiangshu.OpenCode
 open Wanxiangshu.Repository.Knowledge.Casebook
 
@@ -9,4 +10,5 @@ open Wanxiangshu.Repository.Knowledge.Casebook
 /// token pair (AgentJournal + IEventStore in one file is forbidden).
 module CasebookTools =
 
-    val buildSpecs: factory: HostToolFactory -> workspaceRoot: string -> owner: CasebookSettlementOwner -> ToolSpec list
+    val buildSpecs:
+        factory: HostToolFactory -> workspaceRoot: string -> owner: CasebookSettlementOwner -> Task<ToolSpec list>

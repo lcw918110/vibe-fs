@@ -1,7 +1,6 @@
 namespace Wanxiangshu.Execution.Delegation.Advisor
 
-open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
+open Wanxiangshu.Foundation
 open Wanxiangshu.Participant.Provider
 
 /// advisor-[002]: one record of the caller's own context, addressed by the caller's anchor number.
@@ -25,9 +24,9 @@ type AdvisorViewPlan =
 
 /// advisor-[002]/[003]: render the caller's context view as the advisor seat's first prompt.
 ///
-/// The prompt keeps the repository's existing blogger input shape (ARCH-010 / CTX-013): the
-/// authored `# ` comment header, one blank line, then one `[[new_work_to_record]]` table per record.
-/// An advisor therefore reads the caller's material exactly the way a Blogger reads a delta.
+/// The prompt is this seat's own view. Foundation's `SyntheticToml` owns the bytes (ARCH-010):
+/// the authored `# ` comment header, one blank line, then one `[[new_work_to_record]]` table per
+/// record, with the record text under the field `record`. That table name is this view's schema.
 ///
 /// Selection is by anchor alone: an anchor is kept when it is below the declaration's `PrefixUntil`
 /// and was not delivered yet, and a `ThenRemove` pair replaces that anchor's text with its summary.
@@ -42,7 +41,10 @@ module AdvisorView =
     /// ARCH-010: the authored header for this view, one semantic path for both locales.
     let private viewPath = "lifecycle/advisor/view"
 
-    /// CTX-013 sparse schema: the record's text under the table's own field name.
+    /// This view's own table. One record, one table; the text sits under `record`.
+    let private recordTable = "new_work_to_record"
+
+    /// The record's text under the table's own field name.
     let private recordField = "record"
 
     let private headerLines (language: string) =
@@ -52,10 +54,8 @@ module AdvisorView =
     let private textOf (removals: Map<int, string>) (message: AdvisorViewMessage) =
         removals |> Map.tryFind message.Anchor |> Option.defaultValue message.Text
 
-    let private recordItem (text: string) : BloggerDeltaItem =
-        { Role = recordField
-          Part = BloggerDeltaPart.TextPart text
-          Truncated = false }
+    let private recordBlock (text: string) =
+        SyntheticToml.tableArrayEntry recordTable [ SyntheticToml.field recordField (SyntheticToml.renderString text) ]
 
     /// advisor-[003]: the delta — anchors below `PrefixUntil` that were not delivered yet.
     let private delta (delivered: Set<int>) (request: AdvisorViewRequest) =
@@ -74,8 +74,8 @@ module AdvisorView =
 
         let viewPrompt =
             emitted
-            |> List.map (fun message -> recordItem (textOf removals message))
-            |> CompanionPrompt.newWorkMessage (headerLines language)
+            |> List.map (fun message -> recordBlock (textOf removals message))
+            |> SyntheticToml.document (headerLines language)
 
         { ViewPrompt = viewPrompt
           DeliveredAnchors = List.sort (anchors emitted @ Set.toList delivered)

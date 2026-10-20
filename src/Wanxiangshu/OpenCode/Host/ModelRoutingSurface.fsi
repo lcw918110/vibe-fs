@@ -30,9 +30,6 @@ module ModelRoutingSurface =
     val invokeScheduler: scheduler: obj -> role: string -> running: obj -> previous: obj -> purpose: obj -> obj
     val createRuntime: scheduler: obj -> obj
 
-    val predictorConfiguration: scheduler: obj -> obj
-    val sharedPredictorConfiguration: unit -> obj
-
     val acquireExecutionAdmission:
         runtime: obj ->
         sessionId: string ->

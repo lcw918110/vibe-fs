@@ -5,7 +5,7 @@ import { rolePredicate } from '../../../dist/OpenCode/Tools/ToolRegistrySurface.
 test('WHAT[intra-participant-parallelism-012] the role component of Fission permission admits Engineer and rejects other roles and aliases', () => {
   assert.equal(rolePredicate('fission', 'Engineer'), true)
   for (const role of [
-    'Manager', 'DevOps', 'Orchestrator', 'Blogger', 'Bookkeeper', 'Predictor',
+    'Manager', 'DevOps', 'Orchestrator', 'Bookkeeper',
     'Coder', 'Inspector', 'Browser', 'Inquiry', 'Reviewer', 'Distiller',
     'engineer-alias', 'ManagerWithWorkRecord', 'DevOpsEngineer', 'CustomSubagent', 'self-claimed-engineer',
   ]) {

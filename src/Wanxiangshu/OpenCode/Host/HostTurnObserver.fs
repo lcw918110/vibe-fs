@@ -80,14 +80,6 @@ module HostTurnObserver =
         FissionRuntime.isSilentInterrupt sessionId
         || isDurableFissionOwner journal sessionId
 
-    /// capability-enforcement-021: which owner an idle Blogger turn reaches.
-    let private bloggerIdleRoute (abortCause: AbortCause) (context: ReconciledTurnContext) =
-        CompletedTurnClassifier.bloggerIdleRoute
-            (context.Quiescence.IsSome && context.Turn.Role = Some Role.Blogger)
-            (abortCause <> AbortCause.External)
-            context.Turn.Outcome
-            context.Turn.Parts
-
     /// Host boundary consumes the guard's one-shot armed anomaly. Consumption
     /// also schedules the guard-owned continuation at this existing reconcile point.
     let private abortCauseOfTurn (scope: PluginRuntimeScope) (context: ReconciledTurnContext) : Task<AbortCause> =
@@ -137,26 +129,9 @@ module HostTurnObserver =
         (context: ReconciledTurnContext)
         : Task =
         task {
-            let route = bloggerIdleRoute abortCause context
-
-            if route <> CompletedTurnClassifier.BloggerIdleRoute.Observe then
-                // No tool-loop request follows this Blogger terminal, so
-                // provider transform cannot own recovery. The idle wake is the
-                // causal boundary that can still send exact-one nudge / AABB.
-                do!
-                    InteractionRepairWorkflow.repairBloggerProtocol
-                        scope.BloggerRuntimeHost
-                        scope.Sessions.Quiescence
-                        context
-                        sessionPort
-                        rootWorkspace
-                        eventPort
-                        journal
-
-            if route <> CompletedTurnClassifier.BloggerIdleRoute.Repair then
-                // Sole Application turn entry (rabbit §6.5 / §18): Host no longer
-                // multiplexes SyncDelegate / Manager handled-bools.
-                do! observeTurnWorkflow abortCause context
+            // Sole Application turn entry (rabbit §6.5 / §18): Host no longer
+            // multiplexes SyncDelegate / Manager handled-bools.
+            do! observeTurnWorkflow abortCause context
         }
 
     let private observeCurrentTurn
@@ -209,26 +184,12 @@ module HostTurnObserver =
                         context
         }
 
-    /// speculative-investigation-013 / STRENGTH-010: the primary-turn observation port is
-    /// optional; an absent port means no observation, never a skipped turn.
-    let private observePrimaryTurnIfPresent
-        (observePrimaryTurn: (ReconciledTurn -> Task<unit>) option)
-        (turn: ReconciledTurn)
-        : Task<unit> =
-        task {
-            match observePrimaryTurn with
-            | Some observePrimary -> do! observePrimary turn
-            | None -> ()
-        }
-
     let private observeBusinessTurn
         (observeTurnWorkflow: AbortCause -> ReconciledTurnContext -> Task)
         (sessionPort: ISessionHostPort)
         (rootWorkspace: IRootWorkspaceReader)
         (eventPort: IEventObservationPort)
         (journal: AgentJournal option)
-        (handlePreTurn: (ReconciledTurn -> Task<bool>) option)
-        (observePrimaryTurn: (ReconciledTurn -> Task<unit>) option)
         (scope: PluginRuntimeScope)
         (context: ReconciledTurnContext)
         : Task =
@@ -240,46 +201,20 @@ module HostTurnObserver =
             // business observation is admitted.
             do! awaitOwnedInterrupt scope turn.SessionId turn.ProviderRun
 
-            let! preTurnHandled =
-                match handlePreTurn with
-                | Some handler -> handler turn
-                | None -> Task.FromResult false
-
-            if preTurnHandled then
-                // STRENGTH-004/011: Replica observations are leaf-local. They
-                // only reconcile the request plan for cleanup; family recovery,
-                // owner fallback, Companion and ordinary TurnWorkflow
-                // must never observe them.
-                let attempts: AttemptPlanCapability =
-                    { TryAttemptPlan = scope.TryAttemptPlan
-                      TryBindAttemptPlan = scope.TryBindAttemptPlan
-                      ConsumeAttemptPlan = scope.ConsumeAttemptPlan
-                      FreezePendingAttemptPlan = scope.Recovery.FreezePendingAttemptPlan
-                      TryPendingAttemptPlan = scope.Recovery.TryPendingAttemptPlan }
-
-                let wirePort = journal |> Option.map AgentJournalPortAdapter.forWire
-                do! XWire.reconcileAttempt wirePort attempts turn
-                return ()
-            else
-                // speculative-investigation-013 / STRENGTH-010 / STRENGTH-007: primary turn observation
-                // (closing dry run, primary symbol evidence collection, durable append)
-                // executes before observeCurrentTurn.
-                do! observePrimaryTurnIfPresent observePrimaryTurn turn
-
-                // Current-process Host observation proceeds from its exact facts.
-                // No durable-family gate is fabricated here: Join tools admit via
-                // their exact current-process permit, and explicit /continue owns
-                // future user-driven work.
-                return!
-                    observeCurrentTurn
-                        observeTurnWorkflow
-                        sessionPort
-                        rootWorkspace
-                        eventPort
-                        journal
-                        scope
-                        abortCause
-                        context
+            // Current-process Host observation proceeds from its exact facts.
+            // No durable-family gate is fabricated here: Join tools admit via
+            // their exact current-process permit, and explicit /continue owns
+            // future user-driven work.
+            return!
+                observeCurrentTurn
+                    observeTurnWorkflow
+                    sessionPort
+                    rootWorkspace
+                    eventPort
+                    journal
+                    scope
+                    abortCause
+                    context
         }
 
     let observe
@@ -288,18 +223,7 @@ module HostTurnObserver =
         (rootWorkspace: IRootWorkspaceReader)
         (eventPort: IEventObservationPort)
         (journal: AgentJournal option)
-        (handlePreTurn: (ReconciledTurn -> Task<bool>) option)
-        (observePrimaryTurn: (ReconciledTurn -> Task<unit>) option)
         (scope: PluginRuntimeScope)
         (context: ReconciledTurnContext)
         : Task =
-        observeBusinessTurn
-            observeTurnWorkflow
-            sessionPort
-            rootWorkspace
-            eventPort
-            journal
-            handlePreTurn
-            observePrimaryTurn
-            scope
-            context
+        observeBusinessTurn observeTurnWorkflow sessionPort rootWorkspace eventPort journal scope context

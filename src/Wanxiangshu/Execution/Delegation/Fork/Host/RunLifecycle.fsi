@@ -22,8 +22,8 @@ module HostForkRunLifecycle =
         childAgent: string ->
             Result<PromptAuthority.IdentitySeed, string>
 
-    val workRecordForOutcome:
-        childWorkRecordForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
+    val viewForOutcome:
+        childViewForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
         run: PendingHostRun ->
         outcome: TerminalOutcome ->
             Task<string option>
@@ -70,7 +70,7 @@ module HostForkRunLifecycle =
         sessions: ISessionHostPort ->
         run: PendingHostRun ->
         outcome: TerminalOutcome ->
-        workRecord: string option ->
+        view: string option ->
             Task
 
     val installRun:
@@ -79,7 +79,7 @@ module HostForkRunLifecycle =
         journal: AgentJournal option ->
         parentId: SessionId ->
         sessions: ISessionHostPort ->
-        childWorkRecordForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
+        childViewForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
         trackOwnedWork: ((unit -> Task) -> unit) ->
         agentId: string ->
         childId: SessionId ->
@@ -107,5 +107,5 @@ module HostForkRunLifecycle =
         _parentId: SessionId ->
         _sessions: ISessionHostPort ->
         _run: PendingHostRun ->
-        _workRecord: string option ->
+        _view: string option ->
             unit

@@ -44,9 +44,9 @@ Review 接纳前不得向固定 DevOps 派工，已有只读 Engineer 的合法 
 
 Orchestrator 只委任或接续顶层道路的 Manager，不直接委任其他 Office，不介入具体执行，不使用 Fission。`commission` 的 `calling` 可选，省略时推导为 Manager persona；显式 `calling` 与推导不一致须 typed 拒绝。
 
-## [015] Predictor
+## [015] 不另设强度选择职位
 
-Predictor 只为 Strength 降级选择廉价 provider/model，不进入普通调度、Manager 的公开 fork 候选、工具门禁或用户可见接口。
+不存在为强度降级选择廉价模型的职位。该名字不进入普通调度、Manager 的公开 fork 候选、工具门禁或用户可见接口。
 
 ## [016] Engineer
 

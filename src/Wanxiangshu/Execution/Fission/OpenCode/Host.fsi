@@ -19,7 +19,7 @@ module FissionHostRequestProjection =
 
 /// Host-side terminal bridge for same-participant Fission lanes. A physical lane
 /// terminal is not a parent-visible agent completion. It materializes one keyed
-/// lane LWR, and only the durable group convergence publishes a terminal on the
+/// lane view, and only the durable group convergence publishes a terminal on the
 /// old logical owner's SessionId/completion cell.
 module FissionHost =
 

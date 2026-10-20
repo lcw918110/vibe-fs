@@ -10,7 +10,7 @@ Fission 只增加同一 logical participant 的并发 execution presents。各 l
 
 ## [003] Fresh sibling replacement
 
-调用者须为有物理 Host parent 的 subsession。每条 lane 新建独立 Host session，parentID 与原 caller 的 parentID 相同；初始任务由 caller 当时的 canonical Lifecycle Work Record 和该 lane 输入组成，不成为新委托主体。
+调用者须为有物理 Host parent 的 subsession。每条 lane 新建独立 Host session，parentID 与原 caller 的 parentID 相同；初始任务由该 lane 输入组成，caller 已有已交付视图时附带 caller 当时的已交付视图，不成为新委托主体。caller 尚未交付视图不构成准入阻碍，lane 以自身输入启动。
 
 ## [004] All-or-none admission
 
@@ -22,7 +22,7 @@ Fission 只增加同一 logical participant 的并发 execution presents。各 l
 
 ## [006] 裂变前 completion 广播
 
-准入前未决的子任务和进程归 logical owner 共同所有。每项 completion 以确定性载荷向每条 lane 恰好交付一次，不重复 WorkRecord 或逻辑完成。
+准入前未决的子任务和进程归 logical owner 共同所有。每项 completion 以确定性载荷向每条 lane 恰好交付一次，不重复已交付的 view 或逻辑完成。
 
 ## [007] 裂变后 completion 亲和
 
@@ -68,4 +68,4 @@ V1 按 canonical index 从 lane 0 到 N−1 环行，以 keyed union 合并；�
 
 准入须同时满足：已证明 CanonicalRole=Engineer、本次授权含 Fission、subsession 来源、无 active group，以及其余现有准入条件。运行时入口与 ToolRegistry 都须拒绝不满足条件的调用，不能只隐藏 schema。
 
-角色名、Persona 别名、参数、自称身份和附带 Engineer WorkRecord 均不授予能力。所有非 Engineer 身份（含 Manager 各任期、Orchestrator、DevOps、Blogger、Bookkeeper、Predictor 及未知或内部辅助身份）、Engineer 根会话、已有 active group 的 lane、Sphinx 内部只读 Engineer 均拒绝。历史 Manager Fission 只供读取和重放，不重建 lane、恢复执行或扩权。
+角色名、Persona 别名、参数、自称身份和附带已交回的 view 均不授予能力。所有非 Engineer 身份（含 Manager 各任期、Orchestrator、DevOps、Bookkeeper 及未知或内部辅助身份）、Engineer 根会话、已有 active group 的 lane、Sphinx 内部只读 Engineer 均拒绝。历史 Manager Fission 只供读取和重放，不重建 lane、恢复执行或扩权。

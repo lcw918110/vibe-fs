@@ -11,7 +11,6 @@ open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Process
 open Wanxiangshu.Repository.Knowledge.Casebook
 open Wanxiangshu.Resources
-open Wanxiangshu.Strength.OpenCode
 
 module PluginBoot =
 
@@ -22,14 +21,11 @@ module PluginBoot =
           PortOpt: IOpenCodePort option
           Journal: AgentJournal option
           Scope: PluginRuntimeScope
-          StrengthScope: PluginStrengthScope
           Clock: IClockPort
           Timer: ITimerPort
-          StrengthFailFuse: string -> unit
           CasebookSettlements: CasebookSettlementOwner
           WorkspaceDirectory: string option
-          FamilyParent: SessionId -> SessionId option
-          ProtocolArgumentVault: ProtocolArgumentVault.Vault }
+          FamilyParent: SessionId -> SessionId option }
 
     let private bindCasebookSemanticCut (incident: CasebookSemanticCutIncident) =
         let failure = incident.Failure
@@ -63,56 +59,34 @@ module PluginBoot =
             // This may create the missing user config atomically, but performs no Host call.
             do! ModelRouting.initialize ()
 
-            // opencode hands a built-in tool its Effect argument schema and no
-            // JSON schema (1.18.32 `src/tool/json-schema.ts`); the readonly
-            // delegation protocol renders the provider-visible schema with the
-            // same conversion, so resolve that renderer once here.
-            do! ToolSchemaJson.initialize ()
-
             let portOpt = OpenCodePortAdapter.create input
             let workspaceDirectory = PluginHost.workspaceDirectory input
 
             let! journalResult = PluginHost.createJournal input
-
-            let sharedRuntimeKey = workspaceDirectory |> Option.map RuntimePath.forWorkspace
 
             let journal =
                 match journalResult with
                 | Ok value -> value
                 | Error err -> raise (InvalidOperationException err)
 
-            let strengthScope =
-                match SharedPredictorScope.tryAcquireForRuntime sharedRuntimeKey with
-                | Some sharedScope -> sharedScope
-                | None -> new PluginStrengthScope(None)
+            let! jsLifecyclePersistence =
+                task {
+                    match workspaceDirectory with
+                    | Some workspace ->
+                        let! commonDir = RuntimePath.stateRoot workspace
 
-            let isSharedModelLease sessionId =
-                strengthScope.StrengthRuntime.IsResidentSession sessionId
-                || strengthScope.StrengthRuntime.TryFindResident(sessionId).IsSome
-
-            let jsLifecyclePersistence =
-                workspaceDirectory
-                |> Option.bind (fun workspace -> WorkspaceEventStore.tryCurrent (RuntimePath.stateRoot workspace))
-                |> Option.map Wanxiangshu.Repository.Programming.Js.JsToolsTransactionStore.createLifecyclePersistence
+                        return
+                            WorkspaceEventStore.tryCurrent commonDir
+                            |> Option.map
+                                Wanxiangshu.Repository.Programming.Js.JsToolsTransactionStore.createLifecyclePersistence
+                    | None -> return None
+                }
 
             let scope =
-                new PluginRuntimeScope(journal, isSharedModelLease, jsLifecyclePersistence)
-
-            scope.AttachSessionCleanup(fun sid -> strengthScope.ClearSession sid)
-            scope.AttachScopeDispose(fun () -> SharedPredictorScope.release strengthScope)
-
-            // host-boundary-032 / the protocol argument vault
-            // records tool.execute.before originals so the provider transform
-            // can restore them into persisted history. Process-local only;
-            // dropped with the scope.
-            let protocolArgumentVault = ProtocolArgumentVault.create ()
-
-            scope.AttachScopeDispose(fun () -> ProtocolArgumentVault.clear protocolArgumentVault)
+                new PluginRuntimeScope(journal, (fun _ -> false), jsLifecyclePersistence)
 
             let clock = NodeTiming.nodeClockPort ()
             let timer = NodeTiming.nodeTimerPort ()
-
-            let strengthFailFuse (reason: string) : unit = strengthScope.TripStrengthFuse reason
 
             let casebookSettlements = CasebookSettlementOwner bindCasebookSemanticCut
 
@@ -126,12 +100,9 @@ module PluginBoot =
                   PortOpt = portOpt
                   Journal = journal
                   Scope = scope
-                  StrengthScope = strengthScope
                   Clock = clock
                   Timer = timer
-                  StrengthFailFuse = strengthFailFuse
                   CasebookSettlements = casebookSettlements
                   WorkspaceDirectory = workspaceDirectory
-                  FamilyParent = familyParent
-                  ProtocolArgumentVault = protocolArgumentVault }
+                  FamilyParent = familyParent }
         }

@@ -154,9 +154,9 @@ module PromptAuthority =
             PromptKey
 
     val repairPayloadDigest:
-        requestId: BloggerRequestId -> terminalProviderRun: ProviderRunIdentity -> repairKind: string -> string
+        requestId: RepairRequestId -> terminalProviderRun: ProviderRunIdentity -> repairKind: string -> string
 
-    val repairPayloadBelongsToRequest: requestId: BloggerRequestId -> payloadDigest: string -> bool
+    val repairPayloadBelongsToRequest: requestId: RepairRequestId -> payloadDigest: string -> bool
     val gateNudgePayloadDigest: gateKind: string -> terminalProviderRun: ProviderRunIdentity -> string
 
     val gateNudgeAlreadyAdmitted:
@@ -179,7 +179,7 @@ module PromptAuthority =
     val repairAlreadyClaimed:
         sessionId: SessionId ->
         logicalRunId: LogicalRunId ->
-        requestId: BloggerRequestId ->
+        requestId: RepairRequestId ->
         terminalProviderRun: ProviderRunIdentity ->
         repairKind: string ->
         projection: PromptAuthorityProjection ->

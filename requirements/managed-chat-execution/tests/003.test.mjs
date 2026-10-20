@@ -89,7 +89,7 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
       phase: 'ProviderStarted', disposition: null,
     })
     assert.equal(runtime.prompts.filter(prompt => prompt.path?.id === input.sessionID).length, 0)
-    assert.ok(runtime.prompts.every(prompt => prompt.body?.agent === 'blogger'))
+    assert.ok(runtime.prompts.every(prompt => prompt.path?.id !== input.sessionID))
   })
 })
 
@@ -162,7 +162,6 @@ const evidence = {
   providerRun: 'provider-transaction',
   origin: 'HumanRoot',
   requestKind: 'work-main',
-  projectionChoice: { kind: 'UseCommittedEpoch' },
 }
 const run = (failurePoint = 'None', state = 'None') =>
   transaction.transactionScenario(evidence, failurePoint, state)

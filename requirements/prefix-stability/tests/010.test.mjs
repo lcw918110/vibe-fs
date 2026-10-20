@@ -261,7 +261,7 @@ test('WHAT[prefix-stability-010] H13_05b_xwire_drop_leading_continue_still_commi
     const cont = userMsg('u2', '# The previous attempt did not complete.')
     const synthPrefix = {
       info: { id: 'synth-prefix-frozen', role: 'user' },
-      parts: [{ type: 'text', text: '# Opening\nX-B round 1\n\n# Chronicle\nframe' }],
+      parts: [{ type: 'text', text: '# Opening\nX-B round 1\n\n# History\nframe' }],
     }
 
     const wire1 = await inject(opened.journal, session, [user0, asst0, user1])
@@ -615,35 +615,31 @@ test('WHAT[prefix-stability-010] C_PH_ordinary_cursor_ordinary_suppresses_then_r
   assert.equal(pairMessages(back).length, 0)
   assert.deepEqual(back, ordinary, 'same occurrence restores the identical wire')
 })
-test('WHAT[prefix-stability-010] PPT_distiller_and_blogger_never_inject_pair_hint', async () => {
-  const bloggerMsg = [
-    userMsg('u1'),
-    assistantText('a1'),
-    { info: { id: 'u2', role: 'user', agent: 'blogger' }, parts: [{ type: 'text', text: 'blog task' }] },
-  ]
-  const bloggerOut = await inject('ses_blogger', bloggerMsg)
-  assert.equal(pairMessages(bloggerOut).length, 0)
-  assert.deepEqual(bloggerOut, bloggerMsg)
-
+test('WHAT[prefix-stability-010] PPT_distiller_never_injects_pair_hint', async () => {
   const distillerMsg = [
     userMsg('u3'),
-    assistantText('a2'),
+    assistantText('a3'),
     { info: { id: 'u4', role: 'user', agent: 'distiller' }, parts: [{ type: 'text', text: 'distill task' }] },
   ]
   const distillerOut = await inject('ses_distiller', distillerMsg)
   assert.equal(pairMessages(distillerOut).length, 0)
   assert.deepEqual(distillerOut, distillerMsg)
-
-  // Suppression holds even with a terminal real tool result: no guidance
-  // suffix is appended for the canonical blogger/distiller turns.
-  const bloggerTools = [
-    toolCall('c1', 'bash', 't1'),
-    toolResult('r1', 'bash', 't1', 'out1'),
-    { info: { id: 'u2', role: 'user', agent: 'blogger' }, parts: [{ type: 'text', text: 'blog task' }] },
-  ]
-  const bloggerToolsOut = await inject('ses_blogger_tools', bloggerTools)
-  assert.equal(pairMessages(bloggerToolsOut).length, 0)
-  assert.deepEqual(bloggerToolsOut, bloggerTools)
+})
+test('WHAT[prefix-stability-010] PPT_tryInject_call_id_is_stable_per_session_and_ordinal', () => {
+  assert.equal(stableCallId('ses_1', 1n), stableCallId('ses_1', 1n))
+  assert.notEqual(stableCallId('ses_1', 1n), stableCallId('ses_1', 2n))
+  assert.notEqual(stableCallId('ses_1', 1n), stableCallId('ses_2', 1n))
+})
+test('WHAT[prefix-stability-010] PPT_tryInject_without_session_id_still_appends_stable_pair', async () => {
+  // Without a session id the guidance still lands deterministically on the
+  // terminal real tool result; a session-less trailing-user turn passes through.
+  const raw = [toolCall('c1', 'bash', 't1'), toolResult('r1', 'bash', 't1', 'out1')]
+  const out = await inject(undefined, raw)
+  assert.ok(out)
+  assert.equal(out.length, 2)
+  assert.equal(pairMessages(out).length, 0)
+  assert.equal(out[1].parts[0].state.output, `out1\0\uFEFF${text}`)
+  assert.deepEqual(await inject(undefined, out), out, 'session-less replay stays byte-identical')
 })
 
 }

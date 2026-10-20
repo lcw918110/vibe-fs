@@ -2,10 +2,7 @@ namespace Wanxiangshu.Execution.Delegation.Fork.Host
 
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Delegation.SyncDelegate
@@ -244,7 +241,7 @@ type HostForkRuntime
     (
         parentId: SessionId,
         sessions: ISessionHostPort,
-        childWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>,
+        childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>,
         createMailbox: obj -> ForkCompletionMailbox,
         clock: IClockPort,
         raceExit: Task -> int -> Task<bool>,
@@ -254,8 +251,6 @@ type HostForkRuntime
         ?ptyPort: PtyPort,
         ?directoryFor: string -> string option,
         ?onRunStarted: SessionId -> Role -> string option -> unit,
-        ?parentWorkRecordFor: SessionId -> Task<string option>,
-        ?childWorkRecordFor: SessionId -> Task<string option>,
         ?sessionSnapshot: ISessionSnapshotPort,
         ?cancelSignals: SessionId seq -> unit,
         /// Ownership of every handle this runtime forks. Host-owned hidden
@@ -490,16 +485,10 @@ type HostForkRuntime
     let childCreatedDir = defaultArg onChildCreatedDir (fun _ _ _ -> ())
     let runStarted = defaultArg onRunStarted (fun _ _ _ -> ())
 
-    let parentWorkRecordOf =
-        defaultArg parentWorkRecordFor (fun _ -> Task.FromResult None)
+    let childViewOfRun = childViewForRun
 
-    let childWorkRecordOf =
-        defaultArg childWorkRecordFor (fun _ -> Task.FromResult None)
-
-    let childWorkRecordOfRun = childWorkRecordForRun
-
-    let workRecordForOutcome (run: PendingHostRun) (outcome: TerminalOutcome) =
-        HostForkRunLifecycle.workRecordForOutcome childWorkRecordOfRun run outcome
+    let viewForOutcome (run: PendingHostRun) (outcome: TerminalOutcome) =
+        HostForkRunLifecycle.viewForOutcome childViewOfRun run outcome
 
     let cancelSignals = defaultArg cancelSignals (fun _ -> ())
 
@@ -649,11 +638,11 @@ type HostForkRuntime
     member internal _.DeferredFirstPrompts = deferredFirstPrompts
     member internal _.Clock = clockPort
     /// Wall-clock read for Session extension modules (avoids raw DateTimeOffset stamps).
-    member internal _.Now() = clockPort.UtcNow()
+    member _.Now() = clockPort.UtcNow()
 
     /// GLORY-045: re-enlist a still-ungraduated historical child into this
     /// runtime before Fork, so Fork's existing-child path reuses the SAME Host
-    /// session (X/Y context preserved) instead of creating a second one.
+    /// session (its captured context preserved) instead of creating a second one.
     member internal _.AdoptChild(agentId: string, childId: SessionId) : unit =
         lock gate (fun () ->
             children.[agentId] <- childId
@@ -753,9 +742,7 @@ type HostForkRuntime
     member internal _.RunStarted = runStarted
     member internal _.ChildCreated = childCreated
     member internal _.ChildCreatedDir = childCreatedDir
-    member internal _.ParentWorkRecordOf = parentWorkRecordOf
-    member internal _.ChildWorkRecordOf = childWorkRecordOf
-    member internal _.ChildWorkRecordOfRun = childWorkRecordOfRun
+    member internal _.ChildViewOfRun = childViewOfRun
     member internal _.TrackOwnedWork(work: unit -> Task) = startOwnedWork work |> ignore
     member internal _.SendChildPrompt = sendChildPrompt
     member internal _.SendBusyNudge = sendBusyNudge
@@ -832,9 +819,9 @@ type HostForkRuntime
                 try
                     do! this.DrainPtysIfDevOps run
 
-                    let! workRecord = workRecordForOutcome run outcome
+                    let! view = viewForOutcome run outcome
 
-                    do! HostForkRunLifecycle.complete gate pendingRuns journal parentId sessions run outcome workRecord
+                    do! HostForkRunLifecycle.complete gate pendingRuns journal parentId sessions run outcome view
                 with error ->
                     // A proven terminal must still resolve this run's only
                     // completion promise even when settlement faulted: settle an
@@ -866,7 +853,7 @@ type HostForkRuntime
                 journal
                 parentId
                 sessions
-                childWorkRecordOfRun
+                childViewOfRun
                 (fun work -> startOwnedWork work |> ignore)
                 agentId
                 childId
@@ -881,20 +868,20 @@ type HostForkRuntime
         startOwnedWork (fun () -> HostForkRunLifecycle.failRun gate pendingRuns journal parentId sessions run error)
 
     member this.MarkReady(run: PendingHostRun) =
-        // markReady is intentionally a no-op; do not perform an unnecessary WorkRecord read.
+        // markReady is intentionally a no-op; do not perform an unnecessary view read.
         HostForkRunLifecycle.markReady gate pendingRuns journal parentId sessions run None
 
-    member private _.WorkRecordFromCompletion(completion: RunCompletion) : Result<string, string> =
+    member private _.ViewFromCompletion(completion: RunCompletion) : Result<string, string> =
         match completion.Outcome with
-        | AgentCompleted payload when not (String.IsNullOrWhiteSpace payload.WorkRecord) -> Ok payload.WorkRecord
-        | AgentCompleted _ -> Error "reusable fork completed without bounded delta WorkRecord"
+        | AgentCompleted payload when not (String.IsNullOrWhiteSpace payload.View) -> Ok payload.View
+        | AgentCompleted _ -> Error "reusable fork completed without a bounded delivered view"
         | AgentFailed payload -> Error payload.Message
         | AgentAbandoned(_, reason) -> Error reason
 
-    member internal this.AwaitCurrentWorkRecord(agentId: string) : Task<Result<string, string>> =
+    member internal this.AwaitCurrentView(agentId: string) : Task<Result<string, string>> =
         taskResult {
             let! completion = this.AwaitChild agentId
-            return! this.WorkRecordFromCompletion completion
+            return! this.ViewFromCompletion completion
         }
 
     member private this.CancelParentEpisode(completion: TaskCompletionSource<unit>) : Task =
@@ -1032,7 +1019,7 @@ type HostForkRuntime
     /// delegation-026: adoption registers identity only. Restoring here would
     /// plant an active ChildRun with no work behind it, so the next dispatch's
     /// backend Fork answers Nudged, its runTask never starts, and settle's
-    /// AwaitCurrentWorkRecord waits on the restored cell forever. The dispatch
+    /// AwaitCurrentView waits on the restored cell forever. The dispatch
     /// itself installs the run that owns the completion cell.
     member _.AdoptExisting(agentId: string, childId: SessionId) : unit =
         lock gate (fun () -> dormantChildren.[agentId] <- childId)

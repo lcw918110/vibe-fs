@@ -25,9 +25,7 @@ module FailureSurface =
     let private requestKindOf value =
         match requiredText "requestKind" value with
         | "WorkMain" -> ProviderRequestKind.WorkMain
-        | "BloggerMain" -> ProviderRequestKind.BloggerMain
         | "InteractionRepair" -> ProviderRequestKind.InteractionRepair
-        | "StrengthReplica" -> ProviderRequestKind.StrengthReplica
         | other -> invalidArg "requestKind" $"unknown provider request kind '{other}'"
 
     let private statusOf value =

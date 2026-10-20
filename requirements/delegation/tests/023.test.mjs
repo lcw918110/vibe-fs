@@ -13,10 +13,10 @@ test('WHAT[delegation-023] transient failure follows the injected retry verdict 
     assert.equal(await sync.observeTurn(runtime, owner, 'Engineer', 'TurnFailed', '', 'run-retry-1'), true)
     assert.equal(sync.retryCalls(runtime), 1)
     assert.equal(sync.dispatchRetryAttempt(runtime, owner, 'Engineer'), true)
-    assert.equal(await sync.observeTurn(runtime, owner, 'Engineer', 'TurnCompleted', 'retry WorkRecord', 'run-retry-2'), true)
+    assert.equal(await sync.observeTurn(runtime, owner, 'Engineer', 'TurnCompleted', 'retry delivered view', 'run-retry-2'), true)
     const result = await pending
     assert.equal(result.ok, true)
-    assert.match(result.value, /retry WorkRecord/)
+    assert.match(result.value, /retry delivered view/)
   })
   const exhausted = 'owner-exhausted'
   await withSyncRuntime(exhausted, async runtime => {

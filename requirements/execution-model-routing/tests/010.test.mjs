@@ -704,8 +704,8 @@ test('WHAT[execution-model-routing-010] EMR_010_managed_tool_execution_ends_the_
   )
   assert.match(
     registry,
-    /let (?:private )?runAfterAblation[\s\S]*match! replicaStage gate spec ctx with[\s\S]*admissionStage gate spec managerPermission args ctx[\s\S]*let (?:private )?runBoundaryStages[\s\S]*match! ablationStage spec ctx with[\s\S]*runAfterAblation gate spec managerPermission args ctx/,
-    'strength and role/admission gates remain downstream of the provider boundary',
+    /let (?:private )?runAfterAblation[\s\S]*admissionStage gate spec managerPermission args ctx[\s\S]*let (?:private )?runBoundaryStages[\s\S]*match! ablationStage spec ctx with[\s\S]*runAfterAblation gate spec managerPermission args ctx/,
+    'ablation and role/admission gates remain downstream of the provider boundary',
   )
   assert.match(
     registry,

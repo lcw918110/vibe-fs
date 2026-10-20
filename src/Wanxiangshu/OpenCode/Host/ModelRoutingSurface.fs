@@ -99,7 +99,6 @@ module ModelRoutingSurface =
         match text value with
         | ""
         | "normal" -> ModelExecutionPurpose.Normal
-        | "readonly-delegate" -> ModelExecutionPurpose.ReadonlyDelegate
         | other -> invalidArg "purpose" (sprintf "execution-model-routing: unknown scheduler purpose %s" other)
 
     [<Emit("(function freeze(value) { if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) { Object.freeze(value); Object.keys(value).forEach(function (key) { freeze(value[key]); }); } return value; })($0)")>]
@@ -555,34 +554,6 @@ module ModelRoutingSurface =
     let createRuntime (scheduler: obj) : obj =
         RuntimeHandle(ModelRouting.ModelRoutingRuntime(scheduler)) :> obj
 
-    /// Read-only Predictor slot existence query, observed from the loaded model
-    /// configuration. Tool decoration and readonly-delegate admission share
-    /// this one result; capacity and provider health do not change it.
-    let predictorConfiguration (scheduler: obj) : obj =
-        match ModelRouting.predictorConfiguration scheduler with
-        | ModelRouting.PredictorConfiguration.Configured -> box {| kind = "Configured"; reason = null |}
-        | ModelRouting.PredictorConfiguration.NotConfigured ->
-            box
-                {| kind = "NotConfigured"
-                   reason = null |}
-        | ModelRouting.PredictorConfiguration.ConfigurationInvalid reason ->
-            box
-                {| kind = "ConfigurationInvalid"
-                   reason = reason |}
-
-    /// Same query on the process-shared scheduler loaded during plugin load.
-    let sharedPredictorConfiguration () : obj =
-        match ModelRouting.sharedPredictorConfiguration () with
-        | ModelRouting.PredictorConfiguration.Configured -> box {| kind = "Configured"; reason = null |}
-        | ModelRouting.PredictorConfiguration.NotConfigured ->
-            box
-                {| kind = "NotConfigured"
-                   reason = null |}
-        | ModelRouting.PredictorConfiguration.ConfigurationInvalid reason ->
-            box
-                {| kind = "ConfigurationInvalid"
-                   reason = reason |}
-
     let acquireExecutionAdmission
         (runtime: obj)
         (sessionId: string)
@@ -851,15 +822,15 @@ module ModelRoutingSurface =
         |> Option.map targetObject
         |> Option.defaultValue null
 
-    /// provider-attempt-recovery-021: the failed attempt itself was the LWR retry, so its exact
-    /// witness target condemns the provider of that target.
+    /// provider-attempt-recovery-021: the failed attempt was itself the same-provider retry, so its
+    /// exact witness target condemns the provider of that target.
     let condemnFailedTarget (runtime: obj) (providerRun: string) : obj =
         (runtimeOf runtime).CondemnFailedTarget(providerRun)
         |> Option.map targetObject
         |> Option.defaultValue null
 
-    /// provider-attempt-recovery-021: the failed attempt carried the original context, so the next
-    /// fresh admission of this session is bound to the failed target.
+    /// provider-attempt-recovery-021: the failed attempt was this provider's first confirmed failure,
+    /// so the next fresh admission of this session is bound to the failed target.
     let retainFailedTargetForRetry (runtime: obj) (sessionId: string) (providerRun: string) : obj =
         (runtimeOf runtime).RetainFailedTargetForRetry(sessionId, providerRun)
         |> Option.map targetObject

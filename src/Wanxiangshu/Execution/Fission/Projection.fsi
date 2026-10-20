@@ -18,8 +18,8 @@ type FissionTakeoverProjection =
       LaneSessionId: SessionId
       PromptKey: PromptKey option
       PhysicalUserMessageId: PhysicalUserMessageId option
-      AggregateWorkRecordRef: BlobRef
-      AggregateWorkRecordDigest: BlobDigest }
+      AggregateViewRef: BlobRef
+      AggregateViewDigest: BlobDigest }
 
 [<CLIMutable>]
 type FissionGroupProjection =
@@ -30,8 +30,8 @@ type FissionGroupProjection =
       LaneCount: int
       LaneSessions: Map<int, SessionId>
       LanePrompts: Map<int, string>
-      OwnerWorkRecordRef: BlobRef
-      OwnerWorkRecordDigest: BlobDigest
+      OwnerViewRef: BlobRef
+      OwnerViewDigest: BlobDigest
       PreFissionCompletionIds: Set<string>
       LaneWork: Map<int, BlobRef * BlobDigest>
       LaneProviderRuns: Map<int, ProviderRunIdentity>

@@ -43,7 +43,7 @@ test('WHAT[work-009] the second deliver reports the live blocker instead of repo
     assert.match(blocked, /finished = false/)
     assert.match(blocked, /Close or join exactly those resources/)
     assert.doesNotMatch(blocked, /Finished\. Do not continue work\./)
-    const after = life.inspected(journalSurface.JournalSurface_initializeStateRoot(runtime.directory), session)
+    const after = life.inspected(await journalSurface.JournalSurface_initializeStateRoot(runtime.directory), session)
     assert.equal(Array.from(after.Retirements ?? []).length, 0)
     assert.equal(after.Delivered, false)
     assert.notEqual(after.BlockerDigest ?? '', '')

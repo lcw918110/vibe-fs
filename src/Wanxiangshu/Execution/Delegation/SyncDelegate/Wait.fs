@@ -5,7 +5,7 @@ open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Execution.Session.Wait
 
 /// EXEC-026 / EXEC-031: wait descriptors for SyncDelegate CE
-/// (Acquire → GetOrCreate → Send → await ordinary Completion / WorkRecord).
+/// (Acquire → GetOrCreate → Send → await ordinary Completion / delivered view).
 type SyncDelegateWait =
     | DelegateCompletion of owner: SessionId * delegateSession: SessionId * role: SyncDelegateRole
     | InvocationJoin of owner: SessionId * role: SyncDelegateRole

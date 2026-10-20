@@ -4,8 +4,6 @@ open Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Session.Recovery
 open Wanxiangshu.Foundation
@@ -66,7 +64,7 @@ module ChildPromptAuthority =
                     Map.tryFind turn.PhysicalUserMessageId owner.PhysicalLandings
                     |> Option.filter (fun dispatch ->
                         dispatch.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
-                                              PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
+                            PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
 
                 let runtime = PromptDispatcher.forPrompts prompts
                 return! registerLinkedChildIfNeeded runtime turn handle activeProfile accepted

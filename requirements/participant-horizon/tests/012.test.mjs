@@ -10,7 +10,7 @@ process.env.WANXIANGSHU_PROVIDER_LANGUAGE = 'en'
 test('WHAT[participant-horizon-012] real warm-start admission permits repository-evidence roles and rejects others before search', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'wxs-horizon-warm-start-'))
   try {
-    for (const role of ['engineer', 'devops', 'manager', 'orchestrator', 'blogger', 'bookkeeper', 'predictor', 'unknown']) {
+    for (const role of ['engineer', 'devops', 'manager', 'orchestrator', 'bookkeeper', 'unknown']) {
       let searches = 0
       const search = async () => {
         searches += 1

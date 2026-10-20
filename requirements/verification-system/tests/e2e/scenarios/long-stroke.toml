@@ -50,19 +50,7 @@
 #   - ConflictDetected / Published: rebase+barrier lag; timeouts mirror orch-unhappy (60–90s caps)
 #   - interrupt requires holdChildC1UntilLabor; without hold, drain completes child and skips user_message
 #   - non-10 assessment assigns work; the next iteration independently re-audits before publication
-#   - blogger pad undersize → unmatched companion requests (fail closed)
 #   - wall <6s target vs orch publish chain — risk of §16 miss until flesh/perf pass
-#
-# ── DELEGATE 14.5 委托支线（speculative-investigation 真实 E2E） ────────────
-#
-# 本场景同时服务 DELEGATE 14.5（正常完成 / 提前结束 / 自然截断 / 恢复四腿）与
-# verification-system [014]「嵌套 Replica 物理启动且不阻塞属主」。新增回合与
-# 断言的完整说明见文件尾部的 DELEGATE 14.5 注释块；恢复腿的 owner 由 flow 创建，
-# 事实屏障在 flow 尾部。
-#
-# 天花板预期：委托支线新增 2 个委托决策（owner 各 3 步、同伴 1-2 次外发），
-# journal 事件预估 +30~60、SSE 预估 +100~200；当前保持 699/3351 不动
-# （verification-system-010 只许收紧），首跑实测后按规范修订程序调整。
 #
 # Anchors (lean extract, not a paste): orchestrator-unhappy-path (conflict→Published,
 # no restart), manager-unhappy (join wake / low assessment), fallback.toml (consecutive provider failures).
@@ -81,11 +69,6 @@ export const markProviderFailed = (provider) => failed.add(provider)
 export const routingProtocol = 2
 export const hasTheoreticalCapacity = (role, purpose) => true
 
-// DELEGATE 9.2 / WHAT[014]: Predictor 与 owner 配成相同模型是合法状态。这个世界
-// 故意让 readonly-delegate 分支与角色池分支返回同一个 model：purpose 分流的逻辑
-// 证明在 execution-model-routing 单元层（EMR 020/002），世界层不重复证明
-// "两池分离"，改证同模型不关闭委托。manager 分支保留候选轮换，provider-fallback
-// 腿仍能观察降级路径。
 const sharedModel = 'test/test-model-b'
 
 // DELEGATE 9.2 (C): 每次真实路由决策 (role + purpose -> model) 记录到本配置文件
@@ -102,15 +85,12 @@ const recordRoutingDecision = (role, purpose, model) => {
 }
 
 export default function route(role, running, previous, purpose) {
-  if (!new Set(['manager', 'orchestrator', 'engineer', 'devops', 'blogger', 'bookkeeper', 'predictor']).has(role)) {
+  if (!new Set(['manager', 'orchestrator', 'engineer', 'devops', 'plan', 'advisor']).has(role)) {
     throw new Error('unexpected managed role: ' + role)
   }
 
   let target
-  if (purpose === 'readonly-delegate') {
-    // The Predictor pool; configured equal to the role-pool model on purpose.
-    target = { model: sharedModel, reasoning: 'none' }
-  } else if (role === 'manager') {
+  if (role === 'manager') {
     if (previous != null && !failed.has(providerOf(previous.model))) {
       target = previous
     } else {
@@ -124,13 +104,6 @@ export default function route(role, running, previous, purpose) {
   recordRoutingDecision(role, purpose, target.model)
   return target
 }
-
-// DELEGATE 14.5: this scheduler runs inside the spawned OpenCode process,
-// so the in-process __wanxiangshu_test_predictor_state switch that the
-// same-process suites flip is unreachable here; the delegation world declares
-// the Predictor slot configured directly. Configuration presence IS the
-// enablement (spec WHAT[014]) — no second switch exists to flip.
-export const predictorConfiguration = () => ({ state: 'configured', reason: null })
 '''
 
 # Event ceilings (fail-closed on dead loops; primary over silence watchdog):
@@ -142,21 +115,7 @@ export const predictorConfiguration = () => ({ state: 'configured', reason: null
 #                      Both are machine-checked runaway ceilings, not wall-clock budgets; a future
 #                      legitimate topology change must re-measure the complete stroke first.
 #
-# DELEGATE 14.5: the two delegation title turns are declared outside the flow
-# (the Host titles each preflow/flow-created owner session on its own), so they
-# are declared reachable here exactly like humanroot-manager-title — otherwise
-# the dead-edge check would reject them. They are optional: a world whose Host
-# stops titling these sessions tolerates their absence.
-# DELEGATE 4.1: a stdio MCP fixture is declared by name so the Long Stroke
-# world's provider-visible tool surface covers built-in + plugin + MCP tools
-# through the same tool.definition hook. The harness maps the name to the
-# fixture command; no absolute path is declared here. The wire assertion
-# (assertDelegationProtocolSurface in long-stroke-oracles.mjs) requires the
-# MCP tool to appear on the owner wire carrying the delegation protocol —
-# budget required, note optional, companion prose present, same as every
-# built-in and plugin tool. Boundary: tool discovery AFTER mcp.tools.changed
-# is NOT covered by this declaration (see the oracle's boundary note).
-setup = { strict = true, preFlowTurns = ["humanroot-manager-title", "humanroot-loop", "strength-canary-owner-title", "strength-recovery-owner-title"], maxJournalEvents = 699, maxSseEvents = 3351, mcpFixture = "semble", project = { files = { "AGENTS.md" = "long stroke\n", "README.md" = "# long-stroke\n", "read_probe.txt" = "long-stroke-read-probe\n", ".wanxiang/casebook/.keep" = "", "large_probe.txt" = "LARGE_READ_PROBE_MARKER line 0001 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0002 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0003 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0004 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0005 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0006 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0007 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0008 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0009 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0010 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0011 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0012 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0013 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0014 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0015 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0016 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0017 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0018 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0019 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0020 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0021 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0022 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0023 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0024 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0025 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0026 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0027 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0028 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0029 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0030 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0031 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0032 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0033 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0034 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0035 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0036 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0037 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0038 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0039 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\nLARGE_READ_PROBE_MARKER line 0040 pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp" } } }
+setup = { strict = true, preFlowTurns = ["humanroot-manager-title", "humanroot-loop"], maxJournalEvents = 699, maxSseEvents = 3351, mcpFixture = "semble", project = { files = { "AGENTS.md" = "long stroke\n", "README.md" = "# long-stroke\n", "read_probe.txt" = "long-stroke-read-probe\n", ".wanxiang/casebook/.keep" = "" } } }
 session = { agent = "orchestrator", bind = ["title", "orchestrator"] }
 prompt = { agent = "orchestrator", text = "Ship publish_proof.txt to the target branch through the long stroke." }
 
@@ -174,16 +133,6 @@ must = [
   "engineer-resolve.0",
   # orch.2 = join harvest text after Published (orch-unhappy Stroke 6). EXEC-016
   "orch.2",
-  # DELEGATE 14.5: the three uniquely-declared delegation turns must be physically
-  # reached. Both companions' bootstrap requests share ONE wire shape (manager
-  # agent alias, only the todowrite-for-predictor face, the readonly-investigation prose as
-  # last user), so a second bootstrap declaration with an equal-length prefix
-  # would be ambiguous and fail closed. The recovery companion's physical
-  # arrival is proven session-scoped by bindDelegationReplicas (chat counts
-  # [1, 2]) instead of a duplicate declaration.
-  "strength-canary-owner",
-  "strength-canary-replica",
-  "strength-recovery-owner",
 ]
 
 flow = [
@@ -292,79 +241,8 @@ flow = [
   # Production Manager tool surface, observed on the wire the Host actually sent.
   { custom = "assertManagerToolSurfaceOnWire" },
 
-  # ── DELEGATE 14.5: recovery leg in the main flow, then both decisions'
-  #    fact barriers. Legs 1-3 (normal complete / early end / natural
-  #    truncation) ran in the preflow on strength-canary-owner, where
-  #    014.test.mjs pinned the single bootstrap delivery.
-  { createSession = { agent = "manager", bind = ["strength-recovery-owner"], as = "strength-recovery-owner" } },
-  { prompt = { agent = "manager", text = "STRENGTH_RECOVERY: resume the readonly delegation after a provider failure." }, session = "strength-recovery-owner", timeoutMs = 60000 },
-  # .2 is reachable only after the budget call, the faulted-then-retried
-  # continuation and the successor transform.
-  { wait = "strength-recovery-owner.2", timeoutMs = 90000 },
-
-  # Durable side: bind each DelegationBound replica session to its own alias,
-  # prove the Predictor pool model on the wire and the admitted-round counts.
-  { custom = "bindDelegationReplicas" },
-  # Owner side: the companion's real readonly result reached both owners'
-  # later provider requests.
-  { custom = "assertDelegationMaterialOnWire" },
-  # Configured-state protocol surface (DELEGATE 4.1/11.2, E5, G10), observed on
-  # the real provider wire: participating tools carry the required estimated_readonly_rounds and
-  # optional self_note plus the investigation outlook text; non-participating tools remain untouched
-  # with zero protocol increment; completed calls keep their original arguments in later histories;
-  # a note-less call is legal.
-  { custom = "assertDelegationProtocolSurface" },
-
-  # DELEGATE 9.2: this world configures the Predictor pool equal to the
-  # role-pool model, so the wire alone cannot tell the two pools apart. The
-  # same-model legality is proven end-to-end here, and the purpose axis is
-  # witnessed directly by the recorded routing decisions (the purpose never
-  # reaches the provider wire).
-  { custom = "assertDelegationSameModelIsLegal" },
-  { custom = "assertDelegationPurposeOnWire" },
-
-  # Capacity leg (DELEGATE 14.5): owner and companion share ONE provider token.
-  # The capacity ledger is keyed by provider with exactly one token per provider
-  # (ModelRouting.fs ledger construction; execution-model-routing 003 proven at
-  # the surface: one acquire builds one ledger entry and one token), so this
-  # world — every session routed to the test provider — already runs at
-  # capacity 1. The oracle pins what the wire can prove: the shared provider
-  # and the parent-waits-for-child request order (the pools themselves are no
-  # longer distinguishable by model after DELEGATE 9.2's same-model world).
-  { custom = "assertDelegateCapacityOneParentWaits" },
-
-  # R5: the injected-carrier requests really reached the mock and were answered.
-  # The strict mock fail-closes on an undeclared or malformed request, so being
-  # answered IS the legal-arrival proof. The recovery owner's continuation
-  # delivered exactly twice — the faulted delivery plus the Host retry — which
-  # is the post-injection failure path (R5's "normal failure handling").
-  { assertDeliveries = { id = "strength-canary-owner.1", eq = 1 } },
-  { assertDeliveries = { id = "strength-canary-owner.2", eq = 1 } },
-  { assertDeliveries = { id = "strength-recovery-owner.0", eq = 1 } },
-  { assertDeliveries = { id = "strength-recovery-owner.1", eq = 2 } },
-  { assertDeliveries = { id = "strength-recovery-owner.2", eq = 1 } },
-
-  # Fact barriers for both decisions. Requested/Bound are exact: capture and
-  # binding are idempotent per decision (WHAT[speculative-investigation-006]),
-  # so a third write of either is a repeated delegation (R6) and fails the eq.
-  # The downstream chain stays gte — its producers may legitimately race past
-  # an exact count.
-  { waitFact = { name = "DelegationRequested", eq = 2, timeoutMs = 60000 } },
-  { waitFact = { name = "DelegationBound", eq = 2, timeoutMs = 60000 } },
-  { waitFact = { name = "StrengthCandidatePrepared", gte = 2, timeoutMs = 60000 } },
-  { waitFact = { name = "StrengthCandidatePromoted", gte = 2, timeoutMs = 60000 } },
-  { waitFact = { name = "StrengthFramesTraced", gte = 2, timeoutMs = 60000 } },
-
   { expectSatisfied = true },
 ]
-
-[[turn]]
-id = "protocol-repair"
-internal = true
-user = "# Protocol repair"
-
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "chronicle", args = { charge = "Preserve the meaningful transition from this Blogger cycle.", occurrence = "Protocol repair.", settlement = "This occurrence is now the durable state established by the cycle.", consequence = "Later context may rely on this transition after raw history is compressed.", tipName = "durable-transition-over-transcript", opinion = "Compressing the transcript is safe only because the durable transition, not the narration, is what later context can honestly rely on.", advice = "Keep recording the causal spine as facts and let the tip name the reusable lesson, so a compressed horizon loses no decision-bearing state." } }
 
 # A Continue retirement opens the next iteration on the same session: system, tools
 # and root authority stay fixed, the predecessor's history is retained in order, and
@@ -638,8 +516,7 @@ user = [
 # The re-anchored current-action resource carries the review-only read tools DISABLED (its
 # own text says so), so this ladder cannot host a close arc: production refuses every
 # `deliver` it answers with "Cannot finish without a review". The road it keeps the Manager
-# awake for has to be retired on the owner's own lane instead (see the strength canary
-# turns below).
+# awake for has to be retired on the owner's own lane instead.
 tools = ["join", "assume", "deliver"]
 
   # Delivery 1 is the nudge itself; later deliveries re-anchor the same resource after
@@ -776,18 +653,18 @@ user = "# Write publish_proof.txt."
 tools = ["todowrite-for-engineer"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { await this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return { written: true }; } }", estimated_readonly_rounds = 0 } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { await this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return { written: true }; } }" } }
 
-  # Read probe on the programming surface: ordinary Engineer mainline, not Strength Replica.
+  # Read probe on the programming surface: ordinary Engineer mainline.
   # Unique path makes message.part.updated correlation unambiguous in the real Host SSE stream.
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { return await this.cat('read_probe.txt'); } }", estimated_readonly_rounds = 0 } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { return await this.cat('read_probe.txt'); } }" } }
 
   [[turn.step]]
   # A subagent is settled as completed only by `js.deliver` (repository-programming-054/059):
   # a plain `return` leaves the delivery cell empty and the child reports `undelivered`,
   # so no `HandleCompleted` is written and the join never closes.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { return this.deliver({ file: 'publish_proof.txt', written: true }) } }", estimated_readonly_rounds = 0 } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { return this.deliver({ file: 'publish_proof.txt', written: true }) } }" } }
 
   # The delivery tool result asks the provider once more; the child closes its turn here.
   [[turn.step]]
@@ -800,43 +677,14 @@ user = "# Resolve the conflicted publish_proof.txt so it contains exactly: Publi
 tools = ["todowrite-for-engineer"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return { written: true }; } }", estimated_readonly_rounds = 0 } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return { written: true }; } }" } }
 
   [[turn.step]]
   # Same rule for the repair child: only `js.deliver` settles it as completed.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { return this.deliver({ file: 'publish_proof.txt', resolved: true }) } }", estimated_readonly_rounds = 0 } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = {  program = "class Js extends JsProgram { async run() { return this.deliver({ file: 'publish_proof.txt', resolved: true }) } }" } }
 
   [[turn.step]]
   respond = { type = "text", text = "Conflict file resolved." }
-
-# Blogger bootstrap: the companion's own lifecycle prompt (the normal and
-# squash variants share this opening; the Host renders it with a "# " lead).
-# The first cycle of every materialized Blogger session asks for exactly one
-# chronicle call; the dense delta cycles below carry the "# Write the dense
-# work-log continuation now" head instead. Both materialized companions (the
-# humanroot one retired in the preflow and the main spine one) start at step 0
-# of this declaration.
-[[turn]]
-id = "blogger-bootstrap"
-internal = true
-user = "# Call the chronicle tool exactly once now"
-
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "chronicle", args = { charge = "Preserve the meaningful transition from this Blogger cycle.", occurrence = "Long stroke.", settlement = "This occurrence is now the durable state established by the cycle.", consequence = "Later context may rely on this transition after raw history is compressed.", tipName = "durable-transition-over-transcript", opinion = "Compressing the transcript is safe only because the durable transition, not the narration, is what later context can honestly rely on.", advice = "Keep recording the causal spine as facts and let the tip name the reusable lesson, so a compressed horizon loses no decision-bearing state." } }
-
-# The companion's delta cycles reuse the bootstrap declaration above: production rebuilds
-# the Blogger provider view for every cycle (the frame list grows by one, the delta
-# advances) and the rebuilt wire still carries the SAME normal instruction — the
-# `[[new_work_to_record]]` TOML is appended to it — so each cycle keys back to
-# `blogger-bootstrap.0` with its own delivery count, and the `frame-commit` boundary
-# declared below admits the rebuild. The dense-head step ladder this replaced was dead
-# by measurement: its prompt text existed nowhere in src/resources/dist, and no wire
-# could reach it.
-
-[[epoch]]
-turn = "blogger-bootstrap"
-step = 0
-reason = "frame-commit"
 
 # First Wanxiangshu-owned provider failure.
 [[fault]]
@@ -855,178 +703,4 @@ step = 0
 delivery = "provider-error"
 status = 400
 retryable = false
-attempts = [1]
-
-# Pure loop: each owner-opened incarnation reseals at the exact assessment resource
-# (`manager-reopened-loop.0` above) while preserving the authority prefix, the provider
-# plan, and the predecessor's retained history. The authority turn itself establishes the
-# seal once; it no longer reseals, because the successor never trims that history away.
-[[epoch]]
-turn = "continue"
-step = 0
-reason = "prefix-probe"
-optional = true
-
-# ── DELEGATE 14.5: explicit read-only delegation legs ───────────────────────
-#
-# Predictor 模型配置是唯一启用依据（spec WHAT[014]）：E2E 中调度模块运行在独立
-# spawn 的 opencode 进程内，测试进程的 __wanxiangshu_test_predictor_state 开关
-# 到不了那里，因此上方 routingSource 直接声明 configured，并让
-# purpose='readonly-delegate' 选中 Predictor 池模型 test/test-model-b；owner 仍
-# 走角色池 test/test-model，角色与参与者身份不变。
-#
-# 腿1 正常完成 + 腿2 提前结束 + 腿3 自然截断：preflow 的 strength-canary-owner
-# 由 014.test.mjs preFlowCanaries 创建驱动，其同伴第 1 次交付由该文件的
-# waitForExpectationAttempt 等待并以 >= 1 钉住；完整两轮交付与恰一次口径由主流程
-# 覆盖（replica chats [1, 2]、owner chats [4, 5]、Requested/Bound == 2）。
-# budget=2：同伴第 1 轮经
-# 唯一只读面 todowrite-for-predictor 读 large_probe.txt（工具既有截断由宿主掌握；帧只保存
-# 实际返回字节，marker 在头部，截断也存活），第 2 轮以纯文本提前结束；材料经
-# Prepared → Promoted 回传 owner 的后续请求。两个 companion 的每次请求 wire
-# 同形（启动 prose 永远渲染在末尾，replica 自己的交换在它之前），bootstrap 与
-# 续行落在同一 step-0 键上，故只有一条声明、按交付序号给响应
-# （bindReplicaSequence；见该 turn 与 epoch 注释）。
-# 腿4 恢复：主流程新建 strength-recovery-owner，其续行步挂 provider-error 500
-# retryable（Host 自重试，PAR-019）。Requested 在同一 transform 的 capture 阶段、
-# 故障前已落盘；Prepared 候选在重试交付上原样重渲染，不重跑只读工具
-# （DELEGATE-10 恢复路径）。
-#
-# internal=true 的回合（两个 owner 的提示词由测试代码组装、同伴的启动 prose 由
-# 生产组装）不参加 dead-edge 检查，也不进 expectSatisfied——其交付由 waitFact
-# 事实屏障、preflow matchCount 与自定义 oracle 从持久事实与公开 wire 证明。
-# owner 与同伴条目的 last user 不同：owner 是测试声明的提示词，同伴是生产的
-# delegation/readonly-investigation prose（两个 companion 完全相同，故只有一条
-# bootstrap 声明入口），另以 tools 门禁区分：owner 要求 todowrite-for-manager，同伴只放
-# todowrite-for-predictor 且禁止 todowrite-for-manager。
-#
-# owner 角色是 manager（014 preFlow 与 flow 的 createSession 均以 manager 建会话）：
-# 委托 capture 要求 root owner work，而顶层 manager API 会话是本世界唯一的
-# HumanRoot root-work 形态（同文件 humanroot 会话的先例）；顶层 engineer 会话被
-# 判为 subsession，capture 会以 not-root-owner-work 正确拒绝。同伴仍以其继承的
-# manager 角色运行，只读工具面不变。
-#
-# 容量 1 父等子（判据：同 provider、容量 1 时父等子不死锁、不双占）：容量账本
-# 按 provider 建条且每 provider 恰一张票（ModelRouting.fs 的 ledger 构造；
-# execution-model-routing 003 已在 surface 级实证一次 acquire 建成一 entry 一
-# token）。本世界所有会话同路由到 test provider，因此委托支线的 owner 与同伴
-# 天然共享唯一票——父等子是既成物理而非编程模拟，routingSource 无需改动。
-# wire 可证部分由 assertDelegateCapacityOneParentWaits 断言：同 provider、双方
-# 模型池不同，且 owner 发起委托的请求晚于同伴全部请求到达（transform 直到同伴
-# 结束才放行父请求 = 父在等且未死锁）；「不双占」由上述账本结构保证、在
-# execution-model-routing 单测载体证明，E2E 侧不重复断言。「取消时 fence/child
-# 释放」在此结构下不可构造：同伴生命周期同步吞并在 owner 的 transform 内，
-# 外部 abort 只能发生在该 transform 返回之后，抓不到进行中的子——如实记为未决，
-# 不造替代证明。
-
-[[turn]]
-id = "strength-canary-owner-title"
-lane = "strength-canary-owner"
-kind = "title"
-user = "STRENGTH_HOST_CANARY: inspect README.md through the real nested Replica path."
-optional = true
-
-  [[turn.step]]
-  respond = { type = "title", text = "Read-only Delegate Canary" }
-
-# Owner of the normal-complete + early-end + natural-truncation decision.
-# Step 0 carries the explicit estimated_readonly_rounds (batch max) and the optional self_note;
-# capture freezes DelegationRequested from this completed batch.
-[[turn]]
-id = "strength-canary-owner"
-internal = true
-user = "STRENGTH_HOST_CANARY: inspect README.md through the real nested Replica path."
-tools = ["todowrite-for-manager"]
-
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { program = "class Js extends JsProgram { async run() { return { inspected: true } } }", estimated_readonly_rounds = 2, self_note = "read-only survey before publishing" } }
-
-  # The continuation whose transform starts the decision (Bound → companion
-  # rounds → Prepared) and renders the candidate before the target assistant
-  # output — the mid-insertion the prefix-probe epoch below admits. Its explicit
-  # zero estimate keeps the legal "estimate 0 without self_note" pairing on the
-  # wire after both companions moved to the non-participating todowrite-for-predictor face.
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { program = "class Js extends JsProgram { async run() { return { inspected: true } } }", estimated_readonly_rounds = 0 } }
-
-  # Successor transform replays the Promoted frames into XTrace before capture
-  # (WHAT[speculative-investigation-008]) → StrengthFramesTraced.
-  [[turn.step]]
-  respond = { type = "text", text = "Companion survey received; the publish can proceed." }
-
-  # The declared rung after this prose reply was removed: a text reply ends the
-  # assistant turn, so no request could ever land on it (measured). The frames
-  # capture is proven by the durable StrengthFramesTraced fact, never by a request count.
-
-[[turn]]
-id = "strength-canary-replica"
-internal = true
-user = "Continue the current task's read-only investigation"
-tools = ["todowrite-for-predictor"]
-forbiddenTools = ["todowrite-for-manager"]
-
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-predictor", args = { program = "class Js extends JsProgram { async run() { return await this.cat('large_probe.txt'); } }" } }
-
-[[turn]]
-id = "strength-recovery-owner-title"
-lane = "strength-recovery-owner"
-kind = "title"
-user = "STRENGTH_RECOVERY: resume the readonly delegation after a provider failure."
-optional = true
-
-  [[turn.step]]
-  respond = { type = "title", text = "Delegate Recovery Canary" }
-
-# Owner of the recovery decision, created and driven by the flow below (its
-# prompt is flow-declared, so this turn is NOT internal).
-[[turn]]
-id = "strength-recovery-owner"
-lane = "strength-recovery-owner"
-user = "STRENGTH_RECOVERY: resume the readonly delegation after a provider failure."
-tools = ["todowrite-for-manager"]
-
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { program = "class Js extends JsProgram { async run() { return { inspected: true } } }", estimated_readonly_rounds = 1, self_note = "verify probe content after provider fault recovery" } }
-
-  # First delivery of this step is refused by the declared fault; the Host
-  # retry serves this same response. DelegationRequested was persisted by the
-  # capture phase before the fault; the Prepared candidate re-renders
-  # identically on the retry (DELEGATE-10).
-  [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = {  program = "class Js extends JsProgram { async run() { return { inspected: true } } }", estimated_readonly_rounds = 0 } }
-
-  [[turn.step]]
-  respond = { type = "text", text = "Recovered delegation consumed; continuing the road." }
-
-  # XTrace capture carrier for the recovery decision, symmetrical to the
-  # canary owner's step 3: StrengthFramesTraced needs one more physical step
-  # after the successor before the road closes in prose.
-
-# ── strength delegation declarations (restored verbatim after the rung cleanup) ──────────
-# The prefix-probe boundaries admit the mid-insertion the owner's continuation performs, and
-# the recovery leg's fault is what makes its retried delivery a second physical attempt.
-[[epoch]]
-turn = "strength-canary-owner"
-step = 1
-reason = "prefix-probe"
-optional = true
-
-[[epoch]]
-turn = "strength-recovery-owner"
-step = 1
-reason = "prefix-probe"
-optional = true
-
-[[epoch]]
-turn = "strength-canary-replica"
-step = 0
-reason = "prefix-probe"
-optional = true
-
-[[fault]]
-turn = "strength-recovery-owner"
-step = 1
-delivery = "provider-error"
-status = 500
-retryable = true
 attempts = [1]

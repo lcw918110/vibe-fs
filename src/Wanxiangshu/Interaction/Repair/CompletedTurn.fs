@@ -3,8 +3,6 @@ namespace Wanxiangshu.Interaction.Repair
 open System
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Session.Recovery
 open Wanxiangshu.Foundation
@@ -17,8 +15,6 @@ open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Participant.Provider.Projection
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
-open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Recovery
@@ -39,18 +35,6 @@ module CompletedTurnClassifier =
         | AwaitRepairTerminal
         | NoRepair
 
-    /// capability-enforcement-021: how one idle Blogger turn reaches the
-    /// protocol repair owner.
-    [<RequireQualifiedAccess>]
-    type BloggerIdleRoute =
-        /// Ordinary turn observation only.
-        | Observe
-        /// Prose-only terminal: protocol repair alone owns the turn.
-        | Repair
-        /// Aborted turn: repair drives its live request, then the ordinary
-        /// abort observation still runs.
-        | RepairThenObserve
-
     let private supportsInteractionRepair =
         function
         | Some Role.Manager
@@ -63,7 +47,6 @@ module CompletedTurnClassifier =
         | Some Role.Inquiry
         | Some Role.Plan -> true
         | Some Role.Distiller
-        | Some Role.Blogger
         | Some Role.Advisor
         | None -> false
 
@@ -80,9 +63,9 @@ module CompletedTurnClassifier =
             |> String.concat ""
 
     /// Session terminal material: formal text + host-visible reasoning/thinking.
-    /// COMPANION-003: TerminalOutputRaw 与 LWR 禁止 raw tool call/result——
+    /// COMPANION-003: TerminalOutputRaw 与 terminal capture 禁止 raw tool call/result——
     /// 末回合工具可能极大且不经 transform。This is the XTrace terminal segment's
-    /// text, not a parallel A channel.
+    /// text, not a parallel session-wide text.
     let partsSessionText (parts: MessagePart array) : string =
         if isNull parts then
             ""
@@ -220,36 +203,6 @@ module CompletedTurnClassifier =
         | true, None, ReconcileProgram.TurnNeedsContinuation _ -> RepairDefectDecision.RequestRepair
         | true, None, (ReconcileProgram.TurnCompleted | ReconcileProgram.TurnAborted _ | ReconcileProgram.TurnFailed _) ->
             RepairDefectDecision.NoRepair
-
-    let private hasBloggerToolEvidence (parts: MessagePart array) =
-        not (isNull parts)
-        && parts
-           |> Array.exists (function
-               | MessagePart.ToolCall _
-               | MessagePart.ToolResult _ -> true
-               | _ -> false)
-
-    /// capability-enforcement-021: a Blogger turn that no Host tool loop
-    /// follows (prose-only completion, or a run stopped by the continuation
-    /// itself or aborted from outside) leaves its live request with idle as the
-    /// only wake that can still nudge, AABB or abandon it. Ignoring an aborted
-    /// turn would keep that request's flight claimed forever. The repair owner
-    /// itself proves the turn belongs to the live request. Provider failures
-    /// belong to provider-attempt recovery, and a degeneration-guard abort
-    /// already owns its successor.
-    let bloggerIdleRoute
-        (bloggerQuiescent: bool)
-        (guardOwnsAbort: bool)
-        (outcome: ReconcileProgram.TurnOutcome)
-        (parts: MessagePart array)
-        : BloggerIdleRoute =
-        match bloggerQuiescent, outcome with
-        | false, _
-        | true, ReconcileProgram.TurnFailed _ -> BloggerIdleRoute.Observe
-        | true, ReconcileProgram.TurnAborted _ when guardOwnsAbort -> BloggerIdleRoute.Observe
-        | true, ReconcileProgram.TurnAborted _ -> BloggerIdleRoute.RepairThenObserve
-        | true, _ when hasBloggerToolEvidence parts -> BloggerIdleRoute.Observe
-        | true, _ -> BloggerIdleRoute.Repair
 
     let roleOfAgent (agent: string option) (fallback: Role option) =
         match agent with

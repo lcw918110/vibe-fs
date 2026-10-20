@@ -22,18 +22,6 @@ export const routingProtocol = 2
 export default function route(role, running, previous, purpose) {
   return { model: 'test/system', reasoning: 'none' }
 }
-
-export const predictorConfiguration = () => {
-  const state = globalThis.__wanxiangshu_test_predictor_state ?? 'unconfigured'
-  if (state === 'configured') return { state: 'configured', reason: null }
-  if (state === 'invalid') {
-    return {
-      state: 'invalid',
-      reason: globalThis.__wanxiangshu_test_predictor_reason ?? 'test Predictor configuration is invalid',
-    }
-  }
-  return { state: 'unconfigured', reason: null }
-}
 `,
   'utf8',
 )

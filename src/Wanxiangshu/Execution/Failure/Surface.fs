@@ -65,9 +65,7 @@ module Surface =
     let private requestKindOf value =
         match requiredText "provider.requestKind" value with
         | "WorkMain" -> ProviderRequestKind.WorkMain
-        | "BloggerMain" -> ProviderRequestKind.BloggerMain
         | "InteractionRepair" -> ProviderRequestKind.InteractionRepair
-        | "StrengthReplica" -> ProviderRequestKind.StrengthReplica
         | requestKind -> invalidArg "provider.requestKind" $"unknown provider request kind '{requestKind}'"
 
     let private budgetOf fieldName value =
@@ -127,9 +125,7 @@ module Surface =
     let private requestKindLabel =
         function
         | ProviderRequestKind.WorkMain -> "WorkMain"
-        | ProviderRequestKind.BloggerMain -> "BloggerMain"
         | ProviderRequestKind.InteractionRepair -> "InteractionRepair"
-        | ProviderRequestKind.StrengthReplica -> "StrengthReplica"
 
     let private authorizationView (authorization: ProviderRecoveryAuthorization) =
         box
@@ -169,6 +165,14 @@ module Surface =
         function
         | FatalityDecision.NoFatality -> box {| kind = "NoFatality" |}
         | FatalityDecision.FatalAfterSettlement -> box {| kind = "FatalAfterSettlement" |}
+
+
+    /// The only confirmed-failure step. priorSameProviderRetry is a confirmed fact,
+    /// not a timeout and not an ambiguous result.
+    let recoveryStep (priorSameProviderRetry: bool) : string =
+        match ProviderAttemptRecovery.next priorSameProviderRetry with
+        | ProviderRecoveryStep.RetrySameProvider -> "RetrySameProvider"
+        | ProviderRecoveryStep.BlacklistProviderThenRetry -> "BlacklistProviderThenRetry"
 
     let decide (value: obj) : obj =
         let decision = value |> inputOf |> ExecutionFailurePolicy.decide

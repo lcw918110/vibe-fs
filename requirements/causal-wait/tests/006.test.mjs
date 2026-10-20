@@ -106,11 +106,11 @@ const causal = await import('../../../dist/Execution/Session/Wait/Surface.js')
 const owner = (id) => causal.owner('flow', { id })
 const readDiagnostic = (workspace) =>
   JSON.parse(fs.readFileSync(path.join(workspace, '.Herdchestra', 'diagnostics', 'causal-waits.json'), 'utf8'))
-const write = (descriptor) => {
+const write = async (descriptor) => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'escape-taxonomy-'))
   const registry = causal.createRegistry()
   const lease = causal.enter(registry, descriptor)
-  causal.writeSnapshot(workspace, registry)
+  await causal.writeSnapshot(workspace, registry)
   return { workspace, lease, registry }
 }
 
@@ -125,7 +125,7 @@ test('WHAT[causal-wait-006] CAUSAL_006_wait_escape_has_five_typed_cases', () => 
 
   assert.deepEqual(tags, ['deadlineAt', 'cancelledBy', 'processLifetime', 'sessionLifetime', 'openEndedExternal'])
 })
-test('WHAT[causal-wait-006] CAUSAL_006_escapes_render_distinctly_in_diagnostics', () => {
+test('WHAT[causal-wait-006] CAUSAL_006_escapes_render_distinctly_in_diagnostics', async () => {
   const wait = causal.createWait({
     waitKind: 'escape-taxonomy',
     owner: owner('A'),
@@ -141,7 +141,7 @@ test('WHAT[causal-wait-006] CAUSAL_006_escapes_render_distinctly_in_diagnostics'
     source: 'escape-taxonomy.test',
   })
 
-  const { workspace, lease } = write(wait)
+  const { workspace, lease } = await write(wait)
   try {
     const snap = readDiagnostic(workspace)
     assert.equal(snap.active.length, 1)
@@ -152,7 +152,7 @@ test('WHAT[causal-wait-006] CAUSAL_006_escapes_render_distinctly_in_diagnostics'
     fs.rmSync(workspace, { recursive: true, force: true })
   }
 })
-test('WHAT[causal-wait-006] CAUSAL_006_deadline_escape_carries_typed_instant', () => {
+test('WHAT[causal-wait-006] CAUSAL_006_deadline_escape_carries_typed_instant', async () => {
   const wait = causal.createWait({
     waitKind: 'deadline-escape',
     owner: owner('A'),
@@ -162,7 +162,7 @@ test('WHAT[causal-wait-006] CAUSAL_006_deadline_escape_carries_typed_instant', (
     source: 'escape-taxonomy.test',
   })
 
-  const { workspace, lease } = write(wait)
+  const { workspace, lease } = await write(wait)
   try {
     const [{ tag: deadlineKind, at: deadlineAt }] = readDiagnostic(workspace).active[0].escapes
     assert.equal(deadlineKind, 'deadlineAt')

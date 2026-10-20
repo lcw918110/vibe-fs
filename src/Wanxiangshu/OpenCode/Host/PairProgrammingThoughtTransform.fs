@@ -16,14 +16,11 @@ open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Delegation
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.OpenCode.Host.PairProgramming
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.OpenCode.Host.RequirementGrounding
 open Wanxiangshu.Repository.Programming.Js.OpenCode
 open Wanxiangshu.Repository.Programming.Js.Anchor
 open Wanxiangshu.Participant.Provider.Projection
-open Wanxiangshu.Requirement.Grounding
 
 /// HOST-013：永久 pair-programming auto-injected pairs。
 ///
@@ -37,9 +34,7 @@ open Wanxiangshu.Requirement.Grounding
 module PairProgrammingThoughtTransform =
 
     [<RequireQualifiedAccess>]
-    type CursorPresentationOwner =
-        | PairGuidance
-        | RequirementGrounding
+    type CursorPresentationOwner = | PairGuidance
 
     [<Literal>]
     let private PairProgrammingGuidelinePath = "host/pair-programming-guideline"
@@ -341,9 +336,6 @@ module PairProgrammingThoughtTransform =
     /// 组内排序唯一合法：`Ordinal` 升序。
     ///
     /// Anchor 不在当前真实消息里的 historical pair **不重放、不报错**。
-    /// XWire prefix probe 用 FrozenRecordPrefix 替换已覆盖前缀时会 drop 那些
-    /// 消息（CTX-010 canonical `CutoffExclusive`）；被覆盖区里的 pair 属于被替换的前缀，
-    /// 不应再注入 rewritten view，更不能因此 AbortSession 杀死当前物理 retry。
     /// Durable fact 仍保留；完整 transcript 回来时 anchor 在场即可再 replay。
     let cursorGuidanceSeparator = "\u0000\uFEFF"
 
@@ -581,30 +573,16 @@ module PairProgrammingThoughtTransform =
                   PartId = partId
                   CallId = ToolCallId.create (unbox<string> parts.[index]?callID) }))
 
-    let private cursorPresentationPrefixes
-        (guidance: PairProgrammingGuideline list)
-        (occurrences: RequirementGroundingOccurrence list)
-        =
+    let private cursorPresentationPrefixes (guidance: PairProgrammingGuideline list) =
         let guidanceBytes =
             guidance
             |> List.map (fun pair -> cursorGuidanceSeparator + pair.MarkerText)
             |> String.concat ""
 
-        occurrences
-        |> List.scan
-            (fun prefix occurrence ->
-                let bytes =
-                    occurrence.Reads
-                    |> List.map (fun read -> cursorGuidanceSeparator + read.CursorResultBytes)
-                    |> String.concat ""
-
-                prefix + bytes)
-            ""
-        |> List.collect (fun reads ->
-            [ { GuidanceBytes = guidanceBytes
-                RequirementBytes = reads }
-              { GuidanceBytes = ""
-                RequirementBytes = reads } ])
+        [ { GuidanceBytes = guidanceBytes
+            RequirementBytes = "" }
+          { GuidanceBytes = ""
+            RequirementBytes = "" } ]
 
     let private presentationsAtMessage (session: SessionAgentProjection option) (rawMsg: obj) =
         let atMessage gap =
@@ -619,19 +597,11 @@ module PairProgrammingThoughtTransform =
         | Some state ->
             let guidance = state.Guidelines |> Option.defaultValue GuidelineProjection.empty
 
-            let grounding =
-                state.RequirementGrounding
-                |> Option.defaultValue RequirementGroundingProjection.empty
+            let atAnchor (pairs: PairProgrammingGuideline list) =
+                cursorPresentationPrefixes (pairs |> List.filter (fun pair -> atMessage pair.ResultGap))
 
-            let atAnchor (pairs: PairProgrammingGuideline list) (occurrences: RequirementGroundingOccurrence list) =
-                cursorPresentationPrefixes
-                    (pairs |> List.filter (fun pair -> atMessage pair.ResultGap))
-                    (occurrences |> List.filter (fun occurrence -> atMessage occurrence.ResultGap))
-
-            atAnchor (GuidelineProjection.pairs guidance) (RequirementGroundingProjection.occurrences grounding)
-            @ atAnchor
-                (GuidelineProjection.visiblePairs guidance)
-                (RequirementGroundingProjection.visibleOccurrences grounding)
+            atAnchor (GuidelineProjection.pairs guidance)
+            @ atAnchor (GuidelineProjection.visiblePairs guidance)
             |> List.distinct
 
     let private captureCursorResult journal trace session (rawMsg: obj) =
@@ -705,8 +675,7 @@ module PairProgrammingThoughtTransform =
     let private stripCapturedPresentation owner captured value =
         let retain presentation =
             match owner with
-            | CursorPresentationOwner.PairGuidance -> captured.Body + presentation.RequirementBytes
-            | CursorPresentationOwner.RequirementGrounding -> captured.Body + presentation.GuidanceBytes
+            | CursorPresentationOwner.PairGuidance -> captured.Body
 
         match matchingPresentations captured value |> List.map retain |> List.distinct with
         | [] -> Ok value
@@ -1332,11 +1301,7 @@ module PairProgrammingThoughtTransform =
         (restartGuidance: string option)
         : Task<LlmFacing.Document> =
         task {
-            let! guidance =
-                match journal, projectionSessionIdOpt with
-                | Some durable, Some sessionId ->
-                    EnforcerTipGuidance.latestTipGuidance durable (SessionId.create sessionId)
-                | _ -> Task.FromResult None
+            let guidance: string option = None
 
             // Algorithm G2: every round that carries a PairHint also lists the
             // unresolved parked handles, so the AI is pressed to take a

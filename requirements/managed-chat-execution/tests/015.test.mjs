@@ -9,10 +9,8 @@ import { execFile } from 'node:child_process'
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
 import * as recoveryHost from '../../../dist/OpenCode/Host/SessionRecoveryHostSurface.js'
 import * as routing from '../../../dist/OpenCode/Host/ModelRoutingSurface.js'
-import * as ownership from '../../verification-system/tests/support/blogger-ownership.mjs'
 import {
   acceptAuthorityRoot,
-  claimBloggerRequest,
   startPluginIncarnation,
   withExecutablePlugin,
 } from '../../verification-system/tests/support/plugin-fixture.mjs'
@@ -44,7 +42,7 @@ const executionCount = (session, physical) =>
   ).length
 
 const acquireLease = (session, physical) =>
-  routing.acquireSharedExecutionAdmission(session, physical, 'blogger', 'blogger', null, 'normal')
+  routing.acquireSharedExecutionAdmission(session, physical, 'engineer', 'engineer', null, 'normal')
 
 const withPlugin = async (action) => {
   const workspace = mkdtempSync(join(tmpdir(), 'wxs-chat015-'))
@@ -150,131 +148,6 @@ test('WHAT[managed-chat-execution-015] a boundary rejection without an accepted 
       assert.equal(recoveryHost.executionStatus(host, session, physical), null, 'no durable execution may be fabricated')
       assert.deepEqual(outcome.manuals, [], 'a key outside recovery ownership must not register a manual intervention')
     })
-  })
-})
-
-// The emission side of the same contract: the REAL registered transform is
-// driven through its public hook with a deterministic freeze refusal, and the
-// refusal must report itself to the settlement owner so the exact execution
-// settles and its exact capacity returns. The accepted execution is created by
-// the real chat.message admission (HumanRoot); the durable main->Blogger link
-// then makes the transform's request-kind path a companion path, so with no
-// durable open request the plan freeze refuses with blogger-request-missing.
-// The signal, the durable terminal and the shared-capacity release all stay
-// production-owned.
-test('WHAT[managed-chat-execution-015] the real transform refusal settles the exact execution and returns its capacity', async () => {
-  await withExecutablePlugin(async (hooks, directory, createdIds, runtime) => {
-    const main = 'ses-par015-emit-main'
-    const blogger = 'ses-par015-emit-blogger'
-    const physical = 'msg-par015-emit-blogger'
-
-    // Real admission: the registered chat.message establishes the durable
-    // Accepted execution and the exact capacity lease for this physical id.
-    await acceptAuthorityRoot(runtime, blogger, 'blogger', physical)
-    const opening = {
-      message: { id: physical, sessionID: blogger, role: 'user', agent: 'blogger', time: { created: 3 } },
-      parts: [{ type: 'text', text: '# Call the chronicle tool exactly once.' }],
-    }
-    await hooks['chat.message']({ sessionID: blogger, messageID: physical, agent: 'blogger' }, opening)
-
-    const status = recoveryHost.journalExecutionStatus(runtime.journal, blogger, physical)
-    assert.equal(status?.phase, 'Accepted', 'construction: chat.message must leave an accepted execution')
-
-    const leaseCount = () =>
-      routing.sharedCapacitySnapshot().executions.filter(
-        (execution) => execution.sessionId === blogger && execution.physicalUserMessageId === physical,
-      ).length
-    assert.equal(leaseCount(), 1, 'construction: the accepted execution must hold its exact lease')
-
-    // Durable main->Blogger link (the production CompanionBloggerLinked fact).
-    await ownership.linkBlogger(runtime.journal, main, blogger)
-
-    const messages = [
-      { info: opening.message, parts: opening.parts },
-      {
-        info: {
-          id: 'msg-par015-emit-blogger-run',
-          sessionID: blogger,
-          parentID: physical,
-          role: 'assistant',
-          agent: 'blogger',
-          providerID: 'provider',
-          modelID: 'blogger-model',
-          time: { created: 4 },
-        },
-        parts: [],
-      },
-    ]
-    await assert.rejects(
-      () =>
-        hooks['experimental.chat.messages.transform']({ sessionID: blogger }, { messages: structuredClone(messages) }),
-      (error) => /blogger-request-missing/.test(String(error?.message ?? error)),
-      'the refused start boundary must still surface the original hook failure',
-    )
-
-    assert.deepEqual(
-      recoveryHost.journalExecutionStatus(runtime.journal, blogger, physical),
-      { phase: 'Terminal', disposition: 'Failed' },
-      'WHAT[managed-chat-execution-015]: the real refusal must settle the exact execution as a pre-provider Failed terminal',
-    )
-    assert.equal(leaseCount(), 0, 'WHAT[managed-chat-execution-015]: the exact capacity must return after the durable terminal')
-  })
-})
-
-
-test('WHAT[managed-chat-execution-015] Blogger wire replacement preserves the original accepted physical execution', async () => {
-  await withExecutablePlugin(async (hooks, directory, createdIds, runtime) => {
-    const main = 'ses-chat015-original-main'
-    const blogger = 'ses-chat015-original-blogger'
-    const physical = 'msg-chat015-original-physical'
-    // Real admission: chat.message establishes the durable Accepted execution and
-    // the exact capacity lease for `physical` (same setup the refusal case uses).
-    await acceptAuthorityRoot(runtime, blogger, 'blogger', physical)
-    const profile = await ownership.rootBlogger(runtime.journal, blogger, physical)
-    await ownership.linkBlogger(runtime.journal, main, blogger)
-    const claim = await claimBloggerRequest({
-      runtime, mainSession: main, bloggerSession: blogger, profile,
-      dispatchPhysical: 'msg-chat015-landed', requestId: 'chat015-replaced-wire',
-      toml: 'charge = "Preserve the original physical execution."',
-    })
-    try {
-      const user = {
-        info: { id: physical, sessionID: blogger, role: 'user', agent: 'blogger', time: { created: 3 } },
-        parts: [{ type: 'text', text: ownership.BLOGGER_INSTRUCTION }],
-      }
-      await hooks['chat.message'](
-        { sessionID: blogger, messageID: physical, agent: 'blogger' },
-        { message: user.info, parts: user.parts },
-      )
-      const assistant = {
-        info: {
-          id: 'msg-chat015-original-run', sessionID: blogger, parentID: physical,
-          role: 'assistant', agent: 'blogger', providerID: 'provider',
-          modelID: 'blogger-model', time: { created: 4 },
-        },
-        parts: [],
-      }
-      runtime.pushHostMessage(blogger, user)
-      runtime.pushHostMessage(blogger, assistant)
-      const output = { messages: structuredClone([user, assistant]) }
-      await hooks['experimental.chat.messages.transform']({ sessionID: blogger }, output)
-
-      // managed-chat-execution-015: the start boundary binds the durable
-      // Accepted/ProviderStarted facts and the exact capacity fence to the real
-      // pre-transform physical user message (captured before Blogger/Relay
-      // rewrites the wire), never to a message id re-derived from the projected
-      // tail. The transform returning without `accepted-execution-missing` while
-      // ProviderStarted + the fence stay bound to `physical` is that proof: under
-      // the pre-fix code the freeze looked up a synthetic trailing id and refused.
-      assert.equal(
-        recoveryHost.journalExecutionStatus(runtime.journal, blogger, physical).phase,
-        'ProviderStarted',
-        'the start boundary binds ProviderStarted to the original physical message',
-      )
-      assert.equal(executionCount(blogger, physical), 1, 'the original execution keeps its exact capacity fence')
-    } finally {
-      claim.dispose()
-    }
   })
 })
 

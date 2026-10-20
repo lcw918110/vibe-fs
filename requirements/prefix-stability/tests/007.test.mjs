@@ -3,7 +3,7 @@ import test from 'node:test'
 import * as authority from '../../../dist/Interaction/Authority/Surface.js'
 import * as planner from '../../../dist/Participant/Provider/Attempt/PlannerSurface.js'
 import * as delegation from '../../../dist/Execution/Delegation/SyncDelegate/Surface.js'
-import * as strength from '../../../dist/Strength/Surface.js'
+import * as promptSurface from '../../../dist/Resources/PromptSurface.js'
 import * as tools from '../../../dist/OpenCode/Tools/ToolSurface.js'
 import * as canonicalJson from '../../../dist/OpenCode/Codec/CanonicalJsonSurface.js'
 import * as providerProjection from '../../../dist/Participant/Provider/Projection/Surface.js'
@@ -13,7 +13,7 @@ installDefaultResources()
 
 const OWNER = 'ses_owner_prompt'
 
-const roles = ['Manager', 'Orchestrator', 'Engineer', 'DevOps', 'Blogger']
+const roles = ['Manager', 'Orchestrator', 'Engineer', 'DevOps', 'Plan']
 
 const profile = (role, tier = 'Fast', kind = 'WorkMain') => planner.plan({ role, tier, kind })
 
@@ -21,7 +21,7 @@ test('WHAT[prefix-stability-007] PROMPT_019_each_canonical_role_has_one_stable_p
   const ids = new Set()
   for (const role of roles) {
     const id = authority.systemPromptIdForRole(role)
-    const resource = strength.systemPromptForRole(role)
+    const resource = promptSurface.systemForRole('en', role)
     const fast = profile(role, 'Fast')
     const deep = profile(role, 'Deep')
 
@@ -83,8 +83,8 @@ test('WHAT[prefix-stability-007] PROMPT_019_role_and_tier_capabilities_remain_ex
 test('WHAT[prefix-stability-007] manager_life_review_acceptance_system_prompt_byte_identical', () => {
   // Office system prompt 在同一个生命周期（Life）内保持逐字节一致。
   // 严禁因 T1 交托、Fallback 切换、Review 或 Host compaction 等事件改写 system prompt 字节或重绑 Persona。
-  const managerSystemPromptBefore = strength.systemPromptForRole('Manager')
-  const managerSystemPromptAfter = strength.systemPromptForRole('Manager')
+  const managerSystemPromptBefore = promptSurface.systemForRole('en', 'Manager')
+  const managerSystemPromptAfter = promptSurface.systemForRole('en', 'Manager')
 
   assert.ok(managerSystemPromptBefore.length > 0, 'Manager system prompt must not be empty')
   assert.equal(

@@ -37,9 +37,9 @@ test('WHAT[office-capability-006] synthetic Manager checker rejects retired code
 test('WHAT[office-capability-006] synthetic repair checker requires repair followed by revalidation', () => {
   const example = CASES.find((item) => item.id === 'devops-inherent-repair')
   for (const toolCalls of [
-    [{ name: 'todowrite-for-devops', args: { program: 'js.run' } }],
-    [{ name: 'todowrite-for-devops', args: { program: 'js.run' } }, { name: 'todowrite-for-devops', args: { program: "this.write('src/bug.ts', 'fixed')" } }],
-    [{ name: 'todowrite-for-devops', args: { program: 'js.run' } }, { name: 'todowrite-for-devops', args: { program: "this.write('src/bug.ts', 'fixed')" } }, { name: 'todowrite-for-devops', args: { program: 'js.run' } }, { name: 'fork' }],
+    [{ name: 'todowrite-for-devops', args: { program: 'js.call' } }],
+    [{ name: 'todowrite-for-devops', args: { program: 'js.call' } }, { name: 'todowrite-for-devops', args: { program: "this.write('src/bug.ts', 'fixed')" } }],
+    [{ name: 'todowrite-for-devops', args: { program: 'js.call' } }, { name: 'todowrite-for-devops', args: { program: "this.write('src/bug.ts', 'fixed')" } }, { name: 'todowrite-for-devops', args: { program: 'js.call' } }, { name: 'fork' }],
   ]) {
     assert.equal(evaluateCase(example, { role: 'devops', toolCalls }).ok, false)
   }

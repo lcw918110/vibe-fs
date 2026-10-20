@@ -138,7 +138,7 @@ module SyncDelegateBatching =
     [<Emit("Promise.all($0)")>]
     let private promiseAll (promises: Task<'T> array) : Task<'T array> = jsNative
 
-    /// One charge's rendered tool output: a WorkRecord, the merged canonical
+    /// One charge's rendered tool output: the delivered view, the merged canonical
     /// call, or the failure prose. The three cases are the invocation result's
     /// own shape, not three separate decisions.
     let private renderInvocationOutput
@@ -146,7 +146,7 @@ module SyncDelegateBatching =
         (result: Result<SyncDelegateInvocationResult, string>)
         : string =
         match result with
-        | Ok(SyncDelegateInvocationResult.WorkRecord workRecord) -> tomlObjectWithInstructions [ workRecord ] []
+        | Ok(SyncDelegateInvocationResult.View view) -> tomlObjectWithInstructions [ view ] []
         | Ok(SyncDelegateInvocationResult.MergedInto canonicalCall) ->
             tomlObjectWithInstructions [ mergedInstruction language canonicalCall ] []
         | Error err -> tomlObjectWithInstructions [ sprintf "Engineer charge failed: %s" err ] []

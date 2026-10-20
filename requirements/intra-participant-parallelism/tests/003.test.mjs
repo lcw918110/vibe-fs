@@ -4,7 +4,7 @@ import { fission, harness, parsed } from './support/admission.mjs'
 import { acceptAuthorityRoot, openIncumbency, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
 import * as executionStatus from '../../../dist/Execution/Session/ChatExecution/StatusSurface.js'
 
-test('WHAT[intra-participant-parallelism-003] actual admission creates distinct siblings under the existing parent with LWR and each exact input', async () => {
+test('WHAT[intra-participant-parallelism-003] actual admission creates distinct siblings under the existing parent with the owner view and each exact input', async () => {
   const { events, runtime } = harness()
   const owner = 'sibling-owner'
   try {
@@ -15,8 +15,28 @@ test('WHAT[intra-participant-parallelism-003] actual admission creates distinct 
     const starts = events.filter(([kind]) => kind === 'start')
     assert.equal(starts.length, 2)
     assert.equal(new Set(starts.map(([, , session]) => session)).size, 2)
-    assert.match(starts[0][3], /CANONICAL-LWR/)
-    assert.match(starts[1][3], /CANONICAL-LWR/)
+    assert.match(starts[0][3], /CANONICAL-OWNER-VIEW/)
+    assert.match(starts[1][3], /CANONICAL-OWNER-VIEW/)
+    assert.match(starts[0][3], /lane A  /)
+    assert.match(starts[1][3], /lane B/)
+    assert.equal(fission.isActive(runtime, owner), true)
+  } finally {
+    fission.release(runtime, owner)
+  }
+})
+
+test('WHAT[intra-participant-parallelism-003] actual admission admits the lanes of an owner that has not delivered a view, and the lane startup carries only the lane input', async () => {
+  const { events, runtime } = harness({ ownerView: null })
+  const owner = 'undelivered-owner'
+  try {
+    const result = await fission.admit(runtime, owner, parsed())
+    assert.equal(result.ok, true)
+    assert.equal(result.ownerView, null)
+    const starts = events.filter(([kind]) => kind === 'start')
+    assert.equal(starts.length, 2)
+    for (const [, , , startup] of starts) {
+      assert.doesNotMatch(startup, /CANONICAL-OWNER-VIEW/)
+    }
     assert.match(starts[0][3], /lane A  /)
     assert.match(starts[1][3], /lane B/)
     assert.equal(fission.isActive(runtime, owner), true)
@@ -98,4 +118,4 @@ test('WHAT[intra-participant-parallelism-003] actual Host-created Fission lanes 
   })
 })
 
-test.todo('WHAT[intra-participant-parallelism-003] actual Host-created siblings bind the original participant identity and receive its current canonical WorkRecord (GAP-158)')
+test.todo('WHAT[intra-participant-parallelism-003] actual Host-created siblings bind the original participant identity and receive its current canonical view (GAP-158)')

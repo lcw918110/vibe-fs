@@ -14,11 +14,11 @@ A single authority records confirmed failures and exhaustion. Deduplicate by `(S
 
 ## [004] Failure accounting and request-kind evidence
 
-Each confirmed failure adds one and, while budget remains, yields an exact typed failure licence. Business-main success records success and resets the count. Budget accounting neither changes roles nor decides provider health; [021] owns target settlement.
+Each confirmed failure adds one and, while budget remains, yields an exact typed failure licence. Business-main success (`WorkMain`) records success and resets the count. Budget accounting neither changes roles nor decides provider health; [021] owns target settlement.
 
-Recovery inherits RequestKind from durable ProviderStarted matching `(SessionId, PhysicalUserMessageId)`, including subsequent tool steps; exact ProviderRun authorization is checked separately. Only proven BloggerMain may use session association to locate the main owner. Ordinary children retain WorkMain regardless of association.
+Recovery inherits RequestKind from durable ProviderStarted matching `(SessionId, PhysicalUserMessageId)`, including subsequent tool steps; exact ProviderRun authorization is checked separately. Ordinary children retain WorkMain regardless of association.
 
-For Accepted without ProviderStarted, accepted origin may establish WorkMain or InteractionRepair; Blogger still requires durable start evidence. Text, failure ordinal, role and session association cannot supply a missing kind.
+For Accepted without ProviderStarted, accepted origin may establish WorkMain or InteractionRepair. Text, failure ordinal, role and session association cannot supply a missing kind.
 
 ## [005] Bounded automatic retry
 
@@ -36,19 +36,15 @@ Reject a failure record whose count is not the valid successor, exceeds the budg
 
 An empty or XML-only terminal without confirmed provider-error evidence never advances the provider-failure budget. Every repairable role, including Manager, must reach bounded Interaction Repair, at most once; an unfinished turn must not be silently dropped.
 
-An errored assistant terminal remains a failed attempt even when its formal output is empty or XML-only. If idle arrives before the exact typed failure observation, reconciliation waits rather than publishing a content-repair occasion. The matching failure observation owns budget accounting and the fresh LWR retry; content validity cannot downgrade it to Interaction Repair.
+An errored assistant terminal remains a failed attempt even when its formal output is empty or XML-only. If idle arrives before the exact typed failure observation, reconciliation waits rather than publishing a content-repair occasion. The matching failure observation owns budget accounting and the fresh retry; content validity cannot downgrade it to Interaction Repair.
 
 ## [009] Host retries are not domain failures
 
 The Host's transport-attempt number neither enters the domain failure count nor determines budget or identity.
 
-## [010] Blogger maintenance retry
-
-A licensed BloggerMain retry sends BloggerMain directly (`BloggerSquash` maintenance loop is retired in favour of ANCHOR view declarations `context-compression-031`). Non-blogger request kinds are rejected by `BloggerRetryPolicy.nextRequest`.
-
 ## [011] Immutable retry plan
 
-Each AttemptPlan fixes probe and maintenance choices from RequestKind and persisted material before rendering, bound to its own physical message. Transient cross-callback state must neither decide these choices nor carry recovery permission.
+Each AttemptPlan fixes retry choices from RequestKind and persisted material before rendering, bound to its own physical message. Transient cross-callback state must neither decide these choices nor carry recovery permission.
 
 ## [012] Abort residue is not failure
 
@@ -62,23 +58,11 @@ Retries preserve the durable ParticipantIdentity (Role, Persona, provenance/vers
 
 A recovery continuation requires a recorded confirmed failure, remaining budget and observation that the exact failed ProviderRunIdentity has stopped Host retry under [022]. Sending itself neither advances nor resets the budget. Coarse session.error cannot authorize a send; [023] covers an accepted retry that never starts.
 
-## [015] StrengthReplica is outside the owner budget
-
-StrengthReplica success and failure belong to the speculative branch; neither advances nor clears the owner Logical Run's budget.
-
 ## [016] Success accounting follows proven RequestKind
 
-Only successful WorkMain or BloggerMain records SuccessRecorded and clears consecutive failures. InteractionRepair and StrengthReplica do not. `finish=tool-calls` is a valid provider-attempt success even while the Host turn continues.
+Only successful `WorkMain` records SuccessRecorded and clears consecutive failures. `InteractionRepair` does not (`BloggerMain`, `BloggerSquash` and `StrengthReplica` are retired). `finish=tool-calls` is a valid provider-attempt success even while the Host turn continues.
 
-Blogger kind requires the current typed request or BloggerCycleReceipt; continuation kind requires AcceptedContinuationIds. Role or terminal text cannot turn maintenance into business-main success.
-
-## [017] Blogger retry replaces physical ownership
-
-Before retry, close the failed BloggerRequestMaterialized as BloggerRequestAbandoned. Every Main→Main retry re-materializes typed context with a fresh agent-free PromptKey. An old key proves no ownership of the retry.
-
-## [018] Wait only for durable producer progress
-
-After WorkMain failure, a linked Blogger's durable open request without strictly newer prefix coverage delays recovery. Re-evaluate on the next committed fact in that stream; only closing the open request by commit/abandon or advancing coverage unlocks it. No timer, deadline, sleep, polling or process-local pending/flight state may drive this wait. Without a durable open producer, retry proceeds immediately.
+Continuation kind requires AcceptedContinuationIds. Role or terminal text cannot turn maintenance into business-main success.
 
 ## [019] Only typed policy permission authorizes retry
 
@@ -90,13 +74,13 @@ LocalInvariant, ProtocolRejection, AuthorizationDenied, UserCancelled, Supersede
 
 Budget folds only committed Authority Root, typed provider-failure and eligible business-main success facts; identical facts yield the same view. It holds no callback, continuation, next action, send permission or workflow entry. Every retry still consumes its exact typed failure licence and derives execution content from retry policy.
 
-## [021] 首次失败保留目标；LWR 重试失败才驱逐 provider
+## [021] 首次原样重试，第二次拉黑 Provider 后重试，以此类推
 
-只有已发出 LWR 重试的确切 attempt 再次发生已授权 provider 失败，才永久 poison 其 provider。判定须同时有该 PhysicalUserMessageId 的 ProviderRetryAttempt 接受事实，以及为它建立 durable ProviderStarted 的同一 ProviderRunIdentity；同物理消息的后续 step 不算该重试自身。失败计数、序号、文本和内存状态不能代替这些事实。
+系统已废除 Y 恢复材料与 prefix probe 候选机制。provider attempt 失败后的恢复策略统一为：**第一次原样重试（保留确切原目标），第二次把该 Provider 拉黑（永久 poison）后换候选 Provider 重试，以此类推**。
 
-首次失败保留确切原目标，作为同 session 下一次 fresh admission 的单次调度偏好，以 context-compression[010]/[011] 的 FrozenRecordPrefix 替换上下文。LWR 重试自身失败后才轮换候选；预算代数和 participant identity 不变。
+具体而言：对某个目标 Provider 的首次失败，保留确切原目标作为同 session 下一次 fresh admission 的单次调度偏好并原样重试（不构造 FrozenRecordPrefix）；只有已发出该原样重试的确切 attempt 再次发生已授权 provider 失败，才永久 poison 该 provider 并轮换至下一候选 Provider，对新候选 Provider 同样遵循“首次原样重试、再次失败则拉黑”的递推规则。判定须同时有该 PhysicalUserMessageId 的 ProviderRetryAttempt 接受事实，以及为它建立 durable ProviderStarted 的同一 ProviderRunIdentity；同物理消息的后续 step 不算该重试自身。预算代数和 participant identity 不变。
 
-ordinary、sync delegate 和恢复重入遵守同一结算规则：取得 RetryFreshAttempt 后、重投发送前，一起读取 LWR 事实和失败目标，单次消费确切 provider-run witness。重复、旧回调、取消和提交未知不取得结算权限。
+ordinary、sync delegate 和恢复重入遵守同一结算规则：取得 RetryFreshAttempt 后、重投发送前，单次消费确切 provider-run witness。重复、旧回调、取消和提交未知不取得结算权限。
 
 ## [022] 发送须等待确切宿主终态
 
@@ -111,13 +95,3 @@ Host 停止自动重试的唯一证据是确切 `(SessionId, ProviderRunIdentity
 session-only idle 是唤醒，不能证明同 session 所有已接受输入都已被 Host 停止。在线 sweep 必须由公开 Host snapshot 的最新已完成 assistant 的 exact `parentID` 确认停止的物理执行，只定夺它自己的未启动义务。已被 owner 明确取代的旧 assistant idle 不定夺新输入，不铸造新输入的 idle permit；尚未保存到 Host 或仍在容量排队的已接受 successor 由其准入 owner 和独立 recovery sweep 负责。
 
 定夺必须终局：有 typed resume capability 时，用确切已接受 material 恢复执行；否则将该执行结为终态并报告该 turn 失败。本义务不发送新文本、不生成替换 PromptClaim，也不放宽 [003] 的单次物理发送约束。
-
-## [024] 加载期 Blogger stale 请求的同源未启动执行定夺
-
-加载归位把上一 runtime 遗留、本进程已无同 RequestId live flight 的 Blogger open request 结算为 `BloggerRequestAbandoned`（reason `stale-open-at-load`，crash-reconciliation-018/020）时，必须同时定夺该 Blogger session 名下恰好处于 `Accepted ∧ ¬ProviderStarted ∧ ¬Terminal` 的执行：
-
-- 每个此类执行按其 exact key 写入 typed pre-provider terminal `Failed`，复用 [023] 的定夺路径与 `managed-chat-execution-007` 的结算纪律；terminal durable 提交确认后发出该执行的 exact capacity 归还请求（boot 场景新进程没有旧 lease，release 是幂等 no-op，仍须请求）。
-- 已有 `ProviderStarted` 或已有 terminal 的执行保持不动；不触碰其他 session 或其他 open request 的执行；projection 中没有该 key 时不伪造执行或结算。
-- 同一 stale request 的重复加载幂等：已 terminal 的执行不再产生第二份 terminal 或第二次释放副作用；不得以 session-wide release、计数减一、idle/time/诊断文本定夺。
-- 本定夺只适用于「本进程无 live flight 的 stale open request」这一同源子集；全量加载快照的 `Accepted ∧ ¬ProviderStarted` sweep（含 resume 与不替代发送语义）仍归 [023] 的 boot sweep，未被本条替代。
-- terminal 提交未知时保留显式未知、不释放；失败显式暴露，不阻塞同一加载回调中其他 stale request 的结算。

@@ -2,7 +2,6 @@ namespace Wanxiangshu.OpenCode
 
 open System.Collections.Generic
 open System.Threading.Tasks
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Foundation
@@ -38,17 +37,15 @@ module ToolRegistry =
     /// capability-enforcement-006: the authority the execute gate resolves for a tool, so a
     /// consumer can tell an office tool from an internal leaf without guessing
     /// from the tool name.
-    val tryAdmission: specName: string -> bloggerHost: IBloggerRuntimeHost option -> ToolAdmission option
+    val tryAdmission: specName: string -> ToolAdmission option
 
     /// capability-enforcement-006: the internal-leaf decision for a session that holds no public
     /// office profile at all. An office tool is never admitted this way.
-    val privateAttachmentAdmits:
-        specName: string -> bloggerHost: IBloggerRuntimeHost option -> sessionId: string -> bool
+    val privateAttachmentAdmits: specName: string -> sessionId: string -> bool
 
     /// AGENT-007 role gate, delegates to owner-defined tool admissions.
-    /// sessionId is the tool call's Host session; bloggerHost is optional for tests.
-    val rolePredicate:
-        specName: string -> bloggerHost: IBloggerRuntimeHost option -> sessionId: string -> (Role -> bool)
+    /// sessionId is the tool call's Host session.
+    val rolePredicate: specName: string -> sessionId: string -> (Role -> bool)
 
     val runPlanProgram:
         prose: JsCanonicalDescription.Prose ->
@@ -69,20 +66,18 @@ module ToolRegistry =
         currentPhysicalUserMessage: (string -> string option) ->
         sessionDirectories: Dictionary<string, string> ->
         onRunStarted: (SessionId -> Role -> string option -> unit) option ->
-        parentWorkRecordFor: (string -> Task<string option>) option ->
-        childWorkRecordFor: (string -> Task<string option>) option ->
+        viewForSession: (string -> Task<string option>) option ->
         snapshot: ISessionSnapshotPort option ->
         cancelSignals: (SessionId seq -> unit) option ->
         beginToolExecution: (string -> unit) ->
         endToolExecution: (string -> unit) ->
         eventPort: IEventObservationPort option ->
-        bloggerHost: IBloggerRuntimeHost option ->
         syncDelegateRuntime: SyncDelegateRuntime option ->
-        isReplicaSession: (SessionId -> bool) option ->
+
         casebookToolSpecs: ToolSpec list ->
         jsTransactionPersistence: IJsTransactionPersistence option ->
         jsLifecyclePersistence: IJsLifecyclePersistence option ->
         continueManagerLoop: (SessionId -> string -> Task<Result<unit, string>>) ->
-        childWorkRecordForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) option ->
+        childViewForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) option ->
         userNotify: (string -> string -> unit) option ->
             ToolRegistration

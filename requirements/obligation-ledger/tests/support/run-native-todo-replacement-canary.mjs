@@ -43,7 +43,6 @@ const isTitleRequest = (body) => {
         message.content.includes('title generator')),
   )
 }
-const isChronicleRequest = (body) => (body?.tools ?? []).some((tool) => (tool?.function?.name ?? tool?.name) === 'chronicle')
 
 const jsViewCall = (id, view) =>
   buildToolCallChunks(
@@ -73,13 +72,6 @@ const provider = await startHttpServer(async (request, response) => {
     }
     if (isTitleRequest(body)) {
       sendSSE(response, buildTextChunks(`title_${Date.now()}`, 'OL002 Title', 1))
-      return
-    }
-    if (isChronicleRequest(body)) {
-      sendSSE(response, buildToolCallChunks(`chronicle_${providerRequests.length}`, 'chronicle', JSON.stringify({
-        charge: 'Preserve observation', occurrence: 'Occurrence', settlement: 'Settlement',
-        consequence: 'Consequence', tipName: 'tip', opinion: 'opinion', advice: 'advice',
-      }), 1))
       return
     }
     if (hasToolResult(body)) {

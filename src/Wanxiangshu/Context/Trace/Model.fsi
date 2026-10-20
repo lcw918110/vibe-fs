@@ -70,8 +70,6 @@ module XTrace =
     val sliceFrom: start: XTraceCursor -> items: XTraceItem list -> XTraceItem list
     val head: items: XTraceItem list -> XTraceCursor
     val flatten: messages: SemanticMessage list -> {| Part: SemanticPart; Role: string |} list
-    val isWorkRecordPart: part: SemanticPart -> bool
-    val forWorkRecord: items: XTraceItem list -> XTraceItem list
     val forOpening: items: XTraceItem list -> XTraceItem list
     val renderItem: item: XTraceItem -> string
     val render: items: XTraceItem list -> string

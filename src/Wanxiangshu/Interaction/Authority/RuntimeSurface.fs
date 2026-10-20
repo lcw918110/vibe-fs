@@ -826,7 +826,7 @@ module RuntimeSurface =
         |> Option.defaultValue null
 
     let repairPayloadDigest (request: string) (terminal: string) (kind: string) : string =
-        PromptAuthority.repairPayloadDigest (BloggerRequestId.create request) (ProviderRunIdentity.create terminal) kind
+        PromptAuthority.repairPayloadDigest (RepairRequestId.create request) (ProviderRunIdentity.create terminal) kind
 
     let repairAlreadyClaimed
         (session: string)
@@ -839,7 +839,7 @@ module RuntimeSurface =
         PromptAuthority.repairAlreadyClaimed
             (SessionId.create session)
             (LogicalRunId.create logicalRun)
-            (BloggerRequestId.create request)
+            (RepairRequestId.create request)
             (ProviderRunIdentity.create terminal)
             kind
             (projectionOf projection)

@@ -17,7 +17,7 @@ test('WHAT[delegation-008] actual batch sends once in supplied Host order despit
     assert.ok(prompt.indexOf('FIRST-CHARGE') < prompt.indexOf('SECOND-CHARGE'))
     assert.equal(sync.promptCount(runtime, owner, 'Engineer'), 1)
     assert.equal(await sync.settle(runtime, owner, 'Engineer', 'batch result', 'batch-run'), true)
-    assert.equal((await first).kind, 'WorkRecord')
+    assert.equal((await first).kind, 'View')
     assert.deepEqual(await second, { kind: 'MergedInto', canonical: 'call-first' })
   })
 })

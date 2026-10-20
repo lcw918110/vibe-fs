@@ -27,7 +27,6 @@ module SessionRecovery =
         | WorkSession of SessionId
         | AgentChild of parent: SessionId * child: SessionId * AgentHandleId
         | Companion of main: SessionId * companion: SessionId
-        | Blogger of main: SessionId * blogger: SessionId
         | ManagerJob of ManagerJobId * manager: SessionId
 
     module RecoveryNode =
@@ -92,10 +91,6 @@ module SessionRecovery =
           Results: Map<SessionId, SessionRecovery> }
 
     type ClaimRecovery =
-        { SessionId: SessionId
-          Outcome: SessionRecovery }
-
-    type BloggerRecovery =
         { SessionId: SessionId
           Outcome: SessionRecovery }
 

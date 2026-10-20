@@ -199,7 +199,7 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         HostForkRuntime(
             orchestratorId,
             deps.Sessions,
-            deps.ChildWorkRecordForRun,
+            (fun _ _ -> Task.FromResult None),
             CompletionMailboxRuntime.create,
             NodeTiming.nodeClockPort (),
             NodeTiming.raceExit,
@@ -217,9 +217,7 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
                     | true, path when System.IO.Directory.Exists path -> Some path
                     | _ -> None),
             ?sessionSnapshot = deps.SessionSnapshot,
-            onRunStarted = deps.OnRunStarted,
-            parentWorkRecordFor = deps.ParentWorkRecordFor,
-            childWorkRecordFor = deps.ChildWorkRecordFor
+            onRunStarted = deps.OnRunStarted
         )
 
     let managerAgentId (jobId: ManagerJobId) = ManagerJobId.value jobId
@@ -293,14 +291,18 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         | Some record -> Ok record
         | None -> Error(sprintf "No durable job record for '%s'" (ManagerJobId.value jobId))
 
-    let lifecycleWorkOf (record: ManagerJobProjection) =
+    let lifecycleWorkOf
+        (record: ManagerJobProjection)
+        : Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option =
         let directory = WorktreePath.value record.WorktreePath
-        let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot directory
+        let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.forStateRoot directory
         Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value record.ManagerSessionId)
 
     let loopSignalOfWork = DurableLoopSignal.ofWork
 
-    let requireOpenWork (record: ManagerJobProjection) =
+    let requireOpenWork
+        (record: ManagerJobProjection)
+        : Result<Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork, string> =
         lifecycleWorkOf record |> Result.requireSome "Manager session is not open"
 
     /// The last committed retirement on this work. The list is projected from
@@ -376,7 +378,7 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
             let! retirement = requireCommittedRetirement work
 
             let commonDir =
-                Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot (WorktreePath.value record.WorktreePath)
+                Wanxiangshu.Persistence.Journal.RuntimePath.forStateRoot (WorktreePath.value record.WorktreePath)
 
             let requestId =
                 "hand-off:" + ManagerJobId.value jobId + ":" + retirement.RetirementId
@@ -427,14 +429,17 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
     let lifecycleReviewed
         (managerSessionId: SessionId)
         (worktreePath: Wanxiangshu.Foundation.Identity.WorktreePath)
-        : (string * string) option =
-        let commonDir =
-            worktreePath
-            |> Wanxiangshu.Foundation.Identity.WorktreePath.value
-            |> Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot
+        : Task<(string * string) option> =
+        task {
+            let! commonDir =
+                worktreePath
+                |> Wanxiangshu.Foundation.Identity.WorktreePath.value
+                |> Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot
 
-        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value managerSessionId)
-        |> Option.bind PublishReviewEvidence.ofWork
+            return
+                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value managerSessionId)
+                |> Option.bind PublishReviewEvidence.ofWork
+        }
 
     let relayPort: RelayPort =
         { CreateManagerSession = createManagerSession
@@ -483,8 +488,9 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         taskResult {
             // Canonicalize the repo path via git common-dir so symlinked
             // spellings share one cross-process publish lock.
-            let lockRepoPath =
+            let! lockRepoPath =
                 Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot deps.RepoPath
+                |> TaskResultCE.ofTask
 
             let sweepLockPath = IntegrationGate.lockPath lockRepoPath (TargetRef.value target)
 
@@ -664,20 +670,23 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         (incumbent: string)
         (expected: string)
         (next: string)
-        : Result<string, string> =
-        let directory = WorktreePath.value record.WorktreePath
-        let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot directory
+        : Task<Result<string, string>> =
+        task {
+            let directory = WorktreePath.value record.WorktreePath
+            let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot directory
 
-        if String.IsNullOrWhiteSpace commonDir then
-            Error "lifecycle store is unavailable"
-        else
-            executeAuthorityAdvance
-                directory
-                commonDir
-                (SessionId.value record.ManagerSessionId)
-                incumbent
-                expected
-                next
+            if String.IsNullOrWhiteSpace commonDir then
+                return Error "lifecycle store is unavailable"
+            else
+                return
+                    executeAuthorityAdvance
+                        directory
+                        commonDir
+                        (SessionId.value record.ManagerSessionId)
+                        incumbent
+                        expected
+                        next
+        }
 
     let advanceAuthorityRevision
         (relay: OrchestratorRelayPort)

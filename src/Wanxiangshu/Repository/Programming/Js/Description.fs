@@ -512,6 +512,13 @@ module JsCanonicalDescription =
   }"""
             [ "comment_host_capability", prose.CommentHostCapability ]
 
+    let private rgStub (prose: Prose) =
+        fill
+            """  async rg(argv) {
+    // {{comment_host_capability}}
+  }"""
+            [ "comment_host_capability", prose.CommentHostCapability ]
+
     let private statStub (prose: Prose) =
         fill
             """  async stat(path) {
@@ -563,7 +570,7 @@ module JsCanonicalDescription =
 
     let private deliverStub (prose: Prose) =
         fill
-            """  async deliver(value) {
+            """  async deliver(value, view) {
     // {{comment_host_capability}}
   }"""
             [ "comment_host_capability", prose.CommentHostCapability ]
@@ -624,12 +631,12 @@ module JsCanonicalDescription =
 class JsProgram {"""
             .TrimStart()
 
-    /// `js.Runnable` exists exactly when the Exec capability is projected; the
+    /// `js.Callable` exists exactly when the Exec capability is projected; the
     /// wrapper binds the class onto the global `js` namespace before the model
     /// source runs.
-    let private runnableOpen (capabilities: Set<JsCapability>) =
+    let private callableOpen (capabilities: Set<JsCapability>) =
         if has capabilities JsCapability.Exec then
-            "class JsRunnable {}\n\n"
+            "class JsCallable {}\n\n"
         else
             ""
 
@@ -652,6 +659,8 @@ class JsProgram {"""
                   whereStub prose
               if has capabilities JsCapability.Glob then
                   lsStub prose
+              if has capabilities JsCapability.Grep then
+                  rgStub prose
               if has capabilities JsCapability.Write then
                   writeStub prose
                   mkdirStub prose
@@ -678,7 +687,7 @@ class JsProgram {"""
               deliverStub prose
               runStub prose ]
 
-        String.concat "\n\n" ((runnableOpen capabilities + classOpen) :: methods @ [ "}" ])
+        String.concat "\n\n" ((callableOpen capabilities + classOpen) :: methods @ [ "}" ])
 
     let private rethrowHost =
         """if (result && result.ok === false) {
@@ -1287,6 +1296,16 @@ const err = new Error(reason); err.__jsFailure = { code, reason }; throw err;"""
     return result.entries;
   }"""
                       [ "rethrow_host", rethrowHost ]
+              if has capabilities JsCapability.Grep then
+                  fill
+                      """  async rg(argv) {
+    const result = await this._api.js.rg(argv);
+    {{rethrow_host}}
+    return result.paths !== undefined
+      ? { exitCode: result.exitCode, paths: result.paths }
+      : { exitCode: result.exitCode, messages: result.messages };
+  }"""
+                      [ "rethrow_host", rethrowHost ]
               if has capabilities JsCapability.Write then
                   fill
                       """  write(path, content) {
@@ -1368,7 +1387,7 @@ const err = new Error(reason); err.__jsFailure = { code, reason }; throw err;"""
       const lines = [node.charge];
       for (const dep of node.deps || []) {
         const record = results[dep];
-        if (record) lines.push("--- " + dep + " ---\\n" + (record.workRecord || ""));
+        if (record) lines.push("--- " + dep + " ---\\n" + (record.view || ""));
       }
       return lines.join("\\n");
     };
@@ -1470,15 +1489,15 @@ const err = new Error(reason); err.__jsFailure = { code, reason }; throw err;"""
   }"""
                   []
               fill
-                  """  async deliver(value) {
+                  """  async deliver(value, view) {
     const err = new Error("delivered");
-    err.__jsDelivered = { value: value };
+    err.__jsDelivered = { value: value, view: view };
     throw err;
   }"""
                   []
               runStub prose ]
 
-        String.concat "\n\n" ((runnableOpen capabilities + classOpen) :: methods @ [ "}" ])
+        String.concat "\n\n" ((callableOpen capabilities + classOpen) :: methods @ [ "}" ])
 
     let private contractFor
         (prose: Prose)
@@ -1501,7 +1520,10 @@ const err = new Error(reason); err.__jsFailure = { code, reason }; throw err;"""
                       [ prose.VerbCreate; "mkdir" ]
                   else
                       []
-                  if has capabilities JsCapability.Exec then [ "run" ] else [] ]
+                  if has capabilities JsCapability.Exec then
+                      [ "call" ]
+                  else
+                      [] ]
             |> String.concat ", "
 
         let parallelTemplate =
@@ -1564,6 +1586,7 @@ const err = new Error(reason); err.__jsFailure = { code, reason }; throw err;"""
                     (set
                         [ JsCapability.Read
                           JsCapability.Glob
+                          JsCapability.Grep
                           JsCapability.Fork
                           JsCapability.Join
                           JsCapability.Horizon

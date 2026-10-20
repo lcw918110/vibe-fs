@@ -9,7 +9,7 @@ test('WHAT[managed-session-lifecycle-006] exact admission resumes the road witho
     assert.equal(await forkTool.settle(runtime, owner, 'ANSWER-A', 'provider-a'), true)
     const consumed = await forkTool.consumeWorkWithOutcome(runtime, owner, a.root, 'confirmed')
     assert.equal(consumed.ok, true)
-    assert.match(consumed.workRecord, /ANSWER-A/)
+    assert.match(consumed.view, /ANSWER-A/)
     const tombstone = forkTool.workSnapshot(runtime, owner)
     assert.equal(tombstone[0].lifecycle, 'Retired')
     assert.equal((await forkTool.replayBinding(runtime, owner, 'Ada')).ok, true)

@@ -60,11 +60,11 @@ sequence 为 S4 时，deliver 是两次调用。第一次只落确认。另一�
 
 ## [008] 后继投影
 
-后继不保留完整物理历史。义务是剥除前任 assistant 与 tool。后继通过用户原文 `U`、本任交互、持久化账本与前任声明的 ANCHOR 视图（durable checkpoint + `extra`）承接交棒，不注入机器物化的 `LWR_prev`。
+S1/S2/S3/S4 的接力机制不再主动清除上下文；上下文的保留与裁剪全部依靠 `view` 机制。后继通过用户原文 `U`、保留在 `view` 边界内的交互、持久化账本与前任声明的 ANCHOR 视图（durable checkpoint + `view.thenRemove` 摘要）承接交棒，不注入机器物化的合成前任记录。
 
-- 允许后果：稳定消息身份的首次观察序晚于本任 OpeningCursor 才留。比较单位是 XTrace 观察序。后继接收用户原文 `U`、本任物理交互、持久化账本与前任声明的视图（`ViewCheckpointCommitted` 与前任在 `view` 里声明的 `thenRemove` 摘要）；首任与非首任一律不生成合成记录、不物化 `LWR_prev`。ProjectionCut 只判定退休尝试的请求身份，不当成新任的活跃请求，也不拿来过滤历史。不生成合成消息，不概括前任。
-- 禁止后果：不得把完整物理历史写成现行义务。不得把前任 assistant 与 tool 留在后继消息集里。不得注入机器物化的 `LWR_prev` 合成消息。不得把旧日志字节翻译成新事件再注入。
-- 失败后果：无稳定身份时拒绝装配，不猜测。
+- 允许后果：后继接收用户原文 `U`、经 `view` 机制裁剪保留的物理交互、持久化账本与前任声明的视图（`ViewCheckpointCommitted` 与前任在 `view` 里声明的 `thenRemove` 摘要）；首任与非首任一律不生成合成记录、不物化合成前任记录。接力本身不主动剥除前任消息。ProjectionCut 只判定退休尝试的请求身份，不当成新任的活跃请求，也不拿来过滤历史。不生成合成消息，不概括前任。
+- 禁止后果：不得在接力时主动清除或强制剥除前任上下文；上下文清理必须仅由显式 `view` 声明驱动。不得注入机器物化的合成前任记录消息。不得把旧日志字节翻译成新事件再注入。
+- 失败后果：无稳定身份或 `view` 状态非法时拒绝装配，不猜测。
 
 ## [009] 阻塞与资源
 
@@ -86,7 +86,7 @@ sequence 为 S4 时，deliver 是两次调用。第一次只落确认。另一�
 
 S4 第一次调用只确认。第二次调用依持久退休结果分流：Relayed 在返回前排队同一会话的后继提示；Delivered 没有继任者，必须在返回前完成当前 attempt 的中断。
 
-- 允许后果：已评且第一次确认落地后，第二次 Relayed 调用在工具返回前先把同一会话的后继提示（`runtime/manager-assess`）排入队列，不中止会话。若下一次 transform 仍是旧任残余尝试，则停止该已退休尝试。同一会话只启动一个后继。后继 transform 剥除前任 assistant 与 tool，保留用户原文与后继提示，不再中止一次。用户新 prompt 之后，后继 Manager 工具不再因退休冻结被拒。后任已有新根时，裁剪之后的唤醒被清空，不中止会话，也不因拒绝中断而崩溃。
+- 允许后果：已评且第一次确认落地后，第二次 Relayed 调用在工具返回前先把同一会话的后继提示（`runtime/manager-assess`）排入队列，不中止会话。若下一次 transform 仍是旧任残余尝试，则停止该已退休尝试。同一会话只启动一个后继。后继 transform 保留经 `view` 机制管理的上下文、用户原文与后继提示（接力不主动清除上下文），不再中止一次。用户新 prompt 之后，后继 Manager 工具不再因退休冻结被拒。后任已有新根时，裁剪之后的唤醒被清空，不中止会话，也不因拒绝中断而崩溃。
 - 终态后果：Delivered 先落盘退休事实，再通过既有 journal owner 关闭相应 Manager/HumanRoot logical run，然后等待 `InterruptAttempt` 的 Host 回执，最后才返回“已结束”。这只停止已完成工作的当前 attempt，不删除会话或级联取消子资源；后续真实用户输入继续受新回合保护。
 - 禁止后果：不得把第一次确认收成退休。不得向 Relayed 接力发出终态 interrupt，也不得在后继已派发后再发一次旧任期的会话中止。不得把旧物理历史从后继消息集里剥掉。
 - 失败后果：终态中断被拒绝或抛错时，工具必须呈现失败，不能忽略失败后返回“已结束”；已提交的 Delivered 不回滚，也不因此开继任任期。在途 Host 中断未完成精确的 provider-step 释放与物理中断之前，不得派发后继。
@@ -159,9 +159,9 @@ S4 第一次调用只确认。第二次调用依持久退休结果分流：Relay
 
 当 Plan 模式会话被初始化或任期推进时，系统为该任期装配输入。
 
-- 允许后果：跑者接收本规划任务范围内的全部真实用户输入原文（`U`）、本任期的交互、持久化账本与前任在编程面声明的 ANCHOR 视图（durable `ViewCheckpointCommitted` 与 `view.thenRemove` 摘要），以及通过编程面读写的 Markdown 伪文件（`P`）；系统不生成合成工作记录，不做机器物化的 `LWR_prev` 注入。
-- 禁止后果：模型不得直接读写或篡改 `U`。系统不得向消息集注入合成 `LWR_prev` 记录。`P` 不得作为文本直接注入模型输入消息集。模型不得取得任何超出 `P` 之外的仓库或工作区写权限。
-- 失败后果：若输入集合包含未经任期剥除的上下文或遗漏必需事实，系统必须在消息投影阶段拒绝生成请求并终止本次调用。
+- 允许后果：跑者接收本规划任务范围内的全部真实用户输入原文（`U`）、经 `view` 机制裁剪保留的交互（durable `ViewCheckpointCommitted` 与 `view.thenRemove` 摘要），以及通过编程面读写的 Markdown 伪文件（`P`）；接力不主动清除上下文，系统不生成合成工作记录，不做机器物化的合成前任记录注入。
+- 禁止后果：模型不得直接读写或篡改 `U`。系统不得向消息集注入合成前任记录，也不得在接力时主动清除上下文。`P` 不得作为文本直接注入模型输入消息集。模型不得取得任何超出 `P` 之外的仓库或工作区写权限。
+- 失败后果：若输入集合遗漏必需事实或 `view` 状态损坏，系统必须在消息投影阶段拒绝生成请求并终止本次调用。
 
 ## [021] 角色与严格权限投影
 
@@ -224,7 +224,7 @@ Plan 的轮换生命周期由不可变 wanxiangli 事实驱动并投影状态。
   1. `IncumbencyRetired(incumbencyId, Relayed)`；
   2. `IncumbencyOpened(workId, nextIncumbencyId, stage, openingCursor)`，其中 stage 等于退休时的 stage（接力不推进阶段）。
   退休游标取自当前 `deliver` 所属物理交互的真实 XTrace 边界，表示已消费到的最后一个语义 part；下一任的 `openingCursor` 等于该游标，首个新 part 从其后开始，不另加一。较新的用户输入或其它 provider run 不得扩大本次退休范围。
-  当前活跃任期更新为新任期，阶段不变，下一次 Provider 请求触发前缀重锚并重启上下文（新任期按 [034] 过滤旧任交互、承接前任声明的 ANCHOR 视图，保留真实对话的因果顺序）。
+  当前活跃任期更新为新任期，阶段不变；接力不再主动清除上下文，上下文的保留与裁剪全部依靠 `view` 机制（见 [034]）。
 - 禁止后果：若存在活跃阻塞资源（blocker），禁止退休任期；系统必须记录 `RetirementBlocked` 并向模型返回 blocker 摘要。接力严禁改写 `stage`、严禁产生 `Reviewed`、严禁影响 `Delivered` 投影。禁止在未成功持久化新任期前注销当前任期。禁止使用固定增量、消息数组下标或缺省值伪造退休游标。本任未评审且上一笔退休也未评审时，严禁再次接力开任。
 - 失败后果：退休边界不可证明时，在追加事件之前拒绝接力；事务写入失败时，当前任期保持活跃，不产生状态漂移。背靠背无评审接力的拒绝是 ReviewRequired 观察、零写，当前任期保持活跃，runner 提交本任 `review` 后方再次接力。
 
@@ -249,7 +249,7 @@ Manager 与 Plan 的目标义务独立于物理回合：空 stop、合格收尾�
 
 当 Plan 跑者调用 `devops(intent)` 时，系统把调查意图同步委派给本 work 绑定的固定 DevOps。原工具名 `ask` 不再是本能力的别名。
 
-- 允许后果：系统查询本规划任务绑定的唯一固定 DevOps 实例；若未绑定则由运行时 single-flight 创建并持久化 `DevOpsBound` 绑定事实。将 `intent` 作为调查目标投递给该 DevOps 做只读调查（含真实 bash 执行，只读约束由 office 提示词承担，不做运行时门）。等待本次调用的完成事实，确认收敛后把 DevOps 的生命周期工作记录（LWR，子→父方向，`includeOpening = false`）完整交回 Planner。
+- 允许后果：系统查询本规划任务绑定的唯一固定 DevOps 实例；若未绑定则由运行时 single-flight 创建并持久化 `DevOpsBound` 绑定事实。将 `intent` 作为调查目标投递给该 DevOps 做只读调查（含真实 bash 执行，只读约束由 office 提示词承担，不做运行时门）。等待本次调用的完成事实，确认收敛后把 DevOps 经 `js.deliver` 交回的增量去重 TOML 视图完整交回 Planner。
 - 禁止后果：模型在调用参数中只传 `intent`，不得传递 DevOps 的 id、role、model 等底层拓扑标识。系统严禁对 DevOps 的返回结果做二次模型摘要，必须完整交付。同一规划任务同时至多运行一个未决 devops 委派；已有未决委派时再次调用必须返回强类型拒绝。返回材料不得携带底层 id（SessionId/AgentId/PtyId）。
 - 失败后果：若固定 DevOps 处于忙碌状态或响应失败，返回强类型错误，不静默丢弃，不新建替代操作员。
 
@@ -267,7 +267,7 @@ Manager 与 Plan 的目标义务独立于物理回合：空 stop、合格收尾�
 
 系统启动时，必须显式注册 Plan 相关的工具与参数规范。
 
-- 允许后果：在 `ToolRegistry` 中登记 `todowrite-for-plan`（JS 编程面）、`devops`、`ask`、`review`、`deliver`（编排面）。静态工具名单与投机调查分类显式登记五个名称；`ask` 参数为 `question`，`devops` 参数为 `intent`，能力映射不得混用。`review` 与 Manager 共用同一 ToolSpec（见 [038]）。
+- 允许后果：在 `ToolRegistry` 中登记 `todowrite-for-plan`（JS 编程面）、`devops`、`ask`、`review`、`deliver`（编排面）。静态工具名单显式登记五个名称；`ask` 参数为 `question`，`devops` 参数为 `intent`，能力映射不得混用。`review` 与 Manager 共用同一 ToolSpec（见 [038]）。
 - 禁止后果：严禁使用前缀匹配、通配符或模糊规则对工具进行分类或准入。未显式登记的工具不得进入 Plan 的工具列表。`handoff` 与 `resume` 不得作为 Plan 工具登记或注册。
 - 失败后果：若工具名称或分类缺失，系统在启动静态校验或工具构建期必须报错阻断。
 
@@ -293,7 +293,7 @@ Plan 角色与各阶段使用的指导文档必须在资源目录中中英双语
 
 Plan 的阶段与任期机制不得污染其他角色；[027] 明确规定的 Manager 长程连续性除外。
 
-- 允许后果：Orchestrator、Engineer、DevOps、Blogger 的既有角色合同不变。Manager 禁止静默停止且禁用 `ask`，`review` 的业务判断不变。
+- 允许后果：Orchestrator、Engineer、DevOps 的既有角色合同不变。Manager 禁止静默停止且禁用 `ask`，`review` 的业务判断不变。
 - 禁止后果：非 Plan 角色严禁获取 `todowrite-for-plan`、`devops` 或 `ask`。Plan 的 Baton 隔离逻辑严禁污染非 Plan 会话。任何角色都不得再使用已经撤销的 Plan 空停豁免。
 - 失败后果：任何非 Plan 回归测试失败均表明破坏了全局不变量，改动必须判定为不合格。
 
@@ -307,18 +307,16 @@ work lifecycle 的唯一 durable owner 是 wanxiangli：Work 负责规则和规�
 - 禁止后果：规则校验失败不得进入 SQLite append。严禁让旧 EventStore envelope、CanonicalIntegrator 投影或进程内缓存成为第二份 lifecycle 权威；严禁自动修复、跳过损坏 record 或把 Conflict/Unknown 当成功。
 - 失败后果：非法命令在 append 前拒绝且零写；revision/request 冲突显式返回 Conflict；已知未写返回 NotWritten；COMMIT 结果不明返回 Unknown 并要求重开后核对。读到损坏历史时整份拒绝。
 
-## [034] 任期隔离与前缀重锚（openingCursor 形式）
+## [034] 任期接力与 `view` 驱动上下文管理
 
-当为处于活跃任期的会话组装 Provider 请求消息集时，系统应用通用的 Baton 隔离策略。
+当为处于活跃任期的会话组装 Provider 请求消息集时，接力机制不再主动清除上下文；上下文的保留与裁剪全部依靠 `view` 机制。
 
-- 允许后果：先以稳定 Host 消息及 part 身份捕获本次请求中新观察到的真实交互，再按原消息顺序执行任期过滤：
-  1. 当前规划任务因果范围内的全部真实用户输入原文（U）完整保留；
-  2. 保留本任期真实 assistant 与 tool 交互，不把用户回答移动到它所回答的 assistant 或工具交互之前；
-  3. 交棒由前任在 `todowrite-for-plan` 声明的 ANCHOR `view`（durable `ViewCheckpointCommitted` + `view.thenRemove` 摘要）承担，装配阶段不生成合成记录、不注入机器物化的 `LWR_prev`。
-  `openingCursor` 表示已消费到的边界。物理消息的任期归属取其稳定身份在 XTrace 中的首次观察游标，跨前缀 epoch 不变；后续追加的 part 或重锚后的重复捕获不得把旧消息变成新任消息。工具调用及结果按完整物理交互保留或剥除，不切半。
-  每个任期的首条请求按持久化的 `TenureReanchored` 事实触发一次前缀重锚（reanchorRequested = true）；必须等待该事实提交后才继续请求组装。重复请求、空停后的追问和进程重启不得为同一任期重复重锚。
-- 禁止后果：上一任期及更早任期的全部 assistant 消息与 tool 消息以及任何合成记录行必须全部剥除，不得进入消息集；严禁注入机器物化的 `LWR_prev`。规划底稿 P 的正文严禁直接拼装入消息集。用户消息 U 严禁压缩、重排、重编码或篡改。禁止依赖 Host 消息上并不存在的 `cursor` 字段；缺少稳定归属证据时，禁止静默删除交互或放行旧交互。对于非 Plan 角色或无活跃任期的普通会话，严禁触发隔离与剥除。
-- 失败后果：若任期消息装配失败、游标越界或必需的重锚提交失败，系统必须停止当前请求组装，拒绝发送残缺或受污染的上下文。
+- 允许后果：先以稳定 Host 消息及 part 身份捕获本次请求中新观察到的真实交互，再按 `view` 声明（`prefixUntil` / `thenRemove`）组装消息集：
+  1. 当前规划任务因果范围内的真实用户输入原文（U）与交互按原因果顺序保留，受显式 `view` 声明裁剪；
+  2. 交棒与上下文清理完全由模型在编程面提交的 ANCHOR `view`（durable `ViewCheckpointCommitted` + `view.thenRemove` 摘要）承担，装配阶段不主动清除前任消息、不生成合成记录、不注入机器物化的合成前任记录。
+  `openingCursor` 记录任期开启时的观察边界，不触发自动剥除前任交互。
+- 禁止后果：严禁在 S1/S2/S3/S4 接力时主动清除上下文；严禁注入机器物化的合成前任记录。规划底稿 P 的正文严禁直接拼装入消息集。用户消息 U 严禁篡改。
+- 失败后果：若消息装配失败或 `view` 状态损坏，系统必须停止当前请求组装，拒绝发送残缺或受污染的上下文。
 
 ## [035] 崩溃恢复判定与位置重绑
 
@@ -392,7 +390,7 @@ Relayed 只注销旧 Manager 的派工与控制租约。固定 DevOps、已接�
 
 ## [045] 历史不代替工作区
 
-provider 上下文由剥除后留下的本任消息、用户原文与显式资源构成。工作区由调用方自行检查，projection 不转述其内容。当前动作由事实约束的资源与能力表达，不由前任摘要代替。
+provider 上下文由物理历史、用户原文与显式资源构成；历史保留与裁剪只由 `view` 声明决定。工作区由调用方自行检查，projection 不转述其内容。当前动作由事实约束的资源与能力表达，不由前任摘要代替。
 
 ## [046] durable 结果的观察与启动条件
 

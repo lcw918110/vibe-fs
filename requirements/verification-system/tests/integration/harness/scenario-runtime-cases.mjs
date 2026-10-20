@@ -267,7 +267,7 @@ reason = "epoch-switch"
       // cold boundary is covered and the scenario silently stopped exercising it. Same
       // reasoning as an empty `attempts` list in a fault.
       // `epoch-switch` is excluded here because it shares the multi-delivery shape
-      // with `prefix-probe`/`frame-commit`/`manager-loop`: append-only deliveries
+      // with `frame-commit`/`manager-loop`: append-only deliveries
       // are legal and held, not `boundary-not-reached`. Use `fallback-side` instead.
       const runtime = runtimeOf(`${TWO_STEPS}
 [[epoch]]
@@ -283,79 +283,6 @@ reason = "fallback-side"
 
       assertTrue(appendOnly.sealBroken !== undefined);
       assertEq(appendOnly.sealBroken.reason, 'boundary-not-reached');
-    },
-  },
-
-  {
-    name: 'CTX-010 a prefix-probe entry admits breaking and append-only deliveries alike',
-    fn: () => {
-      // A recovery sequence alternates probe slots (odd offset, armed) and ordinary
-      // slots, so one entry legitimately mixes rebased and append-only requests.
-      // The declaration is checked on every delivery; "never fired" surfaces at
-      // scenario end via `unfiredBoundaries`.
-      const runtime = runtimeOf(`${TWO_STEPS}
-[[epoch]]
-turn = "mgr"
-step = 1
-reason = "prefix-probe"
-`);
-
-      deliver(runtime, request([SYSTEM, user('Ship the parser fix.')]));
-
-      // Delivery 1 of step 1: the probe rebases the prefix — the covered head is
-      // replaced by the synthetic companion memory, the system and tool set stay
-      // fixed, and the declared user text remains the physical tail. The assistant
-      // after it makes this step 1 of the turn.
-      const probed = request([
-        SYSTEM,
-        user('[companion memory]'),
-        assistant('step zero'),
-        user('Ship the parser fix.'),
-        assistant('reply'),
-      ]);
-      const first = runtime.select(probed, contextOf(probed.sessionID));
-      assertEq(first.resealed, 'prefix-probe');
-
-      // Delivery 2 of step 1: an ordinary append-only continuation of the probed
-      // wire, same declared text as its physical tail.
-      const appended = request([
-        SYSTEM,
-        user('[companion memory]'),
-        assistant('step zero'),
-        user('Ship the parser fix.'),
-        assistant('reply'),
-        user('Ship the parser fix.'),
-        assistant('reply2'),
-      ]);
-      const second = runtime.select(appended, contextOf(appended.sessionID));
-      assertTrue(second.sealBroken === undefined, 'append-only delivery after a fired probe is legal');
-
-      // The declaration fired, so the scenario-end check is clean.
-      assertEq(runtime.unfiredBoundaries().length, 0);
-    },
-  },
-
-  {
-    name: 'CTX-010 a prefix-probe declaration that never fires is reported at scenario end',
-    fn: () => {
-      const runtime = runtimeOf(`${TWO_STEPS}
-[[epoch]]
-turn = "mgr"
-step = 1
-reason = "prefix-probe"
-`);
-
-      deliver(runtime, request([user('Ship the parser fix.')]));
-
-      // Only append-only deliveries: the declaration never admitted a break.
-      const appendOnlyBody = request([user('Ship the parser fix.'), assistant('step zero')]);
-      const appendOnly = runtime.select(appendOnlyBody, contextOf(appendOnlyBody.sessionID));
-      assertTrue(appendOnly.sealBroken === undefined, 'an append-only delivery of a probe entry is not a seal error');
-
-      const unfired = runtime.unfiredBoundaries();
-      assertEq(unfired.length, 1, 'the declaration is reported at scenario end');
-      assertEq(unfired[0].entryId, 'mgr.1');
-      assertEq(unfired[0].kind, 'prefix-probe');
     },
   },
 

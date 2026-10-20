@@ -11,7 +11,6 @@ type Role =
     | Inquiry
     | DevOps
     | Distiller
-    | Blogger
     | Plan
     /// On-demand second opinion: a dedicated reviewer participant that reads a
     /// view of the caller's context and answers in prose, holding no tools.

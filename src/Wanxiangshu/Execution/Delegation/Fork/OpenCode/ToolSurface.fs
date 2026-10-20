@@ -14,7 +14,6 @@ open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation.Outcome
-open Wanxiangshu.Mission.WorkRecord
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.Interaction.Dispatch.OpenCode
@@ -489,7 +488,7 @@ module ForkToolSurface =
         owners
         abortSession
         cancelSignals
-        (beforeWorkRecord: (string -> Task) option)
+        (beforeViewRead: (string -> Task) option)
         : Task<obj> =
         emitJsExpr () "process.env.WANXIANGSHU_ADMISSION_TIMEOUT_MS = '100'" |> ignore
 
@@ -522,26 +521,22 @@ module ForkToolSurface =
             let sessionPort = ForkSessionPort(abortSession, existingChildIds)
             let sessions = sessionPort :> ISessionHostPort
 
-            let childWorkRecordForRun (sessionId: SessionId) (_providerRun: ProviderRunIdentity) =
+            let childViewForRun (sessionId: SessionId) (_providerRun: ProviderRunIdentity) =
                 task {
-                    match beforeWorkRecord with
+                    match beforeViewRead with
                     | Some observe -> do! observe (SessionId.value sessionId)
                     | None -> ()
 
                     return None
                 }
 
-            let parentWorkRecord sessionId =
+            let viewForSession sessionId =
                 task {
-                    match beforeWorkRecord with
+                    match beforeViewRead with
                     | Some observe -> do! observe sessionId
                     | None -> ()
 
-                    return!
-                        LifecycleWorkRecordProjection.lifecycleWorkRecord
-                            (Some journal)
-                            (SessionId.create sessionId)
-                            true
+                    return Wanxiangshu.Repository.Programming.Js.JsDeliveredValues.tryPeekRendered sessionId
                 }
 
             let scope =
@@ -556,11 +551,10 @@ module ForkToolSurface =
                     (fun _ -> None),
                     Dictionary<string, string>(),
                     None,
-                    Some parentWorkRecord,
-                    None,
+                    Some viewForSession,
                     None,
                     cancelSignals,
-                    childWorkRecordForRun = childWorkRecordForRun
+                    childViewForRun = childViewForRun
                 )
 
             scope.AttachCurrentProcessJoinMode "ready"
@@ -571,7 +565,7 @@ module ForkToolSurface =
     let createRuntime (directory: string) (owners: obj) : Task<obj> =
         createRuntimeUsingAbort directory owners (fun _ -> Task.FromResult(Ok())) None None
 
-    let createRuntimeWithWorkRecordRead (directory: string) (owners: obj) (beforeRead: string -> Task) : Task<obj> =
+    let createRuntimeWithViewRead (directory: string) (owners: obj) (beforeRead: string -> Task) : Task<obj> =
         createRuntimeUsingAbort directory owners (fun _ -> Task.FromResult(Ok())) None (Some beforeRead)
 
     let createRuntimeWithCancelSignals
@@ -1049,7 +1043,7 @@ module ForkToolSurface =
                               "agentId" ==> record.AgentId
                               "role" ==> record.Role
                               "status" ==> record.Status
-                              "workRecord" ==> record.WorkRecord ]
+                              "view" ==> record.View ]
 
                     createObj
                         [ "ok" ==> true
@@ -1114,7 +1108,7 @@ module ForkToolSurface =
                         match runtime.List() |> fst |> List.tryHead with
                         | None -> return false
                         | Some agent ->
-                            match! runtime.AwaitCurrentWorkRecord agent.AgentId with
+                            match! runtime.AwaitCurrentView agent.AgentId with
                             | Ok _ -> return true
                             | Error _ -> return false
         }
@@ -1242,7 +1236,7 @@ module ForkToolSurface =
         let harness = unbox<ForkHarness> value
 
         AgentJournal.handleProjection harness.Journal (harness.OwnerSession owner)
-        |> HandleProjection.workRecords
+        |> HandleProjection.workBindings
         |> List.map workView
         |> List.toArray
 
@@ -1253,7 +1247,7 @@ module ForkToolSurface =
             try
                 return
                     AgentJournal.handleProjection journal (SessionId.create owner)
-                    |> HandleProjection.workRecords
+                    |> HandleProjection.workBindings
                     |> List.map workView
                     |> List.toArray
             finally
@@ -1397,7 +1391,7 @@ module ForkToolSurface =
             let handles = AgentJournal.handleProjection harness.Journal parent
 
             let candidate =
-                HandleProjection.workRecords handles
+                HandleProjection.workBindings handles
                 |> List.tryFind (fun record ->
                     record.Work
                     |> Option.exists (fun work -> AuthorityRootUserMessageId.value work.AuthorityRoot = root))
@@ -1440,7 +1434,7 @@ module ForkToolSurface =
                 | _ -> invalidArg "commitment" "unknown commitment scenario"
 
             let candidate =
-                HandleProjection.workRecords (journal.HandleProjection parent)
+                HandleProjection.workBindings (journal.HandleProjection parent)
                 |> List.tryFind (fun record ->
                     record.Work
                     |> Option.exists (fun work -> AuthorityRootUserMessageId.value work.AuthorityRoot = root))
@@ -1481,7 +1475,7 @@ module ForkToolSurface =
                             box
                                 {| ok = true
                                    root = root
-                                   workRecord = completion.WorkRecord |}
+                                   view = completion.View |}
                     | _ ->
                         return
                             box

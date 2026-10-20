@@ -1,14 +1,14 @@
 # obligation-ledger — WHAT
 
-本包规定编程面（`todowrite-for-<role>`）的 ANCHOR `view` 声明与上下文压缩 checkpoint 的确认边界。宿主原生 `todowrite` 已退役，不进入 `StaticTools.knownToolNames`、能力权限矩阵、投机调查分类或 ablation 映射；插件也不维护第二份待办账本。唯一产生压缩 checkpoint 的来源是携带非空 `view` 声明并成功完成的编程面调用：每次 exact 调用确认后追加一条持久化 `ViewCheckpointCommitted` 事实，按固定 K=3 窗口推进上下文压缩边界。
+本包规定编程面（`todowrite-for-<role>`）的 ANCHOR `view` 声明与上下文压缩 checkpoint 的确认边界。宿主原生 `todowrite` 已退役，不进入 `StaticTools.knownToolNames`、能力权限矩阵、投机调查分类或 ablation 映射；插件也不维护第二份待办账本。唯一产生压缩 checkpoint 的来源是携带非空 `view` 声明并成功完成的编程面调用：每次 exact 调用确认后追加一条持久化 `ViewCheckpointCommitted` 事实，进入 checkpoint 窗口；裁剪边界由 `view` 声明自身决定。
 
 ## [001] 宿主原生 todowrite 退役，编程面 view 声明为唯一 checkpoint 来源
 
 宿主原生 `todowrite` 已彻底退役，不在 `StaticTools.knownToolNames`、`permissionFor`、`requestToolMap`、`InvestigationEstimateContract.classifyTool` 或 `resources/ablation/tool-map.json` 中登记或放行。各角色的活规划与工作推进由其 `todowrite-for-<role>` 编程面承担；唯有前缀为 `todowrite-for-` 且 `state.input.view` 为非空对象的调用具备压缩 checkpoint 资格。未声明 `view`、空对象 `{}`、非对象或非 `todowrite-for-*` 工具的终态事件均不产生 `ViewCheckpointCommitted`。
 
-## [002] 编程面 view 声明驱动真实 Host 终态与固定 K=3 窗口
+## [002] 编程面 view 声明驱动真实 Host 终态与 checkpoint 记录
 
-编程面调用携带的 `view` 参数按原样进入执行与 Host ToolPart 状态；当 Host 发出 `message.part.updated` 的 `completed` 终态且 `state.input.view` 非空时，插件为该 exact `ToolCallId` 追加一条 `ViewCheckpointCommitted`，进入 `ViewCheckpoints` 的固定 K=3 窗口（`PhaseWindow.retainCheckpoints = 3`），保留最近 3 个 checkpoint 所在完整 semantic turn 为 raw。
+编程面调用携带的 `view` 参数按原样进入执行与 Host ToolPart 状态；当 Host 发出 `message.part.updated` 的 `completed` 终态且 `state.input.view` 非空时，插件为该 exact `ToolCallId` 追加一条 `ViewCheckpointCommitted`，进入 `ViewCheckpoints` 窗口。窗口只记录成功声明的 checkpoint 身份与顺序；上下文的保留与裁剪由 `view` 声明本身决定，宿主不再按固定计数替模型裁剪历史。
 
 ## [003] 不维护第二份 desired/applied 待办投影
 

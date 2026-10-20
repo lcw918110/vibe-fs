@@ -44,7 +44,7 @@ module ManagerWorkflow =
     /// Read-only probe: the successor-prompt occasion this Manager session's work
     /// currently owes. It reads the same fold the dispatch reads and dispatches
     /// nothing.
-    val successorPromptContextOf: workspaceDirectory: string -> sessionIdText: string -> obj
+    val successorPromptContextOf: workspaceDirectory: string -> sessionIdText: string -> Task<obj>
 
     val continueAfterRetiredAttempt:
         sessionPort: ISessionHostPort ->

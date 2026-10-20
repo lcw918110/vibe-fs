@@ -41,7 +41,7 @@ export default function route(role, running) {
 
 export const managedConfig = () => {
   const agent = {}
-  for (const role of ['orchestrator', 'manager', 'engineer', 'devops', 'blogger', 'bookkeeper', 'predictor']) {
+  for (const role of ['orchestrator', 'manager', 'engineer', 'devops', 'plan']) {
     agent[role] = {}
   }
   return { agent }

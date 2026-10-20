@@ -1,6 +1,5 @@
 namespace Wanxiangshu.OpenCode.Host
 
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation

@@ -114,9 +114,6 @@ test('WHAT[durable-events-023] prompt provider companion and context folds decid
     'Interaction/Authority/Fold.fs',
     'Participant/Provider/Attempt/Fallback/ProviderFailureFactFold.fs',
     'Context/Companion/CompanionFactFold.fs',
-    // The Context (Blogger) fold writes six slices; it decides which ones move and
-    // leaves the aggregate write and the refusal rendering to the bridge.
-    'Context/Companion/Blogger/ContextFactFold.fs',
   ]) {
     const text = readFileSync(join(SOURCE_ROOT, source), 'utf8')
     assert.doesNotMatch(

@@ -7,13 +7,12 @@
     <WanxiangshuOwnerLocalityKind>composition</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-model.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.eventstore-event-vocabulary-contract.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.speculative-investigation.strength-event-vocabulary-contract.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-event-vocabulary-contract.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.repository-programming.repository-programming-js-event-vocabulary-contract.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.epistemic-reasoning.sphinx-v2-core.fsproj"/>
-    <Compile Include="Persistence/EventStore/AuthoritativeVocabulary.fsi"/>
-    <Compile Include="Persistence/EventStore/AuthoritativeVocabulary.fs"/>
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-model.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.eventstore-event-vocabulary-contract.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-event-vocabulary-contract.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.repository-programming.repository-programming-js-event-vocabulary-contract.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.epistemic-reasoning.sphinx-v2-core.fsproj" />
+    <Compile Include="Persistence/EventStore/AuthoritativeVocabulary.fsi" />
+    <Compile Include="Persistence/EventStore/AuthoritativeVocabulary.fs" />
   </ItemGroup>
 </Project>

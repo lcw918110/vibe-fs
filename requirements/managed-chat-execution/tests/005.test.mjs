@@ -50,7 +50,6 @@ const startedWire = (physicalUserMessageId, providerRun = `provider-${physicalUs
       Accepted: JSON.parse(acceptedWire(physicalUserMessageId, { SessionId: sessionId }))[1][1][1].Evidence,
       ProviderRun: tagged('ProviderRunIdentity', providerRun),
       RequestKind: 'WorkMain',
-      ProjectionChoice: 'UseCommittedEpoch',
     },
     Key: keyWire(sessionId, physicalUserMessageId),
     SchemaVersion: 1,
@@ -62,7 +61,6 @@ const terminalWire = (physicalUserMessageId, disposition, sessionId = 'ses-chat'
       Accepted: JSON.parse(acceptedWire(physicalUserMessageId, { SessionId: sessionId }))[1][1][1].Evidence,
       ProviderRun: tagged('ProviderRunIdentity', `provider-${physicalUserMessageId}`),
       RequestKind: 'WorkMain',
-      ProjectionChoice: 'UseCommittedEpoch',
     }],
     Key: keyWire(sessionId, physicalUserMessageId),
     SchemaVersion: 1,
@@ -141,7 +139,6 @@ const evidence = (overrides = {}) => ({
   providerRun: 'provider-provider-lifecycle',
   origin: 'HumanRoot',
   requestKind: 'work-main',
-  projectionChoice: { kind: 'UseCommittedEpoch' },
   ...overrides,
 })
 const accept = (attempt = evidence(), appendOutcome = 'Committed') => ({
@@ -285,7 +282,6 @@ const assertNoReplacementPrompt = (runtime, created, sessionID) => {
     'provider identity confirmation must not dispatch a replacement prompt to this physical execution')
   for (const prompt of runtime.prompts) {
     assert.equal(created.includes(prompt.path?.id), true)
-    assert.equal(prompt.body?.agent, 'blogger')
     assert.equal(prompt.body?.metadata?.wanxiangshu_origin, 'AgentOwnerRoot')
   }
 }

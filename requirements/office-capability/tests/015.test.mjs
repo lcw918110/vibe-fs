@@ -9,5 +9,3 @@ test('WHAT[office-capability-015] Predictor has no public office permission proj
     assert.equal(isAllowed('predictor', permission), false)
   }
 })
-
-test.todo('WHAT[office-capability-015] Predictor confinement to internal Strength must be proved at scheduling and visibility boundaries after resolving 07-D2')

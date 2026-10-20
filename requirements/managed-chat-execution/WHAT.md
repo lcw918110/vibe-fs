@@ -77,7 +77,7 @@ Replay 只返回 typed owner effect request；不得写 fact、清 counter、释
 
 transform 在 provider 启动边界拒绝某个 exact execution 时（例如 attempt plan freeze 失败：`accepted-execution-missing`、`frozen-attempt-plan-missing`、`attempt-plan-freeze-failed`、`blogger-request-missing`、`authority-evidence-invalid`、`persistence-failed`），该拒绝必须作为一次 typed pre-provider failure 报告给 settlement owner；报告携带 exact `(SessionId, PhysicalUserMessageId)` 与诊断码，free-form 文本只作诊断，不决定 disposition。
 
-该 physical identity 必须在消息投影改写前从本次真实 Host 输入取得，并贯穿 attempt freeze、ProviderStarted 确认和拒绝报告。Blogger/Replica 的合成消息 id、摘要或投影后的最后一条 user 消息不得替代它；也不得读取 session-current id 为旧请求补身份。
+该 physical identity 必须在消息投影改写前从本次真实 Host 输入取得，并贯穿 attempt freeze、ProviderStarted 确认和拒绝报告。合成消息 id、摘要或投影后的最后一条 user 消息不得替代它；也不得读取 session-current id 为旧请求补身份。
 
 - projection 中该 exact key 处于 `Accepted ∧ ¬ProviderStarted ∧ ¬Terminal` 时，settlement owner 写入 typed pre-provider terminal `Failed`，并在 durable 提交确认后精确归还该执行持有的 exact capacity fence；定夺为终局，同一 key 的重复报告幂等（已 terminal 为 no-op，terminal 已存在而容量仍 held 时只请求精确 release）。
 - projection 中不存在该 exact key（`AcceptedExecutionMissing`）时，不得伪造执行或结算，也不得登记非本 owner 的 manual；保留原始拒绝与诊断，交准入 owner 处置。

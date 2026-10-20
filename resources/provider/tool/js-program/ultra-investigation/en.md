@@ -1,28 +1,15 @@
 class Js extends JsProgram {
-  async walk(dir) {
-    const found = [];
-    for (const entry of await this.ls(dir)) {
-      const full = dir === "." ? entry : dir + "/" + entry;
-      if (entry.endsWith("/")) found.push(...await this.walk(full.slice(0, -1)));
-      else found.push(full);
-    }
-    return found;
-  }
   async run() {
-    const declaration = /\b(?:type|module)\s+RetryPolicy\b/;
-    const hits = [];
-    const evidence = [];
-    for (const path of (await this.walk("src")).filter((path) => path.endsWith(".fs"))) {
-      const text = await this.cat(path);
-      const at = text.search(declaration);
-      if (at < 0) continue;
-      hits.push({ path, at });
-      evidence.push({
-        path,
-        declarationFound: true,
-        excerpt: text.slice(Math.max(0, at - 220), at + 900),
-      });
-    }
-    return { declarations: hits, evidence, changedFiles: [], executed: false };
+    const found = await this.rg(["\\b(?:type|module)\\s+RetryPolicy\\b", "src", "-g", "*.fs"]);
+    const hits = found.messages.flatMap((message) => {
+      if (message.type !== "match") return [];
+      const text = message.data.lines.text;
+      return [{
+        path: message.data.path.text,
+        line: message.data.line_number,
+        excerpt: text.slice(0, 900),
+      }];
+    });
+    return { declarations: hits, changedFiles: [], executed: false };
   }
 }

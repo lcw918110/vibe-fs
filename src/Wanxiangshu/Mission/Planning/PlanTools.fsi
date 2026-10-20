@@ -17,7 +17,7 @@ type DeliverResult =
 /// work-028: the outcome of one synchronous ask delegation.
 type AskResult =
     { Kind: string
-      WorkRecord: string
+      View: string
       Status: string }
 
 type DeliverySpawnOutcome =
@@ -87,7 +87,7 @@ module PlanTools =
         gitCommonDir: string -> workId: string -> operationId: string -> execSessionId: string -> Result<unit, string>
 
     /// work-028: delegate the intent synchronously to the bound fixed
-    /// DevOps and return its complete work record verbatim. `delegateTo`
+    /// DevOps and return its complete delivered view verbatim. `delegateTo`
     /// carries the real delegation capability (injected by the tool surface);
     /// at most one pending delegation per work, tracked in process memory.
     val executeAsk:

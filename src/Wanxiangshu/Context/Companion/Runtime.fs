@@ -1,6 +1,5 @@
 namespace Wanxiangshu.Context.Companion
 
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Foundation.Identity
 
@@ -10,45 +9,14 @@ type Companion(?initialMemory: CompanionMemory, ?durable: ICompanionDurablePort,
 
     let restoredMemory = initialMemory
 
-    let blogProjection: BlogProjectionState =
-        restoredMemory
-        |> Option.map (fun m -> m.Blog)
-        |> Option.defaultValue BlogProjection.empty
-
     // DSL-MUTABLE: resource — in-memory X-trace projection mirror (durable-backed)
     let mutable xTraceProjection: XTraceProjectionState =
         restoredMemory
         |> Option.map (fun m -> m.XTrace)
         |> Option.defaultValue XTraceProjection.empty
 
-    let latestB: BlogText option =
-        restoredMemory |> Option.bind (fun m -> m.EffectiveFrames)
-
-    /// COMPANION-002: the companion Blogger Session Y for this X.
-    ///
-    /// A runtime mirror of the durable link, not a second writer: `CompanionHost`
-    /// owns the create/abort decision and writes the fact through
-    /// `ICompanionDurablePort`, then tells this cache. Restored on construction so a
-    /// restart reuses the same Y instead of creating a second one.
-    // DSL-MUTABLE: resource — cached companion Blogger session id
-    let mutable bloggerSessionId: SessionId option =
-        restoredMemory |> Option.bind (fun m -> m.BloggerSessionId)
-
     member _.Memory: CompanionMemory =
-        lock lockObj (fun () ->
-            { Blog = blogProjection
-              EffectiveFrames = latestB
-              BloggerSessionId = bloggerSessionId
-              XTrace = xTraceProjection })
-
-    /// Mirror a durable Blogger link that `CompanionHost` already recorded.
-    member _.RecordBloggerLinked(bloggerId: SessionId) : unit =
-        lock lockObj (fun () -> bloggerSessionId <- Some bloggerId)
-
-    /// Mirror a durable Blogger unlink. `None` again, so the next transform creates
-    /// a fresh Y rather than prompting an aborted session forever.
-    member _.RecordBloggerClosed() : unit =
-        lock lockObj (fun () -> bloggerSessionId <- None)
+        lock lockObj (fun () -> { XTrace = xTraceProjection })
 
     /// COMPANION-007: refresh the in-memory XTrace mirror after the transform
     /// boundary captured new parts. Without this the chunker keeps mapping the

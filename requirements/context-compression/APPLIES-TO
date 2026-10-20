@@ -13,8 +13,6 @@
 /src/Wanxiangshu/OpenCode/Host/PluginRuntimeScope.fs
 /src/Wanxiangshu/OpenCode/Host/PairProgramming/**
 /src/Wanxiangshu/OpenCode/Host/PairProgrammingThoughtTransform.fs
-/src/Wanxiangshu/OpenCode/Host/RequirementGrounding/**
-/src/Wanxiangshu/OpenCode/Host/RequirementGroundingSurface.fs
 /src/Wanxiangshu/OpenCode/Codec/ProjectionMessageEdit.fs
 /src/Wanxiangshu/Enforcer/Guidance/**
 /src/Wanxiangshu/Participant/Provider/Projection/Intent.fs

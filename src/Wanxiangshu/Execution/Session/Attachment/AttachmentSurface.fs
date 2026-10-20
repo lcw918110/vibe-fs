@@ -171,9 +171,8 @@ module AttachmentSurface =
 
     /// managed-session-lifecycle-001 (GAP-133): drive every AttachmentKind through the
     /// ONE lifecycle owner against one controlled Host, and read from the shared
-    /// registry which `(owner, kind)` holds each child. Companion, SyncInspector,
-    /// SyncCoder and StrengthReplica are all established by the same core — the first
-    /// three through their kind adapters, the replica through the core directly — with
+    /// registry which `(owner, kind)` holds each child. Companion, SyncInspector and
+    /// SyncCoder are all established by the same core — through their kind adapters — with
     /// one registry recording them all, so an attachment kind is only ever parameters
     /// and terminal policy.
     let everyKindScenario (owner: string) : Task<obj> =
@@ -224,7 +223,7 @@ module AttachmentSurface =
                                 |> Seq.map (fun child ->
                                     { SessionId = child
                                       ParentSessionId = Some ownerId
-                                      Agent = Some "blogger"
+                                      Agent = Some "companion"
                                       Title = Some "Companion" })
                                 |> Seq.toList
                             )
@@ -294,7 +293,7 @@ module AttachmentSurface =
                 companion.Ensure(
                     ownerId,
                     { Kind = SatelliteKind.Companion
-                      Agent = "blogger"
+                      Agent = "companion"
                       Title = "Companion"
                       Directory = None
                       RestoredSessionId = None
@@ -307,40 +306,6 @@ module AttachmentSurface =
                             closed.Add(SessionId.value o)
                             Task.FromResult(Ok()) }
                 )
-
-            // The read-only replica kind: one resident child per owner, established by
-            // the same core and recorded in the same registry.
-            // DSL-MUTABLE: algorithm-scratch — the resident replica child of each owner
-            let residentReplica = Dictionary<string, SessionId>()
-
-            let replicaOperations =
-                { AttachmentLeaseCore.Operations.ListChildren = fun _ -> Task.FromResult(Ok [])
-                  AttachmentLeaseCore.Operations.CreateChild =
-                    fun ownerText _ _ ->
-                        // STRENGTH-004: one resident child per owner.
-                        match residentReplica.TryGetValue ownerText with
-                        | true, existing -> Task.FromResult(Ok(SessionId.value existing))
-                        | false, _ ->
-                            let id = SessionId.create (sprintf "%s-replica" ownerText)
-                            children.Add id
-                            residentReplica.[ownerText] <- id
-                            Task.FromResult(Ok(SessionId.value id))
-                  AttachmentLeaseCore.Operations.AbortChild = fun _ -> Task.FromResult(Ok())
-                  AttachmentLeaseCore.Operations.Link = fun _ _ _ -> Task.FromResult(Ok())
-                  AttachmentLeaseCore.Operations.Close = fun _ -> Task.FromResult(Ok()) }
-
-            let replicaSpec: AttachmentLeaseCore.Spec =
-                { Kind = AttachmentKind.StrengthReplica
-                  Agent = "engineer"
-                  Title = "engineer"
-                  Directory = None
-                  RestoreHint = None }
-
-            let! replicaResult = AttachmentLeaseCore.ensure replicaOperations ownerId replicaSpec
-            let! replicaAgain = AttachmentLeaseCore.ensure replicaOperations ownerId replicaSpec
-
-            replicaResult
-            |> Result.iter (fun lease -> registry.Bind(ownerId, AttachmentKind.StrengthReplica, lease))
 
             let childOf =
                 function
@@ -355,15 +320,13 @@ module AttachmentSurface =
                 |> Result.map (fun l -> SessionId.value l.SessionId)
                 |> Result.toOption
 
-            let replicaChild =
-                replicaResult |> Result.map (fun l -> l.SessionId) |> Result.toOption
-
             let bindingOf child =
                 registry.TryFindByChild(SessionId.create child)
                 |> List.map (fun (boundOwner, kind) -> SessionId.value boundOwner, AttachmentLeaseCore.kindKey kind)
 
             let bindings =
-                [ inspectorChild; coderChild; companionChild; replicaChild ]
+                [ inspectorChild; coderChild; companionChild ]
+
                 |> List.choose id
                 |> List.map (fun child -> bindingOf child |> List.toArray)
                 |> List.toArray
@@ -389,7 +352,7 @@ module AttachmentSurface =
                 companion.Ensure(
                     ownerId,
                     { Kind = SatelliteKind.Companion
-                      Agent = "blogger"
+                      Agent = "companion"
                       Title = "Companion"
                       Directory = None
                       // The Companion host always passes the durable association it
@@ -405,8 +368,8 @@ module AttachmentSurface =
                        inspectorChild = Option.defaultValue "" inspectorChild
                        coderChild = Option.defaultValue "" coderChild
                        companionChild = Option.defaultValue "" companionChild
-                       replicaChild = Option.defaultValue "" replicaChild
                        bindings = bindings
+
                        children = children |> Seq.map SessionId.value |> Seq.toArray
                        companionOrigin =
                         companionLease
@@ -432,7 +395,6 @@ module AttachmentSurface =
                         sync.TryFindByScope(otherScope, SyncDelegateRole.Inspector)
                         |> Option.map SessionId.value
                         |> Option.defaultValue ""
-                       replicaResidentStable =
-                        replicaAgain |> Result.map (fun l -> l.SessionId) |> Result.defaultValue ""
                        registrySize = registry.Snapshot() |> List.length |}
+
         }

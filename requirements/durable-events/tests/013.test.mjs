@@ -80,8 +80,8 @@ const journal = await import("../../../dist/Persistence/Journal/Surface.js");
 
 const CLOSED = {
   family: 'Companion',
-  case: 'CompanionBloggerClosed',
-  payload: { SessionId: 'ses_es_boot' },
+  case: 'TerminalOutputCaptured',
+  payload: { SessionId: 'ses_es_boot', TextRef: 'blob-boot', TextDigest: 'sha-boot', ProviderRun: 'run-boot' },
 }
 const mustOk = (result, label) => {
   assert.equal(result.ok, true, `${label}: ${JSON.stringify(result.error)}`)
@@ -135,8 +135,8 @@ const journal = await import("../../../dist/Persistence/Journal/Surface.js");
 
 const CLOSED_AGENT = {
   family: 'Companion',
-  case: 'CompanionBloggerClosed',
-  payload: { SessionId: 'ses_es_writer' },
+  case: 'TerminalOutputCaptured',
+  payload: { SessionId: 'ses_es_writer', TextRef: 'blob-writer', TextDigest: 'sha-writer', ProviderRun: 'run-writer' },
 }
 const mustOk = (result, label) => {
   assert.equal(result.ok, true, `${label}: ${JSON.stringify(result.error)}`)
@@ -252,34 +252,6 @@ test('WHAT[durable-events-013] EXEC_cancelled_revision_subscription_unregisters_
     assert.equal(await revisions.awaitCancelled(from, handle), true)
     assert.equal(revisionOf(handle), from, 'cancellation is not a durable fact')
   })
-})
-}
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { default: test } = await import("node:test");
-const assoc = await import("../../../dist/Execution/Session/AssociationSurface.js");
-
-const linked = (pairs, start = assoc.empty) =>
-  pairs.reduce((current, pair) => {
-    const result = assoc.link(pair, current)
-    assert.equal(result.ok, true, result.ok ? '' : result.message)
-    return result.value
-  }, start)
-
-test('WHAT[durable-events-013] PERSIST_008_both_directions_answer_from_one_map_without_a_scan', () => {
-  // The reason both entries live in one map: `isCompanion` and `bloggerOf` are the
-  // two questions the transform boundary asks on every request, and a reverse index
-  // held separately could disagree with the forward one.
-  const state = linked(
-    Array.from({ length: 50 }, (_, n) => ({ main: `ses_x${n}`, blogger: `ses_y${n}` })),
-  )
-
-  assert.equal(assoc.ids(state).length, 100)
-  assert.equal(assoc.bloggerOf('ses_x37', state), 'ses_y37')
-  assert.equal(assoc.mainSessionOf('ses_y37', state), 'ses_x37')
-  assert.equal(assoc.isCompanion('ses_y37', state), true)
-  assert.equal(assoc.isCompanion('ses_x37', state), false)
 })
 }
 

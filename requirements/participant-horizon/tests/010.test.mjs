@@ -22,10 +22,10 @@ integrationTest('WHAT[participant-horizon-010] actual fork and commission schema
   await withPlugin(async (hooks) => {
     assert.equal(hooks.tool.fork.args.calling.safeParse('engineer').success, true)
     assert.equal(hooks.tool.commission.args.calling.safeParse('lead').success, true)
-    for (const role of ['devops', 'manager', 'blogger', 'bookkeeper', 'predictor', 'coder', 'inspector', 'browser', 'inquiry', 'distiller']) {
+    for (const role of ['devops', 'manager', 'bookkeeper', 'coder', 'inspector', 'browser', 'inquiry', 'distiller']) {
       assert.equal(hooks.tool.fork.args.calling.safeParse(role).success, false, role)
     }
-    for (const calling of ['engineer', 'devops', 'coordinator', 'blogger', 'bookkeeper', 'predictor']) {
+    for (const calling of ['engineer', 'devops', 'coordinator', 'bookkeeper']) {
       assert.equal(hooks.tool.commission.args.calling.safeParse(calling).success, false, calling)
     }
   })

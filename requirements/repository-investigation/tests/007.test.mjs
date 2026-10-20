@@ -14,7 +14,7 @@ test('WHAT[repository-investigation-007] empty keywords perform zero searches ev
     const search = async () => { calls += 1; return [] }
     const charge = 'Find auth handlers.\r\nKeep this exact text.\n'
     for (const keywords of [undefined, '', ' \r\n\t']) {
-      const result = await warmStart.prepareWithSearch(search, 'investigation-zero', 'Blogger', directory, keywords, charge)
+      const result = await warmStart.prepareWithSearch(search, 'investigation-zero', 'Manager', directory, keywords, charge)
       assert.equal(result.ok, true)
       assert.equal(calls, 0)
       await context.test(`raw task bytes preserved for ${JSON.stringify(keywords)}`, { todo: 'GAP-084: current common renderer wraps instructions; clarify byte-equality boundary before changing it' }, () => {

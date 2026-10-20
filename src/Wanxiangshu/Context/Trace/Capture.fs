@@ -7,9 +7,6 @@ open System.Threading.Tasks
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Prefix
-open Wanxiangshu.Enforcer
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session.Recovery
@@ -35,9 +32,6 @@ open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session
@@ -89,8 +83,9 @@ type XTraceMessageCapture =
 ///
 /// Every prompt/assistant/reasoning/tool part enters the XTrace through exactly
 /// one mapper, so no two independent parser/renderer pairs can disagree about a
-/// segment. `TerminalSessionA` is gone: the terminal output is captured as the
-/// XTrace's last segment (TerminalOutputCaptured), not as a parallel A text.
+/// segment. There is no separate terminal session: the terminal output is
+/// captured as the XTrace's last segment (TerminalOutputCaptured), not as a
+/// parallel session-wide text.
 module XTraceCapture =
 
     /// The one `MessagePart → SemanticPart` mapper. `Activity` parts are
@@ -283,7 +278,7 @@ module XTraceCapture =
     let captureTerminal (journal: AgentJournal option) (turn: ReconciledTurn) =
         // COMPANION-003: TerminalOutputRaw = formal text + host-visible
         // reasoning only. partsSessionText drops tool call/result so
-        // LWR Final output stays free of raw tools and matches
+        // the captured terminal segment stays free of raw tools and matches
         // AgentRunResult.TerminalText.
         let text = CompletedTurnClassifier.partsSessionText turn.Parts
         captureTerminalText journal turn.SessionId text turn.ProviderRun
@@ -301,12 +296,6 @@ module XTraceCapture =
 
     /// COMPANION-003 / COMPANION-007: synchronise the XTrace with the provider's
     /// semantic projection at the transform boundary.
-    ///
-    /// The Blogger chunker works in semantic (turn/part) coordinates against the
-    /// same projection, so the XTrace must mirror it part-for-part or the
-    /// `SemanticCursor → XTrace cursor` mapping cannot advance monotonically
-    /// (measured: `BlogObservationCommitted` was rejected as "consumed nothing" when
-    /// the XTrace lagged the projection).
     ///
     /// Idempotent by `(reanchorGen, turn, part)` provenance: the same Host view is
     /// re-observed every transform without duplicating the trace; a reanchor opens
@@ -705,8 +694,8 @@ module XTraceCapture =
                     |> appendFact durable sessionId (Some providerRun)
         }
 
-    /// Write last_words as a normal assistant text part so a completed Life's
-    /// LWR Recent work contains them. Dedicated provenance avoids colliding
+    /// Write last_words as a normal assistant text part so the session's own
+    /// plain transcript contains them. Dedicated provenance avoids colliding
     /// with g:N/turn:M/part:P capture. Caller supplies an already-written blob.
     let captureLastWords
         (journal: AgentJournal option)

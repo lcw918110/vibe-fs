@@ -210,7 +210,6 @@ type SessionRecoveryHost
                     started.Accepted
                     started.ProviderRun
                     started.RequestKind
-                    started.ProjectionChoice
 
             return requirePersistence "start" result
         }
@@ -406,33 +405,6 @@ type SessionRecoveryHost
                     )
         }
 
-    /// provider-attempt-recovery-024: the load phase abandoned a stale Blogger
-    /// open request. Decide every same-session execution still Accepted without
-    /// a provider start; already-terminal keys are counted, never rewritten.
-    let settleStaleBloggerAcceptedExecutions (sessionId: SessionId) : Task<int * int> =
-        task {
-            let current =
-                (AgentJournal.snapshot journal).AgentProjections.ChatExecutions
-                |> ChatExecutionProjection.current
-                |> List.filter (fun state -> state.key.SessionId = sessionId)
-
-            let accepted =
-                current
-                |> List.filter (fun state -> state.startedEvidence.IsNone && state.terminalDisposition.IsNone)
-
-            let alreadyTerminal =
-                current
-                |> List.filter (fun state -> state.terminalDisposition.IsSome)
-                |> List.length
-
-            for state in accepted do
-                let! _ = settleAcceptedBoundaryRejection state.key state.acceptedEvidence
-                ()
-
-            return List.length accepted, alreadyTerminal
-        }
-
-    /// managed-chat-execution-015: the transform refused the provider start
     /// boundary for this exact execution. Terminal keys are idempotent; a key
     /// without an accepted projection is never fabricated. Provider-started
     /// executions belong to the provider phase and are never terminalized
@@ -521,15 +493,11 @@ type SessionRecoveryHost
             let statesToRecover =
                 match event with
                 | ChatExecutionRecoveryLifecycleEvent.ProviderStartBoundaryRejected _ -> []
-                | ChatExecutionRecoveryLifecycleEvent.BloggerStaleRequestAbandoned _ -> []
                 | _ -> statesFor event
 
             match event with
             | ChatExecutionRecoveryLifecycleEvent.ProviderStartBoundaryRejected(key, reason) ->
                 let! _ = settleProviderStartBoundaryRejected key reason
-                ()
-            | ChatExecutionRecoveryLifecycleEvent.BloggerStaleRequestAbandoned sessionId ->
-                let! _ = settleStaleBloggerAcceptedExecutions sessionId
                 ()
             | _ -> ()
 
@@ -579,9 +547,3 @@ type SessionRecoveryHost
     /// "ignored" as the observable decision of this signal.
     member _.SettleProviderStartBoundaryRejected(key: ChatExecutionKey, reason: string) : Task<string> =
         settleProviderStartBoundaryRejected key reason
-
-    /// provider-attempt-recovery-024: the load phase abandoned a stale Blogger
-    /// open request. Returns (settled, alreadyTerminal) for the same-source
-    /// accepted executions.
-    member _.SettleStaleBloggerAcceptedExecutions(sessionId: SessionId) : Task<int * int> =
-        settleStaleBloggerAcceptedExecutions sessionId

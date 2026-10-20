@@ -12,9 +12,10 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Mission.Lifecycle
+open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Repository.Knowledge.Casebook
-open Wanxiangshu.Strength.Persistence
+
 
 module PluginHostWiring =
 
@@ -45,21 +46,26 @@ module PluginHostWiring =
             return settled
         }
 
-    let private acquireFinalizationStore workspaceRoot =
-        try
-            let commonDir = RuntimePath.stateRoot workspaceRoot
-            Ok(WorkspaceEventStore.acquire commonDir)
-        with ex ->
-            Error ex
+    let private acquireFinalizationStore workspaceRoot : Task<Result<IEventStore, exn>> =
+        task {
+            try
+                let! commonDir = RuntimePath.stateRoot workspaceRoot
+                return Ok(WorkspaceEventStore.acquire commonDir)
+            with ex ->
+                return Error ex
+        }
 
     let private tryFinalize settlements workspaceRoot delegateSessionId =
-        match acquireFinalizationStore workspaceRoot with
-        | Ok store -> tryFinalizeWithin settlements workspaceRoot store delegateSessionId
-        | Error cause -> Task.FromResult(CaseFinalizeSettlement.unknown delegateSessionId cause.Message)
+        task {
+            match! acquireFinalizationStore workspaceRoot with
+            | Ok store -> return! tryFinalizeWithin settlements workspaceRoot store delegateSessionId
+            | Error cause -> return CaseFinalizeSettlement.unknown delegateSessionId cause.Message
+        }
 
     /// Composition-root handle for everything the Host needs after boot:
-    /// the ports `HostSignalBootstrap.wire` produced plus the durability
-    /// handle and the shared-terminal acquisition from `PluginHost.createHost`.
+    /// the ports `HostSignalBootstrap.wire` produced plus the shared-terminal
+    /// acquisition from `PluginHost.createHost`.
+
     type Host =
         { EventPort: IEventObservationPort
           SessionPort: ISessionHostPort
@@ -67,8 +73,8 @@ module PluginHostWiring =
           Wired: HostSignalBootstrap.WiredSignals
           SharedTerminalKey: string option
           SharedTerminalPort: Events.HostEventPort option
-          StrengthDurability: StrengthDurabilityPort option
           RootWorkspace: IRootWorkspaceReader
+
           CausalWaitObserver: IWaitObserver }
 
     /// Callback supplier: wiring hands the bound ports, the composition root
@@ -163,16 +169,8 @@ module PluginHostWiring =
                         scope.Sessions.OwnedSessions.Add childId |> ignore
                         scope.Sessions.OwnedSessions.Add parentId |> ignore
 
-                    // STRENGTH-006..008: borrow the same unified EventStore already
-                    // acquired by AgentJournal boot.
-                    let strengthDurability =
-                        match boot.Journal, workspaceDirectory with
-                        | Some _, Some workspace ->
-                            WorkspaceEventStore.tryCurrent (RuntimePath.stateRoot workspace)
-                            |> Option.map StrengthDurability.create
-                        | _ -> None
-
                     let causalWait = CausalWaitProcess.local ()
+
                     let rootWorkspace = RootWorkspaceProcess.local ()
 
                     // Keep the causal wait bridge on the root workspace.
@@ -184,12 +182,6 @@ module PluginHostWiring =
 
                     CasebookLifecycle.setEnabled workspaceDirectory
 
-                    // Strength closures are built here in plugin composition from
-                    // the already-held scope and durability handle; the Host
-                    // boundary only receives the neutral `StrengthHostPorts`.
-                    let strengthPorts =
-                        PluginStrengthPorts.create (Some boot.StrengthScope) strengthDurability
-
                     let! wired =
                         HostSignalBootstrap.wire
                             (observeTurnWorkflowFor sessionPort eventPort rootWorkspace.Reader)
@@ -197,8 +189,8 @@ module PluginHostWiring =
                             eventPort
                             snapshotOpt
                             boot.Journal
-                            strengthPorts
                             scope
+
                             rootWorkspace.Reader
                             input
                             BookkeeperRuntime.tryConsumePromptAuthorization
@@ -220,10 +212,19 @@ module PluginHostWiring =
                           Wired = wired
                           SharedTerminalKey = terminalKey
                           SharedTerminalPort = sharedTerminalPort
-                          StrengthDurability = strengthDurability
                           RootWorkspace = rootWorkspace.Reader
+
                           CausalWaitObserver = causalWait.Observer }
                 }
+
+            let! commonDirOpt =
+                match workspaceDirectory with
+                | Some ws ->
+                    task {
+                        let! dir = RuntimePath.stateRoot ws
+                        return Some dir
+                    }
+                | None -> Task.FromResult None
 
             // Continue keeps the authority run alive while its former physical
             // attempt must still be interrupted. A new root after Accepted is different.
@@ -241,10 +242,8 @@ module PluginHostWiring =
                     |> Option.map (fun profile -> AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
 
                 let workOpt =
-                    workspaceDirectory
-                    |> Option.bind (fun workspace ->
-                        let commonDir = RuntimePath.stateRoot workspace
-
+                    commonDirOpt
+                    |> Option.bind (fun commonDir ->
                         Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value sessionId))
 
                 // Delivered closes the work: the final retirement left no
@@ -261,7 +260,7 @@ module PluginHostWiring =
                     Wanxiangshu.Composition.Durable.UserQuestionJournal.pending durable sessionId)
                 |> Option.isSome
 
-            match
+            match!
                 PluginHost.createHost
                     input
                     boot.PortOpt

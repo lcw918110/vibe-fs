@@ -5,8 +5,6 @@ open System.Collections.Generic
 open System.Threading.Tasks
 open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Turn
-open Wanxiangshu.Context.Companion.Blogger.OpenCode
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Fission.OpenCode
 open Wanxiangshu.Foundation
@@ -220,7 +218,6 @@ module FissionHostSurface =
                     eventPort
                     None
                     None
-                    (PluginBloggerScope() :> IBloggerRuntimeHost)
                     (HashSet<string>())
                     (fun _ -> false)
                     AbortCause.External

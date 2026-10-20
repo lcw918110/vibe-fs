@@ -28,23 +28,30 @@ module ManagerWorkflow =
     let private finishPath = "runtime/manager-finish"
 
     let private lifecycleWork (directory: string option) (sessionId: string) =
-        directory
-        |> Option.bind (fun workspace ->
-            let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
-            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir sessionId)
+        task {
+            match directory with
+            | Some workspace ->
+                let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+                return Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir sessionId
+            | None -> return None
+        }
 
     /// The iteration ordinal as the provider reads it: "1" for the first
     /// Manager on this road, then one more per durable opening. A road with no
     /// view yet (first opening not yet committed) is still the first.
     let private iterationOrdinalText (directory: string option) (sessionId: SessionId) =
-        let ordinal =
-            lifecycleWork directory (SessionId.value sessionId)
-            |> Option.map (fun work ->
-                let retired = work.RoundCount
-                max 1 (retired + if work.ActiveId.IsSome then 1 else 0))
-            |> Option.defaultValue 1
+        task {
+            let! workOpt = lifecycleWork directory (SessionId.value sessionId)
 
-        string ordinal
+            let ordinal =
+                workOpt
+                |> Option.map (fun work ->
+                    let retired = work.RoundCount
+                    max 1 (retired + if work.ActiveId.IsSome then 1 else 0))
+                |> Option.defaultValue 1
+
+            return string ordinal
+        }
 
     /// True when this provider run already produced one of the work's
     /// retirements: the run is retired and its later observations are stale.
@@ -53,8 +60,13 @@ module ManagerWorkflow =
         (sessionId: SessionId)
         (providerRun: ProviderRunIdentity)
         =
-        lifecycleWork directory (SessionId.value sessionId)
-        |> Option.exists (fun work -> List.contains (ProviderRunIdentity.value providerRun) work.RetiredRuns)
+        task {
+            let! workOpt = lifecycleWork directory (SessionId.value sessionId)
+
+            return
+                workOpt
+                |> Option.exists (fun work -> List.contains (ProviderRunIdentity.value providerRun) work.RetiredRuns)
+        }
 
     /// An unreviewed S4 tenure whose confirmation already landed cannot
     /// happen through the library's own gate; treat it as no action.
@@ -71,13 +83,18 @@ module ManagerWorkflow =
     // Algorithm H reads the opening sequence plus tenure, review outcome, and confirmation.
     // S1–S3 do not enter the S4 resource match. Certificates are not an input.
     let private resourceForCurrentAction (directory: string option) (sessionId: SessionId) =
-        match lifecycleWork directory (SessionId.value sessionId) with
-        | None -> None
-        | Some work when work.Sequence <> [ "S4" ] -> None
-        | Some work when work.ActiveId.IsNone -> None
-        | Some work when work.Reviewed |> not -> unreviewedResource work.Confirmed
-        | Some work when not work.Confirmed -> reviewedResource work.ReviewOutcome
-        | Some _ -> Some finishPath
+        task {
+            let! workOpt = lifecycleWork directory (SessionId.value sessionId)
+
+            return
+                match workOpt with
+                | None -> None
+                | Some work when work.Sequence <> [ "S4" ] -> None
+                | Some work when work.ActiveId.IsNone -> None
+                | Some work when work.Reviewed |> not -> unreviewedResource work.Confirmed
+                | Some work when not work.Confirmed -> reviewedResource work.ReviewOutcome
+                | Some _ -> Some finishPath
+        }
 
 
     let private activeResourcePath (directory: string option) (sessionId: SessionId) =
@@ -97,11 +114,11 @@ module ManagerWorkflow =
     /// The closeout substitution reads the confirmation bit from the work the
     /// closeout targets. A missing work is still unconfirmed.
     let private closeoutSubstitutions (turn: ReconciledTurn) =
-        let confirmed =
-            lifecycleWork turn.Directory (SessionId.value turn.SessionId)
-            |> Option.exists (fun work -> work.Confirmed)
-
-        Map [ "closeout", finishCloseoutText confirmed ]
+        task {
+            let! workOpt = lifecycleWork turn.Directory (SessionId.value turn.SessionId)
+            let confirmed = workOpt |> Option.exists (fun work -> work.Confirmed)
+            return Map [ "closeout", finishCloseoutText confirmed ]
+        }
 
     let private sendNudge
         (quiescence: ISessionQuiescenceGate)
@@ -112,29 +129,35 @@ module ManagerWorkflow =
         (turn: ReconciledTurn)
         (resourcePath: string)
         =
-        let substitutions =
-            if resourcePath = assessPath then
-                Map [ "ordinal", iterationOrdinalText turn.Directory turn.SessionId ]
-            elif resourcePath = finishPath then
-                closeoutSubstitutions turn
-            else
-                Map.empty
+        task {
+            let! substitutions =
+                if resourcePath = assessPath then
+                    task {
+                        let! ordinal = iterationOrdinalText turn.Directory turn.SessionId
+                        return Map [ "ordinal", ordinal ]
+                    }
+                elif resourcePath = finishPath then
+                    closeoutSubstitutions turn
+                else
+                    Task.FromResult Map.empty
 
-        HostSessionNudge.trySendIdleGateContinuation
-            quiescence
-            permit
-            sessionPort
-            rootWorkspace
-            turn.SessionId
-            (ProviderProse.documentFor turn.SessionId "work/manager-continue" Map.empty
-             + "\n\n"
-             + ProviderProse.documentFor turn.SessionId resourcePath substitutions)
-            PromptAuthority.ContinuationKind.ManagerGuard
-            turn.Directory
-            (Some journal)
-            (resourcePath + ":" + ProviderRunIdentity.value turn.ProviderRun)
-            turn.ProviderRun
-            PromptDispatcher.AwaitMode.Detached
+            return!
+                HostSessionNudge.trySendIdleGateContinuation
+                    quiescence
+                    permit
+                    sessionPort
+                    rootWorkspace
+                    turn.SessionId
+                    (ProviderProse.documentFor turn.SessionId "work/manager-continue" Map.empty
+                     + "\n\n"
+                     + ProviderProse.documentFor turn.SessionId resourcePath substitutions)
+                    PromptAuthority.ContinuationKind.ManagerGuard
+                    turn.Directory
+                    (Some journal)
+                    (resourcePath + ":" + ProviderRunIdentity.value turn.ProviderRun)
+                    turn.ProviderRun
+                    PromptDispatcher.AwaitMode.Detached
+        }
 
     let private scheduleNudge
         (quiescence: ISessionQuiescenceGate)
@@ -146,8 +169,8 @@ module ManagerWorkflow =
         =
         task {
             // 没读到工作不是完成证据；提醒继续核对任务，而不是悄悄放行自然结束。
-            let resourcePath =
-                activeResourcePath turn.Directory turn.SessionId |> Option.defaultValue workPath
+            let! resourceOpt = activeResourcePath turn.Directory turn.SessionId
+            let resourcePath = resourceOpt |> Option.defaultValue workPath
 
             let! outcome = sendNudge quiescence permit sessionPort rootWorkspace journal turn resourcePath
 
@@ -168,16 +191,20 @@ module ManagerWorkflow =
     /// and the committed retirement fence carries the provider run that made it;
     /// no run identity is invented, and a work with no retirement (the first
     /// tenure) gets its authority from the job's own prompt, not from here.
+    let private unreviewedS4Retirement (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
+        match work.Sequence, work.ActiveId, List.tryLast work.Retirements with
+        | [ "S4" ], Some _, Some retirement when not work.Reviewed ->
+            Some(retirement.RetirementId, retirement.Fence.ProviderRunId)
+        | _ -> None
+
     let private successorPromptContext
         (workspaceDirectory: string option)
         (sessionIdText: string)
-        : (string * string) option =
-        lifecycleWork workspaceDirectory sessionIdText
-        |> Option.bind (fun work ->
-            match work.Sequence, work.ActiveId, List.tryLast work.Retirements with
-            | [ "S4" ], Some _, Some retirement when not work.Reviewed ->
-                Some(retirement.RetirementId, retirement.Fence.ProviderRunId)
-            | _ -> None)
+        : Task<(string * string) option> =
+        task {
+            let! workOpt = lifecycleWork workspaceDirectory sessionIdText
+            return workOpt |> Option.bind unreviewedS4Retirement
+        }
 
     /// Read-only probe (the `loopSignalOf` / `publishReviewOf` pattern): the
     /// successor-prompt occasion this Manager session's work currently owes,
@@ -185,46 +212,52 @@ module ManagerWorkflow =
     /// `present = false` is the fail-closed answer for a work that owes no
     /// successor prompt: a first tenure with no retirement, a work whose open
     /// tenure is already reviewed, and every non-S4 sequence.
-    let successorPromptContextOf (workspaceDirectory: string) (sessionIdText: string) : obj =
-        match successorPromptContext (Some workspaceDirectory) sessionIdText with
-        | Some(retirementId, providerRunId) ->
-            box
-                {| present = true
-                   retirementId = retirementId
-                   providerRunId = providerRunId |}
-        | None ->
-            box
-                {| present = false
-                   retirementId = ""
-                   providerRunId = "" |}
+    let successorPromptContextOf (workspaceDirectory: string) (sessionIdText: string) : Task<obj> =
+        task {
+            let! contextOpt = successorPromptContext (Some workspaceDirectory) sessionIdText
+
+            return
+                match contextOpt with
+                | Some(retirementId, providerRunId) ->
+                    box
+                        {| present = true
+                           retirementId = retirementId
+                           providerRunId = providerRunId |}
+                | None ->
+                    box
+                        {| present = false
+                           retirementId = ""
+                           providerRunId = "" |}
+        }
 
     /// One durable opening at an observed head. DurableWorkHost owns race
     /// reconciliation: a conflicting or unknown append is accepted only when
     /// a reread proves the same Manager work now exists.
-    let private openManagerWorkAtHead (sessionId: string) (directory: string) (head: int64) : unit =
-        // A plugin may enter from a subdirectory. The work belongs to the
-        // actual worktree root, not that entry directory or the common Git dir.
-        let root =
-            Wanxiangshu.Git.GitSubject.execIn directory [| "rev-parse"; "--show-toplevel" |]
-            |> fun path -> path.TrimEnd('\r', '\n')
+    let private openManagerWorkAtHead (sessionId: string) (directory: string) (head: int64) : Task<unit> =
+        task {
+            // A plugin may enter from a subdirectory. The work belongs to the
+            // actual worktree root, not that entry directory or the common Git dir.
+            let! rawRoot = Wanxiangshu.Git.GitSubject.execIn directory [| "rev-parse"; "--show-toplevel" |]
+            let root = rawRoot.TrimEnd('\r', '\n')
 
-        if System.String.IsNullOrWhiteSpace root then
-            invalidOp "Manager lifecycle opening failed: Git did not identify a worktree root"
+            if System.String.IsNullOrWhiteSpace root then
+                invalidOp "Manager lifecycle opening failed: Git did not identify a worktree root"
 
-        let gitCommonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot root
+            let! gitCommonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot root
 
-        match
-            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.ensureOpened
-                gitCommonDir
-                sessionId
-                (sessionId + ":open:" + string head)
-                root
-                (Wanxiangshu.Mission.Lifecycle.DurableWorkHost.executionSequence ())
-                sessionId
-                (float head)
-        with
-        | Ok _ -> ()
-        | Error reason -> invalidOp ("Manager lifecycle opening failed: " + reason)
+            match
+                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.ensureOpened
+                    gitCommonDir
+                    sessionId
+                    (sessionId + ":open:" + string head)
+                    root
+                    (Wanxiangshu.Mission.Lifecycle.DurableWorkHost.executionSequence ())
+                    sessionId
+                    (float head)
+            with
+            | Ok _ -> ()
+            | Error reason -> invalidOp ("Manager lifecycle opening failed: " + reason)
+        }
 
     let ensureManagerWorkOpened
         (workspaceDirectory: string option)
@@ -232,10 +265,9 @@ module ManagerWorkflow =
         (sessionIdTextOpt: string option)
         : Task<unit> =
         task {
-            match sessionIdTextOpt, workspaceDirectory with
-            | None, _
-            | _, None -> return ()
-            | Some sessionId, Some root -> observedHead |> Option.iter (openManagerWorkAtHead sessionId root)
+            match sessionIdTextOpt, workspaceDirectory, observedHead with
+            | Some sessionId, Some root, Some head -> do! openManagerWorkAtHead sessionId root head
+            | _ -> return ()
         }
 
     let private deliverLoopPrompt
@@ -248,11 +280,10 @@ module ManagerWorkflow =
         (terminalProviderRunId: string)
         =
         task {
+            let! ordinal = iterationOrdinalText workspaceDirectory sessionId
+
             let loopPromptText =
-                ProviderProse.documentFor
-                    sessionId
-                    "runtime/manager-assess"
-                    (Map [ "ordinal", iterationOrdinalText workspaceDirectory sessionId ])
+                ProviderProse.documentFor sessionId "runtime/manager-assess" (Map [ "ordinal", ordinal ])
 
             let terminalRun = ProviderRunIdentity.create terminalProviderRunId
 
@@ -284,7 +315,7 @@ module ManagerWorkflow =
         (sessionId: SessionId)
         =
         task {
-            match successorPromptContext workspaceDirectory (SessionId.value sessionId) with
+            match! successorPromptContext workspaceDirectory (SessionId.value sessionId) with
             | Some(retirementId, providerRunId) ->
                 do!
                     deliverLoopPrompt
@@ -346,20 +377,23 @@ module ManagerWorkflow =
         (journal: AgentJournal option)
         (context: ReconciledTurnContext)
         : Task =
-        match journal, context.Failure, context.Turn.Outcome, context.Quiescence with
-        | Some durable, _, _, _ when
-            UserQuestionJournal.suppressesTurn
-                durable
-                context.Turn.SessionId
-                context.Turn.AuthorityRootUserMessageId
-                context.Turn.ProviderRun
-            ->
-            Task.FromResult()
-        | _, _, _, _ when isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun ->
-            Task.FromResult()
-        | Some durable, None, ReconcileProgram.TurnCompleted, Some permit ->
-            scheduleNudge quiescence permit sessionPort rootWorkspace durable context.Turn
-        | _ -> Task.FromResult()
+        task {
+            let! retired = isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun
+
+            match retired, journal, context.Failure, context.Turn.Outcome, context.Quiescence with
+            | true, _, _, _, _ -> return ()
+            | false, Some durable, _, _, _ when
+                UserQuestionJournal.suppressesTurn
+                    durable
+                    context.Turn.SessionId
+                    context.Turn.AuthorityRootUserMessageId
+                    context.Turn.ProviderRun
+                ->
+                return ()
+            | false, Some durable, None, ReconcileProgram.TurnCompleted, Some permit ->
+                return! scheduleNudge quiescence permit sessionPort rootWorkspace durable context.Turn
+            | _ -> return ()
+        }
 
     let observe
         (quiescence: ISessionQuiescenceGate)
@@ -369,18 +403,18 @@ module ManagerWorkflow =
         (observeOrdinary: ReconciledTurnContext -> Task)
         (context: ReconciledTurnContext)
         : Task =
-        match
-            isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun,
-            context.Failure,
-            context.Turn.Outcome
-        with
-        | true, _, _ -> Task.FromResult()
-        | false, Some _, _ -> observeOrdinary context
-        | false, None, ReconcileProgram.TurnInProgress -> Task.FromResult()
-        // provider-attempt-recovery-008: an unfinished manager turn is content damage, not a
-        // reason to stop. It earns the same bounded Interaction Repair as every
-        // other repairable role instead of being silently dropped.
-        | false, None, ReconcileProgram.TurnNeedsContinuation _ -> observeOrdinary context
-        | false, None, ReconcileProgram.TurnCompleted ->
-            observeIdle quiescence sessionPort rootWorkspace journal context
-        | false, None, _ -> observeOrdinary context
+        task {
+            let! retired = isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun
+
+            match retired, context.Failure, context.Turn.Outcome with
+            | true, _, _ -> return ()
+            | false, Some _, _ -> return! observeOrdinary context
+            | false, None, ReconcileProgram.TurnInProgress -> return ()
+            // provider-attempt-recovery-008: an unfinished manager turn is content damage, not a
+            // reason to stop. It earns the same bounded Interaction Repair as every
+            // other repairable role instead of being silently dropped.
+            | false, None, ReconcileProgram.TurnNeedsContinuation _ -> return! observeOrdinary context
+            | false, None, ReconcileProgram.TurnCompleted ->
+                return! observeIdle quiescence sessionPort rootWorkspace journal context
+            | false, None, _ -> return! observeOrdinary context
+        }

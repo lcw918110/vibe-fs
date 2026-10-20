@@ -98,7 +98,7 @@ and internal SyncDelegateInvocation =
         Batch: SyncDelegateBatch option
         Completion: TaskCompletionSource<Result<SyncDelegateInvocationResult, string>>
         /// EXEC-031: XTrace head (one-past last part, 0 when empty) captured at
-        /// send. Inclusive start of the per-batch WorkRecord range; the
+        /// send. Inclusive start of the per-batch view range; the
         /// exclusive end is the same head captured at completion.
         mutable StartCursor: int64 option
     }

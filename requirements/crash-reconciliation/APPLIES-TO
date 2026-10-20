@@ -16,7 +16,6 @@
 /src/Wanxiangshu/OpenCode/Host/LoadRecoverySurface.*
 /src/Wanxiangshu/OpenCode/Host/SessionBindingRecovery.*
 /src/Wanxiangshu/Execution/Delegation/DurableChildLookup.*
-/src/Wanxiangshu/Context/Companion/Blogger/Runtime/Abandon.*
 /src/Wanxiangshu/Change/Runtime.fs
 /src/Wanxiangshu/Execution/Session/AgentCompletion.fs
 /src/Wanxiangshu/Execution/Session/RecoveryClosureProjection.fs

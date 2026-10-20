@@ -45,7 +45,6 @@ test('WHAT[work-021] Plan separates human ask from devops investigation and deni
     'Pty',
     'Fork',
     'Fission',
-    'Chronicle',
     'Fetch',
     'Finality',
     'BashHoneypot',

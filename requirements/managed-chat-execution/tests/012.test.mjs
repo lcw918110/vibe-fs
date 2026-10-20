@@ -40,7 +40,6 @@ const action = (kind, cut, extra = {}) => ({
     },
     origin: 'HumanRoot',
     requestKind: 'work-main',
-    projectionChoice: { kind: 'UseCommittedEpoch' },
   },
   appendOutcome: 'Committed',
   ...extra,
@@ -139,7 +138,6 @@ const evidence = {
   providerRun: 'provider-crash-property',
   origin: 'HumanRoot',
   requestKind: 'work-main',
-  projectionChoice: { kind: 'UseCommittedEpoch' },
 }
 const action = (kind, extra = {}) => ({ kind, evidence, appendOutcome: 'Committed', ...extra })
 
@@ -258,7 +256,6 @@ const evidenceSeed = (sessionId, physicalId) => ({
   providerRun: `provider-${sessionId}`,
   origin: 'HumanRoot',
   requestKind: 'work-main',
-  projectionChoice: { kind: 'UseCommittedEpoch' },
 })
 const action = (evidence, kind, extra = {}) => ({ kind, evidence, appendOutcome: 'Committed', ...extra })
 

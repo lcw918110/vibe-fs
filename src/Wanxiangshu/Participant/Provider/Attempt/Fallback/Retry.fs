@@ -24,7 +24,7 @@ type RetryPorts =
     { Admit: ProviderRecoveryAuthorization -> Task<Result<FailureAdmissionOutcome, string>>
       Redispatch: ProviderRecoveryAuthorization -> RetryAttempt -> Task<RetryVerdict> }
 
-/// Single retry engine shared by the ordinary turn path, Blogger recovery and
+/// Single retry engine shared by the ordinary turn path and
 /// dedicated delegate children (delegation-023 / execution-failure-policy-003 / provider-attempt-recovery-019).
 module Retry =
 

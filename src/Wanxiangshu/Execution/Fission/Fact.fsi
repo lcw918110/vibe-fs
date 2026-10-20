@@ -13,8 +13,8 @@ module FissionFact =
                LaneCount: int
                LaneSessions: SessionId list
                LanePrompts: string list
-               OwnerWorkRecordRef: BlobRef
-               OwnerWorkRecordDigest: BlobDigest
+               OwnerViewRef: BlobRef
+               OwnerViewDigest: BlobDigest
                PreFissionCompletionIds: string list |} ->
             AgentFact
 
@@ -25,8 +25,8 @@ module FissionFact =
                LaneIndex: int
                LaneSessionId: SessionId
                ProviderRun: ProviderRunIdentity
-               WorkRecordRef: BlobRef
-               WorkRecordDigest: BlobDigest |} ->
+               ViewRef: BlobRef
+               ViewDigest: BlobDigest |} ->
             AgentFact
 
     val inline FissionCompletionCaptured:
@@ -61,8 +61,8 @@ module FissionFact =
                LaneIndex: int
                LaneSessionId: SessionId
                PromptKey: PromptKey
-               AggregateWorkRecordRef: BlobRef
-               AggregateWorkRecordDigest: BlobDigest |} ->
+               AggregateViewRef: BlobRef
+               AggregateViewDigest: BlobDigest |} ->
             AgentFact
 
     val inline FissionTakeoverStarted:
@@ -72,8 +72,8 @@ module FissionFact =
                LaneIndex: int
                LaneSessionId: SessionId
                PhysicalUserMessageId: PhysicalUserMessageId
-               AggregateWorkRecordRef: BlobRef
-               AggregateWorkRecordDigest: BlobDigest |} ->
+               AggregateViewRef: BlobRef
+               AggregateViewDigest: BlobDigest |} ->
             AgentFact
 
     val inline FissionConverged:
@@ -82,8 +82,8 @@ module FissionFact =
                OwnerSessionId: SessionId
                TerminalLaneSessionId: SessionId
                TerminalProviderRun: ProviderRunIdentity
-               AggregateWorkRecordRef: BlobRef
-               AggregateWorkRecordDigest: BlobDigest |} ->
+               AggregateViewRef: BlobRef
+               AggregateViewDigest: BlobDigest |} ->
             AgentFact
 
     val inline FissionFailed:

@@ -2,9 +2,6 @@ namespace Wanxiangshu.OpenCode
 
 open System
 open System.Threading.Tasks
-open Wanxiangshu.Context.Companion.Blogger.OpenCode
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer.Cycle
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Session.Attachment
 open Wanxiangshu.Execution.Session.ChatExecution
@@ -44,9 +41,6 @@ type PluginRuntimeScope =
 
     member AttachScopeDispose: dispose: (unit -> unit) -> unit
 
-    /// Composition-of-owners: Blogger parking/flight/drain state lives in its own scope.
-    member Blogger: PluginBloggerScope
-    member BloggerRuntimeHost: IBloggerRuntimeHost
 
     /// Composition-of-owners: per-instance session registries live in their own scope.
     member Sessions: PluginSessionScope

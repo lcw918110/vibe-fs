@@ -1,2 +1,0 @@
-One sharp, self-contained declarative sentence answering charge: state the conclusion that is now safe to treat as fact. Do not prefix it with “confirmed,” “clarified,” “established,” or “it is now clear.” Distinguish occurrence, mutation, and verification, and state any remaining boundary directly.
-Land it like a verdict: the conclusion must follow directly from occurrence and may not be broader than the facts.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { withForkRuntime, toolModule } from './support/fork-runtime.mjs'
 import * as forkTool from '../../../dist/Execution/Delegation/Fork/OpenCode/ToolSurface.js'
 
-test('WHAT[delegation-024] pre-join resume preserves both public join WorkRecords', async () => {
+test('WHAT[delegation-024] pre-join resume preserves both public join delivered views', async () => {
   const owner = 'prejoin-retained-delivery'
   await withForkRuntime(owner, async runtime => {
     const first = forkTool.executeManagerFork(runtime, toolModule, owner, 'engineer', 'Ada', 'FIRST')
@@ -42,9 +42,9 @@ test('WHAT[delegation-024] child completion record comes from delivered value an
     assert.equal(deliveredReceipt.records.length, 1)
     assert.equal(deliveredReceipt.records[0].name, 'Ada')
     assert.equal(deliveredReceipt.records[0].status, 'completed')
-    assert.match(deliveredReceipt.records[0].workRecord, /summary = "DELIVERED-RECORD"/)
-    assert.match(deliveredReceipt.records[0].workRecord, /files = 2/)
-    assert.doesNotMatch(deliveredReceipt.records[0].workRecord, /RAW-PROSE-IGNORED/)
+    assert.match(deliveredReceipt.records[0].view, /summary = "DELIVERED-RECORD"/)
+    assert.match(deliveredReceipt.records[0].view, /files = 2/)
+    assert.doesNotMatch(deliveredReceipt.records[0].view, /RAW-PROSE-IGNORED/)
 
     const second = forkTool.executeManagerResume(runtime, toolModule, owner, '', 'Ada', 'UNDELIVERED-CHARGE')
     await forkTool.awaitPromptCount(runtime, 2)
@@ -57,7 +57,7 @@ test('WHAT[delegation-024] child completion record comes from delivered value an
     assert.equal(undeliveredReceipt.records.length, 1)
     assert.equal(undeliveredReceipt.records[0].name, 'Ada')
     assert.equal(undeliveredReceipt.records[0].status, 'undelivered')
-    assert.equal(undeliveredReceipt.records[0].workRecord, '')
+    assert.equal(undeliveredReceipt.records[0].view, '')
   })
 })
 
@@ -223,7 +223,7 @@ test('WHAT[delegation-024] Engineer reuse sends parent delta waits for its own r
   await verifyReusableHandoff('Engineer')
 })
 
-test('WHAT[delegation-024] DevOps completion is claimed by HandleTurn and its LWR returns to the caller', async () => {
+test('WHAT[delegation-024] DevOps completion is claimed by HandleTurn and its delivered view returns to the caller', async () => {
   await verifyReusableHandoff('DevOps')
 })
 }

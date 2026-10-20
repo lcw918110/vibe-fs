@@ -7,16 +7,13 @@
     <WanxiangshuCompileShard>enforcer-catalog-resource</WanxiangshuCompileShard>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.behavior-diagnosis.enforcer-catalog.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-promptresources.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-runtimeresources.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.distribution.assemblyinfo.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.participant-identity.foundation-roles.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.language.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-llm-facing.fsproj"/>
-    <Compile Include="Resources/EnforcerCatalogResource.fsi"/>
-    <Compile Include="Resources/EnforcerCatalogResource.fs"/>
-    <Compile Include="Resources/RuntimeResourceAssembly.fsi"/>
-    <Compile Include="Resources/RuntimeResourceAssembly.fs"/>
+    <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-promptresources.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-runtimeresources.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.distribution.assemblyinfo.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.participant-identity.foundation-roles.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.language.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-llm-facing.fsproj" />
+    <Compile Include="Resources/RuntimeResourceAssembly.fsi" />
+    <Compile Include="Resources/RuntimeResourceAssembly.fs" />
   </ItemGroup>
 </Project>

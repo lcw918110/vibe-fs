@@ -248,10 +248,6 @@ module Envelope =
     /// K2: BlogObservationCommitted 手写分流。新字节以 TipName 为 canonical
     /// 键；tip v2 时代旧字节以 TipRuleId 兜底（两者皆缺 → 拒绝，与 tip v2
     /// clean break 语义一致）。FieldNameAtCommit 不读；TipTextRef /
-    /// TipTextDigest 为可选读法（旧字节 → None）。其余 case 仍走 auto。
-    let private bloggerRequestIdDecoder =
-        taggedStringDecoder "BloggerRequestId" BloggerRequestId.create
-
     let private int64TaggedDecoder expected create : Decoder<'a> =
         Decode.index 0 Decode.string
         |> Decode.andThen (fun actual ->
@@ -266,98 +262,12 @@ module Envelope =
     let private prefixEpochIdDecoder =
         int64TaggedDecoder "PrefixEpochId" PrefixEpochId.create
 
-    let private blogObservationCommittedFieldsDecoder =
-        Decode.object (fun get ->
-            {| SessionId = get.Required.Field "SessionId" sessionIdDecoder
-               BloggerSessionId = get.Required.Field "BloggerSessionId" sessionIdDecoder
-               RequestId = get.Required.Field "RequestId" bloggerRequestIdDecoder
-               FrameEpochId = get.Required.Field "FrameEpochId" frameEpochIdDecoder
-               PreviousIngestedThroughSequence = get.Required.Field "PreviousIngestedThroughSequence" Decode.int64
-               NextIngestedThroughSequence = get.Required.Field "NextIngestedThroughSequence" Decode.int64
-               PreviousCoverableTurnCutoffExclusive =
-                get.Required.Field "PreviousCoverableTurnCutoffExclusive" Decode.int
-               NextCoverableTurnCutoffExclusive = get.Required.Field "NextCoverableTurnCutoffExclusive" Decode.int
-               NextCoveredPrefixDigest = get.Required.Field "NextCoveredPrefixDigest" Decode.string
-               TextRef = get.Required.Field "TextRef" blobRefDecoder
-               TextDigest = get.Required.Field "TextDigest" blobDigestDecoder
-               ProviderRun = get.Required.Field "ProviderRun" providerRunIdentityDecoder
-               ToolCallIds = get.Required.Field "ToolCallIds" (Decode.list toolCallIdDecoder)
-               TipName = get.Optional.Field "TipName" (Decode.option Decode.string) |> Option.bind id
-               TipRuleId = get.Optional.Field "TipRuleId" (Decode.option Decode.string) |> Option.bind id
-               TipTextRef = get.Optional.Field "TipTextRef" (Decode.option blobRefDecoder) |> Option.bind id
-               TipTextDigest =
-                get.Optional.Field "TipTextDigest" (Decode.option blobDigestDecoder)
-                |> Option.bind id
-               EvidenceRef =
-                get.Optional.Field "EvidenceRef" (Decode.option blobRefDecoder)
-                |> Option.bind id
-               ObservedPrefixEpochId = get.Required.Field "ObservedPrefixEpochId" prefixEpochIdDecoder |})
-
-    let private blogObservationCommittedPayloadDecoder =
-        blogObservationCommittedFieldsDecoder
-        |> Decode.andThen (fun fields ->
-            let tipName =
-                match fields.TipName with
-                | Some name -> Some name
-                | None -> fields.TipRuleId
-
-            match tipName with
-            | None -> Decode.fail "BlogObservationCommitted requires TipName (or legacy TipRuleId)"
-            | Some name ->
-                Decode.succeed
-                    {| SessionId = fields.SessionId
-                       BloggerSessionId = fields.BloggerSessionId
-                       RequestId = fields.RequestId
-                       FrameEpochId = fields.FrameEpochId
-                       PreviousIngestedThroughSequence = fields.PreviousIngestedThroughSequence
-                       NextIngestedThroughSequence = fields.NextIngestedThroughSequence
-                       PreviousCoverableTurnCutoffExclusive = fields.PreviousCoverableTurnCutoffExclusive
-                       NextCoverableTurnCutoffExclusive = fields.NextCoverableTurnCutoffExclusive
-                       NextCoveredPrefixDigest = fields.NextCoveredPrefixDigest
-                       TextRef = fields.TextRef
-                       TextDigest = fields.TextDigest
-                       ProviderRun = fields.ProviderRun
-                       ToolCallIds = fields.ToolCallIds
-                       TipName = name
-                       TipTextRef = fields.TipTextRef
-                       TipTextDigest = fields.TipTextDigest
-                       EvidenceRef = fields.EvidenceRef
-                       ObservedPrefixEpochId = fields.ObservedPrefixEpochId |})
-
-    let private blogObservationCommittedDecoder: Decoder<ContextFactCases> =
-        Decode.index 1 blogObservationCommittedPayloadDecoder
-        |> Decode.map ContextFactCases.BlogObservationCommitted
-
     let private contextFactDecoder: Decoder<ContextFactCases> =
-        Decode.index 0 Decode.string
-        |> Decode.andThen (function
-            | "BlogObservationCommitted" -> blogObservationCommittedDecoder
-            | _ -> Decode.Auto.generateDecoderCached<ContextFactCases> (extra = extra))
-
-    let private tipPresentationDecoder =
-        Decode.Auto.generateDecoderCached<TipPresentation> (extra = extra)
-
-    /// TipGuidanceDelivered gained `OccurrenceId` (occurrence frontier, WHAT
-    /// guidance-delivery-001). Legacy facts without the field decode with
-    /// OccurrenceId = None and can only restore coverage, never the frontier.
-    let private tipGuidanceDeliveredPayloadDecoder =
-        Decode.object (fun get ->
-            {| SessionId = get.Required.Field "SessionId" sessionIdDecoder
-               TipName = get.Required.Field "TipName" Decode.string
-               OccurrenceId =
-                get.Optional.Field "OccurrenceId" (Decode.option Decode.string)
-                |> Option.bind id
-               Presentation = get.Required.Field "Presentation" tipPresentationDecoder |})
-
-    let private tipGuidanceDeliveredDecoder: Decoder<HostFactCases> =
-        Decode.index 1 tipGuidanceDeliveredPayloadDecoder
-        |> Decode.map HostFactCases.TipGuidanceDelivered
+        Decode.Auto.generateDecoderCached<ContextFactCases> (extra = extra)
 
     let private hostFactDecoder: Decoder<HostFactCases> =
         Decode.index 0 Decode.string
-        |> Decode.andThen (function
-            | "TipGuidanceDelivered" -> tipGuidanceDeliveredDecoder
-            | _ -> Decode.Auto.generateDecoderCached<HostFactCases> (extra = extra))
+        |> Decode.andThen (fun _ -> Decode.Auto.generateDecoderCached<HostFactCases> (extra = extra))
 
     let private fissionFactDecoder =
         Decode.Auto.generateDecoderCached<FissionFactCases> (extra = extra)

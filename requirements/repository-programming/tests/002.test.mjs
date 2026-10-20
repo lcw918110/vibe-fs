@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { rolePredicate } from '../../../dist/OpenCode/Tools/ToolRegistrySurface.js'
 import { allRoleLabels } from '../../../dist/Foundation/RolesSurface.js'
 
@@ -26,19 +23,9 @@ test('WHAT[repository-programming-002] registered_js_tools_match_js_tool_generat
 }
 import {
   generate,
-  isGeneratedToolName,
   memberBinding,
 } from '../../../dist/Repository/Programming/Js/GeneratorSurface.js'
 import { permissions as rolePermissions } from '../../../dist/Participant/Persona/OfficeCapabilitySurface.js'
-import {
-  execute,
-  caseName,
-  render,
-} from '../../../dist/Repository/Programming/Js/WorkflowSurface.js'
-import {
-  installDelegationHost,
-  clearDelegationHost,
-} from '../../../dist/Repository/Programming/Js/RuntimeSurface.js'
 
 const caps = (...permissions) => permissions
 
@@ -52,8 +39,7 @@ const isSome = (value) => value !== null
 
 const PERMISSION_NAMES = [
   'Fork', 'Join', 'Horizon', 'Advisor', 'TodoWrite', 'Fission', 'Read', 'Write', 'Edit', 'Fetch', 'Glob', 'Grep', 'Move',
-  'Remove', 'Inspect', 'Behavior', 'Exec', 'Pty', 'Network', 'ReviewAssessment', 'Chronicle',
-  'Finality', 'BashHoneypot',
+  'Remove', 'Inspect', 'Behavior', 'Exec', 'Pty', 'Network', 'ReviewAssessment',
 ]
 
 const toolPermissionByName = Object.fromEntries(PERMISSION_NAMES.map((n) => [n, n]))
@@ -68,10 +54,11 @@ const fsPermissionsOf = (role) =>
 const MEMBERS_BY_PERMISSION = {
   Read: ['cat', 'stat', 'whereAll', 'where'],
   Glob: ['ls'],
+  Grep: ['rg'],
   Write: ['write', 'mkdir'],
   Move: ['mv'],
   Remove: ['rm'],
-  Exec: ['run'],
+  Exec: ['call'],
   Fork: ['fork', 'dag'],
   Join: ['join'],
   Fission: ['fission'],
@@ -85,11 +72,12 @@ const BINDING_BY_MEMBER = {
   mv: 'js.mv',
   cat: 'js.cat',
   ls: 'js.ls',
+  rg: 'js.rg',
   stat: 'js.stat',
   mkdir: 'js.mkdir',
   whereAll: 'js.whereAll',
   where: 'js.where',
-  run: 'js.run',
+  call: 'js.call',
   fork: 'js.fork',
   dag: 'js.dag',
   join: 'js.join',
@@ -100,8 +88,8 @@ const BINDING_BY_MEMBER = {
 
 const MEMBER_ORDER = [
   'write', 'rm', 'mv',
-  'cat', 'ls', 'stat', 'mkdir', 'whereAll', 'where',
-  'run',
+  'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where',
+  'call',
   'fork', 'dag', 'join', 'fission', 'horizon', 'advisor',
 ]
 
@@ -111,9 +99,16 @@ const expectedMembers = (permissionNames) =>
     .sort((left, right) => MEMBER_ORDER.indexOf(left) - MEMBER_ORDER.indexOf(right))
 
 // Sugar members are compiled inside the base class itself instead of
-// delegating to `_api` (dag builds fork waves plus one join; run is the Exec
-// Runnable gate), so their base-class layer is the public method they declare.
-const SUGAR_MEMBERS = ['dag', 'run']
+// Sugar members are compiled inside the base class itself instead of
+// delegating to `_api` (dag builds fork waves plus one join), so their base-class
+// layer is the public method they declare.
+const SUGAR_MEMBERS = ['dag']
+
+// The Exec member is NOT on the base class: it is a member of the global `js`
+// namespace only (`js.call(...)`), because the base class already owns `run()`
+// as the model's program entry. Its binding still resolves, its description and
+// example still name it, and the base class must not shadow it.
+const GLOBAL_MEMBERS = ['call']
 
 const layersOf = (s) =>
   Object.fromEntries(
@@ -136,7 +131,7 @@ test('WHAT[repository-programming-002] JS004_capability_exactness_plus_one_ultra
   const layers = layersOf(result)
   assert.deepEqual(
     Object.keys(layers).sort(),
-    ['cat', 'ls', 'mkdir', 'stat', 'where', 'whereAll', 'write'],
+    ['cat', 'ls', 'mkdir', 'rg', 'stat', 'where', 'whereAll', 'write'],
   )
   for (const [member, layer] of Object.entries(layers)) {
     assert.equal(layer.inBaseClass, true, `${member} in base class`)
@@ -154,13 +149,14 @@ test('WHAT[repository-programming-002] JS004_capability_exactness_plus_one_ultra
   assert.equal(result.description.includes('_api'), false)
   assert.equal(result.description.includes('__jsFailure'), false)
   assert.equal(result.examples.length, 1, 'one responsibility-shaped Ultra Example')
-  assert.match(result.examples[0], /RetryPolicy/)
+  assert.match(result.examples[0], /this\.rg\(/)
+  assert.match(result.examples[0], /oldApi/)
 })
 
 test('WHAT[repository-programming-002] JS004_absent_capability_is_absent_in_all_four_layers', () => {
   const result = surface('Engineer', ['Read', 'Glob', 'Grep']) // no Edit / Write
   assert.equal(isSome(result), true)
-  assert.deepEqual(memberNames(result), ['cat', 'ls', 'stat', 'whereAll', 'where'])
+  assert.deepEqual(memberNames(result), ['cat', 'ls', 'rg', 'stat', 'whereAll', 'where'])
   assert.equal(result.description.includes('edit(path'), false)
   assert.equal(result.description.includes('rewrite(path'), false)
   assert.equal(result.description.includes('write(path, content)'), false)
@@ -219,7 +215,6 @@ test('WHAT[repository-programming-002] JS004_member_gate_binds_present_members_o
   assert.equal(memberBinding('Engineer', perms, 'edit'), undefined)
   assert.equal(memberBinding('Engineer', perms, 'rewrite'), undefined)
   assert.equal(memberBinding('Engineer', perms, 'write'), undefined)
-  assert.equal(memberBinding('Blogger', caps(ToolPermission.Chronicle), 'cat'), undefined)
 })
 
 test('WHAT[repository-programming-002] JS004_lying_generator_counterexample_is_rejected', () => {
@@ -265,14 +260,22 @@ test('WHAT[repository-programming-002] JS004_horizon_projects_four_layers_for_ev
     assert.equal(layers.horizon.binding, 'js.horizon', `${role}: horizon binding key`)
     assert.equal(layers.horizon.example.includes('horizon'), true, `${role}: horizon canonical example`)
     for (const [member, layer] of Object.entries(layers)) {
-      const baseClassMarker = SUGAR_MEMBERS.includes(member)
-        ? `async ${member}(`
-        : `this._api.${layer.binding}`
-      assert.equal(
-        result.baseClassSource.includes(baseClassMarker),
-        true,
-        `${role}: ${member} in base class`,
-      )
+      if (GLOBAL_MEMBERS.includes(member)) {
+        assert.equal(
+          result.baseClassSource.includes(`this._api.${layer.binding}`),
+          false,
+          `${role}: ${member} must not land on the base class`,
+        )
+      } else {
+        const baseClassMarker = SUGAR_MEMBERS.includes(member)
+          ? `async ${member}(`
+          : `this._api.${layer.binding}`
+        assert.equal(
+          result.baseClassSource.includes(baseClassMarker),
+          true,
+          `${role}: ${member} in base class`,
+        )
+      }
       assert.equal(layer.inDescription, true, `${role}: ${member} in description`)
       assert.equal(layer.binding, BINDING_BY_MEMBER[member], `${role}: ${member} binding`)
     }
@@ -303,14 +306,22 @@ test('WHAT[repository-programming-002] JS004_advisor_projects_four_layers_for_ev
     assert.equal(layers.advisor.binding, 'js.advisor', `${role}: advisor binding key`)
     assert.equal(layers.advisor.example.includes('advisor'), true, `${role}: advisor canonical example`)
     for (const [member, layer] of Object.entries(layers)) {
-      const baseClassMarker = SUGAR_MEMBERS.includes(member)
-        ? `async ${member}(`
-        : `this._api.${layer.binding}`
-      assert.equal(
-        result.baseClassSource.includes(baseClassMarker),
-        true,
-        `${role}: ${member} in base class`,
-      )
+      if (GLOBAL_MEMBERS.includes(member)) {
+        assert.equal(
+          result.baseClassSource.includes(`this._api.${layer.binding}`),
+          false,
+          `${role}: ${member} must not land on the base class`,
+        )
+      } else {
+        const baseClassMarker = SUGAR_MEMBERS.includes(member)
+          ? `async ${member}(`
+          : `this._api.${layer.binding}`
+        assert.equal(
+          result.baseClassSource.includes(baseClassMarker),
+          true,
+          `${role}: ${member} in base class`,
+        )
+      }
       assert.equal(layer.inDescription, true, `${role}: ${member} in description`)
       assert.equal(layer.binding, BINDING_BY_MEMBER[member], `${role}: ${member} binding`)
     }
@@ -324,82 +335,15 @@ test('WHAT[repository-programming-002] JS004_advisor_projects_four_layers_for_ev
   assert.deepEqual(expectedMembers([ToolPermission.Advisor]), ['advisor'])
 
   // Absence: a role without the permission never projects the member — the
-  // advisor seat itself holds no permission at all, and blogger/plan keep
-  // their surfaces advisor-free.
+  // advisor seat itself holds no permission at all, and plan keeps its
+  // surface advisor-free.
   const without = allRoleLabels.filter((role) => !rolePermissions(role.toLowerCase()).includes('Advisor'))
-  assert.deepEqual(without, ['advisor', 'blogger', 'plan'], 'the roles without ToolPermission.Advisor')
+  assert.deepEqual(without, ['advisor', 'plan'], 'the roles without ToolPermission.Advisor')
   for (const role of without) {
     assert.equal(
       memberBinding(role, rolePermissions(role.toLowerCase()), 'advisor'),
       undefined,
       `${role} never resolves js.advisor`,
     )
-  }
-})
-
-const jsProgram = (body) => `class Js extends JsProgram {
-  async run() {
-${body}
-  }
-}`
-
-const managerRun = (dir, body, sessionId) =>
-  execute(
-    dir,
-    'Manager',
-    'en',
-    sessionId,
-    { program: jsProgram(body) },
-    3000,
-    Date.now() + 60_000,
-    1 << 20,
-    null,
-  )
-
-test('WHAT[repository-programming-056] js.horizon serves the installed host roster and refuses with DELEGATION_UNAVAILABLE without one', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'wxs-horizon-member-'))
-  const sessionId = `sess-horizon-${Math.random().toString(36).slice(2, 8)}`
-  const roster = {
-    ok: true,
-    agents: [
-      {
-        label: 'Ada',
-        status: 'still-away',
-        workState: 'none',
-        record: 'stub-horizon-roster',
-        turnsUsed: 0,
-        turnsLeft: 0,
-        timeUsedMs: 0,
-        timeLeftMs: 0,
-      },
-    ],
-    ptys: [],
-  }
-  const notExercised = async () => {
-    throw new Error('the horizon member must not reach fork/join/fission')
-  }
-  try {
-    installDelegationHost(
-      sessionId,
-      notExercised,
-      notExercised,
-      notExercised,
-      async () => roster,
-      notExercised,
-    )
-    const wired = await managerRun(dir, `    return await this.horizon();`, sessionId)
-    assert.equal(caseName(wired), 'Succeeded')
-    const wiredDoc = render(wired)
-    assert.match(wiredDoc, /status = "still-away"/, 'the host roster reaches the program as data')
-    assert.match(wiredDoc, /record = "stub-horizon-roster"/, 'the member returns the host envelope untouched')
-    assert.match(wiredDoc, /ptys = \[\]/)
-
-    clearDelegationHost(sessionId)
-    const unwired = await managerRun(dir, `    return await this.horizon();`, sessionId)
-    assert.equal(caseName(unwired), 'Succeeded')
-    assert.match(render(unwired), /code = "DELEGATION_UNAVAILABLE"/)
-  } finally {
-    clearDelegationHost(sessionId)
-    rmSync(dir, { recursive: true, force: true })
   }
 })

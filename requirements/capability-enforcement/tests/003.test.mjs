@@ -6,8 +6,7 @@ import { plan } from '../../../dist/Participant/Provider/Attempt/PlannerSurface.
 test('WHAT[capability-enforcement-003] request projections retain their kind and never grant permissions outside the office', () => {
   for (const [role, kind] of [
     ['engineer', 'work-main'], ['devops', 'work-main'], ['manager', 'work-main'],
-    ['engineer', 'interaction-repair'], ['engineer', 'strength-replica'],
-    ['devops', 'strength-replica'], ['blogger', 'blogger-main'],
+    ['engineer', 'interaction-repair'],
   ]) {
     const planned = plan({ role, kind })
     assert.equal(planned.ok, true, planned.error)
@@ -16,8 +15,11 @@ test('WHAT[capability-enforcement-003] request projections retain their kind and
     for (const permission of planned.toolCapabilities) {
       assert.equal(authority.has(permission), true, `${role}/${kind} cannot acquire ${permission}`)
     }
-    if (kind === 'strength-replica') {
-      assert.deepEqual(planned.toolCapabilities, ['Glob', 'Grep', 'Read'])
-    }
+  }
+  for (const [role, kind] of [
+    ['engineer', 'strength-replica'], ['devops', 'strength-replica'], ['blogger', 'blogger-main'],
+  ]) {
+    const planned = plan({ role, kind })
+    assert.equal(planned.ok, false, `retired request kind or role '${role}/${kind}' must fail closed`)
   }
 })

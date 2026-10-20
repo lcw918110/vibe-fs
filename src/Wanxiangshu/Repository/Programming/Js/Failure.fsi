@@ -32,6 +32,7 @@ type JsFailure =
     | FileNotFound of string
     | FileAlreadyExists of string
     | FileReadFailed of string
+    | RgFailed of string
     | DirectoryNotEmpty of string
     | DirectoryExists of string
     | ParentDirectoryMissing of string
@@ -63,12 +64,12 @@ type JsFailure =
     | HandleUnknown of string
     | CannotParkWhileAbandoning
     | Abandoned
-    | RunnableSpecIncomplete of string
-    | RunCommandUnsupported of string
-    | RunWaitTimeout
-    | RunChildUnknown of string
-    | RunParkUnsupported
-    | RunHostUnavailable
+    | CallableSpecIncomplete of string
+    | CallCommandUnsupported of string
+    | CallWaitTimeout
+    | CallChildUnknown of string
+    | CallParkUnsupported
+    | CallHostUnavailable
     | AskRefused of string
     | DelegationUnavailable
     | ViewDeclarationInvalid of string

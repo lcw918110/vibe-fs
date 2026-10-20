@@ -16,7 +16,6 @@ test('WHAT[distribution-010] repository resources and emitted role/tool declarat
 
   const expectedActiveRoles = [
     'advisor',
-    'blogger',
     'bookkeeper',
     'devops',
     'engineer',
@@ -28,13 +27,13 @@ test('WHAT[distribution-010] repository resources and emitted role/tool declarat
   assert.deepEqual(
     actualRoles,
     expectedActiveRoles,
-    'resources/provider/role must strictly equal the 8 active roles with zero legacy residue',
+    'resources/provider/role must strictly equal the 7 active roles with zero legacy residue',
   )
 
-  // 2. RolesSurface 必须包含 6 个公开活跃角色，且严格排除全部 5 个已废止角色
+  // 2. RolesSurface 必须包含 5 个公开活跃角色，且严格排除废止角色（含 blogger）
   const rolesSurface = await import('../../../dist/Foundation/RolesSurface.js')
-  const activeRoles = ['manager', 'orchestrator', 'engineer', 'devops', 'blogger', 'plan']
-  const deprecatedRoles5 = ['coder', 'inspector', 'browser', 'inquiry', 'distiller']
+  const activeRoles = ['manager', 'orchestrator', 'engineer', 'devops', 'plan']
+  const deprecatedRoles5 = ['coder', 'inspector', 'browser', 'inquiry', 'distiller', 'blogger']
 
   for (const role of activeRoles) {
     assert.ok(
@@ -61,9 +60,8 @@ test('WHAT[distribution-010] repository resources and emitted role/tool declarat
     'todowrite-for-bookkeeper',
     'todowrite-for-manager',
     'todowrite-for-orchestrator',
-    'todowrite-for-blogger',
   ]
-  const forbiddenTools = ['js-coder', 'js-inspector', 'js-browser']
+  const forbiddenTools = ['js-coder', 'js-inspector', 'js-browser', 'todowrite-for-blogger']
 
   for (const tool of requiredTools) {
     assert.ok(

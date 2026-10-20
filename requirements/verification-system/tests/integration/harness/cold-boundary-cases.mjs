@@ -54,16 +54,13 @@ const REQUEST_KIND_SWITCHED = body(
 // successor projection STRIP the predecessor's assistant/tool traffic and keep the user
 // 原文 plus its own tenure's interactions, so the next iteration sends the authority
 // root, whatever its own tenure observed, and its own fresh-head resource. Only the
-// retired guidance occurrence and the companion frame are additionally normalized away
+// retired guidance occurrence is additionally normalized away
 // (context-compression-019 / GAP-022). Structural only: typed authority-revision
 // retention is proved by the unit projection tests and the long-stroke root-only oracle.
 const GUIDANCE_SUFFIX = '\0\uFEFF<system>\n# # Wait-cost calibration: priced interval.\n</system>';
 // Production memory-preamble (en.md) — line-broken with `# ` prefixes as Host renders it.
 const COMPANION_PREAMBLE =
-  '# The following Chronicle records carry durable state transitions from an older\n'
-  + '# prefix of this session. Continue from what they actually settled and what they\n'
-  + '# left open. Raw code, tool mechanics, image contents, and incidental observation\n'
-  + '# details may have been removed.';
+  '# The following records carry durable state transitions from an older prefix.';
 const MANAGER_TRAFFIC = [
   user(`Round 1${GUIDANCE_SUFFIX}`),
   assistant('assessment evidence'),
@@ -78,15 +75,6 @@ const MANAGER_NEXT = body('test-model', [
   user('Round 2'),
 ]);
 const MANAGER_RETIRED_WITH_NUDGE = body('test-model', [SYSTEM, ...MANAGER_TRAFFIC, user('work nudge')]);
-// Companion frame (synthetic ack + preamble user) may disappear across iterations.
-const MANAGER_RETIRED_WITH_COMPANION = body('test-model', [
-  SYSTEM,
-  user('Round 1'),
-  assistant('.'),
-  user(`${COMPANION_PREAMBLE}\n# prior work record`),
-  assistant('assessment evidence'),
-  { role: 'tool', tool_call_id: 'review-call', content: 'scores' },
-]);
 
 const decide = (previous, next, boundary = null, stripAdmitted = false) =>
   sealDecision({
@@ -112,13 +100,13 @@ const entry = (id) => ({ id, lane: 'coder' });
 
 export const coldBoundaryCases = [
   {
-    name: 'MANAGER-LOOP keeps ordinary user prose that mentions Chronicle records',
+    name: 'MANAGER-LOOP keeps ordinary user prose that mentions archived records',
     fn: () => {
       const previous = body('test-model', [
         SYSTEM,
         user('Round 1'),
         assistant('.'),
-        user('Inspect the Chronicle records before deciding what to do.'),
+        user('Inspect the archived records before deciding what to do.'),
         assistant('assessment evidence'),
         { role: 'tool', tool_call_id: 'review-call', content: 'scores' },
       ]);
@@ -136,7 +124,7 @@ export const coldBoundaryCases = [
           SYSTEM,
           user('Round 1'),
           assistant('.'),
-          user([{ type: 'text', text: `${COMPANION_PREAMBLE}\n# prior work record` }, extraPart]),
+          user([{ type: 'text', text: `${COMPANION_PREAMBLE}\n# prior record` }, extraPart]),
           assistant('assessment evidence'),
           { role: 'tool', tool_call_id: 'review-call', content: 'scores' },
         ]);
@@ -152,7 +140,7 @@ export const coldBoundaryCases = [
           SYSTEM,
           user('Round 1'),
           assistant(ackContent),
-          user(`${COMPANION_PREAMBLE}\n# prior work record`),
+          user(`${COMPANION_PREAMBLE}\n# prior record`),
           assistant('assessment evidence'),
           { role: 'tool', tool_call_id: 'review-call', content: 'scores' },
         ]);
@@ -207,7 +195,7 @@ export const coldBoundaryCases = [
   },
 
   {
-    name: 'speculative-investigation a retired readonly-replay block is injected drift, not a seal break',
+    name: 'ARCH-004 a retired readonly-replay block is injected drift, not a seal break',
     fn: () => {
       const replayCall = {
         role: 'assistant',
@@ -326,52 +314,6 @@ export const coldBoundaryCases = [
     },
   },
 
-  // ── CTX-010: prefix probe ────────────────────────────────────────────────
-
-  {
-    name: 'CTX-010 a declared prefix probe admits a rebased prefix with fixed system/tools',
-    fn: () => {
-      // The probe replaces the covered head with the synthetic companion memory and
-      // keeps the live tail; the system prompt and the tool set are the attempt's
-      // fixed parts (PROMPT-008) and must survive byte-identical.
-      const probed = body('test-model-b', [SYSTEM, user('[companion memory]'), user('Round 2')]);
-      assertEq(decide(FIRST, probed, at('prefix-probe')).resealed, 'prefix-probe');
-    },
-  },
-
-  {
-    name: 'CTX-010 a prefix probe may not rewrite the tool set',
-    fn: () => {
-      // The tools belong to the attempt profile (PROMPT-008); a probe that swapped
-      // them would be changing what the model may call, not rebasing the covered
-      // prefix. The system prompt is deliberately exempt: Host 1.18.9 injects the
-      // model name into it (system.ts:67), so a fallback side switch — the usual
-      // companion of a recovery attempt — changes the system bytes by construction.
-      const retooled = body('test-model-b', [SYSTEM, user('[companion memory]'), user('Round 2')], ['todowrite-for-engineer', 'fetch']);
-      assertEq(
-        decide(FIRST, retooled, at('prefix-probe')).broken,
-        'prefix-probe-rewrote-fixed',
-        'tool rewrite is not a probe',
-      );
-
-      // A side switch with a rebased prefix and unchanged tools is exactly the
-      // recovery shape, and it is admitted.
-      const sideSwitchedProbe = body('test-model-b', [SYSTEM, user('[companion memory]'), user('Round 2')]);
-      assertEq(decide(FIRST, sideSwitchedProbe, at('prefix-probe')).resealed, 'prefix-probe');
-    },
-  },
-
-  {
-    name: 'CTX-010 an append-only delivery of a probe entry is legal',
-    fn: () => {
-      // A recovery sequence alternates probe slots and ordinary slots (FALLBACK-012
-      // arms only odd offsets), so the same entry delivers breaking and
-      // non-breaking requests. The "never fired" check lives at scenario end.
-      const decision = decide(FIRST, APPENDED, at('prefix-probe'));
-      assertEq(decision.held, true);
-    },
-  },
-
   // ── AGENT-020 / PROMPT-012: typed Student request-kind switch ────────────
 
   {
@@ -404,11 +346,6 @@ export const coldBoundaryCases = [
     name: 'MANAGER-LOOP a new iteration reseals after the successor projection strips the predecessor traffic',
     fn: () => {
       assertEq(decide(MANAGER_RETIRED, MANAGER_NEXT, at('manager-loop')).resealed, 'manager-loop');
-      assertEq(
-        decide(MANAGER_RETIRED_WITH_COMPANION, MANAGER_NEXT, at('manager-loop')).resealed,
-        'manager-loop',
-        'production Chronicle-records companion frames may disappear across iterations',
-      );
       assertEq(
         decide(MANAGER_RETIRED_WITH_NUDGE, MANAGER_NEXT, at('manager-loop')).broken,
         'manager-loop-rewrote-fixed',
@@ -594,7 +531,7 @@ export const coldBoundaryCases = [
     fn: () => {
       // Nothing is sealed yet, so no break can happen there. Accepting it silently
       // would make the declaration decorative.
-      // Note: epoch-switch/prefix-probe/frame-commit/manager-loop are multi-delivery
+      // Note: epoch-switch/manager-loop are multi-delivery
       // held exemptions. A single-delivery boundary like fallback-side must report
       // boundary-not-reached on first request.
       assertEq(decide(null, FIRST, at('fallback-side')).broken, 'boundary-not-reached');
@@ -660,8 +597,6 @@ export const coldBoundaryCases = [
     fn: () => {
       assertEq(validateBoundary(at('epoch-switch')).length, 0);
       assertEq(validateBoundary(at('fallback-side')).length, 0);
-      assertEq(validateBoundary(at('prefix-probe')).length, 0);
-      assertEq(validateBoundary(at('frame-commit')).length, 0);
       assertEq(validateBoundary(at('request-kind-switch')).length, 0);
       assertEq(validateBoundary(at('manager-loop')).length, 0);
 

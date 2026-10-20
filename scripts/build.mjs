@@ -163,29 +163,13 @@ async function verifyArtifacts(targetRoot = root) {
   const sphinxEntry = path.join(targetRoot, 'dist/Sphinx/V2/ServeEntry.js')
   if (!fs.existsSync(sphinxEntry)) throw new Error(`missing sphinx entry artifact: ${sphinxEntry}`)
 
-  const enforcerRoot = path.join(targetRoot, 'resources/enforcer')
-  if (!fs.existsSync(enforcerRoot)) throw new Error(`missing rulebook root: ${enforcerRoot}`)
-  const ruleDirs = fs
-    .readdirSync(enforcerRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-  if (ruleDirs.length < 1) throw new Error(`enforcer rulebook has no rule directories under ${enforcerRoot}`)
-  const catalogJson = path.join(enforcerRoot, 'catalog.json')
-  if (fs.existsSync(catalogJson)) throw new Error(`catalog.json must be removed after folder cutover: ${catalogJson}`)
-
-  for (const name of ['primitive-obsession', ruleDirs[0]]) {
-    for (const locale of ['lesson.md', 'lesson.zh-CN.md']) {
-      const lessonPath = path.join(enforcerRoot, name, locale)
-      if (!fs.existsSync(lessonPath)) throw new Error(`missing rulebook file: ${lessonPath}`)
-    }
-  }
-
   const providerRoles = [
     'manager',
     'engineer',
     'devops',
     'orchestrator',
-    'blogger',
+    'plan',
+    'advisor',
     'bookkeeper',
   ]
   for (const name of providerRoles) {

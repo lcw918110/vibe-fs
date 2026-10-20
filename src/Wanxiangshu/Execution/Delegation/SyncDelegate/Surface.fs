@@ -8,8 +8,6 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Turn
-open Wanxiangshu.Context.Companion.Blogger.OpenCode
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Fork
@@ -26,7 +24,6 @@ open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.Interaction.Repair
 open Wanxiangshu.OpenCode
 open Wanxiangshu.Host
-open Wanxiangshu.Mission.WorkRecord
 open Wanxiangshu.Participant.Persona
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
@@ -824,7 +821,6 @@ module SyncDelegateSurface =
                                     ProviderRecoveryWorkflow.continueDelegateCallAfterConfirmedFailure
                                         sessions
                                         rootWorkspace
-                                        owner.BloggerRuntimeHost
                                         journal
                                         turn
                                         observer
@@ -875,7 +871,6 @@ module SyncDelegateSurface =
                     Dictionary<string, string>(),
                     (fun _ -> None),
                     Dictionary<string, string>(),
-                    None,
                     None,
                     None,
                     None,
@@ -1158,7 +1153,7 @@ module SyncDelegateSurface =
 
             return
                 match result with
-                | Ok workRecord -> Wanxiangshu.OpenCode.ToolHostCodec.tomlObjectWithInstructions [ workRecord ] []
+                | Ok view -> Wanxiangshu.OpenCode.ToolHostCodec.tomlObjectWithInstructions [ view ] []
                 | Error error -> failwith error
         }
 
@@ -1175,7 +1170,7 @@ module SyncDelegateSurface =
 
                 return
                     match result with
-                    | Ok workRecord -> box {| ok = true; value = workRecord |}
+                    | Ok view -> box {| ok = true; value = view |}
                     | Error error -> box {| ok = false; error = error |}
         }
 
@@ -1564,7 +1559,6 @@ module SyncDelegateSurface =
             harness.RootWorkspace
             harness.EventPort
             (Some harness.Journal)
-            owner.BloggerRuntimeHost
             (Some harness.Runtime)
             harness.NudgeSent
             harness.JoinGuardNudges
@@ -1591,10 +1585,9 @@ module SyncDelegateSurface =
             harness.RootWorkspace
             harness.EventPort
             (Some harness.Journal)
-            None
-            None
             harness.Plugin.Value
             context
+
 
     let observeRepairTurn
         (value: obj)
@@ -2022,10 +2015,7 @@ module SyncDelegateSurface =
 
                 return
                     match result with
-                    | Ok(SyncDelegateInvocationResult.WorkRecord record) ->
-                        box
-                            {| kind = "WorkRecord"
-                               value = record |}
+                    | Ok(SyncDelegateInvocationResult.View record) -> box {| kind = "View"; value = record |}
                     | Ok(SyncDelegateInvocationResult.MergedInto canonical) ->
                         box
                             {| kind = "MergedInto"
@@ -2047,10 +2037,10 @@ module SyncDelegateSurface =
                 {| accepted = true
                    reason = "independent provider batch" |}
 
-    let evidenceBoundary (charge: string) (workRecord: string) : obj =
+    let evidenceBoundary (charge: string) (view: string) : obj =
         box
             {| charge = charge
-               workRecord = workRecord
+               view = view
                authorityTransferred = false |}
 
     /// Script the retry decorator's verdicts for the next confirmed failures:

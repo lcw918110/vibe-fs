@@ -28,7 +28,7 @@ const contextReanchor = (overrides = {}) => ({
 test('WHAT[context-compression-019] Context_fold_accepts_plain_envelopes_and_replays_the_line_codec', () => {
   const folded = contextFold.fold([contextReanchor()])
   assert.equal(folded.ok, true, folded.ok ? '' : JSON.stringify(folded.error))
-  assert.equal(Number(folded.value.sessions.ses_context.PrefixEpoch.EpochId), 1)
+  assert.equal(folded.value.viewCheckpoints.ses_context, undefined)
 
   const replayed = contextFold.replay([contextReanchor()])
   assert.equal(replayed.ok, true, replayed.ok ? '' : JSON.stringify(replayed.error))
@@ -53,30 +53,11 @@ const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
 const { default: test } = await import("node:test");
 const pair = await import("../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js");
-const grounding = await import("../../../dist/OpenCode/Host/RequirementGroundingSurface.js");
 
-const terminalRead = (path) => [{
-  info: { id: 'r1', role: 'assistant', providerID: 'anthropic' },
-  parts: [{ type: 'tool', tool: 'read', callID: 'source-read', state: { status: 'completed', input: { filePath: path }, output: 'source\n', time: { start: 0, end: 0 } } }],
-}]
-const cursorRead = (path) => [{
-  info: { id: 'r1', role: 'assistant', providerID: 'cursor' },
-  parts: [{ type: 'tool', tool: 'read', callID: 'source-read', state: { status: 'completed', input: { filePath: path }, output: 'source\n', time: { start: 0, end: 0 } } }],
-}]
-const suffixCount = (text) => text.split(grounding.cursorSeparator).length - 1
+const suffixCount = (text) => text.split("\u0000\uFEFF").length - 1
 const pairCallIds = (messages) => messages
   .filter((message) => pair.isPairProgrammingThought(message))
   .map((message) => message.parts[0].callID)
-const groundingMessages = (messages) => messages.filter((message) => message.info?.source === grounding.source)
-const sandbox = () => {
-  const dir = mkdtempSync(join(tmpdir(), 'wanxiang-injection-reanchor-'))
-  mkdirSync(join(dir, 'requirements', 'alpha', 'tests'), { recursive: true })
-  mkdirSync(join(dir, 'src'), { recursive: true })
-  writeFileSync(join(dir, 'requirements', 'alpha', 'WHAT.md'), 'what\n', 'utf8')
-  writeFileSync(join(dir, 'requirements', 'alpha', 'APPLIES-TO'), '/src/**\n', 'utf8')
-  writeFileSync(join(dir, 'src', 'main.fs'), 'source\n', 'utf8')
-  return { dir, source: join(dir, 'src', 'main.fs'), cleanup: () => rmSync(dir, { recursive: true, force: true }) }
-}
 
 test('WHAT[context-compression-019] CTX_019_reanchor_retires_old_pair_wire_but_keeps_history_and_allows_a_fresh_pair', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'wanxiang-pair-reanchor-'))
@@ -111,68 +92,6 @@ test('WHAT[context-compression-019] CTX_019_reanchor_retires_old_pair_wire_but_k
     rmSync(dir, { recursive: true, force: true })
   }
 })
-test('WHAT[context-compression-019] CTX_019_prefix_rebase_is_the_same_auxiliary_cold_boundary_as_host_reanchor', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'wanxiang-pair-prefix-rebase-'))
-  const opened = await pair.createJournal(dir)
-  assert.equal(opened.ok, true)
-  try {
-    const session = 'ctx-019-prefix-rebase-pair'
-    const raw = [{
-      info: { id: 'r1', role: 'assistant', providerID: 'anthropic' },
-      parts: [{ type: 'tool', tool: 'read', callID: 'source', state: { status: 'completed', input: {}, output: 'source\n', time: { start: 0, end: 0 } } }],
-    }]
-    const first = await pair.tryInjectWithJournal(opened.journal, session, pair.text, raw)
-    assert.equal(first.ok, true)
-    assert.equal(pairCallIds(first.value).length, 0)
-    assert.equal(suffixCount(first.value[0].parts[0].state.output), 1)
-
-    const rebased = await pair.appendPrefixRebaseCommitted(opened.journal, session, 0n, 1n, 1)
-    assert.equal(rebased.ok, true, rebased.error)
-
-    const next = await pair.tryInjectWithJournal(opened.journal, session, pair.text, first.value)
-    assert.equal(next.ok, true, next.error)
-    assert.equal(pairCallIds(next.value).length, 0, 'no synthetic pair rows tunnel across a Y prefix rebase')
-    assert.equal(suffixCount(next.value[0].parts[0].state.output), 1, 'the new Y horizon carries exactly one fresh pair suffix')
-    assert.equal(pair.pairCount(opened.journal, session), 2, 'durable pair history remains audit-visible after retirement')
-  } finally {
-    pair.disposeJournal(opened.journal)
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-test('WHAT[context-compression-019] CTX_019_reanchor_retires_old_requirement_reads_then_same_digest_regrounds_on_the_next_real_trigger', async () => {
-  const { dir, source, cleanup } = sandbox()
-  const opened = await grounding.createJournal(dir)
-  assert.equal(opened.ok, true)
-  try {
-    const session = 'ctx-019-grounding'
-    const requested = await grounding.requestPaths(opened.journal, dir, session, [source])
-    assert.equal(requested.needsGrounding, true)
-    const first = await grounding.projectWithJournal(opened.journal, session, terminalRead(source))
-    assert.equal(first.ok, true)
-    const firstOutput = first.value.at(-1).parts[0].state.output
-    assert.ok(firstOutput.includes('requirement_source_path = "requirements/alpha/WHAT.md"'))
-    assert.equal(groundingMessages(first.value).length, 0, 'universal cursor mode emits zero synthetic read rows')
-
-    const reanchored = await grounding.appendContextReanchored(opened.journal, session, 0n, 1n, 'compaction-1')
-    assert.equal(reanchored.ok, true, reanchored.error)
-    assert.deepEqual(grounding.groundedIdentities(opened.journal, session), [])
-
-    const afterReplacement = await grounding.projectWithJournal(opened.journal, session, first.value)
-    assert.equal(afterReplacement.ok, true)
-    assert.equal(afterReplacement.value.at(-1).parts[0].state.output, 'source\n', 'old requirement suffixes must not survive Y')
-
-    const rerun = await grounding.requestPaths(opened.journal, dir, session, [source])
-    assert.equal(rerun.needsGrounding, true)
-    assert.equal(rerun.requested, 1)
-    const second = await grounding.projectWithJournal(opened.journal, session, afterReplacement.value)
-    const secondOutput = second.value.at(-1).parts[0].state.output
-    assert.ok(secondOutput.includes('requirement_source_path = "requirements/alpha/WHAT.md"'), 'same digest regrounds in the new horizon')
-    assert.equal(suffixCount(secondOutput), suffixCount(firstOutput), 'regrounding restores the identical suffix shape')
-  } finally {
-    grounding.disposeJournal(opened.journal)
-    cleanup()
-  }
-})
 test('WHAT[context-compression-019] CTX_019_cursor_reanchor_strips_old_pair_suffix_before_adding_the_new_horizon_pair', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'wanxiang-cursor-pair-reanchor-'))
   const opened = await pair.createJournal(dir)
@@ -200,37 +119,6 @@ test('WHAT[context-compression-019] CTX_019_cursor_reanchor_strips_old_pair_suff
   } finally {
     pair.disposeJournal(opened.journal)
     rmSync(dir, { recursive: true, force: true })
-  }
-})
-test('WHAT[context-compression-019] CTX_019_cursor_reanchor_strips_old_requirement_suffixes_until_a_real_path_trigger_regrounds', async () => {
-  const { dir, source, cleanup } = sandbox()
-  const opened = await grounding.createJournal(dir)
-  assert.equal(opened.ok, true)
-  try {
-    const session = 'ctx-019-cursor-grounding'
-    await grounding.requestPaths(opened.journal, dir, session, [source])
-    const first = await grounding.projectWithJournal(opened.journal, session, cursorRead(source))
-    assert.equal(first.ok, true)
-    const firstOutput = first.value[0].parts[0].state.output
-    assert.ok(suffixCount(firstOutput) > 0)
-
-    const reanchored = await grounding.appendContextReanchored(opened.journal, session, 0n, 1n, 'compaction-1')
-    assert.equal(reanchored.ok, true, reanchored.error)
-    const afterReplacement = await grounding.projectWithJournal(opened.journal, session, first.value)
-    assert.equal(afterReplacement.ok, true)
-    assert.equal(
-      afterReplacement.value[0].parts[0].state.output,
-      'source\n',
-      'Y horizon must not retain any old requirement Cursor suffix',
-    )
-
-    const rerun = await grounding.requestPaths(opened.journal, dir, session, [source])
-    assert.equal(rerun.needsGrounding, true)
-    const second = await grounding.projectWithJournal(opened.journal, session, afterReplacement.value)
-    assert.equal(suffixCount(second.value[0].parts[0].state.output), suffixCount(firstOutput))
-  } finally {
-    grounding.disposeJournal(opened.journal)
-    cleanup()
   }
 })
 }

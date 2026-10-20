@@ -1,6 +1,7 @@
 namespace Wanxiangshu.Execution.Session.Wait
 
 open System
+open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
 
@@ -122,25 +123,27 @@ module CausalWaitBridge =
               "history", box (snapshot.History |> List.map transitionObj |> Array.ofList)
               "frontiers", box (frontiers |> List.map frontierObj |> Array.ofList) ]
 
-    let private writeSnapshotUnsafe (workspace: string) (snapshot: DiagnosticWaitSnapshot) =
-        try
-            let stateRoot =
-                Wanxiangshu.Persistence.Journal.RuntimePath.initializeStateRoot workspace
+    let private writeSnapshotUnsafe (workspace: string) (snapshot: DiagnosticWaitSnapshot) : Task<unit> =
+        task {
+            try
+                let! stateRoot = Wanxiangshu.Persistence.Journal.RuntimePath.initializeStateRoot workspace
 
-            let diagnosticsDir = pathJoin (stateRoot, "diagnostics")
-            mkdirSync (diagnosticsDir, {| recursive = true |})
-            let filePath = pathJoin (diagnosticsDir, "causal-waits.json")
-            writeFileSync (filePath, stringify (toPlainObject snapshot), "utf8")
-        with _ ->
-            ()
+                let diagnosticsDir = pathJoin (stateRoot, "diagnostics")
+                mkdirSync (diagnosticsDir, {| recursive = true |})
+                let filePath = pathJoin (diagnosticsDir, "causal-waits.json")
+                writeFileSync (filePath, stringify (toPlainObject snapshot), "utf8")
+            with _ ->
+                ()
+        }
 
     /// Best-effort overwrite of `<primary-worktree>/.Herdchestra/diagnostics/causal-waits.json`.
-    let writeSnapshot (workspace: string) (snapshot: DiagnosticWaitSnapshot) : unit =
+    let writeSnapshot (workspace: string) (snapshot: DiagnosticWaitSnapshot) : Task<unit> =
         if String.IsNullOrWhiteSpace workspace then
-            ()
+            Task.FromResult()
         else
             writeSnapshotUnsafe workspace snapshot
 
     let target (workspace: string) : IWaitDiagnosticSink =
         { new IWaitDiagnosticSink with
-            member _.Publish(snapshot) = writeSnapshot workspace snapshot }
+            member _.Publish(snapshot) =
+                writeSnapshot workspace snapshot |> ignore }

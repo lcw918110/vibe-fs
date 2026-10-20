@@ -3,9 +3,7 @@
 # Ordinary rules include matching paths. A leading ! excludes an exception from earlier includes.
 
 /src/Wanxiangshu/Context/Prefix/**
-/src/Wanxiangshu/Context/Companion/Blogger/ContextFactFold.fs
 /src/Wanxiangshu/Participant/Provider/Projection/**
 /src/Wanxiangshu/OpenCode/Host/PairProgramming/**
 /src/Wanxiangshu/OpenCode/Host/PairProgrammingThoughtTransform.fs
-/src/Wanxiangshu/OpenCode/Host/RequirementGrounding/**
 /src/Wanxiangshu/Composition/Durable/Fold.fs

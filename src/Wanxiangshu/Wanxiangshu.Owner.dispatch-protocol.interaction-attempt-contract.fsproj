@@ -13,7 +13,6 @@
     <ProjectReference Include="Wanxiangshu.Owner.participant-identity.participant-persona.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.office-capability.foundation-officecapability.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.provider-attempt-recovery.participant-provider-attempt-requestkind.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.prefix-stability.context-prefix-candidate.fsproj"/>
     <Compile Include="Interaction/Attempt/AttemptExecutionProfile.fsi"/>
     <Compile Include="Interaction/Attempt/AttemptExecutionProfile.fs"/>
   </ItemGroup>

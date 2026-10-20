@@ -9,6 +9,7 @@ open Wanxiangshu.Context.Trace
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session
+open Wanxiangshu.Repository.Programming.Js
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host
@@ -21,8 +22,8 @@ open Wanxiangshu.Persistence.Journal
 
 /// Same-participant physical replacement. Fission never calls the Host session
 /// fork endpoint: it creates fresh sibling sessions, starts them from the
-/// canonical owner LWR + exact lane input, then physically interrupts the old
-/// present without terminating the logical owner.
+/// owner's already-delivered view (when there is one) + exact lane input, then
+/// physically interrupts the old present without terminating the logical owner.
 module FissionTool =
 
     [<RequireQualifiedAccess>]
@@ -328,7 +329,7 @@ module FissionTool =
     /// Capture exactly one canonical payload for a pre-Fission completion, then
     /// account/deliver that same payload once per lane. Closed lanes are accounted
     /// through the durable group closure; live lanes also receive a same-run
-    /// continuation. No per-lane WorkRecord copy is created.
+    /// continuation. No per-lane view copy is created.
     let private captureAndBroadcast
         (scope: ToolRuntimeScope)
         (durable: AgentJournal)
@@ -346,8 +347,8 @@ module FissionTool =
                 return! broadcastAfterBegin scope durable profile groupId owner lanes completionId payload
         }
 
-    let private payloadFromWorkRecord workRecord fallback =
-        match workRecord with
+    let private payloadFromView view fallback =
+        match view with
         | Some record when not (String.IsNullOrWhiteSpace record) -> record
         | _ -> fallback
 
@@ -363,8 +364,8 @@ module FissionTool =
         (terminal: AgentRunResult)
         =
         task {
-            let! workRecord = scope.ChildWorkRecordFor(SessionId.value childId)
-            let payload = payloadFromWorkRecord workRecord terminal.TerminalText
+            let view = JsDeliveredValues.tryPeekRendered (SessionId.value childId)
+            let payload = payloadFromView view terminal.TerminalText
 
             do! captureAndBroadcast scope durable profile groupId owner lanes completionId payload
         }
@@ -506,11 +507,11 @@ module FissionTool =
 
             installPtyBroadcasts scope durable profile groupId owner lanes prePtys ownerRuntime
 
-    let private parentWorkRecordPort (scope: ToolRuntimeScope) sessionId =
+    let private ownerViewPort (scope: ToolRuntimeScope) sessionId =
         task {
-            match! scope.ParentWorkRecordFor(SessionId.value sessionId) with
-            | Some record when not (String.IsNullOrWhiteSpace record) -> return Ok record
-            | _ -> return Error "lifecycle_work_record_unavailable"
+            match! scope.ViewForSession(SessionId.value sessionId) with
+            | Some view when not (String.IsNullOrWhiteSpace view) -> return Ok(Some view)
+            | _ -> return Ok None
         }
 
     let private createLanePort
@@ -605,11 +606,14 @@ module FissionTool =
         (providerRun: ProviderRunIdentity option)
         (logicalOwner: SessionId)
         (physicalParent: SessionId option)
-        (ownerWorkRecord: string)
+        (ownerView: string)
         (created: FissionStartedLane list)
         =
         task {
-            match! durable.WriteBlob ownerWorkRecord with
+            // The durable owner view records exactly what the lanes received: the
+            // owner's delivered view, or the empty view when the owner had not
+            // delivered one at admission time.
+            match! durable.WriteBlob ownerView with
             | Error error -> return Error error
             | Ok blob ->
                 let ordered = created |> List.sortBy (fun lane -> lane.Index)
@@ -627,8 +631,8 @@ module FissionTool =
                                LaneCount = parsedCount
                                LaneSessions = ordered |> List.map (fun lane -> lane.SessionId)
                                LanePrompts = ordered |> List.map (fun lane -> lane.Prompt)
-                               OwnerWorkRecordRef = blob.BlobRef
-                               OwnerWorkRecordDigest = blob.BlobDigest
+                               OwnerViewRef = blob.BlobRef
+                               OwnerViewDigest = blob.BlobDigest
                                PreFissionCompletionIds = preCompletionIds |})
         }
 
@@ -687,7 +691,7 @@ module FissionTool =
 
             let deps: FissionAdmissionDependencies =
                 { ParentOf = scope.Sessions.TryGetParentSession
-                  OwnerWorkRecord = parentWorkRecordPort scope
+                  OwnerView = ownerViewPort scope
                   CreateLane = createLanePort scope groupId owner profile.SelectedAgent directory parsed.Count
                   StartLane = startLanePort scope durable profile directory
                   AbortLane = abortLanePort scope
@@ -908,7 +912,7 @@ module FissionTool =
 
             let deps: FissionAdmissionDependencies =
                 { ParentOf = scope.Sessions.TryGetParentSession
-                  OwnerWorkRecord = parentWorkRecordPort scope
+                  OwnerView = ownerViewPort scope
                   CreateLane = createLanePort scope groupId owner profile.SelectedAgent directory parsed.Count
                   StartLane = startLanePort scope durable profile directory
                   AbortLane = abortLanePort scope

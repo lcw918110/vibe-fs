@@ -36,7 +36,7 @@ type SyncDelegateBatch =
 
 [<RequireQualifiedAccess>]
 type SyncDelegateInvocationResult =
-    | WorkRecord of string
+    | View of string
     | MergedInto of ToolCallId
 
 type SyncDelegateDispatchEvidence =

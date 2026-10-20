@@ -87,7 +87,6 @@ module ParticipantIdentity =
         : Result<PersonaName * ParticipantKind, ParticipantIdentityError> =
         match name.ToLowerInvariant() with
         | "bookkeeper" -> Ok(PersonaName "bookkeeper", Bookkeeper)
-        | "predictor" -> Ok(PersonaName "predictor", ManagedRole Role.Engineer)
         | roleName when (Roles.tryParseRole roleName).IsSome ->
             let role = (Roles.tryParseRole roleName).Value
             Ok(PersonaName(Roles.roleLabel role), ManagedRole role)

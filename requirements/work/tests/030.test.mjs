@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as ToolSurface from '../../../dist/OpenCode/Tools/ToolSurface.js'
-import * as Strength from '../../../dist/Strength/Surface.js'
 
-test('WHAT[work-030] StaticTools and estimate contract explicitly distinguish all five plan tools', () => {
+test('WHAT[work-030] StaticTools explicitly registers all five plan tools and excludes handoff/resume', () => {
   const planTools = ['todowrite-for-plan', 'devops', 'ask', 'review', 'deliver']
 
   // ToolSurface exports toolSpecNames as an array of all recognized tool names
@@ -19,24 +18,21 @@ test('WHAT[work-030] StaticTools and estimate contract explicitly distinguish al
   assert.ok(!names.includes('resume'))
   assert.ok(!names.includes('handoff'))
 
-  // Strength.classifyTool must explicitly classify plan tools
-  assert.ok(typeof Strength.classifyTool === 'function', 'Strength.classifyTool must be a function')
-
-  // Both forms of asking are explicit tools, not repository estimates.
+  // Admission is by exact registered name: the five plan tools are the only
+  // plan-admitted entries beyond the shared base permissions.
+  const planRules = ToolSurface.rolePermissionRules('plan')
   for (const tool of planTools) {
-    const policy = Strength.classifyTool(tool)
-    assert.equal(policy, 'NoEstimate', `${tool} must be explicitly classified as NoEstimate`)
+    assert.equal(planRules[tool], 'allow', `${tool} must be admitted to Plan by exact name`)
   }
 })
 
 test('WHAT[work-030] tool registration does not allow prefix or wildcard matching for plan tools', () => {
-  assert.ok(typeof Strength.classifyTool === 'function', 'Strength.classifyTool must be a function')
-
-  // Prefix or wildcard attempts must be rejected or classified as Unreviewed
-  // They must NEVER match EstimateAfterCall or NoEstimate
+  // Prefix or wildcard attempts must be denied; the only wildcard is the
+  // fail-closed `*` fallback that denies every unlisted name.
+  const planRules = ToolSurface.rolePermissionRules('plan')
   const invalidAttempts = ['js-plan-fake', 'plan*', 'ask_question', 'devops_extra', 'review_next', 'deliver_final']
   for (const attempt of invalidAttempts) {
-    const res = Strength.classifyTool(attempt)
-    assert.equal(res, 'Unreviewed', `"${attempt}" must not match plan tool via prefix; must be Unreviewed`)
+    assert.equal(Object.hasOwn(planRules, attempt), false, `"${attempt}" must not be a plan-admitted name`)
   }
+  assert.equal(planRules['*'], 'deny', 'the wildcard fallback must deny every unregistered tool')
 })

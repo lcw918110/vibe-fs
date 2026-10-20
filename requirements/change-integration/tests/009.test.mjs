@@ -180,10 +180,10 @@ const workspaceSurface = await import('../../../dist/OpenCode/Host/WorkspaceEven
 
 const withRoad = async (body) => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-loop-signal-'))
-  const stateRoot = journalSurface.JournalSurface_initializeStateRoot(root)
+  const stateRoot = await journalSurface.JournalSurface_initializeStateRoot(root)
   const store = workspaceSurface.acquire(stateRoot)
   try {
-    await body({ root, stateRoot, store, signalFor: (workId) => hostSurface.loopSignalOf(root, workId) })
+    await body({ root, stateRoot, store, signalFor: async (workId) => hostSurface.loopSignalOf(root, workId) })
   } finally {
     workspaceSurface.release(stateRoot)
     rmSync(root, { recursive: true, force: true })
@@ -217,8 +217,8 @@ test('WHAT[change-integration-009] a relayed retirement whose successor already 
     // Reporting the consumed hand-off again would drive the program through
     // AwaitLoopSignal -> ContinueLoop without ever blocking. The road must wait on
     // durable change instead: the successor's own retirement is the next occasion.
-    assert.equal(signalFor(workId).kind, 'None')
-    assert.equal(signalFor(workId).detail, '')
+    assert.equal((await signalFor(workId)).kind, 'None')
+    assert.equal((await signalFor(workId)).detail, '')
   })
 })
 
@@ -240,7 +240,7 @@ test('WHAT[change-integration-009] a delivered tenure with no successor holds th
     assert.equal(view.Delivered, true, 'the promoted tenure delivered')
     assert.equal(view.ActiveId ?? null, null, 'a final delivery leaves no open tenure')
 
-    const delivered = signalFor(workId)
+    const delivered = await signalFor(workId)
     assert.equal(delivered.kind, 'Candidate')
     assert.equal(delivered.detail, '')
   })
@@ -248,12 +248,12 @@ test('WHAT[change-integration-009] a delivered tenure with no successor holds th
 
 test('WHAT[change-integration-009] no durable work and an unretired tenure both hold no loop signal', async () => {
   await withRoad(async ({ root, store, signalFor }) => {
-    assert.equal(signalFor('ses-loop-absent').kind, 'NoWork')
+    assert.equal((await signalFor('ses-loop-absent')).kind, 'NoWork')
 
     const workId = 'ses-loop-open'
     const opened = await lifecycle.seedOpen(store, 'S4', workId, root, 0n)
     assert.equal(opened.ok, true, opened.error)
-    assert.equal(signalFor(workId).kind, 'None')
+    assert.equal((await signalFor(workId)).kind, 'None')
   })
 })
 }

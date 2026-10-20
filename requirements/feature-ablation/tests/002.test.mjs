@@ -27,21 +27,21 @@ test('WHAT[feature-ablation-002] ABL_002_tri_state_semantics_distinction', () =>
   // 1. ablated 状态：该切面不启用；不得改变可见工具、行为或等价副作用——既不得出现在 provider schema，也不得被 execution gate 放行
   withEnv([
     ['WANXIANGSHU_ABLATION_PROFILE', 'station-41'],
-    ['WANXIANGSHU_ABLATION_speculative_investigation', 'ablated'],
+    ['WANXIANGSHU_ABLATION_delegation_async_fork', 'ablated'],
   ], () => {
     Ablation.load()
-    assert.equal(Ablation.allowsTool('speculate'), false, 'ablated node tool must not be allowed')
-    assert.equal(Ablation.allowsToolSchema('speculate'), false, 'ablated node tool schema must not be allowed')
+    assert.equal(Ablation.allowsTool('fork'), false, 'ablated node tool must not be allowed')
+    assert.equal(Ablation.allowsToolSchema('fork'), false, 'ablated node tool schema must not be allowed')
   })
 
   // 2. active 状态：包级机制按各自 WHAT 正常运行，工具在 schema 暴露且门禁放行
   withEnv([
     ['WANXIANGSHU_ABLATION_PROFILE', 'production'],
-    ['WANXIANGSHU_ABLATION_speculative_investigation', 'active'],
+    ['WANXIANGSHU_ABLATION_delegation_async_fork', 'active'],
   ], () => {
     Ablation.load()
-    assert.equal(Ablation.allowsTool('skill'), true, 'active node tool must be allowed')
-    assert.equal(Ablation.allowsToolSchema('skill'), true, 'active node tool schema must be allowed')
+    assert.equal(Ablation.allowsTool('fork'), true, 'active node tool must be allowed')
+    assert.equal(Ablation.allowsToolSchema('fork'), true, 'active node tool schema must be allowed')
   })
 
   // 3. borrowed 状态：仅 resources/ablation/nodes.json 与 manifest 明示的借用面可运行；不得触发完整包级下游语义
@@ -54,7 +54,7 @@ test('WHAT[feature-ablation-002] ABL_002_tri_state_semantics_distinction', () =>
   })
 
   // 4. 非法状态组合 fail-closed：传入非法模式字符串必须抛出异常拒绝加载
-  withEnv([['WANXIANGSHU_ABLATION_speculative_investigation', 'invalid_mode']], () => {
+  withEnv([['WANXIANGSHU_ABLATION_delegation_async_fork', 'invalid_mode']], () => {
     assert.throws(() => {
       Ablation.load()
     }, /InvalidMode|fail-closed|ablation/i, 'Invalid ablation mode string must fail-closed')
@@ -182,12 +182,6 @@ test('WHAT[feature-ablation-002] ABL_002_station_15_borrows_delegation_facts', (
   })
 })
 
-test('WHAT[feature-ablation-002] ABL_002_strength_forced_off_when_speculation_ablated', () => {
-  withEnv([['WANXIANGSHU_ABLATION_PROFILE', 'station-05']], () => {
-    Ablation.load()
-    assert.equal(Ablation.strengthForcedOff(), true)
-  })
-})
 
 test('WHAT[feature-ablation-002] ABL_002_primary_agent_admission_follows_the_selected_profile', () => {
   withEnv([['WANXIANGSHU_ABLATION_PROFILE', 'station-05']], () => {

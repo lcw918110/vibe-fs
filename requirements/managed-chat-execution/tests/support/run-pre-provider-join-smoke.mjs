@@ -20,7 +20,6 @@ let joinResult = null
 let session
 const routingSource = `export const routingProtocol = 2
 export const hasTheoreticalCapacity = (role) => role !== 'engineer'
-export const predictorConfiguration = () => ({ state: 'unconfigured', reason: null })
 export default function route(role) {
   return role === 'engineer' ? null : { model: 'test/test-model', reasoning: 'none' }
 }
@@ -32,13 +31,6 @@ const provider = await startHttpServer(async (request, response) => {
   const names = (body.tools ?? []).map(tool => tool.function?.name ?? tool.name)
   if (names.includes('todowrite-for-engineer')) childRequests++
   const call = (name, args) => sendSSE(response, buildToolCallsChunks(`join-smoke-${requestNumber}`, [{ name, argsStr: JSON.stringify(args) }], 10))
-  if (names.includes('chronicle')) {
-    return call('chronicle', {
-      charge: 'Observe the isolated admission failure.', occurrence: 'The Engineer pool has no candidate.',
-      settlement: 'No child provider request was sent.', consequence: 'The parent must receive the failure.',
-      tipName: 'admission-failure', opinion: 'Failure must remain observable.', advice: 'Join the exact delegated work.',
-    })
-  }
   if (names.includes('fork')) {
     managerRequests++
     if (managerRequests === 1) return call('fork', { calling: 'engineer', name: 'Worker', charge: 'Do not modify files. Return one short report.' })

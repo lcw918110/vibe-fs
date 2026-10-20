@@ -7,7 +7,6 @@ module ToolSurface =
 
     val toolSpecNames: unit -> string array
     val bashHoneypotContract: unit -> obj
-    val chronicleContract: unit -> obj
 
     /// capability-enforcement-009/025: the review-only tool catalog and the
     /// semantic permissions one tool name maps to, as stable labels.

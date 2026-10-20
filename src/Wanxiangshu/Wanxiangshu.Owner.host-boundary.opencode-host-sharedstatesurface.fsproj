@@ -23,7 +23,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.dispatch-attempt-planner.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.provider-language.participant-provider-language.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.host-boundary.opencode-host-sharedstate.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.companion-host-blogger.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.companion-host.fsproj"/>
     <Compile Include="OpenCode/Host/SharedStateSurface.fsi"/>
     <Compile Include="OpenCode/Host/SharedStateSurface.fs"/>
     <Compile Include="OpenCode/Host/PluginSessionScope.fsi"/>

@@ -4,8 +4,6 @@ open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.OpenCode.Host.PairProgramming
-open Wanxiangshu.OpenCode.Host.RequirementGrounding
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Foundation
 
 /// Shared session-scoped projection-update algebra for the fold families
@@ -44,11 +42,7 @@ module ProjectionUpdate =
 
     let retireAuxiliaryInjectionVisibility (session: SessionAgentProjection) =
         { session with
-            TipDelivery = session.TipDelivery |> Option.map TipDeliveryProjection.applyReanchor
-            Guidelines = session.Guidelines |> Option.map GuidelineProjection.applyReanchor
-            RequirementGrounding =
-                session.RequirementGrounding
-                |> Option.map RequirementGroundingProjection.applyReanchor }
+            Guidelines = session.Guidelines |> Option.map GuidelineProjection.applyReanchor }
 
     // ── single-field fact families ──────────────────────────────────────────
 

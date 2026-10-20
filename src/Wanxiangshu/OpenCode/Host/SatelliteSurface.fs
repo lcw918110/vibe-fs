@@ -20,9 +20,9 @@ type private SatelliteSessionPort(physical: bool, conflict: bool, queryError: bo
         if not physical then
             []
         else
-            [ { SessionId = SessionId.create "blogger-1"
+            [ { SessionId = SessionId.create "companion-1"
                 ParentSessionId = Some(SessionId.create "work")
-                Agent = Some(if conflict then "wrong-agent" else "blogger")
+                Agent = Some(if conflict then "wrong-agent" else "companion")
                 Title = Some(if conflict then "wrong-title" else "Companion") } ]
 
     member _.Created = created.ToArray()
@@ -76,10 +76,14 @@ module SatelliteSurface =
 
     let private spec (port: SatelliteSessionPort) linked =
         { Kind = SatelliteKind.Companion
-          Agent = "blogger"
+          Agent = "companion"
           Title = "Companion"
           Directory = None
-          RestoredSessionId = if linked then Some(SessionId.create "blogger-1") else None
+          RestoredSessionId =
+            if linked then
+                Some(SessionId.create "companion-1")
+            else
+                None
           Link = port.Link
           Close = port.Close }
 

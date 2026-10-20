@@ -8,7 +8,7 @@
 
 ## 三材料装配
 
-`AdvisorView.plan(language, delivered, request)` 是纯函数（无 Host、无 journal、无时钟，同输入必得同字节）：把调用者交出的 messages（anchor + 文本）按声明裁到 `prefixUntil` 之上、排除已交付的 anchor，`thenRemove` 命中的 anchor 用摘要替换其文本，然后渲染成 blogger 形状的一条 view prompt——作者写的 `# ` 注释表头、一个空行、之后每记录一张 `[[new_work_to_record]]` 表。表头文本取自 `resources/provider/lifecycle/advisor/view`（双语同一语义路径，按 `language` 选 locale），因此顾问读调用者材料的方式与 Blogger 读 delta 的方式一致。intent 不进入这条 prompt：`consult` 时 view prompt 与 intent 作为两条独立 prompt 追加，顾问自己的 law 由 Host 的 agent 配置与 system transform 投影，三条材料永不拼接。
+`AdvisorView.plan(language, delivered, request)` 是纯函数（无 Host、无 journal、无时钟，同输入必得同字节）：把调用者交出的 messages（anchor + 文本）按声明裁到 `prefixUntil` 之上、排除已交付的 anchor，`thenRemove` 命中的 anchor 用摘要替换其文本，然后渲染成 TOML 视图形状的一条 view prompt——作者写的 `# ` 注释表头、一个空行、之后每记录一张 `[[new_work_to_record]]` 表。表头文本取自 `resources/provider/lifecycle/advisor/view`（双语同一语义路径，按 `language` 选 locale）。intent 不进入这条 prompt：`consult` 时 view prompt 与 intent 作为两条独立 prompt 追加，顾问自己的 law 由 Host 的 agent 配置与 system transform 投影，三条材料永不拼接。
 
 ## 增量与游标
 

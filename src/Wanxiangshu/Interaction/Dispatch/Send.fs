@@ -889,11 +889,11 @@ module PromptDispatcherSend =
                     tools
             | None -> this.SendAgentOwnerRootWithSeed port sessionId text directory tools issueIdentitySeed
 
-        /// provider-attempt-recovery-008: the one Blogger-request + terminal-scoped interaction repair an unusable terminal earns.
+        /// provider-attempt-recovery-008: the one request + terminal-scoped interaction repair an unusable terminal earns.
         ///
-        /// Its payload digest names the occasion (BloggerRequestId + terminal
+        /// Its payload digest names the occasion (RepairRequestId + terminal
         /// provider run + repair kind), not the prompt text. Request identity
-        /// prevents an earlier Blogger request on the same long-lived run from
+        /// prevents an earlier request on the same long-lived run from
         /// spending the next request's nudge/AABB budget.
         ///
         /// Deriving the digest this way is also what makes the budget durable: it
@@ -903,7 +903,7 @@ module PromptDispatcherSend =
             (port: IDispatchSessionPort)
             (sessionId: SessionId)
             (text: string)
-            (requestId: BloggerRequestId)
+            (requestId: RepairRequestId)
             (terminalProviderRun: ProviderRunIdentity)
             (repairKind: string)
             (profile: PromptAuthority.AuthorityExecutionProfile)
@@ -986,7 +986,7 @@ module PromptDispatcherSend =
             (port: IDispatchSessionPort)
             (sessionId: SessionId)
             (text: string)
-            (requestId: BloggerRequestId)
+            (requestId: RepairRequestId)
             (terminalProviderRun: ProviderRunIdentity)
             (repairKind: string)
             (profile: PromptAuthority.AuthorityExecutionProfile)

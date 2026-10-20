@@ -14,9 +14,11 @@ type JsCapability =
     /// description gates its artifact-write teaching blocks on it.
     | Edit
     | Glob
+    /// `rg(argv)`: one ripgrep argv, always invoked as `rg --json`.
+    | Grep
     | Move
     | Remove
-    /// Host-owned long-running command engineering (`js.run`).
+    /// Host-owned long-running command engineering (`js.call`).
     | Exec
     /// Delegation primitives: create a child work (`fork`) and wait for the
     /// caller's children (`join`).
@@ -36,13 +38,14 @@ type JsCapability =
 module JsCapability =
 
     /// The only ToolPermission → JsCapability mapping. A permission without a
-    /// js-* projection (edit, grep, pty, ask, review, …) produces no member
+    /// js-* projection (edit, pty, ask, review, …) produces no member
     /// (JS-004 four-layer exactness).
     let ofToolPermission (permission: ToolPermission) : JsCapability option =
         match permission with
         | ToolPermission.Read -> Some JsCapability.Read
         | ToolPermission.Write -> Some JsCapability.Write
         | ToolPermission.Glob -> Some JsCapability.Glob
+        | ToolPermission.Grep -> Some JsCapability.Grep
         | ToolPermission.Move -> Some JsCapability.Move
         | ToolPermission.Remove -> Some JsCapability.Remove
         | ToolPermission.Exec -> Some JsCapability.Exec
@@ -163,6 +166,34 @@ module JsFragmentRegistry =
             + "}"
           RuntimeBindingKey = "js.ls" }
 
+    let rg: JsCapabilityFragment =
+        { Capability = JsCapability.Grep
+          MemberName = "rg"
+          Signature = "async rg(argv)"
+          Description =
+            "rg(argv) — one argv. A content search is `rg --json` plus that argv. "
+            + "--files, --files-with-matches, -l, --files-without-match, --count, -c, "
+            + "--count-matches, --quiet, -q, --vimgrep and --type-list are passed through "
+            + "because rg refuses them with --json. argv is a string array, unchanged; "
+            + "do not shell-quote it and do not pass --json yourself. A search with no path "
+            + "does not search the workspace: pass the path. This member does not add "
+            + "--no-ignore; put it in argv when ignored paths must be searched. "
+            + "Returns one JSON object, never text. Content search: { exitCode, messages }, "
+            + "messages the parsed JSON Lines (begin, match, context, end, summary). "
+            + "The modes above: { exitCode, paths }. "
+            + "exitCode 0 means a hit or a listed path; exitCode 1 means a successful search "
+            + "or listing with nothing, and is not a failure. A non-array argv is "
+            + "INVALID_ARGUMENT. A path outside the workspace is PATH_DENIED. Any other rg "
+            + "failure is RG_FAILED."
+          CanonicalExample =
+            "class Js extends JsProgram {\n"
+            + "  async run() {\n"
+            + "    const found = await this.rg([\"RetryPolicy\", \"src\", \"-g\", \"*.fs\"]);\n"
+            + "    return found.messages.filter((message) => message.type === \"match\");\n"
+            + "  }\n"
+            + "}"
+          RuntimeBindingKey = "js.rg" }
+
     let stat: JsCapabilityFragment =
         { Capability = JsCapability.Read
           MemberName = "stat"
@@ -234,22 +265,26 @@ module JsFragmentRegistry =
             + "}"
           RuntimeBindingKey = "js.where" }
 
-    let run: JsCapabilityFragment =
+    let call: JsCapabilityFragment =
         { Capability = JsCapability.Exec
-          MemberName = "run"
-          Signature = "js.run(class extends js.Runnable { ... })"
+          MemberName = "call"
+          Signature = "js.call(class extends js.Callable { ... })"
           Description =
-            "js.run(class extends js.Runnable { ... }) — the host-owned engineering loop, "
-            + "called on the global js object. this.run is YOUR program entry, never this "
-            + "member: the names collide on purpose, so the engineering run never lands on "
-            + "the base class. The class must declare a positive maxDuration, next(ctx), "
-            + "watch(ctx) and sanity(); the host runs the sanity thunks first, then each "
-            + "command, calls watch once per interval slice, dispatches onExit and enforces "
-            + "maxDuration. sanity() returns { nextDone, watchVeto } thunks: nextDone puts "
-            + "the instance into the all-done state and drives next (the host requires null "
-            + "back), watchVeto puts it into the something-is-wrong state and drives watch "
-            + "(the host requires a veto) — writing the thunks is designing the termination "
-            + "condition, and a thunk that fails to show its exit parks the whole js.run "
+            "js.call(class extends js.Callable { ... }) — the host-owned engineering loop, "
+            + "called on the global js object, never on the base class: the call is "
+            + "js.call(...), and this.call(...) does not exist. Your program entry is "
+            + "async run() — a different name for a different thing. The class must "
+            + "declare a positive maxDuration, next(ctx), "
+            + "watch(ctx) and sanity(); the host runs the sanity thunks first and calls "
+            + "next and watch with the argument arrays they return, then each command, "
+            + "calls watch once per interval slice, dispatches onExit and enforces "
+            + "maxDuration. sanity() returns { nextDone, watchVeto } thunks that return "
+            + "argument arrays and never call next or watch themselves: nextDone puts the "
+            + "instance into the all-done state and returns [ctx] (the host calls next and "
+            + "requires null), watchVeto puts it into the something-is-wrong state and "
+            + "returns [ctx] (the host calls watch and requires a veto) — writing the thunks "
+            + "is designing the termination condition, and a thunk that fails to show its "
+            + "exit parks the whole js.call "
             + "with the diagnosis payload; fix the class in a new call, or unpark with a "
             + "value the program consumes as the outcome. next is a LOOP callback, not a "
             + "one-shot declaration: after every command exits the host calls next again, "
@@ -276,13 +311,13 @@ module JsFragmentRegistry =
             + "onExit(result) receives { root, exitCode, stdout, stderr, elapsedMs } with "
             + "that child's full transcript. Returns { ok, status, reason, exitCode, "
             + "stdout, stderr, truncated, bytes, durationMs, steps } — steps counts loop "
-            + "rounds — or { ok: false, code } with RUNNABLE_SPEC_INCOMPLETE / "
-            + "RUN_COMMAND_UNSUPPORTED / RUN_WAIT_TIMEOUT / RUN_CHILD_UNKNOWN / "
-            + "RUN_PARK_UNSUPPORTED."
+            + "rounds — or { ok: false, code } with CALLABLE_SPEC_INCOMPLETE / "
+            + "CALL_COMMAND_UNSUPPORTED / CALL_WAIT_TIMEOUT / CALL_CHILD_UNKNOWN / "
+            + "CALL_PARK_UNSUPPORTED."
           CanonicalExample =
             "class Js extends JsProgram {\n"
             + "  async run() {\n"
-            + "    const outcome = await js.run(class extends js.Runnable {\n"
+            + "    const outcome = await js.call(class extends js.Callable {\n"
             + "      maxDuration = 60000;\n"
             + "      async next(ctx) {\n"
             + "        return ctx.step === 0 ? \"git log --oneline\" : null;\n"
@@ -294,8 +329,8 @@ module JsFragmentRegistry =
             + "      }\n"
             + "      sanity() {\n"
             + "        return {\n"
-            + "          nextDone: () => this.next({ root: \"/\", step: 1 }),\n"
-            + "          watchVeto: () => this.watch({ root: \"/\", step: 0, stdout: \"\", stderr: \"\", exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }),\n"
+            + "          nextDone: () => [{ root: \"/\", step: 1 }],\n"
+            + "          watchVeto: () => [{ root: \"/\", step: 0, stdout: \"\", stderr: \"\", exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }],\n"
             + "        };\n"
             + "      }\n"
             + "    });\n"
@@ -303,7 +338,7 @@ module JsFragmentRegistry =
             + "    return outcome.ok ? outcome.stdout.split(\"\\n\").slice(0, 10) : outcome;\n"
             + "  }\n"
             + "}"
-          RuntimeBindingKey = "js.run" }
+          RuntimeBindingKey = "js.call" }
 
     let fork: JsCapabilityFragment =
         { Capability = JsCapability.Fork
@@ -351,7 +386,7 @@ module JsFragmentRegistry =
           Signature = "async join()"
           Description =
             "join() — wait for this session's children and return "
-            + "{ ok, records: [{ name, agentId, role, status, workRecord }], byName } "
+            + "{ ok, records: [{ name, agentId, role, status, view }], byName } "
             + "(status: completed | undelivered | failed | abandoned) or { ok: false, code }. Membership-scoped: "
             + "it collects the children this caller created, not an explicit handle list."
           CanonicalExample =
@@ -414,7 +449,7 @@ module JsFragmentRegistry =
             + "answer back as data, never as a rendering: { ok, advice } carrying the "
             + "advisor's prose, or { ok: false, reason, code } — code advisor-unavailable — "
             + "when the seat cannot answer. The advisor reads its own law, the view rendered "
-            + "in the Chronicle shape (a comment header plus [[new_work_to_record]] data "
+            + "in TOML shape (a comment header plus [[new_work_to_record]] data "
             + "tables), and the intent as separate prompts, never merged. view is an ANCHOR "
             + "view declaration ({ prefixUntil, thenRemove }) choosing the material to hand "
             + "over; a follow-up call delivers only the view delta since the part already "
@@ -466,11 +501,12 @@ module JsFragmentRegistry =
           mv
           cat
           ls
+          rg
           stat
           mkdir
           whereAll
           where
-          run
+          call
           fork
           dag
           join

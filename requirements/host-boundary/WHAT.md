@@ -74,7 +74,7 @@
 
 ## [019] Host 物理能力缺口必有 Canary 与 Contract 证明
 
-业务所依赖的全部宿主物理能力（包括时序、快照解析、模型路由等）必须同时具备契约测试与真实 canary：canary 必须启动受支持的真实 Host build，经公开 Hook/SDK 发起实际场景并观察公开结果；mock adapter、源码/类型形状检查、伪造 callback 与 UI 截图均不算 canary。缺少任一级证明即判定环境不支持。一次 provider transform 内若 XWire 选择未提交的 prefix probe，必须以 typed `PrefixPresentationHorizon.TentativeCold` 直接返回给同一静态组合根；组合根据此在当前调用中抑制会重放旧历史 horizon 的后置 auxiliary projectors。该事实不得通过跨 callback mutable registry/flag 传播。
+业务所依赖的全部宿主物理能力（包括时序、快照解析、模型路由等）必须同时具备契约测试与真实 canary：canary 必须启动受支持的真实 Host build，经公开 Hook/SDK 发起实际场景并观察公开结果；mock adapter、源码/类型形状检查、伪造 callback 与 UI 截图均不算 canary。缺少任一级证明即判定环境不支持。一次 provider transform 不选择未提交的 probe，也不以跨 callback mutable registry/flag 传递截断决定。
 
 ## [020] 观测不足或多解严格 Fail-Closed
 
@@ -145,7 +145,7 @@ Root workspace 是process-local Host资源定位结果，不是公开可变状�
 
 ## [032] Contract 提示字段解耦与参数清理安全
 
-工具入参中的 `contract` 仅作为对 provider 的提示字段；插件本地对缺失或错误的 `contract` 采取乐观处理，不进行二次强校验。执行清理时，对需要暂存的参数执行私有暂存，并在 `after` 回调中原样恢复；异常退出路径同样保证同源恢复，确保历史原始调用与上下文记录不被参数清理逻辑改写。此处「历史」指每次 provider 请求发给模型的 provider wire 层历史投影：参数清理后由 provider-facing transform 从 before 期私有暂存还原协议字段，使 wire 层历史保留原始入参；宿主持久化快照的内部形态属宿主实现，在公开 Hook API 内既不可满足也不可观测，不作为本仓门禁对象。参数恢复后的对象身份与原始键顺序必须以真实 canary 得到严格证明。参数清理机制按字段所有权处理：服务评审提示字段 `contract` 与仅限参与工具的只读委托估计字段 `estimated_readonly_rounds` / `self_note`。对第 5.2 节参与工具，业务执行视图对其估计字段执行剥除并在 `after`（含异常退出、重复调用与并发回调）同源恢复原始 arguments、自有键顺序与原始证据；两类字段互不覆盖、互不串值，provider wire 层调用记录保留原始入参。不参与工具（及未判定工具）属于 no-op 路径，本机制对其参数不读取、不剥离、不校验，其自有同名字段原样透传。对于参与工具的估计字段校验，非法输入在 before 阶段拒绝并进入参数错误路径，不触发全进程 fuse；建议性短记 `self_note` 的形态不构成调用失败，该填不填、不该填填了、填空白或非字符串均不视为失败。工具定义装饰按 Predictor 只读配置存在性查询两态门控：查询为已配置时，仅对第 5.2 节参与工具 schema 追加必选 `estimated_readonly_rounds` 与条件 `self_note` 字段及客观事实说明，与评审 `contract` 装饰并存；未参与工具无任何增量；未配置时不装饰、不追加。查询结构非法时该 hook 按其 ToolDefinition 既有 fail-closed 处置明确失败，不得静默降级为未配置，也不得发布不完整协议。原始参数保证主要落在 provider wire 历史投影，不得承诺 Host 持久化快照对象形态或宣称重启后宿主内部字段必然完整。该查询由 ModelRouting 随唯一 MJS 模型配置在 Load Phase 一次加载并持有，工具装饰与委托准入共用同一结果，不存在第二份 enabled 真相。
+工具入参中的 `contract` 仅作为对 provider 的提示字段；插件本地对缺失或错误的 `contract` 采取乐观处理，不进行二次强校验。执行清理时，对需要暂存的参数执行私有暂存，并在 `after` 回调中原样恢复；异常退出路径同样保证同源恢复，确保历史原始调用与上下文记录不被参数清理逻辑改写。此处「历史」指每次 provider 请求发给模型的 provider wire 层历史投影：参数清理后由 provider-facing transform 从 before 期私有暂存还原协议字段，使 wire 层历史保留原始入参；宿主持久化快照的内部形态属宿主实现，在公开 Hook API 内既不可满足也不可观测，不作为本仓门禁对象。参数恢复后的对象身份与原始键顺序必须以真实 canary 得到严格证明。参数清理机制只按字段所有权处理服务评审提示字段 `contract`。不为工具定义追加估计轮次或短记字段。原始参数保证主要落在 provider wire 历史投影，不得承诺 Host 持久化快照对象形态或宣称重启后宿主内部字段必然完整。
 
 ## [033] 读取端 hook 的 exact 只读租约校验
 

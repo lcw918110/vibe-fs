@@ -14,7 +14,7 @@
 
 ## [003] Provider retry 授权
 
-仅 `ProviderTransient`、`ProviderPermanent` 可在 `ProviderStarted × Closed breaker × Available retry budget × 可恢复 request kind` 下授权 retry；`Open` 或 `Exhausted` 输出终态，其他 phase 不重试，`StrengthReplica` 不消耗 owner recovery。恢复事实只含一个预算、一个 breaker、request kind 与 logical/provider run identity。其他失败类别不授权 retry；提交未知先 reconciliation，已有可见 token 的中断不自动重放。
+仅 `ProviderTransient`、`ProviderPermanent` 可在 `ProviderStarted × Closed breaker × Available retry budget × 可恢复 request kind` 下授权 retry；`Open` 或 `Exhausted` 输出终态，其他 phase 不重试（`StrengthReplica` 与 `BloggerMain` 已随 clean-break 彻底退役）。恢复事实只含一个预算、一个 breaker、request kind 与 logical/provider run identity。其他失败类别不授权 retry；提交未知先 reconciliation，已有可见 token 的中断不自动重放。
 
 每次 retry 携带 caller 不可构造的授权，精确绑定 `LogicalRunId`、源 `ProviderRunIdentity`、request kind 及由三者纯派生的稳定 `ProviderRecoveryDecisionId`。同一决策重放 identity 不变，新 attempt 产生新 identity；恢复 prompt 标识含 decision 与源 attempt identity，可见文本保持一致。同一授权的重复物理发射由 ledger owner 去重。
 
@@ -42,7 +42,7 @@
 
 Host 上报的 session error 一律解码为 `ProviderTransient`，只有 typed operator abort 与 supersede 分别为 `UserCancelled`、`Superseded`。工具语义错误留在 Host 的 part 循环；plugin、config、schema、permission 等 hook 失败仍按 `host-provider-failure-ownership` fail-loud，其他可信边界仍可产生 [001] 的其他类别。
 
-恢复由 `provider-attempt-recovery` 独占：重建 prefix、去掉旧 retry 行，以 `ProviderRetryAttempt` 替换上下文；不盲目重放已有可见输出的 attempt。预算耗尽按 `host-provider-failure-ownership` 产生唯一 typed terminal。
+恢复由 `provider-attempt-recovery` 独占：去掉旧 retry 行，以 `ProviderRetryAttempt` 执行原样重试或拉黑 Provider 后重试（[021]）；不盲目重放已有可见输出的 attempt。预算耗尽按 `host-provider-failure-ownership` 产生唯一 typed terminal。
 
 ## [010] 致命入口逐处有据
 

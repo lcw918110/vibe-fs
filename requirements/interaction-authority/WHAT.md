@@ -92,7 +92,7 @@ Authority 的 durable terminal interpreter 校验 source witness 与 accepted ro
 ## [021] 历史事件不可变与旧身份不升权
 
 历史 EventStore 事实保持原样，历史事件中记录的旧身份（Coder、Inspector、Browser、Inquiry、Distiller）仅用于历史审计、会话回溯与不变重放，严禁重写事件日志。
-历史旧身份解码严格隔离在历史边界，严禁在活跃权限计算或执行准入中将旧 Inspector/Coder 静默升级为新 Engineer 权限；新交互只接纳当前合法身份集合（Engineer、DevOps、Manager、Orchestrator、Blogger 等），非法或遗留身份的交互请求必须 fail-closed 阻断。
+历史旧身份解码严格隔离在历史边界，严禁在活跃权限计算或执行准入中将旧 Inspector/Coder 静默升级为新 Engineer 权限；新交互只接纳当前合法身份集合（Engineer、DevOps、Manager、Orchestrator、Plan）。Blogger、Predictor 与只读副本不是合法身份。非法或遗留身份的交互请求必须 fail-closed 阻断。
 
 ## [022] DevOps 恢复与续行保持固定模型与执行权威
 

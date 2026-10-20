@@ -22,10 +22,8 @@ module ManagedAgentCatalog =
         | Persona.Researcher -> "researcher"
         | Persona.Analyst -> "analyst"
         | Persona.Auditor -> "auditor"
-        | Persona.Chronicler -> "chronicler"
         | Persona.Distiller -> "distiller"
         | Persona.Curator -> "curator"
-        | Persona.Predictor -> "predictor"
         | Persona.Planner -> "planner"
 
     /// Parse one exact lowercase Host `calling` label into typed identity.
@@ -52,15 +50,11 @@ module ManagedAgentCatalog =
         | "inquirer" -> Some Persona.Analyst
         | "auditor"
         | "examiner" -> Some Persona.Auditor
-        | "chronicler"
-        | "blogger"
-        | "scribe" -> Some Persona.Chronicler
         | "distiller"
         | "condenser" -> Some Persona.Distiller
         | "curator"
         | "bookkeeper"
         | "clerk" -> Some Persona.Curator
-        | "predictor" -> Some Persona.Predictor
         | "planner"
         | "plan" -> Some Persona.Planner
         | _ -> None
@@ -84,7 +78,7 @@ module ManagedAgentCatalog =
 
     /// Canonical managed agent names using single role versions.
     let requiredNames: string list =
-        (allRoles |> List.map Roles.roleLabel) @ [ "bookkeeper"; "predictor" ]
+        (allRoles |> List.map Roles.roleLabel) @ [ "bookkeeper" ]
 
     let managerForkableNames: string list =
         managerForkableRoles |> List.map Roles.roleLabel

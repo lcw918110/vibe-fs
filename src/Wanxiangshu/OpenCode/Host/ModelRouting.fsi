@@ -17,19 +17,6 @@ module ModelRouting =
     val internal seedBoundDevOpsModel: sessionId: SessionId -> value: string -> unit
     val internal capacityOwnership: lease: ExecutionAdmissionLease -> CapacityOwnership
 
-    /// Read-only Predictor slot existence query result, derived from the
-    /// same MJS model configuration. Absent or empty Predictor candidates are
-    /// not configured; valid non-empty candidates are configured; a malformed
-    /// structure is a configuration error. Capacity and provider health do not
-    /// change the configured state.
-    [<RequireQualifiedAccess>]
-    type PredictorConfiguration =
-        | Configured
-        | NotConfigured
-        | ConfigurationInvalid of reason: string
-
-    val predictorConfiguration: scheduler: obj -> PredictorConfiguration
-
     val invokeScheduler:
         scheduler: obj ->
         role: string ->
@@ -56,8 +43,6 @@ module ModelRouting =
             purpose: ModelExecutionPurpose *
             lenderSessionId: string option ->
                 Task<ExecutionAdmissionAcquisition>
-
-        member PredictorConfiguration: PredictorConfiguration
 
         member ExecutionAdmissionTarget:
             lease: ExecutionAdmissionLease -> Result<ModelRoutingTarget, ExecutionAdmissionRejection>
@@ -215,8 +200,6 @@ module ModelRouting =
     val internal wasStoppedExecutionSuperseded: key: ChatExecutionKey -> bool
 
     val internal ownsExecutionAdmission: key: ChatExecutionKey -> bool
-
-    val internal sharedPredictorConfiguration: unit -> PredictorConfiguration
 
 
     val internal rememberProviderStepIdentity:

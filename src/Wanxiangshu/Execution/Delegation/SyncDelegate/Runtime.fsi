@@ -37,7 +37,7 @@ type SyncDelegateRetryPort =
 type SyncDelegateRuntime =
     new:
         sessions: ISessionHostPort *
-        awaitWorkRecord: (DiagnosticWait -> Task<Result<string, string>> -> Task<Result<string, string>>) *
+        awaitView: (DiagnosticWait -> Task<Result<string, string>> -> Task<Result<string, string>>) *
         awaitInvocation:
             (DiagnosticWait
                 -> Task<Result<SyncDelegateInvocationResult, string>>

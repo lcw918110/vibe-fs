@@ -96,24 +96,10 @@ export const terminal = (disposition, profile) => {
 export const canonical = (family, name, payload) => JSON.stringify(['Agent', [family, [name, payload]]])
 export const id = (kind, value) => [kind, value]
 
-export const materialized = (request = 'request', blogger = 'blogger') => canonical('Context', 'BloggerRequestMaterialized', {
-  RequestId: id('BloggerRequestId', request), MainSessionId: id('SessionId', 'parent'),
-  BloggerSessionId: id('SessionId', blogger), RequestKind: 'main',
-  ContextRef: id('BlobRef', 'blobs/context'), ContextDigest: id('BlobDigest', 'digest-context'),
-  ObservedPrefixEpochId: id('PrefixEpochId', 0), PreviousIngestedThroughSequence: '699',
-  NextIngestedThroughSequence: '706', FrameEpochId: id('FrameEpochId', 0),
-  SelectedFrameDigests: [], PromptKey: null,
-})
-
-export const abandoned = (request = 'request', blogger = 'blogger') => canonical('Context', 'BloggerRequestAbandoned', {
-  RequestId: id('BloggerRequestId', request), MainSessionId: id('SessionId', 'parent'),
-  BloggerSessionId: id('SessionId', blogger), Reason: 'stale-open-at-load',
-})
-
 export const admittedFission = () => canonical('Fission', 'FissionAdmitted', {
   GroupId: 'group', OwnerSessionId: id('SessionId', 'owner'), ParentSessionId: null,
   OriginToolCallId: id('ToolCallId', 'fission-call'), LaneCount: 2,
   LaneSessions: [id('SessionId', 'lane-0'), id('SessionId', 'lane-1')],
-  LanePrompts: ['left', 'right'], OwnerWorkRecordRef: id('BlobRef', 'blobs/work'),
-  OwnerWorkRecordDigest: id('BlobDigest', 'digest-work'), PreFissionCompletionIds: [],
+  LanePrompts: ['left', 'right'], OwnerViewRef: id('BlobRef', 'blobs/work'),
+  OwnerViewDigest: id('BlobDigest', 'digest-work'), PreFissionCompletionIds: [],
 })

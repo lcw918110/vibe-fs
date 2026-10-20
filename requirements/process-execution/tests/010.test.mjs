@@ -1,22 +1,24 @@
 import test from 'node:test'
 
 {
-// Host-native `run` tool is retired; `js.run` supersedes it (repository-programming [050]-[052]).
+// Host-native `run` tool is retired; `js.call` supersedes it (repository-programming [050]-[052]).
 const { default: assert } = await import('node:assert/strict')
 const { default: test } = await import('node:test')
 const { sandbox, runProgram, caseName, parseData } = await import('./support/executor.mjs')
 
-test('WHAT[process-execution-010] js.run completed command reports exit code and streams via onExit and outcome', async () => {
+test('WHAT[process-execution-010] js.call completed command reports exit code and streams via onExit and outcome', async () => {
   const { dir, cleanup } = sandbox('wxs-proc-010a-')
   try {
     const outcome = await runProgram(
       dir,
       `    let exitedWith = null;
-    const result = await js.run(class extends js.Runnable {
+    const result = await js.call(class extends js.Callable {
       maxDuration = 5000;
       interval = 50;
       next(ctx) { return ctx.step === 0 ? "printf 'hello-stdout'; printf 'hello-stderr' >&2" : null; }
       check() { return true; }
+      watch(ctx) { if (ctx.exited && ctx.exitCode !== 0) return { abort: "command failed" }; return true; }
+      sanity() { return { nextDone: () => [{ root: '/', step: 1 }], watchVeto: () => [{ root: '/', step: 0, stdout: '', stderr: '', exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }] }; }
       onExit(r) { exitedWith = { exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr }; }
     });
     return { exitCode: result.exitCode, onExitStdout: exitedWith.stdout, onExitStderr: exitedWith.stderr };`,
@@ -31,16 +33,18 @@ test('WHAT[process-execution-010] js.run completed command reports exit code and
   }
 })
 
-test('WHAT[process-execution-010] js.run nonzero exit is reported as data rather than thrown', async () => {
+test('WHAT[process-execution-010] js.call nonzero exit is reported as data rather than thrown', async () => {
   const { dir, cleanup } = sandbox('wxs-proc-010b-')
   try {
     const outcome = await runProgram(
       dir,
-      `    return await js.run(class extends js.Runnable {
+      `    return await js.call(class extends js.Callable {
       maxDuration = 5000;
       interval = 50;
       next(ctx) { return ctx.step === 0 ? "exit 3" : null; }
       check() { return true; }
+      watch(ctx) { if (ctx.exited && ctx.exitCode !== 0 && ctx.exitCode !== 3) return { abort: "command failed" }; return true; }
+      sanity() { return { nextDone: () => [{ root: '/', step: 1 }], watchVeto: () => [{ root: '/', step: 0, stdout: '', stderr: '', exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }] }; }
     });`,
     )
     assert.equal(caseName(outcome), 'Succeeded')

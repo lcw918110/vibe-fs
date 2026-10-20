@@ -28,11 +28,11 @@
 
 ## [006] 内部状态优先转成行动相关后果
 
-任务槽位、缓冲区、重试轮次等内部状态，只以对当前工作和下一步行动的后果或 WorkRecord 呈现。
+任务槽位、缓冲区、重试轮次等内部状态，只以对当前工作和下一步行动的后果或已交付的 TOML 视图呈现。
 
 ## [007] 内部参与者不进入 provider-visible surface
 
-Blogger、Bookkeeper、Predictor 等内部辅助角色不进入模型可见的 enum、Schema、fork 候选或参数说明；内部任务切片与会话标识不进入工具面。
+Bookkeeper 等内部辅助角色不进入模型可见的 enum、Schema、fork 候选或参数说明；内部任务切片与会话标识不进入工具面。
 
 ## [008] 隐藏 review 编排不进 Manager horizon
 
@@ -48,11 +48,11 @@ Manager 的 system prompt、continuation、Schema、错误、工具描述及结�
 - Orchestrator `commission` 只委托 Manager；合法身份词汇由 participant-identity 与 delegation 定义。
 - 固定 DevOps 由合法 Runtime 绑定创建，在模型视界中仅以稳定 Byname（常量 `devops`）呈现，仅通过 `resume` 续做调用（传入 name = `devops`），严禁出现在 `fork` 的候选名单中。
 - `horizon()` 仅返回在场名册的 Byname 或 TerminalName，不暴露底层 id。
-- Blogger、Bookkeeper、Predictor 等内部角色以及 coder、inspector、browser、inquiry、distiller 严禁出现在可 fork 集合中。
+- Bookkeeper 等内部角色以及已退役或非法的历史角色名（如 blogger、predictor、coder、inspector、browser、inquiry、distiller）严禁出现在可 fork 集合中。
 
 ## [011] `horizon()` 是 pull-only snapshot
 
-`horizon()` 只在调用时读取当前快照，不轮询、推送或订阅。可见子智能体须提供最新 durable WorkRecord；不可读时说明，不以旧记录代替。
+`horizon()` 只在调用时读取当前快照，不轮询、推送或订阅。可见子智能体须提供最新已交付的 TOML 视图记录（不存在三段式 `WorkRecord`）；不可读时说明，不以旧记录代替。
 
 已 durable 建立的可见 child，在最终后果交付前不得消失。`Abandoned` 仍按 Byname 显示“未返回”，直至 Join 消费后果并将 handle 置为 `Retired`；仅 `Retired` 可移出名册。
 

@@ -4,7 +4,7 @@ open System
 open System.Threading.Tasks
 open Fable.Core.JsInterop
 
-/// AGENT-027: internal Semble search. Not Host mcp. Not Strength.
+/// AGENT-027: internal Semble search. Not Host mcp.
 module SembleMcpClient =
 
     let private variableText (vars: obj) name =

@@ -117,7 +117,7 @@ test('WHAT[work-038] a fresh tenure with empty findings is promoted', async () =
 
 test('WHAT[work-038] promoting a plan tenure via review tool immediately returns the next stage method in the tool result', async () => {
   await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(directory)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
     const sessionID = 'ses-plan-review-promotion'
     await acceptAuthorityRoot(runtime, sessionID, 'plan', 'user-plan-root')
     const opened = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, directory, sessionID, 0n)
@@ -185,7 +185,7 @@ test('WHAT[work-038] promoting a plan tenure via review tool immediately returns
 test('WHAT[work-038] ReviewShell admission admits both Manager (ReviewAssessment) and Plan (Review) roles', () => {
   assert.equal(rolePredicate('review', 'plan'), true)
   assert.equal(rolePredicate('review', 'manager'), true)
-  for (const role of ['engineer', 'devops', 'orchestrator', 'blogger']) {
+  for (const role of ['engineer', 'devops', 'orchestrator']) {
     assert.equal(rolePredicate('review', role), false, `${role} must be denied admission to review`)
   }
 })

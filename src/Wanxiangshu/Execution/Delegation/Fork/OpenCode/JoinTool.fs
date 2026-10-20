@@ -55,7 +55,7 @@ module JoinTool =
           AgentId: string
           Role: string
           Status: string
-          WorkRecord: string }
+          View: string }
 
     let private lang (ctx: HostToolContext) =
         ProviderLanguageBinding.forSessionText ctx.SessionId
@@ -365,8 +365,8 @@ module JoinTool =
             |> Option.orElseWith (fun () -> findRuntimeAgentRole runtime agentId)
             |> Option.defaultValue ""
 
-    let private decideCompletedStatus (workRecord: string) =
-        if String.IsNullOrWhiteSpace workRecord then
+    let private decideCompletedStatus (view: string) =
+        if String.IsNullOrWhiteSpace view then
             "undelivered"
         else
             "completed"
@@ -379,43 +379,43 @@ module JoinTool =
         : JoinRecord =
         match item with
         | JoinItem.AgentItem(AgentCompletedItem payload) ->
-            let workRecord = if isNull payload.WorkRecord then "" else payload.WorkRecord
+            let view = if isNull payload.View then "" else payload.View
 
             { Name = resolveName payload.AgentId
               AgentId = payload.AgentId
               Role = Roles.roleLabel payload.Role
-              Status = decideCompletedStatus workRecord
-              WorkRecord = workRecord }
+              Status = decideCompletedStatus view
+              View = view }
         | JoinItem.AgentItem(AgentFailedItem payload) ->
             { Name = resolveName payload.AgentId
               AgentId = payload.AgentId
               Role = resolveRole payload.AgentId payload.Role
               Status = "failed"
-              WorkRecord = if isNull payload.Message then "" else payload.Message }
+              View = if isNull payload.Message then "" else payload.Message }
         | JoinItem.AgentItem(AgentAbandonedItem(agentId, _)) ->
             { Name = resolveName agentId
               AgentId = agentId
               Role = resolveRole agentId None
               Status = "abandoned"
-              WorkRecord = "" }
+              View = "" }
         | JoinItem.PtyItem(PtyExited payload) ->
             { Name = resolveLabel payload.PtyId
               AgentId = payload.PtyId
               Role = Roles.roleLabel Role.DevOps
               Status = "completed"
-              WorkRecord = if isNull payload.Outcome then "" else payload.Outcome }
+              View = if isNull payload.Outcome then "" else payload.Outcome }
         | JoinItem.PtyItem(PtyFailed payload) ->
             { Name = resolveLabel payload.PtyId
               AgentId = payload.PtyId
               Role = Roles.roleLabel Role.DevOps
               Status = "failed"
-              WorkRecord = if isNull payload.Message then "" else payload.Message }
+              View = if isNull payload.Message then "" else payload.Message }
         | JoinItem.PtyItem(PtyAborted payload) ->
             { Name = resolveLabel payload.PtyId
               AgentId = payload.PtyId
               Role = Roles.roleLabel Role.DevOps
               Status = "abandoned"
-              WorkRecord = if isNull payload.Message then "" else payload.Message }
+              View = if isNull payload.Message then "" else payload.Message }
 
     let private mapResultsAvailable
         language
@@ -468,31 +468,31 @@ module JoinTool =
               AgentId = ManagerJobId.value jobId
               Role = Roles.roleLabel Role.Manager
               Status = "completed"
-              WorkRecord = CommitHash.value head }
+              View = CommitHash.value head }
         | OrchestratorVerdict.Cancelled jobId ->
             { Name = resolveManagerJobName scope jobId
               AgentId = ManagerJobId.value jobId
               Role = Roles.roleLabel Role.Manager
               Status = "abandoned"
-              WorkRecord = "" }
+              View = "" }
         | OrchestratorVerdict.RejectedDirty reason ->
             { Name = ""
               AgentId = ""
               Role = Roles.roleLabel Role.Manager
               Status = "failed"
-              WorkRecord = if isNull reason then "" else reason }
+              View = if isNull reason then "" else reason }
         | OrchestratorVerdict.IntegrationFailed(jobId, errorDetails) ->
             { Name = resolveManagerJobName scope jobId
               AgentId = ManagerJobId.value jobId
               Role = Roles.roleLabel Role.Manager
               Status = "failed"
-              WorkRecord = if isNull errorDetails then "" else errorDetails }
+              View = if isNull errorDetails then "" else errorDetails }
         | OrchestratorVerdict.Empty ->
             { Name = ""
               AgentId = ""
               Role = Roles.roleLabel Role.Manager
               Status = "abandoned"
-              WorkRecord = "" }
+              View = "" }
 
     let private executeOrchestratorJoinReceipt
         (scope: ToolRuntimeScope)

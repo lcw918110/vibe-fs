@@ -139,7 +139,7 @@ module PromptDispatcher =
 
         member RepairAlreadyClaimed:
             profile: PromptAuthority.AuthorityExecutionProfile ->
-            requestId: BloggerRequestId ->
+            requestId: RepairRequestId ->
             terminalProviderRun: ProviderRunIdentity ->
             repairKind: string ->
                 bool

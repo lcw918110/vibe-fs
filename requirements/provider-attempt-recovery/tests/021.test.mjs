@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import * as xwire from '../../../dist/Context/Prefix/XWireSurface.js'
+import * as failurePolicy from '../../../dist/Execution/Failure/Surface.js'
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as routing from '../../../dist/OpenCode/Host/ModelRoutingSurface.js'
 import * as failureOwner from '../../../dist/Participant/Provider/Attempt/Fallback/ProviderFailureSurface.js'
@@ -66,11 +66,11 @@ const firstFailureKeptTarget = async () => {
     assert.deepEqual(holders[index], FIRST_TARGET)
   }
 
-  const failedTarget = await admit(runtime, 'ses-lwr', 'msg-first')
+  const failedTarget = await admit(runtime, 'ses-retry', 'msg-first')
   assert.deepEqual(failedTarget, SECOND_TARGET, 'the occupied first candidate pushes the attempt to the second')
 
-  routing.endProviderStep(runtime, 'ses-lwr', 'msg-first', 'run-first')
-  release(runtime, 'ses-lwr', 'msg-first')
+  routing.endProviderStep(runtime, 'ses-retry', 'msg-first', 'run-first')
+  release(runtime, 'ses-retry', 'msg-first')
 
   for (let index = 0; index < 1; index += 1) {
     release(runtime, `holder-${index}`, `msg-holder-${index}`)
@@ -78,6 +78,12 @@ const firstFailureKeptTarget = async () => {
 
   return { template, runtime, failedTarget }
 }
+
+test('WHAT[provider-attempt-recovery-021] recoveryStep pure policy: first failure retries same provider, verbatim retry failure blacklists', () => {
+  assert.equal(typeof failurePolicy.recoveryStep, 'function')
+  assert.equal(failurePolicy.recoveryStep(false), 'RetrySameProvider')
+  assert.equal(failurePolicy.recoveryStep(true), 'BlacklistProviderThenRetry')
+})
 
 const admittedWithPhysical = (physicalMessageId) => ({
   SubscribeTerminal: () => ({ Dispose: () => {} }),
@@ -90,15 +96,15 @@ test('WHAT[provider-attempt-recovery-021] explicit retain settlement preserves t
   try {
     // The first target is free again: without a binding fresh admission takes the
     // pool's first candidate, so a retained second candidate proves the binding.
-    const retained = routing.retainFailedTargetForRetry(runtime, 'ses-lwr', 'run-first')
+    const retained = routing.retainFailedTargetForRetry(runtime, 'ses-retry', 'run-first')
     assert.deepEqual(retained, failedTarget, 'the settlement resolves the exact failed target')
     assert.equal(
-      routing.retainFailedTargetForRetry(runtime, 'ses-lwr', 'run-first'),
+      routing.retainFailedTargetForRetry(runtime, 'ses-retry', 'run-first'),
       null,
       'the failed witness is single consumption',
     )
 
-    const retryTarget = await admit(runtime, 'ses-lwr', 'msg-lwr-retry')
+    const retryTarget = await admit(runtime, 'ses-retry', 'msg-retry')
     assert.deepEqual(retryTarget, failedTarget, 'the recovery retry returns to the original target')
     assert.equal(template.providerCapacity('second'), 1, 'retaining a target condemns nothing')
   } finally {
@@ -110,12 +116,12 @@ test('WHAT[provider-attempt-recovery-021] retry preference is consumed once and 
   const { template, runtime, failedTarget } = await firstFailureKeptTarget()
 
   try {
-    routing.retainFailedTargetForRetry(runtime, 'ses-lwr', 'run-first')
-    const retryTarget = await admit(runtime, 'ses-lwr', 'msg-lwr-retry')
+    routing.retainFailedTargetForRetry(runtime, 'ses-retry', 'run-first')
+    const retryTarget = await admit(runtime, 'ses-retry', 'msg-retry')
     assert.deepEqual(retryTarget, failedTarget)
 
-    release(runtime, 'ses-lwr', 'msg-lwr-retry')
-    const next = await admit(runtime, 'ses-lwr', 'msg-next')
+    release(runtime, 'ses-retry', 'msg-retry')
+    const next = await admit(runtime, 'ses-retry', 'msg-next')
     assert.deepEqual(next, FIRST_TARGET, 'the one-use preference has been consumed')
     assert.equal(template.providerCapacity('second'), 1)
   } finally {
@@ -127,21 +133,21 @@ test('WHAT[provider-attempt-recovery-021] explicit condemnation consumes an exac
   const { template, runtime, failedTarget } = await firstFailureKeptTarget()
 
   try {
-    routing.retainFailedTargetForRetry(runtime, 'ses-lwr', 'run-first')
-    assert.deepEqual(await admit(runtime, 'ses-lwr', 'msg-lwr-retry'), failedTarget)
+    routing.retainFailedTargetForRetry(runtime, 'ses-retry', 'run-first')
+    assert.deepEqual(await admit(runtime, 'ses-retry', 'msg-retry'), failedTarget)
 
     // The test selects condemnation explicitly; workflow selection is separate.
-    routing.endProviderStep(runtime, 'ses-lwr', 'msg-lwr-retry', 'run-lwr')
-    const condemned = routing.condemnFailedTarget(runtime, 'run-lwr')
-    assert.deepEqual(condemned, failedTarget, 'the condemning witness is the failed LWR retry target')
+    routing.endProviderStep(runtime, 'ses-retry', 'msg-retry', 'run-retry')
+    const condemned = routing.condemnFailedTarget(runtime, 'run-retry')
+    assert.deepEqual(condemned, failedTarget, 'the condemning witness is the failed same-provider retry target')
     assert.equal(template.providerCapacity('second'), 0)
     assert.equal(
-      routing.condemnFailedTarget(runtime, 'run-lwr'),
+      routing.condemnFailedTarget(runtime, 'run-retry'),
       null,
       'one witness condemns at most once',
     )
 
-    const rotated = await admit(runtime, 'ses-lwr', 'msg-after-condemn')
+    const rotated = await admit(runtime, 'ses-retry', 'msg-after-condemn')
     assert.deepEqual(rotated, FIRST_TARGET, 'the dispatch after the condemnation rotates')
   } finally {
     template.clearFailedProviders()
@@ -149,12 +155,12 @@ test('WHAT[provider-attempt-recovery-021] explicit condemnation consumes an exac
 })
 
 test('WHAT[provider-attempt-recovery-021] the_settlement_fact_is_the_durable_provider_retry_attempt_acceptance', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'wxs-lwr-fact-'))
+  const directory = mkdtempSync(join(tmpdir(), 'wxs-retry-fact-'))
 
   const created = await journal.JournalSurface_bootWithWriterId(
     directory,
-    'writer-lwr-fact',
-    'rt-lwr-fact',
+    'writer-retry-fact',
+    'rt-retry-fact',
     1,
     '2026-01-01T00:00:00Z',
   )
@@ -162,7 +168,7 @@ test('WHAT[provider-attempt-recovery-021] the_settlement_fact_is_the_durable_pro
 
   try {
     const handle = created.journal
-    const accepted = await failureOwner.acceptHumanRoot(handle, 'ses_lwr_fact', 'msg_root', 'engineer')
+    const accepted = await failureOwner.acceptHumanRoot(handle, 'ses_retry_fact', 'msg_root', 'engineer')
     assert.equal(accepted.ok, true, accepted.ok ? '' : accepted.error)
 
 
@@ -170,44 +176,44 @@ test('WHAT[provider-attempt-recovery-021] the_settlement_fact_is_the_durable_pro
     // continuation acceptance AND the exact run that established the request's
     // durable ProviderStarted. A run that did not establish it is a later step.
     assert.equal(
-      failureOwner.wasLwrRetryAttempt(handle, 'ses_lwr_fact', 'msg_root', 'run-any'),
+      failureOwner.wasSameProviderRetryAttempt(handle, 'ses_retry_fact', 'msg_root', 'run-any'),
       false,
       'an authority root is not a recovery dispatch',
     )
-    assert.equal(failureOwner.wasLwrRetryAttempt(handle, 'ses_lwr_fact', 'msg_absent', 'run-any'), false)
+    assert.equal(failureOwner.wasSameProviderRetryAttempt(handle, 'ses_retry_fact', 'msg_absent', 'run-any'), false)
 
     const sent = await dispatch.sendContinuation(
-      admittedWithPhysical('msg_lwr_retry'),
+      admittedWithPhysical('msg_retry'),
       handle,
-      'ses_lwr_fact',
+      'ses_retry_fact',
       'continue after the confirmed provider failure',
       // IA-017 / dispatch-protocol [010]: the retry continuation carries the
       // durable active profile itself; its acceptance fact is bound to the
       // physical message and provider run, not to a re-derived profile.
       'ProviderRetryAttempt',
-      dispatch.projectionObservation(handle, 'ses_lwr_fact').activeLogicalRun,
+      dispatch.projectionObservation(handle, 'ses_retry_fact').activeLogicalRun,
       'Await',
     )
     assert.equal(sent.ok, true, sent.ok ? '' : sent.error)
 
     assert.equal(
-      failureOwner.wasLwrRetryAttempt(handle, 'ses_lwr_fact', 'msg_root', 'run-any'),
+      failureOwner.wasSameProviderRetryAttempt(handle, 'ses_retry_fact', 'msg_root', 'run-any'),
       false,
       'the root request stays an ordinary attempt',
     )
 
-    const established = await failureOwner.establishProviderRun(handle, 'ses_lwr_fact', 'msg_lwr_retry', 'pr-run-1')
+    const established = await failureOwner.establishProviderRun(handle, 'ses_retry_fact', 'msg_retry', 'pr-run-1')
     assert.equal(established.ok, true, 'the retry request establishes its durable provider run')
 
     assert.equal(
-      failureOwner.wasLwrRetryAttempt(handle, 'ses_lwr_fact', 'msg_lwr_retry', 'pr-run-1'),
+      failureOwner.wasSameProviderRetryAttempt(handle, 'ses_retry_fact', 'msg_retry', 'pr-run-1'),
       true,
-      'the accepted retry continuation established by that run is the durable LWR-retry fact',
+      'the accepted retry continuation established by that run is the durable same-provider retry fact',
     )
     assert.equal(
-      failureOwner.wasLwrRetryAttempt(handle, 'ses_lwr_fact', 'msg_lwr_retry', 'pr-run-2'),
+      failureOwner.wasSameProviderRetryAttempt(handle, 'ses_retry_fact', 'msg_retry', 'pr-run-2'),
       false,
-      'a later step of the retry episode is not the LWR retry itself',
+      'a later step of the retry episode is not the same-provider retry itself',
     )
   } finally {
     journal.JournalSurface_dispose(created.journal)
@@ -215,57 +221,4 @@ test('WHAT[provider-attempt-recovery-021] the_settlement_fact_is_the_durable_pro
   }
 })
 
-test('WHAT[provider-attempt-recovery-021] the_lwr_retry_payload_replaces_the_covered_prefix_with_the_work_record', () => {
-  const projection = {
-    messages: [
-      { role: 'user', parts: [{ kind: 'text', text: 'opening request' }] },
-      { role: 'assistant', parts: [{ kind: 'text', text: 'first answer' }] },
-      { role: 'assistant', parts: [{ kind: 'text', text: 'second answer' }] },
-    ],
-  }
-
-  const retryInput = {
-    journal: true,
-    sessionId: 'ses_lwr_payload',
-    acceptedRetry: true,
-    failures: 1,
-    prefixEpoch: 0,
-    physicalUser: 'msg_lwr_retry',
-    acceptedPhysicalUser: 'msg_lwr_retry',
-    snapshotPort: true,
-    currentProjection: projection,
-    committedSnapshot: null,
-    coverableCutoff: 1,
-    coveredDigest: xwire.coveredPrefixDigest(projection, 1),
-    requestStartCutoff: 2,
-    frozenRecordPrefixRef: 'blob/frozen',
-    frozenRecordPrefixDigest: 'sha256:frozen',
-    frozenRecordPrefixBody: 'Chronicle\nwork record of the failed attempt',
-    memoryPreamble: 'same-session memory',
-    outcome: null,
-  }
-
-  const retry = xwire.transform(retryInput)
-  assert.equal(retry.ok, true, retry.ok ? '' : retry.error)
-  assert.equal(retry.consumed, true)
-  assert.equal(retry.changed, true, 'the LWR retry replaces the covered prefix')
-  assert.equal(retry.probe.candidate.cutoff, 1)
-
-  const head = retry.output.messages[0]
-  assert.equal(head.role, 'user')
-  assert.ok(head.parts[0].text.includes('same-session memory'))
-  assert.ok(
-    head.parts[0].text.includes('work record of the failed attempt'),
-    'the LWR body is the retry request context',
-  )
-  assert.equal(retry.output.messages.length, 3, 'the covered prefix is dropped and the tail stays')
-  assert.equal(retry.output.messages[1].parts[0].text, 'first answer')
-
-  const ordinary = xwire.transform({ ...retryInput, acceptedRetry: false })
-  assert.equal(ordinary.noop, true, 'an ordinary request never replaces the prefix')
-
-  const beforeAnyFailure = xwire.transform({ ...retryInput, failures: 0 })
-  assert.equal(beforeAnyFailure.changed, false, 'no confirmed failure means no LWR replacement')
-})
-
-test.todo('WHAT[provider-attempt-recovery-021] actual ordinary and sync-delegate recovery combine exact durable LWR evidence and target settlement after licensing and before send (GAP-139)')
+test.todo('WHAT[provider-attempt-recovery-021] actual ordinary and sync-delegate recovery combine exact durable same-provider retry evidence and target settlement after licensing and before send (GAP-139)')

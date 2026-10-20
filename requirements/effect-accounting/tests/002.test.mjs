@@ -79,6 +79,6 @@ test('WHAT[effect-accounting-002] EXEC_join_first_proven_terminal_is_single_assi
   assert.deepEqual(await lifecycle.completion(completedFirst), {
     status: 'completed',
     agentId: 'agent-completed-first',
-    workRecord: '',
+    view: '',
   })
 })

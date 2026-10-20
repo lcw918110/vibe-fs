@@ -23,7 +23,7 @@ test('WHAT[durable-events-018] activation writes only the local ignore file and 
       ? readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8')
       : null
 
-    const root = journal.JournalSurface_initializeStateRoot(repo)
+    const root = await journal.JournalSurface_initializeStateRoot(repo)
     const store = eventStore.create(root, 'writer-no-hook')
     const appended = await eventStore.append(store, [{
       id: 'a'.repeat(40),

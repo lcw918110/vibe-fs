@@ -74,11 +74,11 @@ for (const replacement of ['active', 'finished', 'successor']) {
     const preparing = Promise.withResolvers()
     const release = Promise.withResolvers()
     let attachmentSession
-    // The same work-record read port is exercised by settle and by the
+    // The same delivered-view read port is exercised by settle and by the
     // attachment preparation; only the latter may block here, otherwise the
     // fixture deadlocks before guidance even starts.
     let armAttachmentBlock = false
-    const runtime = await forkTool.createRuntimeWithWorkRecordRead(directory, [{ sessionId: owner, agent: 'manager' }], async session => {
+    const runtime = await forkTool.createRuntimeWithViewRead(directory, [{ sessionId: owner, agent: 'manager' }], async session => {
       if (armAttachmentBlock && session === attachmentSession) {
         preparing.resolve()
         await release.promise

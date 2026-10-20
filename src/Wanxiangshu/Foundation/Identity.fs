@@ -59,10 +59,9 @@ module Identity =
     /// a crash. Derived, never invented at the call site.
     type PromptKey = private PromptKey of string
 
-    /// One Blogger logical request (Main or Squash). Durable materialization key
-    /// (ENFORCER-050 / C5). Distinct from PromptKey: one logical request may share
-    /// a long-lived Blogger session across many physical claims after park/resume.
-    type BloggerRequestId = private BloggerRequestId of string
+    /// The identity of an interaction-repair request. Its payload digest is
+    /// derived from the request, the terminal provider run and the repair kind.
+    type RepairRequestId = private RepairRequestId of string
 
     /// What the Host prompt-send endpoint hands back: an `accepted-*` admission
     /// receipt.
@@ -90,9 +89,7 @@ module Identity =
     /// same attempt equal" an askable but meaningless question.
     type ProviderRunIdentity = private ProviderRunIdentity of string
 
-    /// STRENGTH-005/006: one speculation decision. Derived by the Strength
-    /// coordinator from frozen owner/run facts; never a clock/random identity.
-    type StrengthDecisionId = private StrengthDecisionId of string
+
 
     /// One tool invocation inside a provider run. `ToolContext.callID`.
     ///
@@ -152,16 +149,16 @@ module Identity =
     /// meant" — and a single string type would let a caller pass either.
     type BlobDigest = private BlobDigest of string
 
-    /// Which generation of the Companion frame sequence is in force
-    /// (COMPANION-006). Advances only when a squash commits.
+    /// Retired. The Companion frame sequence this id numbered is gone and
+    /// nothing produces it any more; the type survives only as a decode helper.
     type FrameEpochId = private FrameEpochId of int64
 
-    /// Which generation of the X provider-visible prefix is in force
-    /// (COMPANION-009). Advances when a probe is promoted or a reanchor retires
-    /// the snapshot.
+    /// Which generation of the provider-visible prefix is in force
+    /// (COMPANION-009). Advances when a reanchor retires the snapshot.
     ///
-    /// Distinct from `FrameEpochId`: the two move independently, and sharing one
-    /// type would let a fold validate an X rebase against a Y squash's number.
+    /// Its own type, not `FrameEpochId`'s: the prefix generation is the live one
+    /// and the frame generation is retired, so one type would let a fold accept a
+    /// retired number as the prefix generation.
     type PrefixEpochId = private PrefixEpochId of int64
 
     // ── execution handles (docs/what/execution.md) ─────────────────────────────────────────
@@ -264,9 +261,9 @@ module Identity =
         let create (value: string) = PromptKey value
         let value (PromptKey v) = v
 
-    module BloggerRequestId =
-        let create (value: string) = BloggerRequestId value
-        let value (BloggerRequestId v) = v
+    module RepairRequestId =
+        let create (value: string) = RepairRequestId value
+        let value (RepairRequestId v) = v
 
     module TransportReceipt =
         let create (value: string) = TransportReceipt value
@@ -282,9 +279,7 @@ module Identity =
         let create (value: string) = ProviderRunIdentity value
         let value (ProviderRunIdentity v) = v
 
-    module StrengthDecisionId =
-        let create (value: string) = StrengthDecisionId value
-        let value (StrengthDecisionId v) = v
+
 
     module ToolCallId =
         let create (value: string) = ToolCallId value

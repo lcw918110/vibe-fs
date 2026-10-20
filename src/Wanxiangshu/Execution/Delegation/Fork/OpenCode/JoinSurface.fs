@@ -37,7 +37,6 @@ module JoinSurface =
         | "Browser" -> Some Role.Browser
         | "Inquiry" -> Some Role.Inquiry
         | "Distiller" -> Some Role.Distiller
-        | "Blogger" -> Some Role.Blogger
         | _ -> None
 
     let private requiredRunId (value: obj) : string option =
@@ -75,7 +74,7 @@ module JoinSurface =
                           Role = role
                           AuthorityRoot = None
                           ProviderRun = None
-                          WorkRecord = text (value?workRecord)
+                          View = text (value?view)
                           Directory = None }
                 )
             )

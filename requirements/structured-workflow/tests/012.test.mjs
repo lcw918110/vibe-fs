@@ -653,23 +653,11 @@ test('WHAT[structured-workflow-012] missing sibling fsi independently triggers s
 })
 
 test('WHAT[structured-workflow-012] comments and string literals containing Literal or inline do not trigger signature risk', () => {
-  // Replicating the 4 exact files from production where [<Literal>] or inline appear in comments:
-  // 1. Context/Companion/Blogger/Delta.fs
-  // 2. Host/Contract/ToolResultBound.fs
-  // 3. Interaction/Authority/Model.fs
-  // 4. Process/Deadline.fs
+  // Replicating production files where [<Literal>] or inline appear in comments:
+  // 1. Host/Contract/ToolResultBound.fs
+  // 2. Interaction/Authority/Model.fs
+  // 3. Process/Deadline.fs
   const negativeCases = [
-    {
-      source: 'Context/Companion/Blogger/Delta.fs',
-      comment: [
-        '/// CTX-003: the input contract. Not an estimate and not compared to any model\'s',
-        '/// window — it only bounds one rendered TOML chunk.',
-        '///',
-        '/// Plain `let`, not `[<Literal>]`: Fable inlines a literal and emits no export,',
-        '/// which would put the number out of reach of the layer-1 tests that pin it.',
-        'let runtime = "DeltaLimitBytes"',
-      ].join('\n'),
-    },
     {
       source: 'Host/Contract/ToolResultBound.fs',
       comment: [

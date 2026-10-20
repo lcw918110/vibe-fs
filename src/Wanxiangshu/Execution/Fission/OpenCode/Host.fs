@@ -17,7 +17,6 @@ open Wanxiangshu.Host
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.Interaction.Repair
-open Wanxiangshu.Mission.WorkRecord
 open Wanxiangshu.OpenCode
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Composition.Durable
@@ -77,7 +76,7 @@ module FissionHostRequestProjection =
 
 /// Host-side terminal bridge for same-participant Fission lanes. A physical lane
 /// terminal is not a parent-visible agent completion. It materializes one keyed
-/// lane LWR, and only the durable group convergence publishes a terminal on the
+/// lane view, and only the durable group convergence publishes a terminal on the
 /// old logical owner's SessionId/completion cell.
 module FissionHost =
 
@@ -278,16 +277,16 @@ module FissionHost =
                 return! appendSharedCompletionBlocks durable group blocks rest
         }
 
-    let private aggregateWorkRecord (durable: AgentJournal) (group: FissionGroupProjection) =
+    let private aggregateView (durable: AgentJournal) (group: FissionGroupProjection) =
         taskResult {
-            let! ownerRecord = readVerified durable group.OwnerWorkRecordRef group.OwnerWorkRecordDigest
-            // DSL-MUTABLE: algorithm-scratch — work record block accumulator
+            let! ownerView = readVerified durable group.OwnerViewRef group.OwnerViewDigest
+            // DSL-MUTABLE: algorithm-scratch — view block accumulator
             let blocks = ResizeArray<string>()
             blocks.Add "[[fission_convergence]]"
             blocks.Add(sprintf "lane_count = %d" group.LaneCount)
             blocks.Add ""
             blocks.Add "[owner_before_fission]"
-            blocks.Add ownerRecord
+            blocks.Add ownerView
             do! appendLaneWorkBlocks durable group blocks (FissionRing.mergeOrder group.LaneCount)
 
             do!
@@ -321,7 +320,7 @@ module FissionHost =
 
     let private takeoverPrompt aggregate =
         LlmFacing.renderInstructions
-            [ "The Fission ring has collected every lane's canonical work record and returned the complete handoff to this final present."
+            [ "The Fission ring has collected every lane's delivered view and returned the complete handoff to this final present."
               "Continue as the same logical participant. Integrate the handoff below and now produce the ordinary final report to your commissioner."
               "Do not report lane mechanics, physical session ids, or the internal Fission topology."
               aggregate ]
@@ -344,8 +343,8 @@ module FissionHost =
                    LaneIndex = laneIndex
                    LaneSessionId = laneSessionId
                    PromptKey = promptKey
-                   AggregateWorkRecordRef = aggregateBlob.BlobRef
-                   AggregateWorkRecordDigest = aggregateBlob.BlobDigest |})
+                   AggregateViewRef = aggregateBlob.BlobRef
+                   AggregateViewDigest = aggregateBlob.BlobDigest |})
 
     let private sendTakeover
         (sessionPort: ISessionHostPort)
@@ -439,7 +438,7 @@ module FissionHost =
         (authority: PromptAuthority.AuthorityExecutionProfile)
         =
         task {
-            match! aggregateWorkRecord durable group with
+            match! aggregateView durable group with
             | Error _ -> return false
             | Ok aggregate ->
                 return! writeAggregateAndTakeover sessionPort durable directoryFor group authority aggregate
@@ -763,8 +762,8 @@ module FissionHost =
                    OwnerSessionId = group.OwnerSessionId
                    TerminalLaneSessionId = turn.SessionId
                    TerminalProviderRun = turn.ProviderRun
-                   AggregateWorkRecordRef = takeover.AggregateWorkRecordRef
-                   AggregateWorkRecordDigest = takeover.AggregateWorkRecordDigest |})
+                   AggregateViewRef = takeover.AggregateViewRef
+                   AggregateViewDigest = takeover.AggregateViewDigest |})
 
     let private publishOwnerTakeover
         (eventPort: IEventObservationPort)
@@ -874,8 +873,8 @@ module FissionHost =
                    LaneIndex = laneIndex
                    LaneSessionId = turn.SessionId
                    ProviderRun = turn.ProviderRun
-                   WorkRecordRef = workBlob.BlobRef
-                   WorkRecordDigest = workBlob.BlobDigest |})
+                   ViewRef = workBlob.BlobRef
+                   ViewDigest = workBlob.BlobDigest |})
 
     let private afterLaneMaterializedAppend
         (sessionPort: ISessionHostPort)
@@ -908,10 +907,10 @@ module FissionHost =
         (group: FissionGroupProjection)
         laneIndex
         (turn: ReconciledTurn)
-        (workRecord: string)
+        (view: string)
         =
         task {
-            match! durable.WriteBlob workRecord with
+            match! durable.WriteBlob view with
             | Error error ->
                 do! failGroup sessionPort eventPort durable group error
                 return true
@@ -929,19 +928,15 @@ module FissionHost =
         (turn: ReconciledTurn)
         =
         task {
-            match! LifecycleWorkRecordProjection.lifecycleWorkRecord (Some durable) turn.SessionId true with
+            match
+                Wanxiangshu.Repository.Programming.Js.JsDeliveredValues.tryPeekRendered (SessionId.value turn.SessionId)
+            with
             | None ->
-                do!
-                    failGroup
-                        sessionPort
-                        eventPort
-                        durable
-                        group
-                        "Fission lane completed without canonical Lifecycle Work Record"
+                do! failGroup sessionPort eventPort durable group "Fission lane completed without a delivered view"
 
                 return true
-            | Some workRecord ->
-                return! writeLaneWorkAndMaterialize sessionPort eventPort durable group laneIndex turn workRecord
+            | Some delivered ->
+                return! writeLaneWorkAndMaterialize sessionPort eventPort durable group laneIndex turn delivered
         }
 
     let private observeOpenLaneCompletion

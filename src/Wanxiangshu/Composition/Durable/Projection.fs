@@ -2,20 +2,15 @@ namespace Wanxiangshu.Composition.Durable
 
 open Wanxiangshu.Change
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.ChatExecution
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.OpenCode.Host.PairProgramming
-open Wanxiangshu.OpenCode.Host.RequirementGrounding
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 /// Bounded projections one session owns (PERSIST-008).
@@ -29,34 +24,28 @@ open Wanxiangshu.Participant.Provider.Attempt.Fallback
 /// bounded-context projection, not an execution cursor.
 type SessionAgentProjection =
     {
+        /// The durable Companion link for this session. The Work ↔ Companion
+        /// relation itself lives in `AgentProjectionSet.Associations`; the raw
+        /// semantic history lives in the XTrace below.
         Companion: CompanionProjection option
         /// COMPANION-003 / HOST-005: the XTrace — the session's unique raw
-        /// semantic trajectory. Separate from `Blog` because the frame sequence
-        /// is Y's compressed view while this is the raw record LWR is built from.
+        /// semantic trajectory. It is the raw record itself, not a compressed
+        /// view of it: what the provider is shown is decided by the model's own
+        /// ANCHOR `view` declaration (prefixUntil / thenRemove), and the
+        /// compressed result handed back to a caller is the delivered
+        /// `js.deliver` view.
         XTrace: XTraceProjectionState option
-        /// docs/what/context.md: the Companion frame sequence and what it covers. Separate from
-        /// `Companion` because that record is the runtime cache's durable mirror,
-        /// while this one is the frame history CTX-011 builds probe candidates from.
-        Blog: BlogProjectionState option
-        /// COMPANION-009: which X prefix generation is in force. Not folded into
-        /// `Blog`: a squash advances the frame epoch without touching the prefix, and
-        /// a reanchor retires the prefix without touching frames, so one record for
-        /// both would make each change look like it moved the other.
+
+        /// COMPANION-009: which provider-visible prefix generation is in force.
+        /// Not folded into the prefix: a reanchor retires the prefix and
+        /// advances this epoch, so one record for both would make each change
+        /// look like it moved the other.
         PrefixEpoch: ActivePrefixEpoch option
         Handles: AgentLinkageProjection option
         ProviderFailures: ProviderFailureProjection option
         PromptAuthority: PromptAuthority.PromptAuthorityProjection option
-        /// ENFORCER-044/045/154: committed Blogger enforcement cycles for this
-        /// session's Companion. Per-session because a cycle belongs to one
-        /// main session's Companion, keyed by the Blogger provider run.
-        Enforcement: EnforcementProjectionState option
-        /// C5: open materializations + unified Entry|Squash receipts.
-        BloggerCycles: BloggerCycleProjectionState option
         /// HOST-013: permanent auto-injected pairs for this transcript.
         Guidelines: GuidelineProjectionState option
-        RequirementGrounding: RequirementGroundingProjectionState option
-        /// Rulebook Main tip delivery: occurrence frontier + TipName coverage (TipGuidanceDelivered fold).
-        TipDelivery: TipDeliveryProjectionState option
         SessionStartedAt: SessionStartedAtProjectionState option
         DelegatedToolEstimate: DelegatedToolEstimateProjectionState option
     }
@@ -68,7 +57,7 @@ type AgentProjectionSet =
         ///
         /// Workspace-scoped rather than per-session, because the relation spans two
         /// sessions and both directions must be answerable from one keyed lookup
-        /// (PERSIST-008). Held per-session, "is this id somebody's Y" would require
+        /// (PERSIST-008). Held per-session, "is this id somebody's Companion" would require
         /// scanning every session.
         Associations: Map<SessionId, SessionAssociation>
         Orchestrator: OrchestratorProjection
@@ -101,16 +90,11 @@ module AgentProjection =
     let emptySession =
         { Companion = None
           XTrace = None
-          Blog = None
           PrefixEpoch = None
           Handles = None
           ProviderFailures = None
           PromptAuthority = None
-          Enforcement = None
-          BloggerCycles = None
           Guidelines = None
-          RequirementGrounding = None
-          TipDelivery = None
           SessionStartedAt = None
           DelegatedToolEstimate = None }
 
@@ -126,13 +110,6 @@ module AgentProjection =
 
     let tryFind (sessionId: SessionId) (projection: AgentProjectionSet) =
         Map.tryFind sessionId projection.Sessions
-
-    /// Fork-child main is sealed for Blogger when its handle is joinable/retired.
-    /// Human root (no handle) → false.
-    let mainSealedForBlogger (mainSessionId: SessionId) (projection: AgentProjectionSet) : bool =
-        match Map.tryFind mainSessionId projection.HandleByChildSession with
-        | Some record -> HandleProjection.recordSealsBlogger record
-        | None -> false
 
     let hasActiveOrchestratorJobs (projection: AgentProjectionSet) : bool =
         OrchestratorProjection.activeJobs projection.Orchestrator |> List.isEmpty |> not

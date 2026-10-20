@@ -13,7 +13,6 @@ module RecoveryClosureProjection =
 
     let private sortKey =
         function
-        | RecoveryNode.Blogger(_, id)
         | RecoveryNode.Companion(_, id)
         | RecoveryNode.AgentChild(_, id, _)
         | RecoveryNode.ManagerJob(_, id)
@@ -29,12 +28,6 @@ module RecoveryClosureProjection =
         |> Option.bind (fun session -> session.Handles)
         |> Option.defaultValue HandleProjection.empty
 
-    let private addBloggerPair (add: RecoveryNode -> unit) (owner: SessionId) (projection: AgentProjectionSet) =
-        match SessionAssociationProjection.tryBloggerOf owner projection.Associations with
-        | Some blogger ->
-            add (RecoveryNode.Companion(owner, blogger))
-            add (RecoveryNode.Blogger(owner, blogger))
-        | None -> ()
 
     let private addLinkedChild
         (root: SessionId)
@@ -53,7 +46,6 @@ module RecoveryClosureProjection =
         | _, HandleLifecycle.Active, Some agentHandle
         | _, HandleLifecycle.CompletedAwaitingJoin _, Some agentHandle ->
             add (RecoveryNode.AgentChild(root, record.ChildSessionId, agentHandle))
-            addBloggerPair add record.ChildSessionId projection
 
     let private addManagerJob
         (root: SessionId)
@@ -70,13 +62,11 @@ module RecoveryClosureProjection =
             ()
         elif managerSessionId = root then
             add (RecoveryNode.ManagerJob(jobId, managerSessionId))
-            addBloggerPair add managerSessionId projection
         else
             add (RecoveryNode.ManagerJob(jobId, managerSessionId))
 
             add (RecoveryNode.AgentChild(root, managerSessionId, AgentHandleId.create (ManagerJobId.value jobId)))
 
-            addBloggerPair add managerSessionId projection
 
     let private sessionNeedsRecovery session =
         let pending =
@@ -84,12 +74,7 @@ module RecoveryClosureProjection =
             |> Option.map (fun authority -> not (Map.isEmpty authority.PendingClaims))
             |> Option.defaultValue false
 
-        let openBlogger =
-            session.BloggerCycles
-            |> Option.map (fun cycles -> not (Map.isEmpty cycles.OpenByRequestId))
-            |> Option.defaultValue false
-
-        pending || openBlogger
+        pending
 
     let private addPendingSession
         (root: SessionId)
@@ -128,7 +113,6 @@ module RecoveryClosureProjection =
         for record in HandleProjection.linkedChildren (rootHandles root projection) do
             addLinkedChild root projection add linkedChildIds record
 
-        addBloggerPair add root projection
 
         for job in AgentProjection.activeOrchestratorJobPairs projection do
             addManagerJob root projection add linkedChildIds job
@@ -138,7 +122,6 @@ module RecoveryClosureProjection =
 
         let rank =
             function
-            | RecoveryNode.Blogger _ -> 0
             | RecoveryNode.Companion _ -> 1
             | RecoveryNode.AgentChild _ -> 2
             | RecoveryNode.ManagerJob _ -> 3

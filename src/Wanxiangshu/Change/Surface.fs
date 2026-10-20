@@ -1397,7 +1397,7 @@ module ChangeSurface =
                     fun _ ->
                         timeline.Add "relay:terminate"
                         Task.FromResult()
-                  LifecycleReviewed = fun _ _ -> Some("Promoted", "authority-1") }
+                  LifecycleReviewed = fun _ _ -> Task.FromResult(Some("Promoted", "authority-1")) }
 
             let acquireGate () =
                 if scenario.GateCancelled then

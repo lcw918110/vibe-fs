@@ -49,7 +49,7 @@ test('WHAT[work-007] a settled fence replays its recorded state instead of the t
     assert.match(await hooks.tool.deliver.execute({}, call(session, 'deliver-confirm', 'run-confirm')), /confirmation_required = true/)
     assert.match(await hooks.tool.deliver.execute({}, call(session, 'deliver-call', 'run-retire')), /Finished\. Do not continue work\./)
 
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(runtime.directory)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(runtime.directory)
     const settled = life.inspected(commonDir, session)
     const settledRetirements = retirementsOf(settled)
     assert.equal(settledRetirements.length, 1)
@@ -71,8 +71,8 @@ test('WHAT[work-007] a settled fence replays its recorded state instead of the t
     assert.equal(after.ActiveId, successor)
     assert.equal(retirementsOf(after).length, 1)
     assert.equal(runtime.prompts.length, dispatched, 'a replay dispatches no second successor')
-    assert.equal(lifecycleWorkView(runtime, session).active, true)
-    assert.equal(lifecycleWorkView(runtime, session).delivered, false)
+    assert.equal((await lifecycleWorkView(runtime, session)).active, true)
+    assert.equal((await lifecycleWorkView(runtime, session)).delivered, false)
   }, { session: 'replay-relayed' })
 })
 
@@ -82,7 +82,7 @@ test('WHAT[work-007] a retried delivered fence is answered by the fold, not by t
     assert.match(await hooks.tool.deliver.execute({}, call(session, 'deliver-confirm', 'run-confirm')), /confirmation_required = true/)
     assert.match(await hooks.tool.deliver.execute({}, call(session, 'deliver-call', 'run-retire')), /Finished\. Do not continue work\./)
 
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(runtime.directory)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(runtime.directory)
     const settled = life.inspected(commonDir, session)
     assert.equal(settled.Delivered, true)
     assert.equal(Boolean(settled.ActiveId), false, 'a final delivery has no successor tenure')
@@ -108,7 +108,7 @@ test('WHAT[work-007] a settled fence whose expected advance moved is refused wit
     await hooks.tool.deliver.execute({}, call(session, 'deliver-confirm', 'run-confirm'))
     await hooks.tool.deliver.execute({}, call(session, 'deliver-call', 'run-retire'))
 
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(runtime.directory)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(runtime.directory)
     const successor = life.inspected(commonDir, session).ActiveId
     accepted(
       life.execute(commonDir, session, 'review-successor', {

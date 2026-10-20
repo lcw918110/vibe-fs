@@ -7,7 +7,6 @@ open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Foundation.AsyncSupport
 open Wanxiangshu.Foundation.Identity
 
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Outcome
@@ -140,16 +139,9 @@ module ManagedChatProviderLifecycle =
         (acceptedEvidence: AcceptedChatExecutionEvidence)
         (providerRun: ProviderRunIdentity)
         (requestKind: ProviderRequestKind)
-        (projectionChoice: XProjectionChoice)
         =
         ManagedChatExecutionFlight'.run (AgentJournal.runtimeId journal) key (fun () ->
-            ManagedChatProviderLifecycle.startWith
-                (forJournal journal)
-                key
-                acceptedEvidence
-                providerRun
-                requestKind
-                projectionChoice)
+            ManagedChatProviderLifecycle.startWith (forJournal journal) key acceptedEvidence providerRun requestKind)
 
     let terminal
         (journal: AgentJournal)

@@ -21,7 +21,7 @@ module PtySupervisor =
     val list: supervisor: PtySupervisor -> PtyId list
     val signalName: signal: PtySignal -> string
     val ensureSpawn: supervisor: PtySupervisor -> Task<unit>
-    val spawnSync: supervisor: PtySupervisor -> command: string -> cwd: string -> obj
+    val spawn: supervisor: PtySupervisor -> command: string -> cwd: string -> Task<obj>
 
     val failPending:
         entries: (PtyCommand * TaskCompletionSource<Result<unit, string>> option) list -> reason: string -> unit

@@ -8,7 +8,6 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Interaction.Dispatch
-open Wanxiangshu.Mission.WorkRecord
 open Wanxiangshu.OpenCode
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Process
@@ -157,14 +156,16 @@ module AdvisorSeat =
         | None -> Task.FromResult None
         | Some snapshot -> snapshotProseOf snapshot childId
 
-    /// advisor-[004]: the child's lifecycle WorkRecord first, the Host snapshot as its
-    /// fallback. Both are empty for an advisor that never spoke, and an empty answer is a
-    /// refusal rather than an empty piece of advice.
+    /// The child's delivered view first, the Host snapshot as its fallback.
+    /// The seat stays. Both are empty for an
+    /// advisor that never spoke, and an empty answer is a refusal.
     let private readProse (deps: AdvisorSeatDeps) (childId: SessionId) : Task<string option> =
         task {
-            let! record = LifecycleWorkRecordProjection.lifecycleWorkRecord deps.Journal childId false
+            let delivered =
+                Wanxiangshu.Repository.Programming.Js.JsDeliveredValues.tryPeekRendered (SessionId.value childId)
+                |> Option.bind nonBlank
 
-            match record |> Option.bind nonBlank with
+            match delivered with
             | Some prose -> return Some prose
             | None -> return! snapshotProse deps childId
         }

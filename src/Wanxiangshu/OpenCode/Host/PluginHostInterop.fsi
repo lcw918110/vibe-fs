@@ -10,7 +10,7 @@ open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Git
 open Wanxiangshu.Mission.Work
 open Wanxiangshu.Persistence.Journal
-open Wanxiangshu.Strength.OpenCode
+
 
 module PluginHostInterop =
 
@@ -78,17 +78,15 @@ module PluginHostInterop =
         rootWorkspace: IRootWorkspaceReader ->
         journal: AgentJournal option ->
         workspaceDirectory: string option ->
-        strengthScope: PluginStrengthScope option ->
         scope: PluginRuntimeScope ->
         currentPhysicalUserMessage: (string -> string option) ->
         onRunStarted: (SessionId -> Role -> string option -> unit) option ->
-        parentWorkRecordFor: (string -> Task<string option>) option ->
-        childWorkRecordFor: (string -> Task<string option>) option ->
-        childWorkRecordForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
+        viewForSession: (string -> Task<string option>) option ->
+        childViewForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
         snapshot: ISessionSnapshotPort option ->
         cancelSignals: (SessionId seq -> unit) option ->
         eventPort: IEventObservationPort option ->
         casebookToolSpecs: ToolSpec list ->
         continueManagerLoop: (SessionId -> string -> Task<Result<unit, string>>) ->
         userNotify: (string -> string -> unit) option ->
-            ToolRegistration
+            Task<ToolRegistration>

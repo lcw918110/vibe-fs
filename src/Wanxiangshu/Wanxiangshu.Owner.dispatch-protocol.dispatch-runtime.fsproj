@@ -31,6 +31,5 @@
     <Compile Include="Interaction/Dispatch/Send.fsi"/>
     <Compile Include="Interaction/Dispatch/Send.fs"/>
       <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-fatal-effect.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.prefix-stability.context-prefix-candidate.fsproj"/>
   </ItemGroup>
 </Project>

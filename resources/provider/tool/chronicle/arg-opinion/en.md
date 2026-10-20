@@ -1,1 +1,0 @@
-Your critical opinion of the current operation: judge frankly what this concrete transition did well or badly, and why.

@@ -59,19 +59,6 @@ module CompletedTurnSurface =
     let partsText (parts: obj) : string =
         CompletedTurnClassifier.partsText (partsOf parts)
 
-    /// capability-enforcement-021: which owner one idle Blogger turn reaches.
-    let bloggerIdleRoute (bloggerQuiescent: bool) (guardOwnsAbort: bool) (outcome: string) (parts: obj) : string =
-        match
-            CompletedTurnClassifier.bloggerIdleRoute
-                bloggerQuiescent
-                guardOwnsAbort
-                (ReconcileProgram.outcomeOf outcome)
-                (partsOf parts)
-        with
-        | CompletedTurnClassifier.BloggerIdleRoute.Observe -> "Observe"
-        | CompletedTurnClassifier.BloggerIdleRoute.Repair -> "Repair"
-        | CompletedTurnClassifier.BloggerIdleRoute.RepairThenObserve -> "RepairThenObserve"
-
     let partsSessionText (parts: obj) : string =
         CompletedTurnClassifier.partsSessionText (partsOf parts)
 

@@ -61,11 +61,7 @@ module AblationGate =
     /// A tool owned by no node is denied by nobody: ablation governs what the manifest
     /// declares, not what it omits.
     let toolDenied (registry: AblationRegistry) (toolName: string) =
-        let targetNode =
-            if toolName = "speculate" then
-                Some(AblationNodeId.create "speculative-investigation")
-            else
-                AblationToolMap.tryNode toolName
+        let targetNode = AblationToolMap.tryNode toolName
 
         // Borrowed still runs: the surface it may borrow is decided by the caller's
         // manifest, and a borrowed tool is visible inside that surface. A tool owned
@@ -79,11 +75,7 @@ module AblationGate =
     /// Schema visibility is stricter than execution: an ablated tool disappears from
     /// the provider's tool list, not merely fails when called.
     let toolSchemaDenied (registry: AblationRegistry) (toolName: string) =
-        let targetNode =
-            if toolName = "speculate" then
-                Some(AblationNodeId.create "speculative-investigation")
-            else
-                AblationToolMap.tryNode toolName
+        let targetNode = AblationToolMap.tryNode toolName
 
         match targetNode with
         | None -> false

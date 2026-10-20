@@ -17,9 +17,9 @@ const harness = ({ failCreateAt, failStartAt, failInterrupt = false, parent = 'o
       events.push(['parent', owner])
       return parent
     },
-    ownerWorkRecord: async (owner) => {
+    ownerView: async (owner) => {
       events.push(['lwr', owner])
-      return 'CANONICAL-LWR'
+      return 'CANONICAL-OWNER-VIEW'
     },
     createLane: async (_owner, physicalParent, lane) => {
       events.push(['create', lane.index, physicalParent])
@@ -82,7 +82,7 @@ const withRoutingHome = async (body) => {
   mkdirSync(configDir, { recursive: true })
   writeFileSync(
     join(configDir, 'wanxiangshu.mjs'),
-    "export const routingProtocol = 2\nexport default function route(role, running, previous, purpose) { return { model: 'fixture/root-model', reasoning: 'none' } }\nexport const predictorConfiguration = () => { const state = globalThis.__wanxiangshu_test_predictor_state ?? 'unconfigured'; if (state === 'configured') return { state: 'configured', reason: null }; if (state === 'invalid') return { state: 'invalid', reason: globalThis.__wanxiangshu_test_predictor_reason ?? 'test Predictor configuration is invalid' }; return { state: 'unconfigured', reason: null } }\n",
+    "export const routingProtocol = 2\nexport default function route(role, running, previous, purpose) { return { model: 'fixture/root-model', reasoning: 'none' } }\n",
     'utf8',
   )
   process.env.HOME = home

@@ -13,7 +13,6 @@ const ROLES = [
   'Orchestrator',
   'Engineer',
   'DevOps',
-  'Blogger',
 ]
 const agentName = (role) => `${role.toLowerCase()}`
 const buildConfig = () => {
@@ -61,7 +60,6 @@ const ROLES = [
   'Orchestrator',
   'Engineer',
   'DevOps',
-  'Blogger',
 ]
 const agentName = (role) => `${role.toLowerCase()}`
 const buildConfig = () => {
@@ -105,12 +103,10 @@ const MCP_SERVER = 'wanxiang_fixture'
 const MCP_PATTERN = `${MCP_SERVER}_*`
 const MCP_TOOL = `${MCP_SERVER}_search`
 const MCP_SERVERS = { [MCP_SERVER]: { type: 'local', command: ['node', 'fixture.js'], enabled: true } }
-const AGENT_NAMES = ['manager', 'orchestrator', 'engineer', 'devops', 'blogger', 'plan', 'bookkeeper']
-// Office roles the managed catalog projects onto the Host; Blogger is the
-// internal companion (exactly { chronicle }) and Bookkeeper the hidden leaf
-// (deny-all), so neither forwards a Host-declared external namespace.
+const AGENT_NAMES = ['manager', 'orchestrator', 'engineer', 'devops', 'plan', 'bookkeeper']
+// Office roles the managed catalog projects onto the Host; Bookkeeper is the hidden leaf (deny-all).
 const OFFICE_AGENTS = ['manager', 'orchestrator', 'engineer', 'devops', 'plan']
-const CLOSED_AGENTS = ['blogger', 'bookkeeper']
+const CLOSED_AGENTS = ['bookkeeper']
 
 const buildConfig = (extra = {}) => ({
   agent: Object.fromEntries(AGENT_NAMES.map((name) => [name, {}])),
@@ -166,8 +162,6 @@ test('WHAT[capability-enforcement-007] mcp_namespace_forwarding_moves_no_office_
     )
   }
 
-  assert.equal(withMcp.agent.blogger.permission.chronicle, 'allow', 'Blogger keeps exactly chronicle')
-  assert.equal(withMcp.agent.blogger.permission.skill, 'deny', 'Blogger keeps no utility tools')
   assert.equal(withMcp.agent.bookkeeper.permission['*'], 'deny', 'Bookkeeper stays deny-all')
   assert.equal(withMcp.agent.devops.permission.fission, 'deny', 'DevOps keeps no fission')
   assert.equal(withMcp.agent.engineer.permission['todowrite-for-orchestrator'], 'deny', 'Engineer keeps its own js surface')

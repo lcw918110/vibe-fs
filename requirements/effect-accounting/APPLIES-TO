@@ -12,7 +12,6 @@
 /src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs
 /src/Wanxiangshu/Persistence/Journal/FactCodec.fs
 /src/Wanxiangshu/Interaction/Dispatch/**
-/src/Wanxiangshu/Context/Companion/Blogger/Runtime/CycleProjection.fs*
 /src/Wanxiangshu/Execution/Delegation/Fork/ChildRecovery.fs*
 /src/Wanxiangshu/Execution/Delegation/Fork/Host/HostForkRunLifecycleSurface.fs*
 /src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs

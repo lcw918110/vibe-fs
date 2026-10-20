@@ -17,7 +17,6 @@ const personas = {
   manager: 'Lead',
 }
 const rootSelection = (participant) => {
-  const role = participant === 'predictor' ? 'inspector' : participant
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -25,7 +24,7 @@ const rootSelection = (participant) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant,
-      role,
+      role: participant,
       selectedTier: 'deep',
       persona: personas[participant] ?? 'Unknown',
       personaCatalogVersion: 1,
@@ -98,7 +97,6 @@ const personas = {
   manager: 'Lead',
 }
 const rootSelection = (participant) => {
-  const role = participant === 'predictor' ? 'inspector' : participant
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -106,7 +104,7 @@ const rootSelection = (participant) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant,
-      role,
+      role: participant,
       selectedTier: 'deep',
       persona: personas[participant] ?? 'Unknown',
       personaCatalogVersion: 1,
@@ -286,8 +284,8 @@ const dispatch = await import('../../../dist/Interaction/Dispatch/DispatchSurfac
 const { withJournal, acceptOwner, hostPort } = await import('./support/authority.mjs')
 
 for (const [participant, tools] of [
-  ['manager', [['*', false], ['todowrite-for-predictor', true]]],
-  ['blogger', undefined],
+  ['manager', [['*', false], ['todowrite-for-manager', true]]],
+  ['engineer', undefined],
 ]) {
   test(`WHAT[dispatch-protocol-010] managed ${participant} assignments retain the accepted run and tool boundary across journal reopen`, async () => {
     await withJournal(`assignment-${participant}`, async (handle, reopen) => {

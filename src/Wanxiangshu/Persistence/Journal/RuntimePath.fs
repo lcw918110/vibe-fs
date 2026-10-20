@@ -1,5 +1,6 @@
 namespace Wanxiangshu.Persistence.Journal
 
+open System.Threading.Tasks
 open System
 open Fable.Core
 open Fable.Core.JsInterop
@@ -52,7 +53,12 @@ module RuntimePath =
         path
 
     // DSL-MUTABLE: resource — 主工作树位置缓存，不保存任何业务事实。
-    let private roots = Collections.Generic.Dictionary<string, string>()
+    let private roots = Collections.Generic.Dictionary<string, Task<string>>()
+
+    let private evictFailedRoot key (task: Task<string>) =
+        match roots.TryGetValue key with
+        | true, cached when obj.ReferenceEquals(cached, task) -> roots.Remove key |> ignore
+        | _ -> ()
 
     let private parsePrimaryWorktree (first: string array) =
         if first |> Array.contains "bare" then
@@ -66,70 +72,93 @@ module RuntimePath =
         else
             (Array.head first).Substring("worktree ".Length) |> canonicalPath |> outsideGit
 
-    let private primaryWorktree (workspace: string) =
-        let listing =
-            try
-                Some(GitSubject.execIn workspace [| "worktree"; "list"; "--porcelain"; "-z" |])
-            with _ ->
-                None
+    let private primaryWorktree (workspace: string) : Task<string> =
+        task {
+            let! listing =
+                task {
+                    try
+                        let! text = GitSubject.execIn workspace [| "worktree"; "list"; "--porcelain"; "-z" |]
+                        return Some text
+                    with _ ->
+                        return None
+                }
 
-        match listing with
-        | None -> workspace
-        | Some text ->
-            text.Split([| '\u0000' |])
-            |> Array.takeWhile (fun field -> field <> "")
-            |> parsePrimaryWorktree
+            match listing with
+            | None -> return workspace
+            | Some text ->
+                return
+                    text.Split([| '\u0000' |])
+                    |> Array.takeWhile (fun field -> field <> "")
+                    |> parsePrimaryWorktree
+        }
 
     /// Git 只提供只读拓扑：主工作树和 linked worktree 共用主工作树下的状态。
     /// 没有 Git 仓库时使用给定目录；不回退到 .git、XDG 或旧日志。
-    let stateRoot (workspace: string) : string =
-        if String.IsNullOrWhiteSpace workspace then
-            invalidArg "workspace" "A workspace directory is required"
+    let stateRoot (workspace: string) : Task<string> =
+        task {
+            if String.IsNullOrWhiteSpace workspace then
+                invalidArg "workspace" "A workspace directory is required"
 
-        let key = workspace |> canonicalPath |> outsideGit
+            let key = workspace |> canonicalPath |> outsideGit
 
-        let primary =
-            match roots.TryGetValue key with
-            | true, value -> value
-            | _ ->
-                let value = primaryWorktree key
-                roots.[key] <- value
-                value
+            let primaryTask =
+                match roots.TryGetValue key with
+                | true, taskValue -> taskValue
+                | _ ->
+                    let taskValue = primaryWorktree key
+                    roots.[key] <- taskValue
+                    taskValue
 
-        let target = joinPath primary ".Herdchestra"
-        let existing = lstat target (createObj [ "throwIfNoEntry" ==> false ])
+            let! primary =
+                task {
+                    try
+                        return! primaryTask
+                    with ex ->
+                        evictFailedRoot key primaryTask
+                        return raise ex
+                }
 
-        if
-            not (isNull existing)
-            && (unbox<bool> (existing?isSymbolicLink ())
-                || not (unbox<bool> (existing?isDirectory ())))
-        then
-            invalidArg "workspace" ".Herdchestra must be a real directory, not a link or file"
-
-        target
-
-    /// 仅写入者初始化时创建自身忽略规则，不修改项目的 .git/info/exclude。
-    let initializeStateRoot workspace =
-        let target = stateRoot workspace
-        mkdir target (createObj [ "recursive" ==> true ])
-        let ignore = joinPath target ".gitignore"
-
-        try
-            writeFile ignore "*\n" (createObj [ "flag" ==> "wx"; "encoding" ==> "utf8" ])
-        with error when alreadyExists error ->
-            let entry = lstat ignore (createObj [ "throwIfNoEntry" ==> false ])
+            let target = joinPath primary ".Herdchestra"
+            let existing = lstat target (createObj [ "throwIfNoEntry" ==> false ])
 
             if
-                isNull entry
-                || unbox<bool> (entry?isSymbolicLink ())
-                || not (unbox<bool> (entry?isFile ()))
-                || (readFile ignore "utf8").Trim() <> "*"
+                not (isNull existing)
+                && (unbox<bool> (existing?isSymbolicLink ())
+                    || not (unbox<bool> (existing?isDirectory ())))
             then
-                invalidOp ".Herdchestra/.gitignore must be a regular file excluding all runtime data"
+                invalidArg "workspace" ".Herdchestra must be a real directory, not a link or file"
 
-        target
+            return target
+        }
 
-    let forWorkspace workspace = stateRoot workspace |> runtimeDirectory
+    /// 仅写入者初始化时创建自身忽略规则，不修改项目的 .git/info/exclude。
+    let initializeStateRoot (workspace: string) : Task<string> =
+        task {
+            let! target = stateRoot workspace
+            mkdir target (createObj [ "recursive" ==> true ])
+            let ignore = joinPath target ".gitignore"
+
+            try
+                writeFile ignore "*\n" (createObj [ "flag" ==> "wx"; "encoding" ==> "utf8" ])
+            with error when alreadyExists error ->
+                let entry = lstat ignore (createObj [ "throwIfNoEntry" ==> false ])
+
+                if
+                    isNull entry
+                    || unbox<bool> (entry?isSymbolicLink ())
+                    || not (unbox<bool> (entry?isFile ()))
+                    || (readFile ignore "utf8").Trim() <> "*"
+                then
+                    invalidOp ".Herdchestra/.gitignore must be a regular file excluding all runtime data"
+
+            return target
+        }
+
+    let forWorkspace (workspace: string) : Task<string> =
+        task {
+            let! target = stateRoot workspace
+            return runtimeDirectory target
+        }
 
     let forStateRoot (stateDirectory: string) =
         stateDirectory |> canonicalPath |> outsideGit |> runtimeDirectory

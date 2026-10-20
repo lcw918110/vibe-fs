@@ -84,7 +84,6 @@ module SemanticTraceSurface =
     val sliceFrom: start: 'a -> values: 'b -> obj array
     val inspectBridge: traceId: string -> openingText: 'a -> range: 'b -> values: 'c -> obj
     val forOpening: values: 'a -> obj array
-    val forWorkRecord: values: 'a -> obj array
     val render: values: 'a -> string
     val flatten: messages: 'a -> obj array
     val snapshot: handle: JournalHandle -> sessionId: string -> SemanticTraceProjection

@@ -15,7 +15,6 @@ const personas = {
   devops: 'Operator',
 }
 const rootSelection = (agent) => {
-  const role = agent === 'predictor' ? 'inspector' : agent
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -23,7 +22,7 @@ const rootSelection = (agent) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant: agent,
-      role,
+      role: agent,
       selectedTier: 'deep',
       persona: personas[agent] ?? 'Unknown',
       personaCatalogVersion: 1,
@@ -89,7 +88,6 @@ const personas = {
   inspector: 'Investigator',
 }
 const rootSelection = (agent) => {
-  const role = agent === 'predictor' ? 'inspector' : agent
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -97,7 +95,7 @@ const rootSelection = (agent) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant: agent,
-      role,
+      role: agent,
       selectedTier: 'deep',
       persona: personas[agent] ?? 'Unknown',
       personaCatalogVersion: 1,

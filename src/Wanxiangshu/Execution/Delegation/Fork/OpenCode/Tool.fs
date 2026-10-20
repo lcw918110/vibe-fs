@@ -259,6 +259,11 @@ module ForkTool =
         |> Option.exists (fun attach ->
             System.String.Equals(attach, request.Name.Trim(), System.StringComparison.OrdinalIgnoreCase))
 
+    let private resolveAttachmentRecord (handles: AgentLinkageProjection option) attach =
+        handles
+        |> Option.bind (HandleProjection.tryFindByByname attach)
+        |> Result.requireSome Path.Fork.AttachUnknown
+
     let private resolveAttachment
         (scope: ToolRuntimeScope)
         (handles: AgentLinkageProjection option)
@@ -268,16 +273,13 @@ module ForkTool =
         | None -> Task.FromResult(Ok None)
         | Some attach ->
             taskResult {
-                let! record =
-                    handles
-                    |> Option.bind (HandleProjection.tryFindByByname attach)
-                    |> Result.requireSome Path.Fork.AttachUnknown
+                let! record = resolveAttachmentRecord handles attach
 
-                let! workRecord =
-                    scope.ParentWorkRecordFor(SessionId.value record.ChildSessionId)
+                let! view =
+                    scope.ViewForSession(SessionId.value record.ChildSessionId)
                     |> TaskResultCE.ofTask
 
-                return workRecord
+                return view
             }
 
     let private appendFissionAffinity durable (context: HostToolContext) (lane: FissionLaneBinding) handleId =
@@ -676,12 +678,14 @@ module ForkTool =
         else
             None
 
-    let private boundDevOpsDispatchRefusal (scope: ToolRuntimeScope) parentSessionId isDevOps =
-        if isDevOps then
-            scope.ManagerCapabilityFactsFor(SessionId.value parentSessionId)
-            |> devopsDispatchRefusal
-        else
-            None
+    let private boundDevOpsDispatchRefusal (scope: ToolRuntimeScope) parentSessionId isDevOps : Task<string option> =
+        task {
+            if isDevOps then
+                let! facts = scope.ManagerCapabilityFactsFor(SessionId.value parentSessionId)
+                return devopsDispatchRefusal facts
+            else
+                return None
+        }
 
     let private bindWorkDevOpsIfNeeded (scope: ToolRuntimeScope) parentSessionId isDevOps =
         task {
@@ -705,7 +709,7 @@ module ForkTool =
             let isDevOps =
                 String.Equals(request.Name.Trim(), "devops", StringComparison.OrdinalIgnoreCase)
 
-            match boundDevOpsDispatchRefusal scope parentSessionId isDevOps with
+            match! boundDevOpsDispatchRefusal scope parentSessionId isDevOps with
             | Some refusal -> return consequence (prose language refusal)
             | None ->
                 do! bindWorkDevOpsIfNeeded scope parentSessionId isDevOps
@@ -744,7 +748,7 @@ module ForkTool =
             let isDevOps =
                 String.Equals(request.Name.Trim(), "devops", StringComparison.OrdinalIgnoreCase)
 
-            match boundDevOpsDispatchRefusal scope parentSessionId isDevOps with
+            match! boundDevOpsDispatchRefusal scope parentSessionId isDevOps with
             | Some refusal -> return consequence (prose language refusal)
             | None -> return! executeManagerAfterGuards scope request context language
         }
@@ -1081,33 +1085,48 @@ module ForkTool =
         else
             scope.LogicalOwnerFor(SessionId.create sessionId)
 
-    let private validateManagerRequestPrerequisites (scope: ToolRuntimeScope) (request: Request) (sessionId: string) =
-        let parentSessionId = resolveParentSessionId scope sessionId
-
-        let isDevOps =
-            String.Equals(request.Name.Trim(), "devops", StringComparison.OrdinalIgnoreCase)
-
+    let private validateManagerRequestSyntax (request: Request) =
         if String.IsNullOrWhiteSpace request.Name then
             Error "name-required"
         elif String.IsNullOrWhiteSpace request.Charge then
             Error "charge-required"
         elif isSelfAttachment request then
             Error "placement-failed"
-        elif (boundDevOpsDispatchRefusal scope parentSessionId isDevOps).IsSome then
-            Error "placement-failed"
         else
             Ok()
+
+    let private validateManagerRequestPrerequisites
+        (scope: ToolRuntimeScope)
+        (request: Request)
+        (sessionId: string)
+        : Task<Result<unit, string>> =
+        taskResult {
+            do! validateManagerRequestSyntax request
+            let parentSessionId = resolveParentSessionId scope sessionId
+
+            let isDevOps =
+                String.Equals(request.Name.Trim(), "devops", StringComparison.OrdinalIgnoreCase)
+
+            let! refusal = boundDevOpsDispatchRefusal scope parentSessionId isDevOps |> TaskResultCE.ofTask
+
+            return!
+                match refusal with
+                | Some _ -> Error "placement-failed"
+                | None -> Ok()
+        }
 
     let private executeManagerReceipt
         (scope: ToolRuntimeScope)
         (request: Request)
         (context: HostToolContext)
         : Task<Result<ForkReceipt, string>> =
-        match validateManagerRequestPrerequisites scope request context.SessionId with
-        | Error err -> Task.FromResult(Error err)
-        | Ok() ->
-            let language = lang context
-            executeManagerReceiptAfterGuards scope request context language
+        task {
+            match! validateManagerRequestPrerequisites scope request context.SessionId with
+            | Error err -> return Error err
+            | Ok() ->
+                let language = lang context
+                return! executeManagerReceiptAfterGuards scope request context language
+        }
 
     let private finishCommissionNewReceipt
         (scope: ToolRuntimeScope)

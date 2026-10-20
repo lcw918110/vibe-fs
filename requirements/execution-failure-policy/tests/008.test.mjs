@@ -16,7 +16,7 @@ test('WHAT[execution-failure-policy-008] Host and persistence classification ign
   for (const diagnostic of ['definitely succeeded', 'definitely failed', 'retry me']) {
     assert.equal(journal.JournalSurface_mapAppendFailure({ kind: 'WriteUnknown', diagnostic }).commitment, 'Unknown')
     assert.equal(provider.classify({
-      providerRun: 'run-20', requestKind: 'StrengthReplica', status: 'Transient', firstTokenObserved: false, diagnostic,
+      providerRun: 'run-20', requestKind: 'WorkMain', status: 'Transient', firstTokenObserved: false, diagnostic,
     }).failure, 'ProviderTransient')
   }
 })

@@ -13,7 +13,6 @@ const ROLES = [
   'Orchestrator',
   'Engineer',
   'DevOps',
-  'Blogger',
 ]
 const agentName = (role) => `${role.toLowerCase()}`
 const buildConfig = () => {
@@ -24,7 +23,6 @@ const buildConfig = () => {
     }
   }
   agent.bookkeeper = { model: 'bookkeeper-model' }
-  agent.predictor = { model: 'predictor-model' }
   return { agent }
 }
 const wildcardMatch = (input, pattern) => {
@@ -79,7 +77,6 @@ const allowList = (config, name) => {
     'horizon',
     'fission',
     'review',
-    'chronicle',
     'fetch',
     'deliver',
     'skill',
@@ -92,8 +89,8 @@ const allowList = (config, name) => {
 }
 const HOST_UTILITY_ALLOW = ['skill']
 const COGNITIVE_UTILITY_ALLOW = ['assume']
-const hostUtilityAllowFor = (role) => (role === 'Blogger' ? [] : HOST_UTILITY_ALLOW)
-const cognitiveUtilityAllowFor = (role) => (role === 'Blogger' ? [] : COGNITIVE_UTILITY_ALLOW)
+const hostUtilityAllowFor = (_role) => HOST_UTILITY_ALLOW
+const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 const ROLE_ALLOW = {
   Manager: ['fork', 'resume', 'join', 'horizon', 'deliver', 'review', 'todowrite-for-manager'],
   Orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
@@ -103,17 +100,15 @@ const ROLE_ALLOW = {
     'horizon',
     'todowrite-for-devops',
   ],
-  Blogger: ['chronicle'],
 }
 
 test('WHAT[capability-enforcement-006] HOST_skill_is_a_host_utility_for_interactive_roles_only', () => {
   const config = buildConfig()
   assert.equal(configureManagedAgents(config).ok, true)
   for (const role of ROLES) {
-    const expected = role === 'Blogger' ? 'deny' : 'allow'
     assert.equal(
       evaluate(mergedRules(config, agentName(role)), 'skill', '*').action,
-      expected,
+      'allow',
       `${agentName(role)} skill permission`,
     )
   }
@@ -122,10 +117,9 @@ test('WHAT[capability-enforcement-006] ASSUME_is_a_non_authority_utility_for_int
   const config = buildConfig()
   assert.equal(configureManagedAgents(config).ok, true)
   for (const role of ROLES) {
-    const expected = role === 'Blogger' ? 'deny' : 'allow'
     assert.equal(
       evaluate(mergedRules(config, agentName(role)), 'assume', '*').action,
-      expected,
+      'allow',
       `${agentName(role)} assume permission`,
     )
   }
@@ -185,7 +179,7 @@ test('WHAT[capability-enforcement-006] AUTOINJ_skill_wire_stays_host_owned_and_i
   assert.equal(markerToolName, 'skill')
   assert.equal(rolePredicate('skill', 'engineer'), false, 'Host-owned skill is not a plugin role tool')
   assert.equal(rolePredicate('skill', 'manager'), false)
-  assert.equal(rolePredicate('skill', 'blogger'), false)
+  assert.equal(rolePredicate('skill', 'blogger'), false, 'blogger is retired and fails closed')
 
   await withPlugin(async (hooks) => {
     assert.equal(hooks.tool['auto-injected'], undefined, 'legacy auto-injected must not be in hooks.tool')
@@ -282,16 +276,13 @@ test('WHAT[capability-enforcement-006] AUTOINJ_tryInject_rewrites_active_call_wi
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
 const { installDefaultResources } = await import("../../../dist/OpenCode/Host/ManagedAgentConfigSurface.js");
-const { chronicleContract } = await import("../../../dist/OpenCode/Tools/ToolSurface.js");
-const enforcer = await import("../../../dist/Enforcer/Surface.js");
+const { rolePredicate } = await import("../../../dist/OpenCode/Tools/ToolRegistrySurface.js");
 
 installDefaultResources()
 
-test('WHAT[capability-enforcement-006] CHRONICLE_spec_exposes_identity_and_argument_surface', () => {
-  const contract = chronicleContract()
-  assert.equal(contract.name, 'chronicle')
-  assert.deepEqual(contract.argumentNames, ['charge', 'occurrence', 'settlement', 'consequence', 'tipName', 'opinion', 'advice', 'evidence'])
-  assert.equal(contract.tipCount, enforcer.fieldNames().length)
+test('WHAT[capability-enforcement-006] chronicle_tool_is_retired_and_not_registered', () => {
+  assert.equal(rolePredicate('chronicle', 'engineer'), false)
+  assert.equal(rolePredicate('chronicle', 'blogger'), false)
 })
 }
 
@@ -321,7 +312,7 @@ const { default: test } = await import("node:test");
 const { admissionAuthority, privateAttachmentAdmits, rolePredicate } = await import("../../../dist/OpenCode/Tools/ToolRegistrySurface.js");
 const { allRoleLabels } = await import("../../../dist/Foundation/RolesSurface.js");
 
-const OFFICE_TOOLS = ['fetch', 'review', 'join', 'chronicle', 'todowrite-for-devops', 'fork', 'resume']
+const OFFICE_TOOLS = ['fetch', 'review', 'join', 'todowrite-for-devops', 'fork', 'resume']
 
 test('WHAT[capability-enforcement-006] internal_leaf_tool_declares_attachment_authority_not_a_public_office', () => {
   assert.equal(admissionAuthority('todowrite-for-bookkeeper'), 'private-attachment')
@@ -464,7 +455,7 @@ integrationTest('WHAT[capability-enforcement-006] MANAGER_pair_guidance_rides_cu
 
   test('WHAT[capability-enforcement-006] internal repository search is not installed as a Host MCP tool or role permission', () => {
     managedAgentConfig.installDefaultResources()
-    const roles = ['Manager', 'Orchestrator', 'Engineer', 'DevOps', 'Blogger', 'Bookkeeper']
+    const roles = ['Manager', 'Orchestrator', 'Engineer', 'DevOps', 'Bookkeeper']
     const config = { agent: Object.fromEntries(roles.map((role) => [role.toLowerCase(), { model: `${role.toLowerCase()}-model` }])) }
     assert.equal(managedAgentConfig.configure(config).ok, true)
     assert.equal(config.mcp?.semble, undefined)

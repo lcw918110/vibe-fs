@@ -12,17 +12,17 @@ import { toolModule } from '../../delegation/tests/support/fork-runtime.mjs'
 // ever appended, so the parent join waited forever and only shutdown
 // cancellation ended it.
 
-test('WHAT[managed-session-lifecycle-028] a faulted work-record read degrades to an empty record and still settles the completed child', async () => {
+test('WHAT[managed-session-lifecycle-028] a faulted view read degrades to an empty record and still settles the completed child', async () => {
   const owner = 'manager-settlement-workrecord-fault'
   const directory = mkdtempSync(join(tmpdir(), 'wxs-settle-workrecord-'))
 
   let readFaults = 0
-  const runtime = await forkTool.createRuntimeWithWorkRecordRead(
+  const runtime = await forkTool.createRuntimeWithViewRead(
     directory,
     [{ sessionId: owner, agent: 'manager' }],
     async () => {
       readFaults += 1
-      throw new Error('injected work-record read fault')
+      throw new Error('injected view read fault')
     }
   )
 
@@ -33,14 +33,14 @@ test('WHAT[managed-session-lifecycle-028] a faulted work-record read degrades to
     assert.match(await placed, /Ada/)
 
     // Deliver the completed terminal through the physical Notify boundary.
-    // The harness's own work-record await reports false on the degraded
+    // The harness's own view await reports false on the degraded
     // empty record; the assertions below pin what actually must hold.
     await forkTool.settle(runtime, owner, 'WORK-RECORD-FAULT-DONE', 'fault-provider-run')
 
     assert.ok(readFaults > 0, 'the injected fault actually fired during settlement')
 
     const works = forkTool.workSnapshot(runtime, owner)
-    assert.ok(works.length > 0, 'the owner keeps a work record')
+    assert.ok(works.length > 0, 'the owner keeps a delivered view')
     assert.equal(works[0].lifecycle, 'CompletedAwaitingJoin', 'the completion cell is joinable')
 
     const joined = await forkTool.executeJoin(runtime, owner)
@@ -73,7 +73,7 @@ test('WHAT[managed-session-lifecycle-028] a proven terminal that faults during s
     await delivered()
 
     const works = forkTool.workSnapshot(runtime, owner)
-    assert.ok(works.length > 0, 'the owner keeps a work record after delivery')
+    assert.ok(works.length > 0, 'the owner keeps a delivered view after delivery')
     assert.ok(
       ['CompletedAwaitingJoin', 'Retired'].includes(works[0].lifecycle),
       `the run reached an observable terminal state, got ${works[0].lifecycle}`

@@ -106,7 +106,7 @@ export const degradationCases = [
 
       assertTrue(
         source.includes('blocking: entry.internal !== true'),
-        'Blogger and other internal lanes must never renew the blocking watchdog',
+        'internal lanes must never renew the blocking watchdog',
       );
       assertTrue(
         !source.includes('blocking: true'),

@@ -529,9 +529,8 @@ user = "nobody ever sends this"
   {
     name: 'verification-system-003 a production-composed lane opts out with internal',
     fn: () => {
-      // The Blogger and the Executor map child cannot be reached by any scenario text:
+      // The internal background worker and the Executor map child cannot be reached by any scenario text:
       // production composes their prompts itself
-      // (`src/Wanxiangshu/Context/Companion/HostBlogger.fs:72,77,118`,
       // `src/Wanxiangshu/OpenCode/Tools/ExecutorSummarize.fs:95`). Without an opt-out the dead-edge
       // check has no evidence either way and rejects a correct scenario.
       accepts(`scenario = "p"
@@ -545,9 +544,9 @@ user = "go"
   respond = { type = "text", text = "ok" }
 
 [[turn]]
-id = "blogger"
+id = "internal-worker"
 internal = true
-user = "You are the blogger of a coding agent session."
+user = "You are an internal worker."
 
   [[turn.step]]
   respond = { type = "text", text = "blog" }

@@ -16,7 +16,7 @@ type InteractionRepairNudge =
         -> string
         -> string option
         -> AgentJournal option
-        -> BloggerRequestId
+        -> RepairRequestId
         -> ProviderRunIdentity
         -> string
         -> Task<InteractionRepairSendOutcome>

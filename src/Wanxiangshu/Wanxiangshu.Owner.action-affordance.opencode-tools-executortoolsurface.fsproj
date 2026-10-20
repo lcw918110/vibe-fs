@@ -1,13 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
     <WanxiangshuSubsystem>application-composition</WanxiangshuSubsystem>
-    <WanxiangshuCompileShard>opencode-tools-executortoolsurface</WanxiangshuCompileShard><WanxiangshuSemanticOwner>action-affordance</WanxiangshuSemanticOwner><WanxiangshuOwnerLocality>opencode-tools-executortoolsurface</WanxiangshuOwnerLocality><WanxiangshuOwnerLocalityKind>composition</WanxiangshuOwnerLocalityKind></PropertyGroup><ItemGroup><ProjectReference Include="Wanxiangshu.Owner.action-affordance.opencode-tools-statictools.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.behavior-diagnosis.enforcer-catalog.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.behavior-diagnosis.enforcer-codec.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-companionfactfold.fsproj"/>
-<ProjectReference Include="Wanxiangshu.Owner.context-compression.companion-host-blogger.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-runtimeresources.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-tool-adapter.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.office-capability.foundation-officecapability.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.participant-identity.foundation-roles.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.provider-language.participant-provider-language.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-diagnostics-runtime.fsproj"/>
-    <Compile Include="OpenCode/Tools/ChronicleTool.fsi"/>
-    <Compile Include="OpenCode/Tools/ChronicleTool.fs"/>
-    <Compile Include="OpenCode/Tools/BashHoneypotTool.fsi"/>
-    <Compile Include="OpenCode/Tools/BashHoneypotTool.fs"/>
-    <Compile Include="OpenCode/Tools/AssumeTool.fsi"/>
-    <Compile Include="OpenCode/Tools/AssumeTool.fs"/>
+    <WanxiangshuCompileShard>opencode-tools-executortoolsurface</WanxiangshuCompileShard><WanxiangshuSemanticOwner>action-affordance</WanxiangshuSemanticOwner><WanxiangshuOwnerLocality>opencode-tools-executortoolsurface</WanxiangshuOwnerLocality><WanxiangshuOwnerLocalityKind>composition</WanxiangshuOwnerLocalityKind></PropertyGroup><ItemGroup><ProjectReference Include="Wanxiangshu.Owner.action-affordance.opencode-tools-statictools.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-companionfactfold.fsproj" />
+<ProjectReference Include="Wanxiangshu.Owner.context-compression.companion-host.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-runtimeresources.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-tool-adapter.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.office-capability.foundation-officecapability.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.participant-identity.foundation-roles.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.provider-language.participant-provider-language.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-diagnostics-runtime.fsproj" />
+    <Compile Include="OpenCode/Tools/BashHoneypotTool.fsi" />
+    <Compile Include="OpenCode/Tools/BashHoneypotTool.fs" />
+    <Compile Include="OpenCode/Tools/AssumeTool.fsi" />
+    <Compile Include="OpenCode/Tools/AssumeTool.fs" />
   </ItemGroup>
 </Project>

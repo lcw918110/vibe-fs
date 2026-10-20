@@ -22,21 +22,19 @@ const openWork = async (store, commonDir, workId) => {
   assert.equal(opened.ok, true, opened.error)
 }
 
-test('WHAT[work-028] devops delegates the intent to the bound DevOps and returns its work record', async () => {
+test('WHAT[work-028] devops delegates the intent to the bound DevOps and returns its delivered view', async () => {
   await withStore(async (store, _root, commonDir) => {
     await openWork(store, commonDir, 'work-ask-1')
     let delegatedIntent = null
     const delegate = async (intent) => {
       delegatedIntent = intent
-      return '# DevOps work record\nInvestigated build artifact paths; they match expectations.'
+      return '# DevOps delivered view\nInvestigated build artifact paths; they match expectations.'
     }
 
     const res = await surface.PlanningSurface.executeAsk(commonDir, 'work-ask-1', 'Check whether build artifact paths match expectation', delegate)
     assert.equal(res.ok, true, res.error)
     assert.equal(res.kind, 'delegated')
     assert.equal(delegatedIntent, 'Check whether build artifact paths match expectation')
-    assert.equal(res.workRecord.includes('DevOps work record'), true)
-
     const resEmpty = await surface.PlanningSurface.executeAsk(commonDir, 'work-ask-1', '   ', delegate)
     assert.equal(resEmpty.ok, false)
     assert.match(resEmpty.error, /cannot be empty/i)

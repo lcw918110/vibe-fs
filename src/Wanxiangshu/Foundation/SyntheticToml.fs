@@ -6,14 +6,13 @@ open System.Text
 /// ARCH-010: the one canonical writer for runtime synthetic TOML.
 ///
 /// The clause says 「字符串写法只有一个 owner。各业务模块不得分别决定引号、转义、换行处理、缩进或
-/// closing delimiter 位置」. Until N3 that was true only incidentally — `BloggerToml` was the sole
+/// closing delimiter 位置」. Until N3 that was true only incidentally — previously Toml was the sole
 /// producer, so it could hold the rules privately and still satisfy the clause. The moment a second
 /// surface needs to render a value, "only one owner" has to become structural or the second surface
 /// copies the logic and the dialect the clause forbids exists.
 ///
 /// So this module owns the string rules and the document layout, and every synthetic surface renders
-/// through it. It knows nothing about Blogger, forks, or any local schema: those live with their
-/// producers, which is what 「不引入统一 envelope」 means.
+/// through it. It knows nothing about forks or any local schema: those live with their producers.
 ///
 /// There is deliberately no parser. ARCH-010 forbids business logic that reads this text back.
 [<RequireQualifiedAccess>]

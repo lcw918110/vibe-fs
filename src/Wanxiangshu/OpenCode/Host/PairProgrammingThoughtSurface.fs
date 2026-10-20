@@ -60,16 +60,11 @@ module PairProgrammingThoughtSurface =
 
     let private projectionFlagsOf (projection: AgentProjectionSet) (session: SessionId) : obj =
         match AgentProjection.tryFind session projection with
-        | None ->
-            box
-                {| guidelines = false
-                   xTrace = false
-                   blog = false |}
+        | None -> box {| guidelines = false; xTrace = false |}
         | Some value ->
             box
                 {| guidelines = value.Guidelines.IsSome
-                   xTrace = XTraceProjection.hasSemanticParts value.XTrace
-                   blog = value.Blog.IsSome |}
+                   xTrace = XTraceProjection.hasSemanticParts value.XTrace |}
 
     let private anchoredFactOf (payload: obj) : AgentFact * SessionId =
         let sessionId = SessionId.create (textOf payload?session)
@@ -160,52 +155,6 @@ module PairProgrammingThoughtSurface =
                        ObservedCompactionRun = ProviderRunIdentity.create observedRun |}
 
             let! result = AgentJournal.appendAgent (StreamId.Session sessionId) None fact (agentJournalOf journal)
-
-            return
-                match result with
-                | Ok _ -> box {| ok = true; error = null |}
-                | Error failure ->
-                    box
-                        {| ok = false
-                           error = JournalAppendFailure.describe failure |}
-        }
-
-    let appendPrefixRebaseCommitted
-        (journal: obj)
-        (session: string)
-        (previousEpoch: int64)
-        (nextEpoch: int64)
-        (cutoffExclusive: int)
-        : Task<obj> =
-        task {
-            let sessionId = SessionId.create session
-
-            let digest =
-                HostDigest.sha256Hex ($"{session}|{previousEpoch}|{nextEpoch}|{cutoffExclusive}")
-
-            let durable = agentJournalOf journal
-            let! blobResult = durable.WriteBlob($"prefix-rebase-test|{digest}")
-
-            let blob =
-                match blobResult with
-                | Ok value -> value
-                | Error error -> failwith $"prefix rebase test fixture blob write failed: {error}"
-
-            let fact =
-                ContextFact.PrefixRebaseCommitted
-                    {| SessionId = sessionId
-                       PreviousEpochId = PrefixEpochId.create previousEpoch
-                       NextEpochId = PrefixEpochId.create nextEpoch
-                       FrozenRecordPrefixRef = blob.BlobRef
-                       FrozenRecordPrefixDigest = blob.BlobDigest
-                       CutoffExclusive = cutoffExclusive
-                       CoveredPrefixDigest = digest
-                       SealRoot = "seal-" + digest
-                       SyntheticMessageId = "memory-" + digest
-                       ProbeId = "probe-" + digest
-                       SolvingProviderRun = ProviderRunIdentity.create ("run-" + digest) |}
-
-            let! result = AgentJournal.appendAgent (StreamId.Session sessionId) None fact durable
 
             return
                 match result with

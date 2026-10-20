@@ -4,10 +4,6 @@ open System.Threading.Tasks
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Cycle
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Repository.Knowledge.Casebook
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Fork.Host
@@ -23,7 +19,7 @@ open Wanxiangshu.Participant.Persona
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
 
-/// SessionDeleted teardown: LoopSensor / Strength / SyncDelegate / Quiescence / Dispose.
+/// SessionDeleted teardown: LoopSensor / SyncDelegate / Quiescence / Dispose.
 /// Caller supplies `signalReconciler` so this module never owns the Scheduler.
 module HostSessionDeletion =
 

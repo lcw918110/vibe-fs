@@ -1,5 +1,52 @@
 # Changelog — 版本历史
 
+## Unreleased — 宿主工程循环改名：js.run → js.call
+
+- **宿主工程循环成员改名，混淆随之解除**。`js.run` 与模型程序入口 `this.run` 同名，模型在两处都看见 `run`，分不清「执行一次工程」和「运行我的程序」。宿主面成员改为 `js.call(class extends js.Callable { ... })`，只在全局 `js` 对象上调用；基类不提供 `this.call(...)`。模型程序入口仍是基类的 `async run()`——两个不同的名字，两件不同的事。
+- **基类随之改名**：`js.Runnable` → `js.Callable`（宿主在全局 `js` 上绑定的空基类）。旧名「Runnable」描述的是被宿主驱动的循环，新名描述的是「可被调用」的类，与成员名同源。
+- **失败码族整体改名**：`RUNNABLE_SPEC_INCOMPLETE` / `RUN_COMMAND_UNSUPPORTED` / `RUN_WAIT_TIMEOUT` / `RUN_CHILD_UNKNOWN` / `RUN_PARK_UNSUPPORTED` / `RUN_HOST_UNAVAILABLE` → `CALLABLE_SPEC_INCOMPLETE` / `CALL_COMMAND_UNSUPPORTED` / `CALL_WAIT_TIMEOUT` / `CALL_CHILD_UNKNOWN` / `CALL_PARK_UNSUPPORTED` / `CALL_HOST_UNAVAILABLE`。clean-break：不留旧码别名，旧码不再被发出。
+- **宿主实现标识符同步**：`JsRunLoop` 模块 → `JsCallLoop`（`Process/JsRunLoop.fs` → `Process/JsCallLoop.fs`，fsproj 与 compile-order 一并更新）、`JsRunHost` → `JsCallHost`、`makeRunMember` → `makeCallMember`、`RunnableValidated` → `CallableValidated`、`validateRunnableSpec` → `validateCallableSpec`、`RunnableSpecIncomplete` 等 union case → `CallableSpecIncomplete` 等。
+- **规范与教学同步**：`requirements/repository-programming` [050]/[051]/[052]/[058] 与 `requirements/process-execution` 的条款改写为新面；双语 `run-rules` / `run-recipes` / `ultra-devops` 改写为 `js.call(class extends js.Callable { ... })`，并删去「两者同名是有意为之的碰撞」那段已经失效的解释——改名后不再有碰撞需要解释。
+
+## Unreleased — 验收层收口：集成层恢复全绿，退役概念清零
+
+- **集成层（integration tier）恢复全绿**。cutover 之后无人跑过这一层，它当时是红的，本轮把三处根因修掉：
+  - 36 个文件残留着 `open Wanxiangshu.Context.Prefix`（`XProjectionChoice` 随 prefix probe 一起退役后留下的死引用）。这些 open 指向的命名空间不在各自 shard 的编译闭包里，shard 独立编译因此报 `The namespace 'Prefix' is not defined`；死引用全部删除。
+  - shard 图缺三条边：`repository-programming-js-capability` 缺 `foundation-taskresult`（`JsRunLoop` 用 `taskResult`），`execution-fission-opencode-host` 缺 `host-tool-adapter`（fission 工具用 `ToolHostCodec`），`composition-durable-fact` 缺 Host 事实词汇。前两条补上引用；第三条不能补——`Host/Fact.fs`（投影）依赖持久事实词汇，而持久事实词汇又依赖 `HostFactCases`（`Host/Facts.fs`），补引用会成环。改为把词汇与投影拆成两个 shard：`durable-composition.host-fact-cases` 持 `Host/Facts.*`，`durable-composition.host-fact` 持 `Host/Fact.*` 并引用它，持久事实 shard 引用前者。环消失，闭包自足。
+  - 验收夹具 `arch010-cases.mjs` 有一处 cutover 留下的半截 `assertTrue(`（删 Blogger 断言时切断），整个 integration harness 因此无法加载；同时两条 CTX-010 prefix-probe 用例与一条 companion frame 断言仍在验证已退役的机制，一并删除。
+- **测试层清零退役概念**。退役概念（Blogger / Predictor / Chronicle / StrengthReplica）在 `src`、`resources`、`scripts` 已无残留；测试层里仍在*提供*这些概念的死代码一并清掉：e2e 隔离宿主配置不再注册 blogger / predictor agent，默认路由源不再导出 `predictorConfiguration`，strict mock provider 不再对 blogger turn 特判，`WANXIANGSHU_BLOGGER_CONTEXT_LIMIT`（产品早已不读）不再下发；dispatch-protocol 与 interaction-authority 的 root selection 不再用 `predictor` → `inspector` 的映射冒充角色。规范与说明文字同步：context-compression / feature-ablation / capability-enforcement 里的退役条款保留（负向断言的锚点），过期注释与 README 段落改写为当前事实；`office-capability-015` 那条以退役概念为对象的待证 TODO 删除。
+- **canary 文件观察不再读半截 JSON**。`run-user-input-canary.mjs` 监听插件原地重写的诊断快照，watch 事件可能在写完前触发，`JSON.parse` 于是抛 `Unexpected end of JSON input` 并杀死 canary；现在半截读取不视为答案，等下一个事件。
+- **未闭合**：release 层的 e2e（Long Stroke 场景）仍红——编排器第三轮之后停住，manager / engineer 的 lane 期望一条未发出。本轮已排除本次清理（回退清理后同样停在同一处），停点属于 cutover 之前的既有欠账：pre-cutover 基线连 shard 覆盖都不闭合，Long Stroke 场景与新的接力/工作记录语义尚未对齐。
+- 验收：`node scripts/build.mjs` 与 `node scripts/check.mjs` 全绿；全量单元测试 3972 通过 / 0 失败（105 跳过、293 待证）；集成层 suites 622 通过 / 0 失败、harness 288 通过 / 0 失败、package 通过。
+
+## Unreleased — 重启后交还子会话不再被判身份冲突
+
+- 加载归位的作废结算（`ChildWorkRecovery.settleOrphanedChildRuns`）改回激活任务的第一件持久动作。它原先排在由 git 子进程支撑的交付恢复之后：重启后 manager 把工作交还给上一 runtime 留下的子会话时，新根的登记会抢在作废落定之前读投影，读到的仍是活跃旧根，于是子会话被判 `ActiveRunIdentityConflict`，交还回执退化成「派发回执不确定」。
+- 作废事实与新根的登记事实现在按写入顺序先后落定：作废先折进投影，新根读到的是已作废的遗留 run，准入放行，交还由子会话本人接下。
+- 规范：`requirements/crash-reconciliation/WHAT.md` [020] 补「该结算是加载归位的首个持久动作：作废事实必须先于下一次交接的身份判定落定，否则新交接会读到仍然活跃的旧根，把已经退休的子会话判成身份冲突」。
+- 验收：`requirements/intra-participant-parallelism/tests/010.test.mjs` 的两段式重启回归此前红在交还一步，现绿；全量单元测试 3972 通过 / 0 失败（`WXS_ACCEPT_TODO=1`），`node scripts/build.mjs` 与 `node scripts/check.mjs` 全绿。
+
+## Unreleased — Fission 准入：owner 已交付视图降为可选上下文
+
+- Fission 准入不再以 owner 是否已交付视图为条件。`ownerViewPort` 读不到 owner 的 `js.deliver` 视图时交出「无视图」，不再回 `lifecycle_view_unavailable`；`FissionAdmission.admitReserved` 删去「owner view materialization returned empty」的整组拒绝——未交付的 owner 一样准入其 lanes，不再被判成「Fission could not establish the full replacement group」。
+- lane 启动文本按 `FissionStartup.render` 的新契约拼装：有 owner 已交付视图时附带该视图，没有时只留 lane 输入。owner 视图是 lane 的上下文，不是准入前提。
+- durable 事实保持诚实：`FissionAdmitted` 的 owner view blob 写的就是 lanes 实际收到的那段文本（owner 未交付时为空视图），接管聚合读同一 blob，事实与 lanes 不会各说各话。
+- JS 准入面随之改语义：`ownerView` 依赖返回 null/空串表示「尚无视图」，`admit` 结果的 `ownerView` 在无视图时为 null。
+- 规范：`requirements/intra-participant-parallelism/WHAT.md` [003] 改写为「初始任务由该 lane 输入组成，caller 已有已交付视图时附带 caller 当时的已交付视图；caller 尚未交付视图不构成准入阻碍」。
+- 测试：`requirements/intra-participant-parallelism/tests/003.test.mjs` 的 owner view 夹具改名 `CANONICAL-OWNER-VIEW`，并新增「owner 未交付视图时 lanes 仍然准入、启动文本只带 lane 输入」一例。
+
+## Unreleased — ToolResultBound 上限改读宿主 tool_output
+
+- `ToolResultBound` 不再把宿主截断层的缺省值（2000 行 / 51200 字节）当作自身上限：插件 `config` hook 读取宿主公开的 `config.tool_output.max_lines` / `max_bytes`（`@opencode-ai/sdk` Config 类型），写入 `setHostLimits`；内容预算（`ContentMaxLines()` / `ContentMaxBytes()`）在绑定时从当前宿主上限即时减去标记自身的成本（2 行 / 34 字节），使 `Marker + tail` 恰好贴满而不超过宿主窗口——宿主抬高或压低上限，下一次绑定即跟随。宿主未声明 `tool_output` 时退回与传输层一致的缺省；非数字、非正数或低于标记成本的声明一律忽略，配置残缺不会放宽界限。`host-boundary-015` 新增抬高、压低与非法声明三组正反例。
+
+## Unreleased — js.run sanity 只交参数数组
+
+- `sanity()` 仍返回 `{ nextDone, watchVeto }` 两个 thunk，但 thunk 只拨实例状态并返回参数数组，不再自己调用 `next`/`watch`。宿主用该数组调用对应方法：`next` 必须返回 `null`，`watch` 必须一次否决。返回值不是数组，或调出的方法没有出口，整次 `js.run` 在调用点 park，什么都不执行。空操作 `() => null` / `() => false` 因此过不了自证。
+
+## Unreleased — js.rg(argv)
+
+- 编程面 Grep 投影为 `rg(argv)`：一个字符串数组。内容搜索固定加上 `--json`；`--files`、`--files-with-matches`、`-l`、`--count` 等与 `--json` 互斥的模式原样执行，结果收成 `paths`。返回 JSON 对象，不是文本。不追加 `--no-ignore`。
+
 ## Unreleased — PLAN.md 合规审计：生命周期统一实现的决策与工程修正
 
 以 `PLAN.md`（Manager/Plan 统一重组，cutover 分支 `feat/lifecycle-cutover` 已并入）为规范，对现行实现逐算法（A–Q）逐条 35 个「能证伪」条件做合规审计，修正下列真实分歧；被后续决策取代的条目（LWR_prev 交接、Reopen 语义、back-to-back 无评审接力、工作计数→durable authority 身份输入、spawn 标记）逐条记录为 SUPERSEDED，未回退。

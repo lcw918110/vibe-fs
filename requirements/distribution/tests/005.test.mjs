@@ -432,8 +432,8 @@ const RESOURCE_SAMPLES = [
   'provider/role/manager/en.md',
   'provider/role/manager/zh-CN.md',
   'provider/world/common-law/en.md',
-  'enforcer/primitive-obsession/lesson.md',
-  'enforcer/primitive-obsession/lesson.zh-CN.md',
+  'provider/lifecycle/manager/work-activation/en.md',
+  'provider/lifecycle/manager/work-activation/zh-CN.md',
 ]
 
 test('WHAT[distribution-005] repository layout has one resources directory beside dist without a dist/resources copy', () => {

@@ -8,7 +8,7 @@
 
 每项文件系统 capability 在公开基类、工具描述、canonical examples 与运行时门禁中一致投影；缺失能力在四层均不可用，伪造调用也须拒绝。一项能力可生成固定顺序的同权成员族，不产生第二份授权。
 
-主原语族按能力投影为：Read → `cat`/`stat`/`whereAll`/`where`，Glob → `ls`，Write → `write`/`mkdir`，Move → `mv`，Remove → `rm`，Exec → `run`，Fork → `fork`/`dag`，Join → `join`，Fission → `fission`，Horizon → `horizon`，Advisor → `advisor`；canonical 成员序为 `write, rm, mv, cat, ls, stat, mkdir, whereAll, where, run, fork, dag, join, fission, horizon, advisor`（生命周期成员 `park` 在基类与运行时绑定中携带，不进入 `members` 列表）。`ToolPermission.Edit` 不再投影任何 `JsCapability`；旧成员 `glob`/`grep`（[057]）与 `file`/`edit`/`rewrite` 均已从仓库生成编程面彻底退役（Plan 任期专用工具 `todowrite-for-plan` 仍独立保有其无路径 `file`/`edit`/`rewrite` 接口）。
+主原语族按能力投影为：Read → `cat`/`stat`/`whereAll`/`where`，Glob → `ls`，Grep → `rg`，Write → `write`/`mkdir`，Move → `mv`，Remove → `rm`，Exec → `run`，Fork → `fork`/`dag`，Join → `join`，Fission → `fission`，Horizon → `horizon`，Advisor → `advisor`；canonical 成员序为 `write, rm, mv, cat, ls, rg, stat, mkdir, whereAll, where, run, fork, dag, join, fission, horizon, advisor`（生命周期成员 `park` 在基类与运行时绑定中携带，不进入 `members` 列表）。`ToolPermission.Edit` 不再投影任何 `JsCapability`；旧成员 `glob` 与 `file`/`edit`/`rewrite` 均已从仓库生成编程面彻底退役（Plan 任期专用工具 `todowrite-for-plan` 仍独立保有其无路径 `file`/`edit`/`rewrite` 接口）。`grep(needle, pattern)` 已退役，Grep 现在只投影 `rg(argv)`。
 
 ## [003] 确定性生成
 
@@ -38,7 +38,7 @@
 
 ## [009] Grep Capability 投影
 
-`grep(needle, pattern)` 只由 Grep capability 授权；Read+Glob 不代替它。needle 接受字符串或正则，必填 pattern 按 glob 规则选文件；返回行列位置与匹配文本，不可读或非 UTF-8 文件跳过。
+`rg(argv)` 只由 Grep capability 授权；Read+Glob 不代替它。参数只有一个 argv，是字符串数组。搜索固定加上 `--json` 后原样传给 `rg`，调用方不再传 `--json`；没有路径时不替它补工作区。成员不追加 `--no-ignore`；要搜索被忽略的路径，由调用方写进 argv。`--files`、`--files-with-matches`、`-l`、`--files-without-match`、`--count`、`-c`、`--count-matches`、`--quiet`、`-q`、`--vimgrep`、`--type-list` 与 `--json` 互斥，所以这些模式不加 `--json`，原样传给 `rg`。返回值都是 JSON 对象，不是文本：内容搜索是 `{ exitCode, messages }`，`messages` 是解析后的 JSON Lines；上述模式是 `{ exitCode, paths }`。`exitCode` 为 `0` 表示有结果，为 `1` 表示成功但没有结果，二者都是数据。argv 不是字符串数组时为 `INVALID_ARGUMENT`；路径越出工作区为 `PATH_DENIED`；其余 `rg` 失败为 `RG_FAILED`。
 
 ## [010] Rewrite、Write 与 Mkdir 的落盘语义
 
@@ -238,7 +238,7 @@ rm/mv 相关稳定失败码（`DIRECTORY_NOT_EMPTY`、`CROSS_DEVICE_MOVE`、`INV
 
 ## [047] 原语组合与教学资源
 
-原语只提供动词，不提供编辑 DSL：find/replace = `cat → where → 拼接 → write`；批量替换 = 一次 `whereAll` 加反向拼接；append = `cat + write`；锚点切片 = 两次 `where`（第二次带 `from`）；**递归枚举 = `ls` 递归组合**（`walk` 写法见双语资源 `tool/js-program/recipes`）；**内容搜索 = walk + `cat` + `whereAll`**。`cat`/`ls`/`stat`/`write`/`mkdir`/`where`/`whereAll` 与 rm/mv 共享同一路径边界与 as-is 纪律。
+原语只提供动词，不提供编辑 DSL：find/replace = `cat → where → 拼接 → write`；批量替换 = 一次 `whereAll` 加反向拼接；append = `cat + write`；锚点切片 = 两次 `where`（第二次带 `from`）；**枚举与内容搜索 = `rg(argv)`**（等价于 `rg --json` 加上这一个 argv，返回 JSON 对象；写法见双语资源 `tool/js-program/recipes`）。`cat`/`ls`/`rg`/`stat`/`write`/`mkdir`/`where`/`whereAll` 与 rm/mv 共享同一路径边界与 as-is 纪律。
 
 教学资源 `tool/js-program/header` 与 `tool/js-program/park` 双语成对，声明主原语、组合模式、where 歧义契约与 unpark 自由值契约；`tool/js-program/contract` 不再声称 all-or-nothing 提交，失败经验与 as-is 语义一致。
 
@@ -250,27 +250,27 @@ parked 载荷的 `source` 字段携带完整程序与执行点标记（[037]）�
 
 `unpark.value` 的 host schema 是任意 JSON 值（可选），执行端零校验；注入值的语义由 park 点定义，错误注入由下游自然失败。工具描述与 `tool/js-program/park` 资源明确这一责任边界。
 
-## [050] js.run：宿主拥有的工程执行循环
+## [050] js.call：宿主拥有的工程执行循环
 
-Exec capability 投影出 `run` 成员与全局 `js.Runnable`。模型写成 `await js.run(class extends js.Runnable { ... })`；控制流归宿主：宿主实例化类、校验规格、驱动 sanity thunk、执行命令、按时间片调用 `watch`、派发 `onExit`、执行 `maxDuration` 上界，模型只写语义回调。
+Exec capability 投影出 `call` 成员与全局 `js.Callable`。模型写成 `await js.call(class extends js.Callable { ... })`；该成员只在全局 `js` 对象上，基类不提供 `this.call(...)`；控制流归宿主：宿主实例化类、校验规格、驱动 sanity thunk 并用它们返回的参数数组调用 `next`/`watch`、执行命令、按时间片调用 `watch`、派发 `onExit`、执行 `maxDuration` 上界，模型只写语义回调。
 
-必选 `maxDuration`（正数毫秒）、`next(ctx)`、`watch(ctx)` 与 `sanity()`；缺任一以 `RUNNABLE_SPEC_INCOMPLETE` 失败。可选 `interval`（默认 10000ms，下限钳制）、`onExit(result)`、`onTimeout`。`watch` 与 `sanity` 是规格的一部分，因此 watchdog 不可能被绕过。
+必选 `maxDuration`（正数毫秒）、`next(ctx)`、`watch(ctx)` 与 `sanity()`；缺任一以 `CALLABLE_SPEC_INCOMPLETE` 失败。可选 `interval`（默认 10000ms，下限钳制）、`onExit(result)`、`onTimeout`。`watch` 与 `sanity` 是规格的一部分，因此 watchdog 不可能被绕过。
 
-`sanity()` 是控制流自证，先于一切执行。它返回 `{ nextDone, watchVeto }` 两个 thunk，宿主驱动并机械检测：`nextDone` 把实例拨到「全部完成」状态并驱动 `next`（宿主要求返回 `null`），`watchVeto` 把实例拨到「出了问题」状态并驱动 `watch`（宿主要求一次否决——`false` 或 `{ abort }`）——写 thunk 就是在设计终止条件，断言代码由宿主承担。thunk 未展示出出口，整个 `js.run` 在调用点经统一 park 通道挂起，载荷携带 `{ sanity: { failure, returned } }` 诊断——在新调用里修好类，或以 unpark 注入值作为程序消费的 js.run 结局。
+`sanity()` 是控制流自证，先于一切执行。它返回 `{ nextDone, watchVeto }` 两个 thunk。thunk 只负责把实例拨到目标状态并返回参数数组，绝不自己调用 `next` 或 `watch`：`nextDone` 返回 `next` 的参数数组（一项，即 `{ root, step }`），`watchVeto` 返回 `watch` 的参数数组（一项，即 watch ctx）。宿主用该数组调用对应方法并机械检测：`next` 必须返回 `null`，`watch` 必须一次否决（`false` 或 `{ abort }`）。写 thunk 就是在设计终止条件，断言代码由宿主承担。返回值不是数组、或调出的方法未展示出口，整个 `js.call` 在调用点经统一 park 通道挂起，载荷携带 `{ sanity: { failure, returned } }` 诊断——在新调用里修好类，或以 unpark 注入值作为程序消费的 js.call 结局。
 
-`next(ctx)` 返回代数：命令字符串（前台跑到退出）| `null`（完工）| `{ spawn, name }`（后台进程，立即继续）| `{ signal, name }`（向该后台发送 `signal`，默认 SIGTERM；2 秒后仍存活则 SIGKILL）| `{ waitFor: { port, timeoutMs } }`（等到 TCP 端口可连接）| `{ send: { name, input } }`（写命名子进程 stdin，见 [058]）。其他形态以 `RUN_COMMAND_UNSUPPORTED` 失败；`waitFor` 超时以 `RUN_WAIT_TIMEOUT` 失败；`signal` 指向未知后台以 `RUN_CHILD_UNKNOWN` 失败。
+`next(ctx)` 返回代数：命令字符串（前台跑到退出）| `null`（完工）| `{ spawn, name }`（后台进程，立即继续）| `{ signal, name }`（向该后台发送 `signal`，默认 SIGTERM；2 秒后仍存活则 SIGKILL）| `{ waitFor: { port, timeoutMs } }`（等到 TCP 端口可连接）| `{ send: { name, input } }`（写命名子进程 stdin，见 [058]）。其他形态以 `CALL_COMMAND_UNSUPPORTED` 失败；`waitFor` 超时以 `CALL_WAIT_TIMEOUT` 失败；`signal` 指向未知后台以 `CALL_CHILD_UNKNOWN` 失败。
 
-`watch(ctx)` 每片返回 continue（无返回/true）、否决（`false` 或 `{ abort: reason }`）或 `{ park: payload }`；`false` 是真实否决，不是「继续」的同义词。park 走与 `js.park` 相同的挂起通道（载荷与 source 执行点同样登记）；恢复值 `'abort'` 中止，其余继续。合法的 abort/timeout SIGKILL 前台命令；运行结束时全部后台进程被杀死。park 裁决需要编排执行路径，缺 park 通道时以 `RUN_PARK_UNSUPPORTED` 失败，不静默降级。
+`watch(ctx)` 每片返回 continue（无返回/true）、否决（`false` 或 `{ abort: reason }`）或 `{ park: payload }`；`false` 是真实否决，不是「继续」的同义词。park 走与 `js.park` 相同的挂起通道（载荷与 source 执行点同样登记）；恢复值 `'abort'` 中止，其余继续。合法的 abort/timeout SIGKILL 前台命令；运行结束时全部后台进程被杀死。park 裁决需要编排执行路径，缺 park 通道时以 `CALL_PARK_UNSUPPORTED` 失败，不静默降级。
 
 ctx：`next` 收到 `{ root, step }`；`watch` 收到 `{ root, step, stdout, stderr, exited, exitCode, backgrounds, elapsedMs, remainingMs }`，`stdout`/`stderr` 是本片增量（前台命令与全部后台子进程合并进同一观察窗），`backgrounds` 是 `{ name, exited, exitCode }` 数组；`onExit(result)` 收到 `{ root, exitCode, stdout, stderr, elapsedMs }`，其 `stdout`/`stderr` 携带该子进程的完整输出（有界头尾），不是片增量。成功结局是结构化对象 `{ ok, status: completed|aborted|timeout, exitCode, stdout, stderr, truncated, bytes, durationMs, steps }`（`steps` 计宿主执行的循环轮数——timeout 时轮数多而命令短，即 `next` 缺终止分支的签名）；host 失败经 `__jsFailure` 哨兵成为程序的稳定失败码，而不是数据。
 
 每路输出保留至多 256 KiB（前 128 KiB 加后 128 KiB），`truncated` 为真并如实报告总字节数；磁盘不回滚，剧本（如 `wget -c`）自行幂等。
 
-## [051] js.run 的多进程形态
+## [051] js.call 的多进程形态
 
 `spawn` 起的后台进程进入本次 run 的进程表，`watch` 的 `backgrounds` 观察面报告其 exited/exitCode；`signal` 收割命名后台；run 结束时兜底 SIGKILL 全部后台。`waitFor` 期间宿主仍按片调用 `watch`，后台崩溃可被观察并触发 abort。
 
-## [052] js.run 教学与验证形态
+## [052] js.call 教学与验证形态
 
 双语资源 `tool/js-program/run-rules` 与 `tool/js-program/ultra-devops`（wget 批量下载 Ultra Example）成对；示例覆盖断点续传、停滞/过慢检测、退出码分派与逐文件 park 汇报。测试以本地限速 Range 服务器真实驱动 `wget -c`：中断后恢复、部分文件保留、逐文件 park/unpark、404 退出码 8 分派给 `onExit`。教学与示例不以无观察的恒真 `watch`（裸 `return true`）为示范：`watch` 的教学形态是先读 ctx 增量与实例状态再作裁决；宿主不拦恒真，但教学不示范它。ultra-devops 示例覆盖 where 歧义 park → unpark 恢复的完整路径：故意触发一次真实歧义（清单中目标名出现两次），读 `{ needle, candidates, nearest }` 诊断、unpark 注入选中 span、程序从原 await 继续——不以 happy path 为唯一示范。
 
@@ -278,9 +278,9 @@ ctx：`next` 收到 `{ root, step }`；`watch` 收到 `{ root, step, stdout, std
 
 每个生成的编程工具接受可选 `view` 参数 `{ prefixUntil, thenRemove? }`：捕获发生在工具调用时、进入下一次请求前，写入进程内 ANCHOR 现场表（context-compression [031]），被下一请求消费一次。`prefixUntil` 必填且必须是锚点编号；`thenRemove` 是 `{ 锚点编号: 摘要 }` 映射，取代累计生效且不可撤销。声明形状非法（缺 `prefixUntil`、`prefixUntil` 不是编号、`thenRemove` 不是映射、键不是锚点编号、摘要为空或非字符串）时整次调用以 `VIEW_DECLARATION_INVALID` 失败：不执行程序，也不改动任何现场。缺失该参数时行为不变。参数描述由双语资源 `tool/js-program/view-declaration-extra` 提供。
 
-## [054] deliver 显式终值
+## [054] deliver 显式终值与 view 视图返回
 
-`deliver(value)` 是生命周期成员，任何生成面无条件携带（与 park 同级）。调用即用该值结束程序：栈展开、不再执行后续语句，终值成为本次调用结果并写入本会话交付格；值必须是 JSON 兼容数据，缺失或非法时以 `INVALID_RETURN_VALUE` 失败。程序捕获内部交付哨兵后可以继续存活，此后的 return 值才是结果——捕获即知情取消。subagent 程序必须以 `js.deliver` 显式交付终值：普通 `return` 保持交付格为空，子工作以 `undelivered` 状态结算（`js.dag` 据此以 `node-undelivered` 挂起）。描述与双语资源 `tool/js-program/deliver` 陈述同一契约。
+`deliver(value, view?)` 是生命周期成员，任何生成面无条件携带（与 park 同级）。调用即用该值与可选 `view` 声明结束程序：栈展开、不再执行后续语句，终值成为本次调用结果，子工作返回给调用方的内容由 `js.deliver` 交回的 `view` 决定并渲染成 TOML。最后的 assistant 散文是否交回由 LLM 自主决定（包含在 `view` 内则交回，否则不交回）。跨次调用遵循增量去重规则：本次工作之前已经返回过的内容，即使本次 `view` 中包含，也不再重复返回。`value` 必须是 JSON 兼容数据，缺失或非法时以 `INVALID_RETURN_VALUE` 失败；`view` 形状非法时以 `VIEW_DECLARATION_INVALID` 失败。程序捕获内部交付哨兵后可以继续存活，此后的 return 值才是结果——捕获即知情取消。subagent 程序必须以 `js.deliver` 显式交付：普通 `return` 保持交付格为空，子工作以 `undelivered` 状态结算（`js.dag` 据此以 `node-undelivered` 挂起）。描述与双语资源 `tool/js-program/deliver` 陈述同一契约。
 
 ## [055] vm 并行边界
 
@@ -295,29 +295,29 @@ ctx：`next` 收到 `{ root, step }`；`watch` 收到 `{ root, step, stdout, std
 ```
 
 - `fork(payload)`：`payload` 是字符串（任务）或 `{ charge, name?, calling?, keywords? }`；缺 `name` 时由 charge 派生（派生名冲突报 `name-already-belongs`）。成功返回 `{ ok, name, agentId, outcome }`，`outcome ∈ created | nudged | commissioned`。拒绝码：`name-required`/`charge-required`/`unknown-calling`/`calling-conflict`/`name-already-belongs`/`warm-start-unavailable`/`context-unavailable`/`not-a-delegation-role`/`placement-failed`/`dispatch-uncertain`。
-- `join()`：按本会话成员归属收拢，返回 `{ ok, records: [{ name, agentId, role, status, workRecord }], byName }`；`status ∈ completed | undelivered | failed | abandoned`。拒绝码：`context-unavailable`/`not-ready`/`nothing-to-join`/`join-in-progress`/`interrupted`/`abandoned`。
+- `join()`：按本会话成员归属收拢，返回 `{ ok, records: [{ name, agentId, role, status, view }], byName }`；`status ∈ completed | undelivered | failed | abandoned`。拒绝码：`context-unavailable`/`not-ready`/`nothing-to-join`/`join-in-progress`/`interrupted`/`abandoned`。
 - `fission({ charge, lanes })`：同身份多 lane 的任务分片执行（宿主负责 lane 绑定与收拢），返回 `{ ok, groupId, lanes: [{ index, sessionId }] }`；owner 的 `join()` 收拢本组 lane。拒绝码：`fission-unavailable`/`lane-start-failed`/`not-ready`/`context-unavailable`/`invalid-prompt`。
 - `dag({ nodes: [{ id, charge, deps?, lanes? }] })`：纯声明糖，由基类编译成波次 `fork` + 一次 `join`；下游节点的 prompt 带上依赖记录。成功返回 `{ ok, results: { [id]: record }, skipped: [id...] }`。**节点失败 → `park`**（与 `where` 同一条恢复通道），payload 为 `{ dag, node, code, deps, done, pending }`；注入值语义：`"retry"` 重跑、`"skip"` 跳过（下游看到 null）、其他值直接作为该节点结果、`{ abort: reason }` 使程序失败。
 - `horizon()`：返回在场名册的数据信封 `{ ok, agents: [{ label, status, target, workState, record, turnsUsed, turnsLeft, timeUsedMs, timeLeftMs }], ptys: [{ terminal }] }`；`status ∈ returned | still-away | did-not-return`，`workState ∈ latest | none | unavailable`，`record` 是最新帧正文原文（无则为 `""`）；四个校准数 `turnsUsed`/`turnsLeft`/`timeUsedMs`/`timeLeftMs` 只在委任者 estimate 与子会话起点两者都可读时给出，否则全为 `0`，不猜测。拒绝码：`horizon-unavailable`。
-- `advisor(intent, view)`：请求本调用 session 自己的顾问专席——`view` 是 Anchor view 声明 `{ prefixUntil, thenRemove }`，返回的数据信封是 `{ ok, advice }` 或 `{ ok: false, code: "advisor-unavailable", reason }`。顾问读到的请求是彼此独立的 prompt，绝不拼成一段：顾问自己的 law、按 Chronicle 形状渲染的 view（`# ` 注释表头 + `[[new_work_to_record]]` 数据表），以及自成一条 user prompt 的 `intent`；follow-up 只交付相对已交付部分的 view 增量，其后追加新的 intent。拒绝码：`advisor-unavailable`。
+- `advisor(intent, view)`：请求本调用 session 自己的顾问专席——`view` 是 Anchor view 声明 `{ prefixUntil, thenRemove }`，返回的数据信封是 `{ ok, advice }` 或 `{ ok: false, code: "advisor-unavailable", reason }`。顾问读到的请求是彼此独立的 prompt，绝不拼成一段：顾问自己的 law、按 advisor 自有 TOML 视图形状渲染的 view（`# ` 注释表头 + `[[records]]` 数据表），以及自成一条 user prompt 的 `intent`；follow-up 只交付相对已交付部分的 view 增量，其后追加新的 intent。拒绝码：`advisor-unavailable`。
 
 实现边界：delegation shard 提供结构化入口（`ForkTool.executeReceipt`/`JoinTool.executeReceipt`/`FissionTool.executeReceipt`，返回数据与上述稳定码；宿主 `fork`/`join`/`fission` 工具的 prose 输出保持不变）；接线层在每次编程调用期间安装进程内委托宿主驱动这些入口，调用结束清除；未安装宿主时成员以 `{ ok:false, code:"DELEGATION_UNAVAILABLE" }` 拒绝，不静默降级。
 
 委托面按能力投影：Orchestrator 没有文件权限但持有 Fork/Join，因此获得仅含委托（fork/join/dag/park）的编程面；`hasFsCapability`/`jsToolSpec.admissionFor` 同步把 Fork/Join/Fission 计入编程面授权，四层一致。
 
-## [057] ls 的 ignore 语义与 glob/grep 退役
+## [057] ls 的 ignore 语义与搜索面
 
-`ls(path)` 在列出条目时应用 gitignore 语义：逐级 `.gitignore`（含否定模式与目录剪枝）加上根 `.git/info/exclude`，与 `JsGlobFs.glob` 使用同一实现（`wanxiangli/fs` 的 ignore 引擎，经新的公开入口暴露），因此「从工作区根开始的 `ls` 递归组合」等价于旧 `glob`，而「walk + `cat` + `whereAll`」等价于旧 `grep`。组合写法见双语资源 `tool/js-program/recipes`。
+`ls(path)` 在列出一层目录时应用 gitignore 语义：逐级 `.gitignore`（含否定模式与目录剪枝）加上根 `.git/info/exclude`。递归枚举与内容搜索由 `rg(argv)` 承担（[009]）。
 
-据此彻底退役 `glob`/`grep` 两个 js 成员：fragment、运行时绑定、四层投影、描述与规则资源一并删除；`Grep` capability 不再投影任何成员。旧 `file`/`edit`/`rewrite` 成员亦已从生成编程面退役（仅 Plan tenure 编程面 `todowrite-for-plan` 保留其专用无路径实现）。
+旧 `glob` js 成员已退役。旧 `grep(needle, pattern)` 成员已退役，其能力现在只投影 `rg(argv)`。旧 `file`/`edit`/`rewrite` 成员仍从仓库生成编程面退役（仅 Plan tenure 编程面 `todowrite-for-plan` 保留其专用无路径实现）。
 
-## [058] js.run 的交互形态（send）与唯一执行面
+## [058] js.call 的交互形态（send）与唯一执行面
 
-Host 原生 `run` 工具与四个 pty 工具（`open-terminal`/`send-terminal`/`read-terminal`/`signal-terminal`）整体退役；`ToolPermission.Exec` 只投影编程面的 `run` 成员，`ToolPermission.Pty` 不再投影任何宿主工具。交互执行由 `js.run` 承担：`next()` 返回 `{ spawn, name }` 起后台子进程，`watch(ctx)` 的 `stdout`/`stderr` 是**该时间片的增量**（前台命令与全部后台子进程的增量合并为一个观察窗），`{ send: { name, input } }` 写进命名子进程的 stdin（缺行尾换行时补一个），`{ signal, name }` 收割，`{ waitFor: { port, timeoutMs } }` 等端口就绪。`send` 指向未知后台名以 `RUN_CHILD_UNKNOWN` 失败；嵌套 `{ send: { name, input } }` 是 canonical 形态，平铺 `{ send: input, name }` 拼写被接受为同一语义，`send` 载荷解析不出目标名时同样以 `RUN_CHILD_UNKNOWN` 失败；子进程 stdout 没有换行协议假设，增量就是字节。
+Host 原生 `run` 工具与四个 pty 工具（`open-terminal`/`send-terminal`/`read-terminal`/`signal-terminal`）整体退役；`ToolPermission.Exec` 只投影编程面的 `call` 成员，`ToolPermission.Pty` 不再投影任何宿主工具。交互执行由 `js.call` 承担：`next()` 返回 `{ spawn, name }` 起后台子进程，`watch(ctx)` 的 `stdout`/`stderr` 是**该时间片的增量**（前台命令与全部后台子进程的增量合并为一个观察窗），`{ send: { name, input } }` 写进命名子进程的 stdin（缺行尾换行时补一个），`{ signal, name }` 收割，`{ waitFor: { port, timeoutMs } }` 等端口就绪。`send` 指向未知后台名以 `CALL_CHILD_UNKNOWN` 失败；嵌套 `{ send: { name, input } }` 是 canonical 形态，平铺 `{ send: input, name }` 拼写被接受为同一语义，`send` 载荷解析不出目标名时同样以 `CALL_CHILD_UNKNOWN` 失败；子进程 stdout 没有换行协议假设，增量就是字节。
 
-## [059] js.deliver 的终值记录
+## [059] js.deliver 的视图记录与增量去重
 
-程序经 `js.deliver(value)` 结束时，宿主把该终值记进进程内按会话的交付格（与 parked 现场同命：重启即丢，durable 终值在调用结算时另写）：子会话的完成载荷（`AgentCompletionPayload.WorkRecord`）直接由交付格终值的规范文本构造，取代从 XTrace + BlogFrame 物化的 LWR 记录；subagent 程序必须显式调用 `js.deliver`，普通 `return` 保持交付格为空，结算时 `join()` 记录报告 `status: "undelivered"`（`js.dag` 据此在 `node-undelivered` 处 park）。`value` 必须是 JSON 兼容数据，缺失或非法仍以 `INVALID_RETURN_VALUE` 失败（[054]）。交付格只在进程内被同一会话的完成路径读取一次（`take`）或窥视（`peek`），调用结算后清理。
+程序经 `js.deliver(value, view?)` 结束时，宿主将该次交付记录进进程内按会话的交付格（与 parked 现场同命：重启即丢，durable 终值在调用结算时另写）：子会话返回给调用方的完成载荷直接由 `js.deliver` 的 `view` 经增量去重（扣除本工作此前已返回过的交互条目）后渲染成 TOML 视图文本构造，彻底取代旧的 `WorkRecord` 三段式物化体系。最后的 assistant 散文是否纳入返回结果完全取决于该 `view` 覆盖范围。subagent 程序必须显式调用 `js.deliver`，普通 `return` 保持交付格为空，结算时 `join()` 记录报告 `status: "undelivered"`（`js.dag` 据此在 `node-undelivered` 处 park）。`value` 必须是 JSON 兼容数据，缺失或非法仍以 `INVALID_RETURN_VALUE` 失败（[054]）。交付格只在进程内被同一会话的完成路径读取一次（`take`）或窥视（`peek`），调用结算后清理。
 
 ## [060] "js" 机器词汇的终局
 

@@ -37,7 +37,4 @@ type OrchestratorHostDeps =
         ContinueManagerLoop: SessionId -> string -> Task<Result<unit, string>>
         RepoPath: string
         TargetBranch: string
-        ParentWorkRecordFor: SessionId -> Task<string option>
-        ChildWorkRecordFor: SessionId -> Task<string option>
-        ChildWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>
     }

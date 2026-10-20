@@ -18,9 +18,7 @@ module ManagedAgentConfigSurface =
 
     let private roleBindingNames () =
         ManagedAgent.requiredNames
-        |> List.filter (fun name ->
-            not (ManagedAgentCatalog.isBookkeeperName name)
-            && name.ToLowerInvariant() <> "predictor")
+        |> List.filter (fun name -> not (ManagedAgentCatalog.isBookkeeperName name))
         |> List.toArray
 
     let private report (outcome: Result<ManagedAgentConfig.ManagedAgentInventory, string>) : obj =

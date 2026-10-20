@@ -236,29 +236,14 @@ const acceptedRetryInput = (overrides = {}) => ({
   journal: true,
   sessionId: 'ses_x',
   acceptedRetry: true,
-  failures: 1,
-  prefixEpoch: 0,
   physicalUser: 'user-1',
   acceptedPhysicalUser: 'user-1',
-  snapshotPort: true,
   currentProjection: baseProjection,
-  committedSnapshot: null,
-  coverableCutoff: 2, // material exists (coverage ahead of request)
-  // The Companion's claim is proven at ITS cutoff; the frozen subset ends at the
-  // request boundary, which is where this attempt may fold (CTX-029).
-  coveredDigest: XWireSurface.coveredPrefixDigest(baseProjection, 2),
-  materialCutoff: 1,
-  requestStartCutoff: 1,
-  frozenRecordPrefixRef: 'blob/ref/frozen-1',
-  frozenRecordPrefixDigest: 'sha256:frozen-1',
-  frozenRecordPrefixBody: 'frozen record prefix body text',
-  memoryPreamble: 'companion memory preamble',
-  outcome: null,
   ...overrides,
 })
 
 test('WHAT[host-boundary-008] XWIRE_pre_inference_retry_does_not_require_a_public_session_snapshot', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ snapshotPort: false }))
+  const result = XWireSurface.transform(acceptedRetryInput())
   assert.equal(result.ok, true)
   assert.equal(result.noop, false)
   assert.equal(result.consumed, true)

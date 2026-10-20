@@ -6,10 +6,7 @@ open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.Enforcer
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session.Recovery
@@ -26,9 +23,6 @@ open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Host
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
@@ -93,22 +87,6 @@ type PluginSessionScope
     // DSL-MUTABLE: resource — per-instance join interrupt registry.
     member val JoinInterrupts: IJoinAttemptRegistry = JoinAttemptRegistry() :> IJoinAttemptRegistry
 
-    /// C6 item 27: waiters are keyed by BloggerSessionId. When the MAIN is
-    /// deleted, the linked Blogger's parked waiter + request slots must be
-    /// cancelled too. Returns the keys to cancel (including sessionId itself
-    /// when it is not a Main with a linked Blogger).
-    member this.LinkedBloggerKeys(sessionId: string) : string list =
-        let bloggerKeys (companion: CompanionHost) =
-            match companion.BloggerSession with
-            | Some bloggerId -> [ SessionId.value bloggerId ]
-            | None -> []
-
-        match this.Companions.TryGetValue sessionId with
-        | true, companion -> bloggerKeys companion
-        | false, _ ->
-            // sessionId may itself be a Blogger child being deleted.
-            [ sessionId ]
-
     member private _.SettleExecution(durable: AgentJournal, execution: ChatExecutionState) : Task =
         task {
             let! settled =
@@ -159,56 +137,6 @@ type PluginSessionScope
         task {
             for durable, execution in unfinished do
                 do! this.SettleExecution(durable, execution)
-        }
-
-    /// managed-session-lifecycle-026: the linked Attached InternalLeaf (Blogger)
-    /// sessions of a Main, proven by the durable CompanionBloggerLinked
-    /// projection. The process-local Companion registry is a cache; the durable
-    /// projection is the existence truth (crash-reconciliation-021).
-    member private _.LinkedLeafSessions(sessionId: string) : SessionId list =
-        let sid = SessionId.create sessionId
-
-        journal
-        |> Option.bind (fun durable ->
-            (AgentJournal.snapshot durable).AgentProjections.Sessions
-            |> Map.tryFind sid
-            |> Option.bind (fun session -> session.Companion)
-            |> Option.bind (fun companion -> companion.BloggerSessionId))
-        |> Option.filter (fun leaf -> leaf <> sid)
-        |> Option.toList
-
-    /// managed-session-lifecycle-026: return a linked leaf's remaining exact
-    /// custody. SettleSessionExecutions already returned what it just settled;
-    /// an unheld key answers AlreadyApplied, so a repeated close stays a no-op.
-    /// HeldForInput is the documented delayed return for a retained
-    /// continuation credit; a Conflict is a real ownership violation and is
-    /// exposed, never swallowed.
-    member private _.ReleaseLeafCustody(leaf: SessionId) : Task =
-        let executions =
-            journal
-            |> Option.map (fun durable ->
-                AgentJournal.snapshot durable
-                |> fun projection -> projection.AgentProjections.ChatExecutions
-                |> ChatExecutionProjection.current
-                |> List.filter (fun execution -> execution.key.SessionId = leaf))
-            |> Option.defaultValue []
-
-        task {
-            for execution in executions do
-                match
-                    ModelRouting.releasePhysicalExecution execution.key.SessionId execution.key.PhysicalUserMessageId
-                with
-                | PhysicalExecutionReleaseOutcome.HeldForInput
-                | PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.Applied
-                | PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.AlreadyApplied
-                | PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.StaleFence -> ()
-                | PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.Conflict ->
-                    invalidOp (
-                        sprintf
-                            "managed-session-lifecycle-026: linked leaf exact capacity release was rejected (%s/%s)"
-                            (SessionId.value execution.key.SessionId)
-                            (PhysicalUserMessageId.value execution.key.PhysicalUserMessageId)
-                    )
         }
 
     /// No-op: language follows the live global preference, so there is no
@@ -296,21 +224,6 @@ type PluginSessionScope
             // continuation inputs this session owns; the last cancellation
             // completes the delayed exact return of the held credit.
             attemptSync (fun () -> ModelRouting.cancelRetainedInputsForSession (SessionId.create sessionId))
-
-            // managed-session-lifecycle-026: a Main close also settles every
-            // execution of its durable linked Attached InternalLeaf before the
-            // leaf's registry entries are dropped.
-            let leaves =
-                try
-                    this.LinkedLeafSessions sessionId
-                with failure ->
-                    remember failure
-                    []
-
-            for leaf in leaves do
-                do! attempt (fun () -> this.SettleSessionExecutions(SessionId.value leaf))
-                attemptSync (fun () -> ModelRouting.cancelRetainedInputsForSession leaf)
-                do! attempt (fun () -> this.ReleaseLeafCustody leaf)
 
             match this.Companions.TryGetValue sessionId with
             | true, companion ->

@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as assoc from '../../../dist/Execution/Session/AssociationSurface.js'
-import * as persona from '../../../dist/Participant/Persona/Surface.js'
 
-const linked = assoc.link({ main: 'ses_main', blogger: 'ses_blogger' }, assoc.empty)
+const linked = assoc.link({ main: 'ses_main', companion: 'ses_companion' }, assoc.empty)
 
 assert.equal(linked.ok, true, linked.message)
 
@@ -14,7 +13,7 @@ test('WHAT[session-ontology-007] HOST_008_durable_link_derives_work_and_leaf_cel
     executionClass: 'Work',
     ownership: { kind: 'Root', owner: null, attachment: null, transactionId: null },
   })
-  assert.deepEqual(assoc.classify('ses_blogger', state), {
+  assert.deepEqual(assoc.classify('ses_companion', state), {
     executionClass: 'InternalLeaf',
     ownership: { kind: 'Attached', owner: 'ses_main', attachment: 'Companion', transactionId: null },
   })

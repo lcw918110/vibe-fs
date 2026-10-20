@@ -15,7 +15,6 @@ const ROLES = [
   'Orchestrator',
   'Engineer',
   'DevOps',
-  'Blogger',
 ]
 
 const agentName = (role) => `${role.toLowerCase()}`
@@ -28,7 +27,6 @@ const buildConfig = () => {
     }
   }
   agent.bookkeeper = { model: 'bookkeeper-model' }
-  agent.predictor = { model: 'predictor-model' }
   return { agent }
 }
 
@@ -89,7 +87,6 @@ const allowList = (config, name) => {
     'horizon',
     'fission',
     'review',
-    'chronicle',
     'fetch',
     'deliver',
     'skill',
@@ -105,9 +102,9 @@ const HOST_UTILITY_ALLOW = ['skill']
 
 const COGNITIVE_UTILITY_ALLOW = ['assume']
 
-const hostUtilityAllowFor = (role) => (role === 'Blogger' ? [] : HOST_UTILITY_ALLOW)
+const hostUtilityAllowFor = (_role) => HOST_UTILITY_ALLOW
 
-const cognitiveUtilityAllowFor = (role) => (role === 'Blogger' ? [] : COGNITIVE_UTILITY_ALLOW)
+const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 
 const ROLE_ALLOW = {
   Manager: ['fork', 'resume', 'join', 'horizon', 'deliver', 'review', 'todowrite-for-manager'],
@@ -118,7 +115,6 @@ const ROLE_ALLOW = {
     'horizon',
     'todowrite-for-devops',
   ],
-  Blogger: ['chronicle'],
 }
 
 test('WHAT[capability-enforcement-023] devops_host_schema_contains_direct_mutation_tools', () => {
@@ -134,10 +130,19 @@ test('WHAT[capability-enforcement-023] devops_host_schema_contains_direct_mutati
   assert.equal(surface.toolName, 'todowrite-for-devops')
   assert.deepEqual(
     surface.capabilities.slice().sort(),
-    ['Advisor', 'Exec', 'Glob', 'Horizon', 'Join', 'Move', 'Read', 'Remove', 'Write'],
+    ['Advisor', 'Exec', 'Glob', 'Grep', 'Horizon', 'Join', 'Move', 'Read', 'Remove', 'Write'],
   )
   const memberNames = surface.members.map((m) => m.memberName)
-  for (const member of ['cat', 'ls', 'stat', 'where', 'whereAll', 'mkdir', 'write', 'mv', 'rm', 'run', 'join']) {
+  for (const member of ['cat', 'ls', 'rg', 'stat', 'where', 'whereAll', 'mkdir', 'write', 'mv', 'rm', 'call', 'join']) {
     assert.ok(memberNames.includes(member), `todowrite-for-devops must expose ${member}`)
+  }
+  assert.deepEqual(
+    allowList(config, 'devops').sort(),
+    [...ROLE_ALLOW.DevOps, ...hostUtilityAllowFor('DevOps'), ...cognitiveUtilityAllowFor('DevOps')].sort(),
+    'devops allow set must equal current matrix + non-authority utilities',
+  )
+  for (const retiredRole of ['blogger', 'predictor']) {
+    assert.deepEqual(permissions(retiredRole), [], `retired ${retiredRole} permissions must fail closed`)
+    assert.equal(generateRole(retiredRole, 'en'), null, `retired ${retiredRole} must fail closed`)
   }
 })

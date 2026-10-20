@@ -1,0 +1,1 @@
+This charge has no accepted string delivery. Printed text is not a return, and an object is not accepted. Call js.deliver(verboseReport) with one string: what ran, what was seen, what was repaired, and what is still unobserved. Do not stop.

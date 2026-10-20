@@ -1,6 +1,5 @@
 namespace Wanxiangshu.Composition.Turn
 
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
 
@@ -11,7 +10,6 @@ open Wanxiangshu.Interaction.Authority
 /// `PromptAuthority.ContinuationKind`.
 type TurnObservationJournalPort =
     {
-        TryBloggerReceiptKind: SessionId -> ProviderRunIdentity -> BlogFrameKind option
         TryContinuationKind: SessionId -> PhysicalUserMessageId -> PromptContinuationKind option
         /// interaction-authority-023: exact durable settlement of the attempt owning
         /// this physical user message — a `ChatExecution` Terminal fact exists.

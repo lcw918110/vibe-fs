@@ -552,7 +552,7 @@ module ToolHostCodec =
 
         // OpenCode Host Truncate defaults to head (keep start). Custom tools
         // pre-bound here with tail retention so decision-relevant endings —
-        // Final output, errors, join work_record — survive, and so Host's
+        // Final output, errors, join view — survive, and so Host's
         // subsequent head pass is a no-op (under 2000 lines / 50 KiB).
         let execute (rawArgs: obj) (rawContext: obj) =
             task {

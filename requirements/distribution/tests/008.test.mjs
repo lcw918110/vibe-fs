@@ -38,22 +38,9 @@ const PROVIDER_ROLES = [
   'manager',
   'orchestrator',
   'devops',
-  'blogger',
+  'plan',
   'bookkeeper',
 ]
-
-test('WHAT[distribution-008] DISTRIBUTION_enforcer_rulebook_closure_is_complete', () => {
-  const enforcerRoot = path.join(root, 'resources', 'enforcer')
-  const tipDirs = fs
-    .readdirSync(enforcerRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-  assert.ok(tipDirs.length >= 1, 'rulebook must contain at least one tip directory')
-  for (const tip of tipDirs) {
-    assert.ok(exists(`resources/enforcer/${tip}/lesson.md`), `missing lesson.md for ${tip}`)
-    assert.ok(exists(`resources/enforcer/${tip}/lesson.zh-CN.md`), `missing lesson.zh-CN.md for ${tip}`)
-  }
-})
 
 test('WHAT[distribution-008] DISTRIBUTION_provider_resource_closure_is_language_complete', () => {
   const roleRoot = path.join(root, 'resources', 'provider', 'role')
@@ -80,7 +67,6 @@ test('WHAT[distribution-008] DISTRIBUTION_provider_resource_closure_is_language_
 
 integrationTest('WHAT[distribution-008] repository runtime resources include both languages for active role laws and rulebook', () => {
   const providerDir = path.join(root, 'resources', 'provider')
-  const enforcerDir = path.join(root, 'resources', 'enforcer')
 
   assert.ok(fs.existsSync(providerDir), 'resources/provider must exist')
   assert.equal(
@@ -103,13 +89,6 @@ integrationTest('WHAT[distribution-008] repository runtime resources include bot
     const full = path.join(providerDir, leaf)
     assert.ok(fs.existsSync(full), `missing provider asset ${leaf}`)
   }
-
-  assert.ok(fs.existsSync(enforcerDir), 'resources/enforcer must exist')
-  assert.equal(
-    fs.existsSync(path.join(enforcerDir, 'catalog.json')),
-    false,
-    'catalog.json must not ship after rulebook folder cutover',
-  )
 })
 
 integrationTest(

@@ -70,7 +70,7 @@ module AttachmentLeaseCore =
         | AttachmentKind.SyncEngineer -> "sync-engineer"
         | AttachmentKind.SyncDevOps -> "sync-devops"
         | AttachmentKind.Bookkeeper transactionId -> "bookkeeper\u001f" + transactionId
-        | AttachmentKind.StrengthReplica -> "strength-replica"
+
 
     let leaseKey (owner: SessionId) (kind: AttachmentKind) =
         SessionId.value owner + "\u001f" + kindKey kind
@@ -209,8 +209,8 @@ type AttachmentLeaseRegistry() =
           AttachmentKind.SyncInspector
           AttachmentKind.SyncCoder
           AttachmentKind.SyncEngineer
-          AttachmentKind.SyncDevOps
-          AttachmentKind.StrengthReplica ]
+          AttachmentKind.SyncDevOps ]
+
 
     /// Re-parse one registry key back into `(owner, kind)`. The registry keeps only
     /// the key, so a reverse lookup recovers the kind from the key's own rendering

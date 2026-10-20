@@ -23,7 +23,7 @@ module SyncDelegateSurface =
     val returnRecordingPromptOutcome: value: obj -> session: string -> index: int -> outcome: obj -> bool
 
     /// Same canonical journal and Host port, using the production provider
-    /// recovery workflow and a real Blogger scope. Model routing reads the
+    /// recovery workflow. Model routing reads the
     /// calling process's already-isolated configuration.
     val createForProviderRecovery: directory: string -> owners: obj -> Task<obj>
 
@@ -170,7 +170,7 @@ module SyncDelegateSurface =
             Task<obj>
 
     val serializationDecision: firstScope: string -> secondScope: string -> sameProviderRun: bool -> obj
-    val evidenceBoundary: charge: string -> workRecord: string -> obj
+    val evidenceBoundary: charge: string -> view: string -> obj
 
     /// Script the retry decorator's verdicts for the next confirmed failures:
     /// `"dispatched"`, `"superseded"` or `"terminal:<reason>"`.

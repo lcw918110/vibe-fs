@@ -4,7 +4,6 @@ open Wanxiangshu.Persistence.Journal.JournalOutcome
 open Wanxiangshu.Persistence.EventStore
 open System.Threading.Tasks
 open Wanxiangshu.Foundation
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Interaction.Authority
@@ -104,7 +103,6 @@ module ManagedChatProviderLifecycle =
         acceptedEvidence: AcceptedChatExecutionEvidence ->
         providerRun: ProviderRunIdentity ->
         requestKind: ProviderRequestKind ->
-        projectionChoice: XProjectionChoice ->
             Task<Result<ManagedChatProviderStartedWitness, ManagedChatProviderLifecycleError>>
 
     val terminalWith:

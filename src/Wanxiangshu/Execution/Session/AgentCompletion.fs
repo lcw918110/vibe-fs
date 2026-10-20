@@ -32,11 +32,8 @@ type AgentFailurePayload =
 /// assistant message id, and PROMPT-002 makes the root a promoted physical
 /// message. `AssistantMessageId` was a second name for the former.
 ///
-/// COMPANION-003: `WorkRecord` IS the final LifecycleWorkRecord — Opening + Y
-/// frames + X gap + terminal. The old `FinalText` (session-wide A) and
-/// `WorkRecordSnapshot` (B with digest/freshness/coverage metadata) are both gone:
-/// one self-contained record replaces the pair, and runtime-only metadata never
-/// reaches the LLM-visible wire (EXEC-004).
+/// `View` holds the final delivered TOML view from js.deliver,
+/// materialised at terminal.
 /// DSL-state-combination: domain — optional child/session/provider identities
 /// are evidence facets of one terminal completion payload, not independent
 /// workflow stages.
@@ -48,8 +45,8 @@ type AgentCompletionPayload =
         Role: Role
         AuthorityRoot: AuthorityRootUserMessageId option
         ProviderRun: ProviderRunIdentity option
-        /// The final LifecycleWorkRecord, materialised at terminal.
-        WorkRecord: string
+        /// The delivered TOML view, materialised at terminal.
+        View: string
         /// The worktree this child ran in, when it has one.
         Directory: string option
     }
@@ -105,7 +102,7 @@ type JoinItem =
 module AgentCompletion =
     let text (outcome: AgentCompletionOutcome) =
         match outcome with
-        | AgentCompleted payload -> payload.WorkRecord
+        | AgentCompleted payload -> payload.View
         | AgentFailed payload -> payload.Message
         | AgentAbandoned(_, reason) -> reason
 
@@ -119,14 +116,14 @@ module AgentCompletion =
 
     let status (outcome: AgentCompletionOutcome) =
         match outcome with
-        | AgentCompleted payload when String.IsNullOrWhiteSpace payload.WorkRecord -> "undelivered"
+        | AgentCompleted payload when String.IsNullOrWhiteSpace payload.View -> "undelivered"
         | AgentCompleted _ -> "completed"
         | AgentFailed _ -> "failed"
         | AgentAbandoned _ -> "abandoned"
 
     let isCompleted (outcome: AgentCompletionOutcome) =
         match outcome with
-        | AgentCompleted payload -> not (String.IsNullOrWhiteSpace payload.WorkRecord)
+        | AgentCompleted payload -> not (String.IsNullOrWhiteSpace payload.View)
         | _ -> false
 
     let completed
@@ -136,7 +133,7 @@ module AgentCompletion =
         (role: Role)
         (authorityRoot: AuthorityRootUserMessageId)
         (providerRun: ProviderRunIdentity)
-        (workRecord: string)
+        (view: string)
         (directory: string option)
         =
         AgentCompleted
@@ -146,7 +143,7 @@ module AgentCompletion =
               Role = role
               AuthorityRoot = Some authorityRoot
               ProviderRun = Some providerRun
-              WorkRecord = workRecord
+              View = view
               Directory = directory }
 
     let failed (agentId: string) (runId: string) (role: Role option) (childSessionId: SessionId option) code message =
@@ -165,7 +162,7 @@ module AgentCompletion =
     /// made "this run has no child session" and "its session id is the empty string"
     /// the same value — the sentinel pattern PROMPT-001 exists to remove.
     ///
-    /// The work record is the run's plain text: a PTY has no LWR, and its completion
+    /// The view is the run's plain text: a PTY has no delivered view, and its completion
     /// schema stays deliberately minimal (EXEC-004).
     let ofSimpleText (agentId: string) (runId: string) (role: Role) (text: string) =
         AgentCompleted
@@ -175,7 +172,7 @@ module AgentCompletion =
               Role = role
               AuthorityRoot = None
               ProviderRun = None
-              WorkRecord = text
+              View = text
               Directory = None }
 
     let ofSimpleError (agentId: string) (runId: string) (role: Role) (message: string) =

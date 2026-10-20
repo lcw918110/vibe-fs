@@ -36,7 +36,7 @@ module AblationSurface =
     val allowsTool: toolName: string -> bool
     val allowsToolSchema: toolName: string -> bool
     val allowsPrimaryAgent: agentName: string -> bool
-    val strengthForcedOff: unit -> bool
+
     val fissionVisible: unit -> bool
     val toolMapEntry: toolName: string -> string
     val allowsFact: factTag: string -> bool

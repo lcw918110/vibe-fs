@@ -14,10 +14,10 @@ module Identity =
     type AuthorityRootUserMessageId = private AuthorityRootUserMessageId of string
     type PhysicalUserMessageId = private PhysicalUserMessageId of string
     type PromptKey = private PromptKey of string
-    type BloggerRequestId = private BloggerRequestId of string
+    type RepairRequestId = private RepairRequestId of string
     type TransportReceipt = private TransportReceipt of string
     type ProviderRunIdentity = private ProviderRunIdentity of string
-    type StrengthDecisionId = private StrengthDecisionId of string
+
     type ToolCallId = private ToolCallId of string
     type HostToolPartId = private HostToolPartId of string
     type HostMessagePartId = private HostMessagePartId of string
@@ -98,9 +98,9 @@ module Identity =
         val create: value: string -> PromptKey
         val value: key: PromptKey -> string
 
-    module BloggerRequestId =
-        val create: value: string -> BloggerRequestId
-        val value: id: BloggerRequestId -> string
+    module RepairRequestId =
+        val create: value: string -> RepairRequestId
+        val value: id: RepairRequestId -> string
 
     module TransportReceipt =
         val create: value: string -> TransportReceipt
@@ -111,9 +111,7 @@ module Identity =
         val create: value: string -> ProviderRunIdentity
         val value: id: ProviderRunIdentity -> string
 
-    module StrengthDecisionId =
-        val create: value: string -> StrengthDecisionId
-        val value: id: StrengthDecisionId -> string
+
 
     module ToolCallId =
         val create: value: string -> ToolCallId

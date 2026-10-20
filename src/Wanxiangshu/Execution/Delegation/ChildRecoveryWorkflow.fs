@@ -125,7 +125,7 @@ module ChildRecoveryWorkflow =
             ChildSnapshotEvidence.Unreadable "terminal assistant does not answer the exact accepted physical message"
         | Some user ->
             let runId = "run-restored-" + ports.AgentId
-            let workRecord = textOfParts assistant.Parts
+            let view = textOfParts assistant.Parts
 
             let agentOutcome =
                 AgentCompletion.completed
@@ -135,7 +135,7 @@ module ChildRecoveryWorkflow =
                     ports.Role
                     (PhysicalUserMessageId.promoteToAuthorityRoot (PhysicalUserMessageId.create user.Id))
                     (ProviderRunIdentity.create assistant.Id)
-                    workRecord
+                    view
                     None
 
             let body = HandleCompletionCodec.encodeOutcome runId agentOutcome

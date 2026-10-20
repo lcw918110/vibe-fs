@@ -220,10 +220,10 @@ const withCompletedEngineer = async (action, { beforeCreate } = {}) => {
       await hooks.event({ event: { type: 'session.idle', properties: { sessionID: sent.child } } })
       const result = await invocation
       assert.equal(result.ok, true, result.reason)
-      assert.equal(typeof result.workRecord, 'string')
-      assert.ok(result.workRecord.trim().length > 0)
-      assert.ok(result.workRecord.includes(answer))
-      assert.doesNotMatch(result.workRecord, /^Opening(?:\r?\n|$)/)
+      assert.equal(typeof result.view, 'string')
+      assert.ok(result.view.trim().length > 0)
+      assert.ok(result.view.includes(answer))
+      assert.doesNotMatch(result.view, /^Opening(?:\r?\n|$)/)
       assert.equal(pluginLifecycle.attachedEngineer(originalRuntime, manager), sent.child)
       assert.equal(runtime.prompts.filter(prompt => prompt.path?.id === sent.child).length, 1)
 
@@ -262,7 +262,7 @@ test('WHAT[managed-session-lifecycle-022] finalize prerequisite uses the origina
   await withCompletedEngineer(async ({ originalRuntime, manager, sent, charge, result }) => {
     assert.deepEqual(pluginLifecycle.takeEngineerDraft(originalRuntime, manager), {
       sessionId: sent.child,
-      turns: [{ question: charge, answer: result.workRecord }],
+      turns: [{ question: charge, answer: result.view }],
     })
     assert.equal(pluginLifecycle.takeEngineerDraft(originalRuntime, manager), null)
   })
@@ -477,7 +477,7 @@ test('WHAT[managed-session-lifecycle-022] original child and owner deletion arch
       assert.equal(observation.verified, true)
       assert.deepEqual(d0EventFiles(directory), afterFiles)
       assert.deepEqual(readFileSync(resolveDecoyFile()), decoy.bytes)
-      assert.ok(result.workRecord.includes(answer))
+      assert.ok(result.view.includes(answer))
     } finally {
       release.resolve()
       try {

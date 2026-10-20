@@ -17,26 +17,25 @@ test('WHAT[managed-session-lifecycle-001] unknown role input cannot silently exe
 
 test('WHAT[managed-session-lifecycle-001] all AttachmentKinds use the same creation, recovery and cleanup owner through public Host paths (GAP-133)', async () => {
   const observed = await attachment.everyKindScenario('owner')
-  const [inspectorChild, coderChild, companionChild, replicaChild] = [
-    observed.inspectorChild, observed.coderChild, observed.companionChild, observed.replicaChild,
+  const [inspectorChild, coderChild, companionChild] = [
+    observed.inspectorChild, observed.coderChild, observed.companionChild,
   ]
 
-  // Every kind was established, but each got its own child: the kind parameters,
-  // not four mechanisms, decide the child.
-  assert.equal(new Set([inspectorChild, coderChild, companionChild, replicaChild]).size, 4)
-  assert.deepEqual(observed.children.slice().sort(), [inspectorChild, coderChild, companionChild, replicaChild].sort())
+  // Every kind was established, but each got its own child
+  assert.equal(new Set([inspectorChild, coderChild, companionChild]).size, 3)
+  assert.deepEqual(observed.children.slice().sort(), [inspectorChild, coderChild, companionChild].sort())
 
   // One shared registry records every kind against ONE lifecycle owner: the reverse
   // lookup answers which kind holds each child, and every binding names this owner.
-  assert.deepEqual(observed.bindings.map(entries => entries.length), [1, 1, 1, 1])
+  assert.deepEqual(observed.bindings.map(entries => entries.length), [1, 1, 1])
   assert.deepEqual(
     observed.bindings.flat().map(([owner]) => owner),
-    ['owner', 'owner', 'owner', 'owner'],
+    ['owner', 'owner', 'owner'],
   )
   const kinds = observed.bindings.flat().map(([, kind]) => kind).sort()
-  assert.deepEqual(kinds, ['companion', 'strength-replica', 'sync-coder', 'sync-inspector'])
-  assert.deepEqual(observed.bindings.map(entries => entries[0][1]).sort(), ['companion', 'strength-replica', 'sync-coder', 'sync-inspector'])
-  assert.equal(observed.registrySize, 4)
+  assert.deepEqual(kinds, ['companion', 'sync-coder', 'sync-inspector'])
+  assert.deepEqual(observed.bindings.map(entries => entries[0][1]).sort(), ['companion', 'sync-coder', 'sync-inspector'])
+  assert.equal(observed.registrySize, 3)
 
   // Recovery through the same owner: the Sync kind keeps the agent bound at create
   // time, the Companion kind reuses instead of minting a second child, and the
@@ -48,7 +47,6 @@ test('WHAT[managed-session-lifecycle-001] all AttachmentKinds use the same creat
   assert.equal(observed.companionOrigin, 'Created')
   assert.equal(observed.companionReuseLinked, 1)
   assert.equal(observed.companionClosedCount, 0)
-  assert.equal(observed.replicaResidentStable, replicaChild)
 
   // Scope isolation survives the collapse: the owner's own scope resolves to its
   // binding while a different scope resolves to nothing.

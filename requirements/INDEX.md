@@ -36,6 +36,7 @@
 | `office-capability` | office 必须由有资格产生的后果定义，而不是 persona 名或工具白名单；确立 Engineer（独占 Fission）、DevOps（固有自修与真实执行）、Manager、Orchestrator 四大核心角色。 |
 | `capability-enforcement` | provider 看见的 capability 与 runtime 真能执行的 capability 必须同源且不扩大 office entitlement；Fission 独占 Engineer，DevOps 固有自修无需逐次开关，Fork/Resume 权能分离。 |
 | `participant-horizon` | machine knowledge 大于 participant experience；只有会改变合法行动的最小事实应穿过 horizon；Manager 并行来自派出多名 Engineer 而非自身分身。 |
+| `advisor` | 顾问是按需请来的第二意见：同一 session 专用、无工具的评审参与者，读调用者交出的 view 与 intent 只回散文，不持有任何工具、不产生授权副作用。 |
 | `cognitive-environment` | 世界观、身份、自我职责与继承知识必须按稳定认知层组织，瞬时 runtime/mission 不能伪装成长期身份。 |
 | `cognitive-workspace` | 持久认知画板已退休；只保留负向边界，禁止 jq/canvas、TodoSink 与 Assume durable runtime 回流。 |
 | `attention-regulation` | `enough`、`abandon` 与 `defer` 工具及 `Attention` 持久投影已退休；注意力动作并入 `assume` 与编程面 ANCHOR `view.thenRemove` 摘要，本包只保留负向边界。 |
@@ -60,7 +61,7 @@
 | Package | 一句话 WHY |
 |---|---|
 | `delegation` | 一项语义工作交给另一 participant 时，authority、charge、owner 与返回后果必须明确；Manager 派发 Engineer 与续做固定 DevOps，禁止跨角色向后差遣；Sphinx 程序内部同步调用标准 Engineer，并压平为同级子会话。 |
-| `advisor` | 同一调用 session 的 advisor 请求永远路由到同一个按需建立的顾问专席，父级是家族根而不产生 sub-subagent；请求由顾问 law、blogger 形状 view 与独立 intent 三条不合并的 prompt 组成，follow-up 只追加 view 增量与新的 intent；顾问无任何工具、只回散文，`js.advisor` 以数据信封返回且不介入调用者授权。 |
+| `advisor` | 同一调用 session 的 advisor 请求永远路由到同一个按需建立的顾问专席，父级是家族根而不产生 sub-subagent；请求由顾问 law、顾问自有 TOML view 与独立 intent 三条不合并的 prompt 组成，follow-up 只追加 view 增量与新的 intent；顾问无任何工具、只回散文，`js.advisor` 以数据信封返回且不介入调用者授权。 |
 | `intra-participant-parallelism` | 同一个 participant（仅限 Engineer）可拥有多个 coequal execution presents，而 identity/authority/responsibility 与最终 completion 仍保持一个。 |
 | `process-execution` | participant 控制真实进程/PTY 时必须得到有界、可终止、物理完成可信的 execution semantics，承接大输出零 Distiller 留尾截断与 Large Gate 门禁。 |
 | `change-integration` | 独立 Git 工作道路进入共享 ref 时必须在短原子门内发布，长 review/repair 不应被全局串行化；DevOps 自修推进快照触发证书失效与独立重评。 |
@@ -70,7 +71,7 @@
 | Package | 一句话 WHY |
 |---|---|
 | `semantic-trace` | participant life 中不可丢失的原始语义历史必须有 append-only、可定位的事实表示；Fission 多 present 确定性 keyed 汇聚，独立 invocation 范围与 resume 边界隔离。 |
-| `work-record` | 跨 participant/review/deliver 传递的一段 work 必须有 bounded canonical statement（LWR）；Fission 汇聚生成单次 Invocation 唯一 Canonical Record。 |
+
 | `context-compression` | 当历史过长时，只能以受控、证据边界明确的 semantic memory 替代可压缩部分。 |
 | `prefix-stability` | 同一 semantic epoch 内已呈现给 provider 的前缀必须保持稳定；冷边界只能由事实驱动。 |
 
@@ -92,12 +93,7 @@
 | `work` | Work 生命周期只有一套事件：S1–S3 一段 deliver，S4 两段 deliver；结果只有 Relayed 与 Delivered，评审只有 Promoted 与 Stayed；后继剥除前任 assistant 与 tool，交棒由前任声明的 ANCHOR 视图承担，不注入机器物化的合成记录。Plan 的编程面、devops 调查、任期隔离、阶段资源、review 与持权交付，以及 Manager/Plan 禁止静默停止、ask 显式用户等待同属本包。 |
 
 
-## 10. Feedback
 
-| Package | 一句话 WHY |
-|---|---|
-| `behavior-diagnosis` | 工程病理只能在满足明确 trigger / negative / distinction 的证据上成立。 |
-| `guidance-delivery` | diagnosis 成立不等于必须立刻重复告知；反馈需要独立的 occurrence、coverage、dedupe 与 horizon-relative delivery 语义。 |
 
 ## 11. Repository knowledge / programming
 
@@ -106,13 +102,12 @@
 | `repository-investigation` | repository claim 必须由可定位、可追溯的真实观察建立，reasoning 不能冒充 evidence acquisition。 |
 | `knowledge-reuse` | 过去的 repository knowledge 可作为 best-effort cache/hint 复用，但不能冒充当前证明；双基线引用与真实 diff 驱动 Bookkeeper 刷新，废除严格 replay 循环。 |
 | `repository-programming` | repository 变换需要能力投影、可组合、sandboxed、As-Is 逐笔落盘的 programming surface，而不是多套漂移 RPC；事务 ReadSnapshots 与案例实质访问严格分离，直接文件工具已退役，编程面是唯一文件契约。 |
-| `requirement-grounding` | 代码路径触碰时，适用 requirement package 必须在 effect 前以可重放 read 语义进入当前 participant horizon。 |
 
 ## 12. Optional optimization / epistemics
 
 | Package | 一句话 WHY |
 |---|---|
-| `speculative-investigation` | 可丢弃 speculation 只有在 authoritative world 零影响时才可换取调查成本下降。 |
+
 | `epistemic-reasoning` | 已由 sphinx-v2 取代的历史包；保留设计沿革和旧证据，不参与当前验收。 |
 | `sphinx-v2` | clean-break 后的 Sphinx 内核：LLM 负责语义判断，程序负责科学问法、作用域估值与资源内调度；旧手写语义评分表整类删除；WP-039 后收敛为 MCP-only 单一入口，原生工具面不恢复。 |
 
@@ -141,7 +136,7 @@
 | 11 | `participant-identity` | 10 | participant-identity-001 ~ 009、participant-identity-010（活跃身份解析与历史身份隔离解码） |
 | 12 | `execution-model-routing` | 20 | execution-model-routing-001 ~ 017、execution-model-routing-018（新角色集合模型路由解耦）、execution-model-routing-019（固定 DevOps 模型绑定持久性与禁止借 resume 换模型）、execution-model-routing-020（多席位路由与外部占位模型被租约覆盖） |
 | 13 | `office-capability` | 13 | office-capability-001、003 ~ 007、011 ~ 012、015 ~ 016、office-capability-017（DevOps 执行与固有非架构级自修授权）、office-capability-018（Sphinx 程控探究与内部标准 Engineer）、office-capability-019（Plan 规划角色与四工具权限集） |
-| 14 | `capability-enforcement` | 26 | capability-enforcement-001 ~ 026（008 四层同构、021 Blogger repair 单一 owner、022 Fission 仅准入已证明 Engineer 均在本包 WHAT 内） |
+| 14 | `capability-enforcement` | 26 | capability-enforcement-001 ~ 026（008 四层同构、021 已退役修复机制不得恢复为运行时分支、022 Fission 仅准入已证明 Engineer 均在本包 WHAT 内） |
 | 15 | `participant-horizon` | 15 | participant-horizon-001 ~ 014、participant-horizon-015（Manager 并行来自派出多名 Engineer 而非自身分身） |
 | 16 | `cognitive-environment` | 15 | cognitive-environment-001 ~ 013、015 ~ 016 |
 | 57 | `cognitive-workspace` | 10 | cognitive-workspace-001 ~ 010 |
@@ -162,27 +157,27 @@
 | 30 | `process-execution` | 17 | process-execution-001 ~ 017；通用工具结果边界归 host-boundary |
 | 31 | `change-integration` | 14 | change-integration-001 ~ 009、011、013 ~ 015、017 |
 | 32 | `semantic-trace` | 12 | semantic-trace-001 ~ 010、semantic-trace-011（Fission keyed convergence 与多 Present 轨迹归并）、semantic-trace-012（独立 Invocation 范围与 Resume 边界） |
-| 33 | `work-record` | 17 | work-record-001 ~ 016、work-record-017（Fission 汇聚生成单次 Invocation Canonical Record） |
-| 34 | `context-compression` | 31 | context-compression-001 ~ 027、context-compression-028（逐次 view checkpoint K 窗口）、context-compression-029（coverage 落后不丢 raw 与紧急 Probe 例外）、context-compression-030（assume call/result 永久原文穿透 LWR）、context-compression-031（ANCHOR 编址、视图声明与 token 经济） |
+
+| 34 | `context-compression` | 31 | context-compression-001 ~ 027、context-compression-028（逐次 view checkpoint K 窗口）、context-compression-029（落后不丢 raw）、context-compression-030（assume call/result 原文保留）、context-compression-031（ANCHOR 编址、视图声明与 token 经济） |
 | 35 | `prefix-stability` | 15 | prefix-stability-001 ~ 015；view checkpoint 窗口见 context-compression-028 |
 | 36 | `execution-failure-policy` | 14 | execution-failure-policy-001 ~ 014 |
-| 37 | `provider-attempt-recovery` | 24 | provider-attempt-recovery-001 ~ 023、provider-attempt-recovery-024（加载期 Blogger stale 请求的同源未启动执行定夺） |
+| 37 | `provider-attempt-recovery` | 24 | provider-attempt-recovery-001 ~ 023、provider-attempt-recovery-024（已接受但未启动的执行必须定夺） |
 | 38 | `host-provider-failure-ownership` | 7 | host-provider-failure-ownership-001 ~ 007 |
 | 39 | `crash-reconciliation` | 21 | crash-reconciliation-001 ~ 019、crash-reconciliation-020（固定 DevOps 崩溃恢复单一逻辑权威与命令去重）、crash-reconciliation-021（进程本地表是缓存，durable 投影是存在性真源） |
 | 40 | `degeneration-guard` | 13 | degeneration-guard-001 ~ 013 |
 | 41 | `obligation-ledger` | 7 | obligation-ledger-001 ~ 007 |
 | 42 | `work` | 50 | work-001 ~ 050（011 起是内核合同；020 起是 Plan 编程面、devops 调查、任期隔离、阶段资源、review 与交付；027 禁止长程静默停止；040 起是唯一任期、DevOps 绑定、资源交接、durable 回执及恢复；049 是 ask 显式人类等待；050 是 Plan 编程面的 js.ask 与 S1 门禁） |
-| 46 | `behavior-diagnosis` | 19 | behavior-diagnosis-001 ~ 019 |
-| 47 | `guidance-delivery` | 11 | guidance-delivery-001 ~ 009、011 ~ 012 |
+
+
 | 48 | institutional-learning（已退役） | 0 | 随 WP-036 整包退役，目录与条款已删除 |
 | 49 | `repository-investigation` | 9 | repository-investigation-001 ~ 009 |
 | 50 | `knowledge-reuse` | 16 | knowledge-reuse-001 ~ 016 |
-| 51 | `repository-programming` | 60 | 原 001 ~ 027 不变；028 起 programPromise/deadline 可重置、029 起 As-Is 逐笔落盘与失败清单形态、030 ~ 036 park/unpark/abandon 全周期、037 ~ 039 Parked 渲染/投影/现场表、040 ~ 044 rm/mv POSIX 与双语四层接线、045 ~ 047 九个文件原语、where 歧义即 park 与组合教学、048 ~ 049 parked source 与 unpark 自由值、050 ~ 052 js.run 宿主循环/多进程代数/wget 断点续传剧本、053 view 声明捕获、054 deliver 显式终值、055 vm 并行边界、056 委托原语 fork/join/fission/dag（全部返回数据信封，dag 节点失败 park）、057 ls 的 ignore 语义与 glob/grep 退役、058 js.run 的交互形态与唯一执行面、059 js.deliver 的终值记录、060 "js" 机器词汇的终局裁决 |
-| 52 | `requirement-grounding` | 12 | requirement-grounding-001 ~ 012 |
-| 53 | `speculative-investigation` | 17 | speculative-investigation-001 ~ 016、speculative-investigation-020（编号 017~019 未启用） |
+| 51 | `repository-programming` | 60 | 原 001 ~ 027 不变；028 起 programPromise/deadline 可重置、029 起 As-Is 逐笔落盘与失败清单形态、030 ~ 036 park/unpark/abandon 全周期、037 ~ 039 Parked 渲染/投影/现场表、040 ~ 044 rm/mv POSIX 与双语四层接线、045 ~ 047 九个文件原语、where 歧义即 park 与组合教学、048 ~ 049 parked source 与 unpark 自由值、050 ~ 052 js.call 宿主循环/多进程代数/wget 断点续传剧本、053 view 声明捕获、054 deliver 显式终值、055 vm 并行边界、056 委托原语 fork/join/fission/dag（全部返回数据信封，dag 节点失败 park）、057 ls 的 ignore 语义与 glob/grep 退役、058 js.call 的交互形态与唯一执行面、059 js.deliver 的终值记录、060 "js" 机器词汇的终局裁决 |
+
 | 54 | `epistemic-reasoning` | 0 | 旧001 ~ 036仅保留历史，现行替代关系见 sphinx-v2/SUPERSEDES.md |
 | 55 | `sphinx-v2` | 36 | sphinx-v2-001 ~ 036（取代 epistemic-reasoning 旧内核条款，关系见 SUPERSEDES.md） |
 | 56 | `distribution` | 11 | distribution-001 ~ 011（010 打包资源与活动注册同步、011 安装产物闭包在场） |
+| 57 | `advisor` | 6 | advisor-001 ~ 006（001 专席归属与「孙子变儿子」、002 请求三材料不合并、003 follow-up 追加增量、004 无工具散文返回、005 无授权副作用、006 js.advisor 编程面成员） |
 
 # 依赖骨架
 
@@ -218,11 +213,11 @@ durable-events           → 无
 durable-convergence      → durable-events
 delegation               → office-capability, session-ontology, managed-session-lifecycle, participant-horizon
 advisor                  → office-capability, capability-enforcement, participant-identity, provider-projection, repository-programming, host-boundary, managed-session-lifecycle
-intra-participant-parallelism → participant-identity, session-ontology, managed-session-lifecycle, office-capability, capability-enforcement, participant-horizon, work-record, process-execution, durable-events, crash-reconciliation
+intra-participant-parallelism → participant-identity, session-ontology, managed-session-lifecycle, office-capability, capability-enforcement, participant-horizon, process-execution, durable-events, crash-reconciliation
 process-execution        → time-capability, host-boundary, participant-horizon
 change-integration       → effect-accounting, durable-events, crash-reconciliation
 semantic-trace           → durable-events
-work-record              → semantic-trace, context-compression, participant-horizon
+
 context-compression      → semantic-trace, provider-projection, obligation-ledger
 prefix-stability         → provider-projection, context-compression, provider-language, participant-identity
 execution-failure-policy → 无
@@ -232,14 +227,12 @@ crash-reconciliation     → durable-events, effect-accounting, structured-workf
 degeneration-guard       → interaction-authority, dispatch-protocol, host-boundary
 obligation-ledger        → host-boundary, context-compression
 work                     → participant-identity, semantic-trace, office-capability, durable-events, prefix-stability
-behavior-diagnosis       → semantic-trace, durable-events, prefix-stability, managed-session-lifecycle
-guidance-delivery        → behavior-diagnosis, participant-horizon, durable-events, concern-routing
+
 institutional-learning   → 已退役，不再定义当前依赖
 repository-investigation → office-capability, participant-horizon
 knowledge-reuse          → repository-investigation, durable-events, durable-convergence
 repository-programming   → office-capability, capability-enforcement, effect-accounting, durable-events, participant-horizon
-requirement-grounding    → requirement-system, host-boundary, participant-horizon, provider-projection, interaction-authority, semantic-trace, prefix-stability, repository-programming
-speculative-investigation→ repository-investigation, participant-identity, execution-model-routing, participant-horizon, provider-projection, semantic-trace
+
 epistemic-reasoning      → 历史包，不再定义当前依赖
 sphinx-v2                → 取代关系及当前合同见本包，完整依赖待审
 distribution             → 特殊：所有声明 runtime resource 的 semantic packages（不获其语义 ownership）
@@ -250,7 +243,7 @@ Phase E 审计结论：3 条 coupling edge 已删（见 `AUDIT.md` Phase E）：
 ```text
 structured-workflow  → causal-wait         删（CE builder 是实现耦合，非定义前提）
 time-capability      → causal-wait         删（deadline 是可选 escape，条件依赖非 hard）
-guidance-delivery    → provider-projection 删（渲染是下游机制）
+
 ```
 
 旧157条边的审计属于当时基线，不证明本次上游重写后的全图。索引不得恢复已退役包的权威；完整反向覆盖与依赖审查仍须从现行WHAT逐项验证。

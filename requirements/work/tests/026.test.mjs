@@ -55,7 +55,7 @@ test('WHAT[work-026] authorized deliver without retirement evidence fails closed
 
 test('WHAT[work-026] S3 authorized deliver enters post-S3 state without starting S4, interrupts the conversation, disables nudges, and later user-commanded delivers can repeatedly start S4', async () => {
   await withExecutablePlugin(async (hooks, directory, createdIds, runtime) => {
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(directory)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
     const planRoot = join(commonDir, 'wanxiangshu')
     const sessionID = 'ses-plan-post-s3'
     await acceptAuthorityRoot(runtime, sessionID, 'plan', 'user-plan-root')

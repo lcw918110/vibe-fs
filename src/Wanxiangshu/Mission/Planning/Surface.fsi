@@ -47,7 +47,7 @@ module PlanningSurface =
             obj
 
     /// work-028: `delegateTo` is a plain JavaScript function
-    /// `(intent) => Promise<string>` returning the DevOps work record.
+    /// `(intent) => Promise<string>` returning the DevOps delivered view.
     val executeAsk: gitCommonDir: string -> workId: string -> intent: string -> delegateTo: obj -> Task<obj>
     val executeJsPlan: root: string -> workId: string -> action: string -> content: obj -> patches: obj -> obj
     val reviewTargetFor: stage: string -> string

@@ -2,7 +2,6 @@ namespace Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Turn
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.OpenCode
@@ -10,21 +9,17 @@ open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Persistence.Journal
 
 module ProviderRecoveryWorkflow =
-    val awaitRecoveryMaterial: host: IBloggerRuntimeHost -> durable: AgentJournal -> mainSessionId: SessionId -> Task
-
-    /// provider-attempt-recovery-021: the one durable fact the recovery target settlement consumes —
-    /// the failed attempt itself was the LWR retry.
-    val failedAttemptWasLwrRetry:
+    /// True only when this failed attempt is itself the verbatim retry of the same provider.
+    val failureIsSameProviderRetry:
         durable: AgentJournal ->
         sessionId: SessionId ->
         physicalUserMessageId: PhysicalUserMessageId ->
         providerRun: ProviderRunIdentity ->
             bool
 
-    /// provider-attempt-recovery-003 / provider-attempt-recovery-023: the request kind a confirmed
-    /// failure continues with — the persisted `ProviderStarted` kind, or the
-    /// accepted evidence's ordinary kind when the start fact was never persisted
-    /// (non-satellite sessions only).
+    /// The request kind a confirmed failure continues with: the persisted ProviderStarted
+    /// kind, or the accepted evidence's ordinary kind when the start fact was never
+    /// persisted. A satellite session without that fact is not guessed.
     val requestKindFor:
         durable: AgentJournal ->
         sessionId: SessionId ->
@@ -36,7 +31,6 @@ module ProviderRecoveryWorkflow =
         rootWorkspace: IRootWorkspaceReader ->
         eventPort: IEventObservationPort ->
         journal: AgentJournal option ->
-        scope: IBloggerRuntimeHost ->
         turn: ReconciledTurn ->
         failure: ExecutionFailure ->
         error: string ->
@@ -46,7 +40,6 @@ module ProviderRecoveryWorkflow =
     val continueDelegateCallAfterConfirmedFailure:
         sessionPort: ISessionHostPort ->
         rootWorkspace: IRootWorkspaceReader ->
-        scope: IBloggerRuntimeHost ->
         durable: AgentJournal ->
         turn: ReconciledTurn ->
         observer: ContinuationAcceptanceObserver option ->

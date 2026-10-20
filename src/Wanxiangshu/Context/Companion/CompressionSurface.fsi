@@ -6,8 +6,6 @@ namespace Wanxiangshu.Context.Companion
 [<RequireQualifiedAccess>]
 module CompressionSurface =
 
-    val nextBloggerRequest: failedKind: string -> hasSquashMaterial: bool -> string
-
     /// Build the production AttemptPlan from plain request labels. The caller
     /// supplies either a probe or a named no-candidate result; the planner itself
     /// still owns the choice and defers probe selection until it is allowed.
@@ -18,6 +16,5 @@ module CompressionSurface =
     val terminalValidityIsValid: value: string -> bool
     val terminalValidityDescription: value: string -> string
     val terminalValidity: value: string -> obj
-    val terminalRequestOwnership: value: obj -> string
     val diagnosticEmit: operation: string -> fields: obj array -> unit
     val diagnosticFatal: operation: string -> fields: obj array -> unit

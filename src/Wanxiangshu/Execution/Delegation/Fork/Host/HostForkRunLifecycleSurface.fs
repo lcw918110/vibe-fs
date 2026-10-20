@@ -85,7 +85,7 @@ module HostForkRunLifecycleSurface =
             box
                 {| status = "completed"
                    agentId = payload.AgentId
-                   workRecord = payload.WorkRecord |}
+                   view = payload.View |}
         | AgentFailed payload ->
             box
                 {| status = "failed"

@@ -51,7 +51,7 @@ test('WHAT[managed-session-lifecycle-013] a stale-projection consumer is arbitra
     // A fresh writer with replay consumes before the old runtime reads again.
     const first = await forkTool.coldConsumeWorkWithOutcome(directory, owner, a.root, 'confirmed')
     assert.equal(first.ok, true)
-    assert.match(first.workRecord, /RACE-ANSWER/)
+    assert.match(first.view, /RACE-ANSWER/)
     deliveries += 1
 
     // The old runtime still holds the in-memory projection it folded before
@@ -62,7 +62,7 @@ test('WHAT[managed-session-lifecycle-013] a stale-projection consumer is arbitra
     const stale = await forkTool.consumeWorkWithOutcome(runtime, owner, a.root, 'confirmed')
     assert.equal(stale.ok, false)
     assert.match(stale.error, /AlreadyRetired/)
-    assert.equal(Object.hasOwn(stale, 'workRecord'), false)
+    assert.equal(Object.hasOwn(stale, 'view'), false)
 
     // Durable replay keeps a single terminal: a fresh cold reader sees the
     // work Retired and every later consumer meets the same tombstone.

@@ -14,7 +14,6 @@ const ROLES = [
   'Orchestrator',
   'Engineer',
   'DevOps',
-  'Blogger',
 ]
 const agentName = (role) => `${role.toLowerCase()}`
 const buildConfig = () => {
@@ -25,7 +24,6 @@ const buildConfig = () => {
     }
   }
   agent.bookkeeper = { model: 'bookkeeper-model' }
-  agent.predictor = { model: 'predictor-model' }
   return { agent }
 }
 const wildcardMatch = (input, pattern) => {
@@ -86,7 +84,6 @@ const allowList = (config, name) => {
     'horizon',
     'fission',
     'review',
-    'chronicle',
     'fetch',
     'deliver',
     'skill',
@@ -98,8 +95,8 @@ const HOST_UTILITY_ALLOW = ['skill']
 const COGNITIVE_UTILITY_ALLOW = [
   'assume',
 ]
-const hostUtilityAllowFor = (role) => (role === 'Blogger' ? [] : HOST_UTILITY_ALLOW)
-const cognitiveUtilityAllowFor = (role) => (role === 'Blogger' ? [] : COGNITIVE_UTILITY_ALLOW)
+const hostUtilityAllowFor = (_role) => HOST_UTILITY_ALLOW
+const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 const ROLE_ALLOW = {
   Manager: [
     'fork',
@@ -117,7 +114,6 @@ const ROLE_ALLOW = {
     'horizon',
     'todowrite-for-devops',
   ],
-  Blogger: ['chronicle'],
 }
 
 test('WHAT[capability-enforcement-002] AGENT_006_role_tool_matrix_reaches_the_host_schema', () => {
@@ -136,9 +132,9 @@ test('WHAT[capability-enforcement-002] AGENT_006_role_tool_matrix_reaches_the_ho
   }
 })
 test('WHAT[capability-enforcement-002] office_capability_permissions_agree_with_the_host_schema_matrix', () => {
-  // Edit and Grep remain office permissions but project no separate JS capability
-  // (string replacement uses Read + Write; content search uses Read + Glob).
-  const DIRECT_PERMISSION_ONLY = new Set(['Edit', 'Grep'])
+  // Edit remains an office permission but projects no separate JS capability
+  // (string replacement uses Read + Write; Grep projects rg).
+  const DIRECT_PERMISSION_ONLY = new Set(['Edit'])
   const permissionOf = (toolName) =>
     ({
       fork: 'Fork',
@@ -149,7 +145,6 @@ test('WHAT[capability-enforcement-002] office_capability_permissions_agree_with_
       fission: 'Fission',
       'bash-honeypot': 'BashHoneypot',
       review: 'ReviewAssessment',
-      chronicle: 'Chronicle',
       fetch: 'Fetch',
       deliver: 'Finality',
     })[toolName]
@@ -172,12 +167,16 @@ test('WHAT[capability-enforcement-002] office_capability_permissions_agree_with_
   }
 
   for (const role of ROLES) {
-    const fromRoles = permissions(role.toLowerCase()).filter((p) => (role === 'Manager' ? true : !DIRECT_PERMISSION_ONLY.has(p)))
+    const fromRoles = permissions(role.toLowerCase()).filter((p) => !DIRECT_PERMISSION_ONLY.has(p))
     const config = buildConfig()
     configureManagedAgents(config)
     const nonDomainUtilities = [...hostUtilityAllowFor(role), ...cognitiveUtilityAllowFor(role)]
     const fromSchema = [...new Set(allowList(config, agentName(role)).filter((tool) => !nonDomainUtilities.includes(tool)).flatMap(permissionsForTool))].sort()
     assert.deepEqual(fromSchema, fromRoles, `${role}: domain permissions must equal the Host schema allow list`)
+  }
+
+  for (const retiredRole of ['blogger', 'predictor']) {
+    assert.deepEqual(permissions(retiredRole), [], `retired ${retiredRole} permissions must fail closed`)
   }
 })
 }
@@ -193,10 +192,10 @@ const { nameOf: managedAgentName } = await import('../../../dist/Participant/Per
 
 test('WHAT[capability-enforcement-002] P7_SURFACE_role_labels_are_js_native_strings', () => {
   assertJsData(allRoleLabels, 'allRoleLabels')
-  assert.equal(allRoleLabels.length, 7, 'exactly seven canonical roles')
+  assert.equal(allRoleLabels.length, 6, 'exactly six canonical roles')
   assert.deepEqual(
     allRoleLabels,
-    ['advisor', 'blogger', 'devops', 'engineer', 'manager', 'orchestrator', 'plan']
+    ['advisor', 'devops', 'engineer', 'manager', 'orchestrator', 'plan']
       .sort(),
   )
 })
@@ -204,9 +203,9 @@ test('WHAT[capability-enforcement-002] P7_SURFACE_public_internal_partition_and_
   assertJsData(allPublicRoleLabels, 'allPublicRoleLabels')
   assertJsData(allInternalRoleLabels, 'allInternalRoleLabels')
   assert.deepEqual(allPublicRoleLabels, ['devops', 'engineer', 'manager', 'orchestrator', 'plan'])
-  assert.deepEqual(allInternalRoleLabels, ['advisor', 'blogger'])
+  assert.deepEqual(allInternalRoleLabels, ['advisor'])
   assert.equal(allPublicRoleLabels.length + allInternalRoleLabels.length, allRoleLabels.length)
-  assert.equal(managedAgentName('deep', 'blogger'), 'blogger')
+  assert.equal(managedAgentName('deep', 'blogger'), '', 'retired blogger fails closed to empty name')
   assert.equal(managedAgentName('engineer', 'engineer'), 'engineer')
   assert.equal(managedAgentName('fast', 'not-a-role'), '', 'unknown role fails closed to empty name')
   assert.equal(managedAgentName('not-a-tier', 'engineer'), 'engineer', 'canonical role resolves without a tier')
@@ -257,7 +256,7 @@ test('WHAT[capability-enforcement-002] TOOLSPEC_engineer_and_devops_tools_have_o
   assert.equal(rolePredicate('todowrite-for-engineer', 'devops'), false)
   assert.equal(rolePredicate('todowrite-for-engineer', 'manager'), false)
 
-  // todowrite-for-devops: DevOps only (carries cat/ls/stat/where/whereAll/mkdir/write/mv/rm + js.run via Exec; direct file/exec/pty tools are retired)
+  // todowrite-for-devops: DevOps only (carries cat/ls/stat/where/whereAll/mkdir/write/mv/rm + js.call via Exec; direct file/exec/pty tools are retired)
   assert.equal(rolePredicate('todowrite-for-devops', 'devops'), true)
   assert.equal(rolePredicate('todowrite-for-devops', 'engineer'), false)
   assert.equal(rolePredicate('todowrite-for-devops', 'manager'), false)
@@ -273,7 +272,8 @@ test('WHAT[capability-enforcement-002] TOOLSPEC_plugin_owned_cognitive_utility_t
     assert.equal(rolePredicate(tool, 'engineer'), true, `${tool} should be allowed for engineer`)
     assert.equal(rolePredicate(tool, 'devops'), true, `${tool} should be allowed for devops`)
     assert.equal(rolePredicate(tool, 'manager'), true, `${tool} should be allowed for manager`)
-    assert.equal(rolePredicate(tool, 'blogger'), false, `${tool} should be denied for blogger`)
+    assert.equal(rolePredicate(tool, 'blogger'), false, `${tool} should fail closed for retired blogger`)
+    assert.equal(rolePredicate(tool, 'predictor'), false, `${tool} should fail closed for retired predictor`)
   }
 })
 }

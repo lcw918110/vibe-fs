@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import * as fork from '../../../dist/Execution/Delegation/Fork/Surface.js'
 import { clearAllForTests, refreshGlobalLanguage, languageOfSession, transformRoleSystem } from '../../../dist/Participant/Provider/LanguageSurface.js'
 import { configure, installDefaultResources } from '../../../dist/OpenCode/Host/ManagedAgentConfigSurface.js'
 import * as prompts from '../../../dist/Resources/PromptSurface.js'
@@ -7,7 +8,7 @@ import { withPreference } from './support/language-fixtures.mjs'
 
 const fields = {
   manager: 'ManagerSystemPrompt', orchestrator: 'OrchestratorSystemPrompt',
-  engineer: 'EngineerSystemPrompt', devops: 'DevopsSystemPrompt', blogger: 'BloggerSystemPrompt',
+  engineer: 'EngineerSystemPrompt', devops: 'DevopsSystemPrompt', plan: 'PlanSystemPrompt',
 }
 const buildConfig = () => ({
   agent: Object.fromEntries([...Object.keys(fields), 'bookkeeper'].map((name) => [name, { model: `${name}-model` }])),
@@ -59,11 +60,15 @@ test('WHAT[provider-language-013] system repair follows the live global preferen
   }
 })
 
-test('WHAT[provider-language-013] companion instruction exports contain Chinese prose under a Chinese preference', async () => {
+test('WHAT[provider-language-013] localized role prompt and fork child payload instruction exports contain Chinese prose under a Chinese preference', async () => {
   await withPreference('zh-CN', async () => {
     refreshGlobalLanguage()
-    const companion = await import('../../../dist/Context/Companion/ProjectionSurface.js')
-    for (const text of [companion.normalInstruction, companion.memoryPreamble]) {
+    const managerSystem = prompts.systemForRole('SimplifiedChinese', 'Manager')
+    assert.match(managerSystem, /[\u4e00-\u9fff]/)
+
+    const instructions = fork.instructions('zh-CN')
+    for (const text of [instructions.Attachment, instructions.CommissionerRecord, instructions.Requirements, ...instructions.Base]) {
+      if (!text) continue
       assert.match(text, /[\u4e00-\u9fff]/)
     }
   })

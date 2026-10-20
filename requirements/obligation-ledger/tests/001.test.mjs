@@ -4,26 +4,19 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 import * as journalSurface from '../../../dist/Persistence/Journal/Surface.js'
 import { rolePermissionRules, toolSpecNames } from '../../../dist/OpenCode/Tools/ToolSurface.js'
-import * as Strength from '../../../dist/Strength/Surface.js'
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
 import { acceptAuthorityRoot, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
 
-test('WHAT[obligation-ledger-001] native todowrite is retired from StaticTools, role permissions, InvestigationEstimateContract, and ablation tool-map', () => {
+test('WHAT[obligation-ledger-001] native todowrite is retired from StaticTools, role permissions, and ablation tool-map', () => {
   const known = toolSpecNames()
   assert.equal(known.includes('todowrite'), false, 'StaticTools.knownToolNames must not contain native todowrite')
   assert.ok(known.includes('todowrite-for-engineer'), 'programming surface tools remain registered')
 
-  for (const role of ['orchestrator', 'manager', 'engineer', 'devops', 'blogger', 'plan']) {
+  for (const role of ['orchestrator', 'manager', 'engineer', 'devops', 'plan']) {
     const rules = rolePermissionRules(role)
     assert.equal('todowrite' in rules, false, `${role} permission rules must not contain native todowrite`)
     assert.equal(rules['*'], 'deny', `${role} wildcard permission stays deny`)
   }
-
-  assert.equal(
-    Strength.classifyTool('todowrite'),
-    'Unreviewed',
-    'retired native todowrite is no longer in the NoEstimate whitelist',
-  )
 
   const toolMap = JSON.parse(readFileSync(resolve(process.cwd(), 'resources/ablation/tool-map.json'), 'utf8'))
   assert.equal('todowrite' in (toolMap.tools ?? {}), false, 'ablation tool-map must not contain native todowrite')

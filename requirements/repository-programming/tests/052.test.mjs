@@ -79,7 +79,7 @@ test('WHAT[repository-programming-052] wget -c resumes a partial download after 
     const aborted = await runProgram(
       dir,
       `    const host = this;
-    return await js.run(class extends js.Runnable {
+    return await js.call(class extends js.Callable {
       maxDuration = 20000;
       interval = 20;
       next(ctx) {
@@ -95,8 +95,8 @@ test('WHAT[repository-programming-052] wget -c resumes a partial download after 
       }
       sanity() {
         return {
-          nextDone: () => this.next({ root: "/", step: 3 }),
-          watchVeto: () => this.watch({ root: "/", step: 0, stdout: "", stderr: "", exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }),
+          nextDone: () => [{ root: "/", step: 3 }],
+          watchVeto: () => [{ root: "/", step: 0, stdout: "", stderr: "", exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }],
         };
       }
     });`,
@@ -110,7 +110,7 @@ test('WHAT[repository-programming-052] wget -c resumes a partial download after 
     const resumed = await runProgram(
       dir,
       `    const host = this;
-    return await js.run(class extends js.Runnable {
+    return await js.call(class extends js.Callable {
       maxDuration = 30000;
       interval = 20;
       next(ctx) {
@@ -137,8 +137,8 @@ test('WHAT[repository-programming-052] wget -c resumes a partial download after 
       }
       sanity() {
         return {
-          nextDone: () => this.next({ root: "/", step: 5 }),
-          watchVeto: () => this.watch({ root: "/", step: 0, stdout: "", stderr: "", exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }),
+          nextDone: () => [{ root: "/", step: 5 }],
+          watchVeto: () => [{ root: "/", step: 0, stdout: "", stderr: "", exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }],
         };
       }
     });`,
@@ -191,7 +191,7 @@ test('WHAT[repository-programming-052] wget exit 8 is dispatched to onExit inste
     const outcome = await runProgram(
       dir,
       `    const dispatched = [];
-    const result = await js.run(class extends js.Runnable {
+    const result = await js.call(class extends js.Callable {
       maxDuration = 15000;
       interval = 50;
       next(ctx) {
@@ -208,8 +208,8 @@ test('WHAT[repository-programming-052] wget exit 8 is dispatched to onExit inste
       onExit(r) { dispatched.push(r.exitCode); }
       sanity() {
         return {
-          nextDone: () => this.next({ root: "/", step: 3 }),
-          watchVeto: () => this.watch({ root: "/", step: 0, stdout: "", stderr: "", exited: false, exitCode: null, backgrounds: [{ name: "srv", exited: true, exitCode: 1 }], elapsedMs: 0, remainingMs: 60000 }),
+          nextDone: () => [{ root: "/", step: 3 }],
+          watchVeto: () => [{ root: "/", step: 0, stdout: "", stderr: "", exited: false, exitCode: null, backgrounds: [{ name: "srv", exited: true, exitCode: 1 }], elapsedMs: 0, remainingMs: 60000 }],
         };
       }
     });

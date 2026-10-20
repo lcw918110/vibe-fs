@@ -5,9 +5,6 @@ open System.Collections.Generic
 open System.Threading.Tasks
 open Fable.Core.JsInterop
 open Wanxiangshu.OpenCode.HostMessageProjection
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Attachment
@@ -19,38 +16,12 @@ open Wanxiangshu.Persistence.Journal
 
 module CompanionTransform =
 
-    let private requireCanonicalProjection result =
-        match result with
-        | Ok value -> value
-        | Error error -> raise (InvalidOperationException error)
-
-    let private materializeCanonicalProjection
-        (journal: AgentJournal option)
-        (xTrace: XTraceProjectionState)
-        : Task<ProviderProjection.ProviderSemanticProjection> =
-        match journal with
-        | None -> Task.FromResult XTraceMaterialization.empty
-        | Some durable ->
-            XTraceMaterialization.currentProjection durable xTrace
-            |> TaskValue.map requireCanonicalProjection
-
-    let private restoredBloggerId (journal: AgentJournal option) (sessionId: string) =
-        journal
-        |> Option.bind (fun j ->
-            (AgentJournal.snapshot j).AgentProjections.Sessions
-            |> Map.tryFind (SessionId.create sessionId)
-            |> Option.bind (fun s -> s.Companion)
-            |> Option.bind (fun companion -> companion.BloggerSessionId)
-            |> Option.map SessionId.value)
-
     let private ensureCompanion
         (companions: Dictionary<string, CompanionHost>)
         (gate: obj)
         (satellites: CompanionLeaseRuntime)
-        (bloggerHost: IBloggerRuntimeHost)
         (sessionPort: ISessionHostPort)
         (journal: AgentJournal option)
-        (onBloggerCreated: (SessionId -> unit) option)
         (workspaceDirectory: string option)
         (sessionId: string)
         : CompanionHost =
@@ -67,11 +38,6 @@ module CompanionTransform =
                         SessionId.create sessionId,
                         sessionPort,
                         ?durable = durable,
-                        onBloggerCreated =
-                            (fun bloggerId -> onBloggerCreated |> Option.iter (fun callback -> callback bloggerId)),
-                        ?restoredBloggerId = restoredBloggerId journal sessionId,
-                        ?journal = journal,
-                        ?bloggerDirectory = workspaceDirectory,
                         satelliteRuntime = satellites
                     )
 
@@ -105,132 +71,30 @@ module CompanionTransform =
         else
             Some(tryMessageSessionId message, tryMessageRole message)
 
-    let allowsBloggerCompanionForAgentName (agentName: string) =
-        match ManagedAgent.tryParse agentName |> Option.map (fun managed -> managed.Role) with
-        | Some Role.Distiller -> false
-        | _ -> true
-
-    let private allowsBloggerCompanion (rawMessages: obj list) =
-        rawMessages
-        |> List.choose tryMessageRole
-        |> List.forall allowsBloggerCompanionForAgentName
-
-    let coordinateBloggerContext
-        (satellites: CompanionLeaseRuntime)
-        (bloggerHost: IBloggerRuntimeHost)
-        (companion: CompanionHost)
-        (journal: AgentJournal option)
-        (context: BloggerRequestContext)
-        : Task<BloggerCoordinator.DecisionEffect> =
-        BloggerCoordinator.onMainContext bloggerHost companion journal context
-
-    let private updateMaterializedBlogger
-        (satellites: CompanionLeaseRuntime)
-        (bloggerHost: IBloggerRuntimeHost)
-        (companion: CompanionHost)
-        (journal: AgentJournal option)
-        (sessionId: string)
-        (blog: BlogProjectionState)
-        (xTrace: XTraceProjectionState)
-        (observedEpoch: PrefixEpochId)
-        (projection: ProviderProjection.ProviderSemanticProjection)
-        : Task<unit> =
-        task {
-            let hasMaterial =
-                BloggerMainContext.hasMaterial journal (SessionId.create sessionId) blog xTrace projection
-
-            if hasMaterial then
-                let! bloggerId = companion.EnsureBloggerAsync()
-
-                match
-                    BloggerMainContext.fromProjection
-                        journal
-                        (SessionId.create sessionId)
-                        bloggerId
-                        observedEpoch
-                        blog
-                        xTrace
-                        projection
-                with
-                | None -> return ()
-                | Some context ->
-                    let! _ = coordinateBloggerContext satellites bloggerHost companion journal context
-
-                    return ()
-        }
-
     let private transformNonSatellite
         (companions: Dictionary<string, CompanionHost>)
         (gate: obj)
         (satellites: CompanionLeaseRuntime)
-        (bloggerHost: IBloggerRuntimeHost)
         (sessionPort: ISessionHostPort)
         (journal: AgentJournal option)
-        (onBloggerCreated: (SessionId -> unit) option)
         (workspaceDirectory: string option)
         (sessionId: string)
         (rawMessages: obj list)
         (rawOutObj: obj)
         : Task<unit> =
         task {
-            let companion =
-                ensureCompanion
-                    companions
-                    gate
-                    satellites
-                    bloggerHost
-                    sessionPort
-                    journal
-                    onBloggerCreated
-                    workspaceDirectory
-                    sessionId
+            let _ =
+                ensureCompanion companions gate satellites sessionPort journal workspaceDirectory sessionId
 
-            // Host view unchanged (CTX-002). Coordinator owns all Blogger effects.
             replaceMessagesInPlace rawOutObj rawMessages
-
-            // No child until there is a real X gap. Empty fixture transforms
-            // (HOST-009 positional hooks) must not require Host transport.
-            let blog, xTrace, observedEpoch =
-                match journal with
-                | Some j ->
-                    let sessions = (AgentJournal.snapshot j).AgentProjections.Sessions
-                    let session = sessions |> Map.tryFind (SessionId.create sessionId)
-
-                    (session
-                     |> Option.bind (fun s -> s.Blog)
-                     |> Option.defaultValue BlogProjection.empty),
-                    (session
-                     |> Option.bind (fun s -> s.XTrace)
-                     |> Option.defaultValue XTraceProjection.empty),
-                    (session
-                     |> Option.bind (fun s -> s.PrefixEpoch)
-                     |> Option.map (fun epoch -> epoch.EpochId)
-                     |> Option.defaultValue PrefixEpochId.initial)
-                | None -> companion.Memory.Blog, companion.Memory.XTrace, PrefixEpochId.initial
-
-            let! projection = materializeCanonicalProjection journal xTrace
-
-            do!
-                updateMaterializedBlogger
-                    satellites
-                    bloggerHost
-                    companion
-                    journal
-                    sessionId
-                    blog
-                    xTrace
-                    observedEpoch
-                    projection
         }
 
     let private processSession
         (companions: Dictionary<string, CompanionHost>)
         (gate: obj)
         (satellites: CompanionLeaseRuntime)
-        (bloggerHost: IBloggerRuntimeHost)
         (sessionPort: ISessionHostPort)
         (journal: AgentJournal option)
-        (onBloggerCreated: (SessionId -> unit) option)
         (workspaceDirectory: string option)
         (sessionId: string)
         (rawMessages: obj list)
@@ -251,25 +115,21 @@ module CompanionTransform =
                         companions
                         gate
                         satellites
-                        bloggerHost
                         sessionPort
                         journal
-                        onBloggerCreated
                         workspaceDirectory
                         sessionId
                         rawMessages
                         rawOutObj
         }
 
-    /// Main-session transform: Host view unchanged; material decision is sole coordinator.
+    /// Main-session transform: Host view unchanged.
     let handleCompanionTransform
         (companions: Dictionary<string, CompanionHost>)
         (gate: obj)
         (satellites: CompanionLeaseRuntime)
-        (bloggerHost: IBloggerRuntimeHost)
         (sessionPort: ISessionHostPort)
         (journal: AgentJournal option)
-        (onBloggerCreated: (SessionId -> unit) option)
         (workspaceDirectory: string option)
         (inObj: obj)
         (rawOutObj: obj)
@@ -277,16 +137,7 @@ module CompanionTransform =
         task {
             let rawMessages = unbox<obj array> rawOutObj?messages |> Array.toList
 
-            let alreadyHasBHead =
-                rawMessages
-                |> List.exists (fun message ->
-                    not (isNull message)
-                    && not (isNull message?info)
-                    && not (isNull message?info?id)
-                    && (unbox<string> message?info?id).StartsWith("companion-b-head"))
-
             let messageContext = rawMessages |> List.tryPick tryMessageContext
-            let companionEligible = allowsBloggerCompanion rawMessages
 
             match messageContext with
             | Some(Some messageSessionId, _) when not (isNull inObj) && isNull inObj?sessionID ->
@@ -299,21 +150,14 @@ module CompanionTransform =
                 else
                     unbox<string> inObj?sessionID
 
-            if
-                not alreadyHasBHead
-                && companionEligible
-                && not (String.IsNullOrWhiteSpace sessionId)
-                && not (isNull rawOutObj?messages)
-            then
+            if not (String.IsNullOrWhiteSpace sessionId) && not (isNull rawOutObj?messages) then
                 return!
                     processSession
                         companions
                         gate
                         satellites
-                        bloggerHost
                         sessionPort
                         journal
-                        onBloggerCreated
                         workspaceDirectory
                         sessionId
                         rawMessages
@@ -324,26 +168,13 @@ module CompanionTransform =
         (companions: Dictionary<string, CompanionHost>)
         (gate: obj)
         (satellites: CompanionLeaseRuntime)
-        (bloggerHost: IBloggerRuntimeHost)
         (sessionPort: ISessionHostPort)
         (journal: AgentJournal option)
-        (onBloggerCreated: (SessionId -> unit) option)
         (workspaceDirectory: string option)
         (projectionSessionIdOpt: string option)
         (inObj: obj)
         (outObj: obj)
         : Task<unit> =
         task {
-            do!
-                handleCompanionTransform
-                    companions
-                    gate
-                    satellites
-                    bloggerHost
-                    sessionPort
-                    journal
-                    onBloggerCreated
-                    workspaceDirectory
-                    inObj
-                    outObj
+            do! handleCompanionTransform companions gate satellites sessionPort journal workspaceDirectory inObj outObj
         }

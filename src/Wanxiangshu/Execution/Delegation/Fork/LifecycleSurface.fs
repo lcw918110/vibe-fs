@@ -27,7 +27,7 @@ module ForkLifecycleSurface =
                       Role = Role.Manager
                       AuthorityRoot = None
                       ProviderRun = None
-                      WorkRecord = "completed"
+                      View = "completed"
                       Directory = None }
 
                 let completion =

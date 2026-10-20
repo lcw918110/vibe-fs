@@ -14,7 +14,7 @@ class Js extends JsProgram {
     const section = manifest.slice(heading);
     const url = section.slice(section.indexOf("https://")).split(/\s/)[0];
 
-    return await js.run(class extends js.Runnable {
+    return await js.call(class extends js.Callable {
       maxDuration = 3600000; // the whole run: 60 min
       interval = 10000;      // watch() runs once per 10 s slice
 
@@ -36,20 +36,20 @@ class Js extends JsProgram {
       slow = 0;
 
       // The control-flow self-test, run first on its own instance (the real
-      // run constructs fresh). Two thunks the host drives and checks —
-      // writing them is designing the exits.
+      // run constructs fresh). Two thunks return argument arrays; the Host calls
+      // next/watch and checks — writing them is designing the exits.
       sanity() {
         return {
           nextDone: () => {
             this.index = this.files.length;
-            return this.next({ root: "/", step: 99 });
+            return [{ root: "/", step: 99 }];
           },
-          watchVeto: async () => {
+          watchVeto: () => {
             this.index = 0;
             this.current = this.files[0];
             this.seenBytes = 0;
             this.stalled = 6;
-            return await this.watch({ root: "/", step: 0, stdout: "", stderr: "", exited: false, exitCode: null, backgrounds: [], elapsedMs: 0, remainingMs: 60000 });
+            return [{ root: "/", step: 0, stdout: "", stderr: "", exited: false, exitCode: null, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }];
           },
         };
       }

@@ -10,9 +10,7 @@ module ExecutionFailurePolicy =
     let private requestKindIdentity =
         function
         | ProviderRequestKind.WorkMain -> "WorkMain"
-        | ProviderRequestKind.BloggerMain -> "BloggerMain"
         | ProviderRequestKind.InteractionRepair -> "InteractionRepair"
-        | ProviderRequestKind.StrengthReplica -> "StrengthReplica"
 
     let private decisionId (facts: ProviderRecoveryFacts) =
         [ LogicalRunId.value facts.LogicalRun
@@ -24,13 +22,6 @@ module ExecutionFailurePolicy =
 
     let private authorization (facts: ProviderRecoveryFacts) : ProviderRecoveryAuthorization =
         ProviderRecoveryAuthorization.Create(decisionId facts, facts.LogicalRun, facts.ProviderRun, facts.RequestKind)
-
-    let private requestCanRecover (requestKind: ProviderRequestKind) =
-        match requestKind with
-        | ProviderRequestKind.WorkMain
-        | ProviderRequestKind.BloggerMain
-        | ProviderRequestKind.InteractionRepair -> true
-        | ProviderRequestKind.StrengthReplica -> false
 
     let private releaseCapacity lifecycle capacity =
         match lifecycle, capacity with
@@ -67,8 +58,8 @@ module ExecutionFailurePolicy =
         (key: ChatExecutionKey)
         (facts: ProviderRecoveryFacts)
         : ExecutionFailureResolution =
-        match lifecycle, requestCanRecover facts.RequestKind with
-        | DurableExecutionLifecycle.ProviderStarted, true -> retryProviderResolution key facts
+        match lifecycle with
+        | DurableExecutionLifecycle.ProviderStarted -> retryProviderResolution key facts
         | _ -> terminalResolution key ChatExecutionTerminalDisposition.Failed lifecycle
 
     let private deriveBreaker =

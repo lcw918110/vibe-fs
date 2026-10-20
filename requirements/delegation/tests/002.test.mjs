@@ -11,7 +11,6 @@ test('WHAT[delegation-002] DELEG_002_calling_name_preserves_office_authority', (
     { label: 'orchestrator', aliases: ['orchestrator', 'Orchestrator'] },
     { label: 'engineer', aliases: ['engineer', 'Engineer'] },
     { label: 'devops', aliases: ['devops', 'DevOps'] },
-    { label: 'blogger', aliases: ['blogger', 'Blogger'] },
   ]
 
   for (const { label, aliases } of activeRoles) {

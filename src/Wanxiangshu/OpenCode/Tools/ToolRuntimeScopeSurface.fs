@@ -129,7 +129,6 @@ type ToolRuntimeScopeSurface =
                 None,
                 None,
                 None,
-                None,
                 None
             )
 
@@ -240,7 +239,6 @@ type ToolRuntimeScopeSurface =
                     sessionParents,
                     (fun _ -> None),
                     Dictionary<string, string>(),
-                    None,
                     None,
                     None,
                     None,
@@ -373,7 +371,6 @@ type ToolRuntimeScopeSurface =
                     None,
                     None,
                     None,
-                    None,
                     None
                 )
 
@@ -423,9 +420,9 @@ type ToolRuntimeScopeSurface =
 
             // Freeze retirement via Ownership tenure Drain: frozen while active, cleared on Unfreeze.
             let frozeFirst = scope.TryFreezeRetirement(managerSessionId, incumbentId)
-            let frozenWhileDraining = scope.IsRetirementFrozen managerSessionId
+            let! frozenWhileDraining = scope.IsRetirementFrozen managerSessionId
             scope.UnfreezeRetirement managerSessionId
-            let frozenAfterUnfreeze = scope.IsRetirementFrozen managerSessionId
+            let! frozenAfterUnfreeze = scope.IsRetirementFrozen managerSessionId
 
             // Settle the owned-work callback: its Ended removes the tool-owned-work blocker.
             workWaiter.SetResult(())

@@ -7,36 +7,35 @@
     <WanxiangshuOwnerLocalityKind>composition</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.epistemic-reasoning.sphinx-v2-core.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.epistemic-reasoning.sphinx-v2-integration.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.eventstore-authoritative-vocabulary.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-convergence.persistence-eventstore-canonicalintegrator.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-convergence.persistence-eventstore-processeventlog.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-storetypes.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-eventstorewriter.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.repository-programming.repository-programming-js-integration-rules.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.planning.mission-planning-eventstore.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.knowledge-integration-rules.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.speculative-investigation.strength-integration-rules.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-surface.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-agentjournal.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.change-integration.change-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-projection.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-model.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-facts.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-fold.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-promptfactcodec.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-obligationsurface.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.action-affordance.persistence-runtime-path.fsproj"/>
-    <Compile Include="OpenCode/Host/WorkspaceEventStore.fsi"/>
-    <Compile Include="OpenCode/Host/WorkspaceEventStore.fs"/>
-    <Compile Include="OpenCode/Host/WorkspaceEventStoreSurface.fsi"/>
-    <Compile Include="OpenCode/Host/WorkspaceEventStoreSurface.fs"/>
-    <Compile Include="OpenCode/Host/WorkspaceSharedJournal.fsi"/>
-    <Compile Include="OpenCode/Host/WorkspaceSharedJournal.fs"/>
+    <ProjectReference Include="Wanxiangshu.Owner.epistemic-reasoning.sphinx-v2-core.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.epistemic-reasoning.sphinx-v2-integration.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.eventstore-authoritative-vocabulary.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-convergence.persistence-eventstore-canonicalintegrator.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-convergence.persistence-eventstore-processeventlog.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-storetypes.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-eventstorewriter.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.repository-programming.repository-programming-js-integration-rules.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.planning.mission-planning-eventstore.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.knowledge-integration-rules.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-surface.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-agentjournal.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.change-integration.change-fact.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-fact.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-fact.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-projection.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-model.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-facts.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-fold.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-promptfactcodec.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-obligationsurface.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.action-affordance.persistence-runtime-path.fsproj" />
+    <Compile Include="OpenCode/Host/WorkspaceEventStore.fsi" />
+    <Compile Include="OpenCode/Host/WorkspaceEventStore.fs" />
+    <Compile Include="OpenCode/Host/WorkspaceEventStoreSurface.fsi" />
+    <Compile Include="OpenCode/Host/WorkspaceEventStoreSurface.fs" />
+    <Compile Include="OpenCode/Host/WorkspaceSharedJournal.fsi" />
+    <Compile Include="OpenCode/Host/WorkspaceSharedJournal.fs" />
   </ItemGroup>
 </Project>

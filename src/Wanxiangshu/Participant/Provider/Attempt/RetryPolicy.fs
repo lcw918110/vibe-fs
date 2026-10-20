@@ -1,13 +1,5 @@
 namespace Wanxiangshu.Participant.Provider.Attempt
 
-/// Why a Blogger retry request cannot be selected.
-[<RequireQualifiedAccess>]
-type BloggerRetryError =
-    /// The boundary could not project a physical request kind.
-    | MissingProjection
-    /// The projected request does not belong to an active Blogger run.
-    | NoActiveBloggerRun
-
 /// What one provider attempt produced.
 [<RequireQualifiedAccess>]
 type AttemptOutcome =
@@ -16,17 +8,22 @@ type AttemptOutcome =
     | Failed
     | Aborted
 
+/// What a confirmed failure of one provider does next.
+/// The fact is "this failure is itself the verbatim retry of that provider",
+/// not a clock and not an ambiguous result.
 [<RequireQualifiedAccess>]
-module BloggerRetryPolicy =
+type ProviderRecoveryStep =
+    | RetrySameProvider
+    | BlacklistProviderThenRetry
 
-    /// Pure Blogger retry request selection.
-    /// A failed BloggerMain always retries as BloggerMain.
-    let nextRequest
-        (failedKind: ProviderRequestKind)
-        (hasSquashMaterial: bool)
-        : Result<ProviderRequestKind, BloggerRetryError> =
-        ignore hasSquashMaterial
+[<RequireQualifiedAccess>]
+module ProviderAttemptRecovery =
 
-        match failedKind with
-        | ProviderRequestKind.BloggerMain -> Ok ProviderRequestKind.BloggerMain
-        | _ -> Error BloggerRetryError.NoActiveBloggerRun
+    /// First confirmed failure retries the same provider.
+    /// A later confirmed failure of that same provider blacklists it, then retries.
+    /// Callers must not pass an unknown or ambiguous outcome as either case.
+    let next (priorSameProviderRetry: bool) : ProviderRecoveryStep =
+        if priorSameProviderRetry then
+            ProviderRecoveryStep.BlacklistProviderThenRetry
+        else
+            ProviderRecoveryStep.RetrySameProvider

@@ -4,7 +4,7 @@ import { permissions, isAllowed } from '../../../dist/Participant/Persona/Office
 import { assertJsData } from '../../verification-system/tests/support/js-contract.mjs'
 
 test('WHAT[office-capability-003] editing a returned permission projection cannot change the office authority', () => {
-  for (const role of ['manager', 'orchestrator', 'engineer', 'devops', 'blogger']) {
+  for (const role of ['manager', 'orchestrator', 'engineer', 'devops']) {
     const expected = [...permissions(role)]
     const returned = permissions(role)
     assertJsData(returned, `permissions(${role})`)
@@ -15,7 +15,7 @@ test('WHAT[office-capability-003] editing a returned permission projection canno
 })
 
 test('WHAT[office-capability-003] unknown, composite and retired names do not create an office authority', () => {
-  for (const role of ['unknown', 'fast-engineer', 'deep-engineer', 'engineer-devops', 'coder', 'inspector', 'browser', 'inquiry', 'distiller']) {
+  for (const role of ['unknown', 'fast-engineer', 'deep-engineer', 'engineer-devops', 'blogger', 'coder', 'inspector', 'browser', 'inquiry', 'distiller']) {
     assert.deepEqual(permissions(role), [], role)
     for (const permission of ['Read', 'Write', 'Exec', 'Fission', 'Fork']) {
       assert.equal(isAllowed(role, permission), false, `${role}/${permission}`)

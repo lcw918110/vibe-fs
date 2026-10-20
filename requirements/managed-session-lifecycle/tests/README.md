@@ -14,9 +14,7 @@
 - 019 保留实际 execution interpreter 的局部验证，GAP-126 的 cancel/delete drain 断言已落地（见下文 session019 核对段）。021 的真实 fatal 链仍缺证明。022 运行真实 Casebook：有/无 draft、Bookkeeper 不可用、归档读取与重复拒绝；尚未观察 identity 去留及五类 typed settlement。
 - 023 调用实际身份解析，区分拒绝旧活跃身份与历史恢复。024 只证明 handle 拒绝第二个活动绑定及 road 保留给定模型；不是 crash、模型固定或 PTY 排空证明。
 - 025 保留上游的真实 HostForkRuntime 与 ToolRuntimeScope 场景。DevOps 工作先经真实 dispatcher physical acceptance 建立 scoped work，两处 Surface 显式接收同一 canonical journal，不用临时 Root 或无 journal 的 InstallRun。受控 PTY port 结束后清记账；DevOps run 终态结算时在 PTY 端口边界观察到终止效果，其名下 PTY 计数归零且其他会话的 PTY 存活。端口未启动 OS 进程，**「TERM 后真实退出并按需升级 KILL」这一半仍是未证义务**，现由 `test.todo` 单独保留，不因上面那条已转真而消失。
-- 028 经真实 Fork 结算链钉住 child 终态的可观察结算：work-record 读取故障降级为空记录仍结算完成 child（completion cell 保持可 join）；结算本身故障时 run 的唯一 completion promise 以显式 joinable 失败解决，join 不无界等待；PERSIST-settled Source 且 durable work Active 时 join 经 pending Source 浮现失败、不挂 journal revision，未知 durable commit 保持 Active 不放行新工作。三例经 ToolSurface 受控故障注入（createRuntimeWithWorkRecordRead、prepareTerminalDelivery、injectPendingPersistFailure）驱动，sessionPort 为内存 harness。2026-10-17 首次真实运行：node --test 本包全套（184 例，170 过 0 败 14 todo）中三例全部通过。
-- 026 Main 收束级联 linked Attached InternalLeaf execution 结算：2026-10-17 同次真实运行四例全部通过——pre-provider 与 after-provider-start 的 exact 容量丢失、重复 Main 关闭幂等、held exact custody 在 Main 关闭时释放。
-- 027 Session 收束取消作用域保留并完成延后归还：同次真实运行五例全部通过——Main 关闭取消 linked leaf 保留并归还 held exact credit、leaf 自删取消自身保留、重复关闭幂等、拒绝的延后释放以所有权违约暴露、失败的自取消不跳过 linked leaf 义务。
+...inable 失败解决，join 不无界等待；PERSIST-settled Source 且 durable work Active 时 join 经 pending Source 浮现失败、不挂 journal revision，未知 durable commit 保持 Active 不放行新工作。三例经 ToolSurface 受控故障注入（createRuntimeWithWorkRecordRead、prepareTerminalDelivery、injectPendingPersistFailure）驱动，sessionPort 为内存 harness。2026-10-17 首次真实运行：node --test 本包全套（184 例，170 过 0 败 14 todo）中三例全部通过。 [col 330]
 
 ## GAP-132 的 scoped work 回归
 

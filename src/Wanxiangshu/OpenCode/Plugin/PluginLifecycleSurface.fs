@@ -23,17 +23,17 @@ module PluginLifecycleSurface =
     let invokeEngineer (runtime: obj) (ownerSessionId: string) (charge: string) : Task<obj> =
         task {
             match! (syncDelegate runtime).Invoke(ownerSessionId, SyncDelegateRole.Engineer, charge) with
-            | Ok workRecord ->
+            | Ok view ->
                 return
                     box
                         {| ok = true
-                           workRecord = workRecord
+                           view = view
                            reason = null |}
             | Error reason ->
                 return
                     box
                         {| ok = false
-                           workRecord = null
+                           view = null
                            reason = reason |}
         }
 

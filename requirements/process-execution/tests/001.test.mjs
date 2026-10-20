@@ -338,7 +338,7 @@ const {
   supervisorList,
   supervisorSignalName,
   supervisorEnsureSpawn,
-  supervisorSpawnSync,
+  supervisorSpawn,
   supervisorSetSpawn,
   supervisorFailPending,
   supervisorTakePending,
@@ -415,19 +415,19 @@ test('WHAT[process-execution-001] SUPERVISOR_ensureSpawn_reuses_one_loader_and_f
   const second = supervisorEnsureSpawn(supervisor)
   assert.equal(first, second, 'loader task is cached')
   await assert.rejects(first)
-  assert.throws(() => supervisorSpawnSync(supervisor, 'echo hi', ''), /bun-pty is not loaded/)
+  assert.throws(() => supervisorSpawn(supervisor, 'echo hi', ''), /bun-pty is not loaded/)
 })
 test('WHAT[process-execution-001] SUPERVISOR_spawnSync_fails_fast_when_loader_never_ran', () => {
-  assert.throws(() => supervisorSpawnSync(supervisorCreate(), 'echo hi', ''), /bun-pty is not loaded/)
+  assert.throws(() => supervisorSpawn(supervisorCreate(), 'echo hi', ''), /bun-pty is not loaded/)
 })
-test('WHAT[process-execution-001] SUPERVISOR_spawnSync_invokes_sh_lc_with_fixed_options', () => {
+test('WHAT[process-execution-001] SUPERVISOR_spawnSync_invokes_sh_lc_with_fixed_options', async () => {
   const supervisor = supervisorCreate()
   let seen
   supervisorSetSpawn(supervisor, (shell, args, options) => {
     seen = [shell, args, options]
     return { pid: 4242 }
   })
-  const term = supervisorSpawnSync(supervisor, 'echo hi', '/tmp/work')
+  const term = await supervisorSpawn(supervisor, 'echo hi', '/tmp/work')
   assert.equal(term.pid, 4242)
   assert.equal(seen[0], 'sh')
   assert.deepEqual(seen[1], ['-lc', 'echo hi'])
@@ -436,14 +436,14 @@ test('WHAT[process-execution-001] SUPERVISOR_spawnSync_invokes_sh_lc_with_fixed_
   assert.equal(seen[2].rows, 24)
   assert.equal(seen[2].cwd, '/tmp/work')
 })
-test('WHAT[process-execution-001] SUPERVISOR_spawnSync_defaults_cwd_to_process_cwd', () => {
+test('WHAT[process-execution-001] SUPERVISOR_spawnSync_defaults_cwd_to_process_cwd', async () => {
   const supervisor = supervisorCreate()
   let seenCwd
   supervisorSetSpawn(supervisor, (_shell, _args, options) => {
     seenCwd = options.cwd
     return {}
   })
-  supervisorSpawnSync(supervisor, 'ls', '')
+  await supervisorSpawn(supervisor, 'ls', '')
   assert.equal(seenCwd, process.cwd())
 })
 test('WHAT[process-execution-001] SUPERVISOR_applyLive_closed_session_short_circuits_ok', async () => {
@@ -628,20 +628,20 @@ test('WHAT[process-execution-001] PTY_TYPES_read_plans_cover_unknown_in_progress
 
 {
   // The four PTY host tools (`open-terminal`, `send-terminal`, `read-terminal`,
-  // `signal-terminal`) are retired; interactive execution is superseded by `js.run`
+  // `signal-terminal`) are retired; interactive execution is superseded by `js.call`
   // (`{ spawn, name }`, `check(ctx)`, `{ send: { name, input } }`, `{ signal, name }`,
   // repository-programming [050]-[052]).
   const { default: assert } = await import('node:assert/strict')
   const { default: test } = await import('node:test')
   const { sandbox, runProgram, caseName, render } = await import('./support/executor.mjs')
 
-  test('WHAT[process-execution-001] js.run interactive actions spawn, send, observe incremental output in check, and signal background child', async () => {
+  test('WHAT[process-execution-001] js.call interactive actions spawn, send, observe incremental output in check, and signal background child', async () => {
     const { dir, cleanup } = sandbox('wxs-proc-001-')
     try {
       const outcome = await runProgram(
         dir,
         `    const chunks = [];
-    const result = await js.run(class extends js.Runnable {
+    const result = await js.call(class extends js.Callable {
       maxDuration = 8000;
       interval = 30;
       next(ctx) {
@@ -659,6 +659,16 @@ test('WHAT[process-execution-001] PTY_TYPES_read_plans_cover_unknown_in_progress
       check(ctx) {
         if (ctx.stdout) chunks.push(ctx.stdout);
         return true;
+      }
+      watch(ctx) {
+        if (ctx.exited && ctx.exitCode !== 0) return { abort: "command failed" };
+        return this.check(ctx);
+      }
+      sanity() {
+        return {
+          nextDone: () => [{ root: "/", step: 4 }],
+          watchVeto: () => [{ root: "/", step: 0, stdout: "", stderr: "", exited: true, exitCode: 2, backgrounds: [{ name: "repl", exited: true, exitCode: 1 }], elapsedMs: 0, remainingMs: 60000 }],
+        };
       }
     });
     return { status: result.status, observed: chunks.join("") };`,

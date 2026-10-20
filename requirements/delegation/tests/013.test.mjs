@@ -4,7 +4,7 @@ import { parse as parseToml } from 'smol-toml'
 import * as join from '../../../dist/Execution/Delegation/Fork/OpenCode/JoinSurface.js'
 import * as handles from '../../../dist/Execution/Delegation/Handle/Surface.js'
 
-const completed = (name, record) => ({ kind: 'completed', agentId: `physical-${name}`, agentName: name, role: 'Engineer', runId: `run-${name}`, workRecord: record })
+const completed = (name, record) => ({ kind: 'completed', agentId: `physical-${name}`, agentName: name, role: 'Engineer', runId: `run-${name}`, view: record })
 
 test('WHAT[delegation-013] renderer preserves entry order and distinguishes completed, failed and abandoned testimony', () => {
   assert.equal(join.renderBatch('english', []), '')

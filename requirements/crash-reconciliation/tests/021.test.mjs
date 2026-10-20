@@ -27,18 +27,6 @@ test('WHAT[crash-reconciliation-021] a hidden Host-owned leaf yields no parent-v
   assert.equal(recovery.bindingEvidence(state, 'child'), null)
 })
 
-test('WHAT[crash-reconciliation-021] a Companion resolves its durable main session and Blogger agent', () => {
-  const state = recovery.create()
-  const companion = 'ses-blogger-companion'
-  assert.equal(recovery.bindingEvidence(state, companion), null)
-  fold(state, canonical('Companion', 'CompanionBloggerLinked', {
-    SessionId: id('SessionId', 'parent'),
-    BloggerSessionId: id('SessionId', companion),
-    BloggerAgent: 'blogger',
-  }))
-  assert.deepEqual(recovery.bindingEvidence(state, companion), { parent: 'parent', agent: 'blogger' })
-})
-
 test('WHAT[crash-reconciliation-021] a Fission lane resolves the folded owner and slot without pre-registration', () => {
   const state = recovery.create()
   recovery.clearLane('lane-0')

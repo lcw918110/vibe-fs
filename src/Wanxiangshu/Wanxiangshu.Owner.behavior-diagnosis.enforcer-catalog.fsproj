@@ -1,3 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
-    <WanxiangshuSubsystem>enforcer</WanxiangshuSubsystem>
-    <WanxiangshuCompileShard>enforcer-catalog</WanxiangshuCompileShard><WanxiangshuSemanticOwner>behavior-diagnosis</WanxiangshuSemanticOwner>…<WanxiangshuOwnerLocality>enforcer-catalog</WanxiangshuOwnerLocality><WanxiangshuOwnerLocalityKind>contract</WanxiangshuOwnerLocalityKind>…</PropertyGroup><ItemGroup><Compile Include="Enforcer/Catalog.fsi"/><Compile Include="Enforcer/Catalog.fs"/><Compile Include="Enforcer/Rulebook.fsi"/><Compile Include="Enforcer/Rulebook.fs"/></ItemGroup></Project>

@@ -27,10 +27,10 @@ type ChatExecutionRecoveryLifecycleEvent =
     /// 按 durable projection 分流，不携带 free-form 决策。
     | ProviderStartBoundaryRejected of ChatExecutionKey * string
 
-    /// provider-attempt-recovery-024：加载期废弃了该 Blogger session 的 stale open
+    /// provider-attempt-recovery-024：加载期废弃了该 companion session 的 stale open
     /// request；recovery owner 定夺同源 `Accepted ∧ ¬ProviderStarted ∧ ¬Terminal`
     /// 的执行（terminal Failed + exact release），不动已启动或已终态的执行。
-    | BloggerStaleRequestAbandoned of SessionId
+    | CompanionStaleRequestAbandoned of SessionId
 
 type ChatExecutionRecoveryActionPorts =
     { ReconcilePhysical: PhysicalReconciliationRequest -> Task

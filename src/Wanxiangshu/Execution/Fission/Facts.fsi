@@ -12,8 +12,8 @@ type FissionFactCases =
            LaneCount: int
            LaneSessions: SessionId list
            LanePrompts: string list
-           OwnerWorkRecordRef: BlobRef
-           OwnerWorkRecordDigest: BlobDigest
+           OwnerViewRef: BlobRef
+           OwnerViewDigest: BlobDigest
            PreFissionCompletionIds: string list |}
     | FissionLaneMaterialized of
         {| GroupId: string
@@ -21,8 +21,8 @@ type FissionFactCases =
            LaneIndex: int
            LaneSessionId: SessionId
            ProviderRun: ProviderRunIdentity
-           WorkRecordRef: BlobRef
-           WorkRecordDigest: BlobDigest |}
+           ViewRef: BlobRef
+           ViewDigest: BlobDigest |}
     | FissionCompletionCaptured of
         {| GroupId: string
            OwnerSessionId: SessionId
@@ -45,23 +45,23 @@ type FissionFactCases =
            LaneIndex: int
            LaneSessionId: SessionId
            PromptKey: PromptKey
-           AggregateWorkRecordRef: BlobRef
-           AggregateWorkRecordDigest: BlobDigest |}
+           AggregateViewRef: BlobRef
+           AggregateViewDigest: BlobDigest |}
     | FissionTakeoverStarted of
         {| GroupId: string
            OwnerSessionId: SessionId
            LaneIndex: int
            LaneSessionId: SessionId
            PhysicalUserMessageId: PhysicalUserMessageId
-           AggregateWorkRecordRef: BlobRef
-           AggregateWorkRecordDigest: BlobDigest |}
+           AggregateViewRef: BlobRef
+           AggregateViewDigest: BlobDigest |}
     | FissionConverged of
         {| GroupId: string
            OwnerSessionId: SessionId
            TerminalLaneSessionId: SessionId
            TerminalProviderRun: ProviderRunIdentity
-           AggregateWorkRecordRef: BlobRef
-           AggregateWorkRecordDigest: BlobDigest |}
+           AggregateViewRef: BlobRef
+           AggregateViewDigest: BlobDigest |}
     | FissionFailed of
         {| GroupId: string
            OwnerSessionId: SessionId

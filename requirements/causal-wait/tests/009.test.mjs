@@ -91,7 +91,18 @@ const externalProducer = (kind, identity) => causal.externalProducer(kind, ident
 const readDiagnostic = (workspace) =>
   JSON.parse(fs.readFileSync(path.join(workspace, '.Herdchestra', 'diagnostics', 'causal-waits.json'), 'utf8'))
 
-test('WHAT[causal-wait-009] CAUSAL_BRIDGE_first_binding_is_stable_and_refreshes_on_lifecycle', () => {
+const waitFor = async (predicate, timeoutMs = 2000) => {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    try {
+      if (predicate()) return
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  assert.fail('condition did not settle within the observation window')
+}
+
+test('WHAT[causal-wait-009] CAUSAL_BRIDGE_first_binding_is_stable_and_refreshes_on_lifecycle', async () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'causal-runtime-'))
   const redirect = fs.mkdtempSync(path.join(os.tmpdir(), 'causal-redirect-'))
   const registry = causal.createRegistry()
@@ -106,11 +117,13 @@ test('WHAT[causal-wait-009] CAUSAL_BRIDGE_first_binding_is_stable_and_refreshes_
   const lease = causal.enter(registry, wait)
   try {
     const filePath = path.join(workspace, '.Herdchestra', 'diagnostics', 'causal-waits.json')
+    await waitFor(() => fs.existsSync(filePath) && readDiagnostic(workspace).active.some((value) => value.waitKind === 'manager-job'))
     assert.equal(fs.existsSync(filePath), true)
     assert.ok(readDiagnostic(workspace).active.some((value) => value.waitKind === 'manager-job'))
     assert.equal(fs.existsSync(path.join(redirect, '.Herdchestra', 'diagnostics', 'causal-waits.json')), false)
   } finally {
     causal.dispose(lease)
+    await waitFor(() => readDiagnostic(workspace).active.length === 0)
     assert.equal(readDiagnostic(workspace).active.length, 0)
     fs.rmSync(workspace, { recursive: true, force: true })
     fs.rmSync(redirect, { recursive: true, force: true })

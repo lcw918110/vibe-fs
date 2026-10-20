@@ -17,7 +17,7 @@ type AttachmentKind =
     /// work-028: the plan ask delegation's fixed DevOps attachment identity.
     | SyncDevOps
     | Bookkeeper of transactionId: string
-    | StrengthReplica
+
 
 [<RequireQualifiedAccess>]
 type SessionOwnership =

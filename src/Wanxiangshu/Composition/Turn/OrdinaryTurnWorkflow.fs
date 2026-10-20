@@ -4,9 +4,6 @@ open System.Collections.Generic
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Execution.Delegation.Fork.OpenCode
 open Wanxiangshu.Execution.Fission
@@ -50,14 +47,22 @@ module OrdinaryTurnWorkflow =
                     question.Request.AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
                     && (question.Answer.IsNone || question.Request.ProviderRunId = turn.ProviderRun))))
 
-    let private isTurnWorkSettled (turn: ReconciledTurn) : bool =
-        turn.Directory
-        |> Option.bind (fun directory ->
-            let commonDir = RuntimePath.stateRoot directory
-            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value turn.SessionId))
-        |> Option.exists (fun work ->
-            work.Delivered
-            || List.contains (ProviderRunIdentity.value turn.ProviderRun) work.RetiredRuns)
+    let private isTurnWorkSettled (turn: ReconciledTurn) : Task<bool> =
+        task {
+            match turn.Directory with
+            | None -> return false
+            | Some directory ->
+                let! commonDir = RuntimePath.stateRoot directory
+
+                let workOpt =
+                    Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value turn.SessionId)
+
+                return
+                    workOpt
+                    |> Option.exists (fun work ->
+                        work.Delivered
+                        || List.contains (ProviderRunIdentity.value turn.ProviderRun) work.RetiredRuns)
+        }
 
     let private classifyManagerOrPlanTurn (context: ReconciledTurnContext) : LongWorkGate =
         let turn = context.Turn
@@ -72,47 +77,41 @@ module OrdinaryTurnWorkflow =
             Continue
         | _ -> Ordinary
 
-    let private longWorkGate (journal: AgentJournal option) (context: ReconciledTurnContext) =
-        let turn = context.Turn
+    let private classifyManagedTurnGate settled context =
+        if settled then Wait else classifyManagerOrPlanTurn context
 
-        let isManaged =
-            match turn.Role with
-            | Some(Role.Manager | Role.Plan) -> true
-            | _ -> false
+    let private longWorkGate (journal: AgentJournal option) (context: ReconciledTurnContext) : Task<LongWorkGate> =
+        task {
+            let turn = context.Turn
 
-        let authority () =
-            journal
-            |> Option.bind (fun durable ->
-                (AgentJournal.snapshot durable).AgentProjections.Sessions
-                |> Map.tryFind turn.SessionId
-                |> Option.bind (fun session -> session.PromptAuthority))
+            let isManaged =
+                match turn.Role with
+                | Some(Role.Manager | Role.Plan) -> true
+                | _ -> false
 
-        if not isManaged then
-            Ordinary
-        elif isExplicitWaitOrOldTurn (authority ()) turn || isTurnWorkSettled turn then
-            Wait
-        else
-            classifyManagerOrPlanTurn context
+            let authority () =
+                journal
+                |> Option.bind (fun durable ->
+                    (AgentJournal.snapshot durable).AgentProjections.Sessions
+                    |> Map.tryFind turn.SessionId
+                    |> Option.bind (fun session -> session.PromptAuthority))
 
-    let private bloggerReceiptKind (port: TurnObservationJournalPort) (turn: ReconciledTurn) =
-        port.TryBloggerReceiptKind turn.SessionId turn.ProviderRun
+            if not isManaged then
+                return Ordinary
+            elif isExplicitWaitOrOldTurn (authority ()) turn then
+                return Wait
+            else
+                let! settled = isTurnWorkSettled turn
+                return classifyManagedTurnGate settled context
+        }
 
-    let private requestKindWithoutBloggerReceipt (port: TurnObservationJournalPort) (turn: ReconciledTurn) =
+    let private requestKindOfCompleted (port: TurnObservationJournalPort) (turn: ReconciledTurn) =
         let continuationKind =
             port.TryContinuationKind turn.SessionId turn.PhysicalUserMessageId
 
-        match continuationKind, turn.Role with
-        | Some PromptContinuationKind.InteractionRepair, _ -> Some ProviderRequestKind.InteractionRepair
-        // A Blogger terminal without a durable cycle receipt did not prove a
-        // business Main success. Never clear the failure budget
-        // from Role alone.
-        | _, Some Role.Blogger -> None
+        match continuationKind with
+        | Some PromptContinuationKind.InteractionRepair -> Some ProviderRequestKind.InteractionRepair
         | _ -> Some ProviderRequestKind.WorkMain
-
-    let private requestKindOfCompleted (port: TurnObservationJournalPort) (turn: ReconciledTurn) =
-        match bloggerReceiptKind port turn with
-        | Some BlogFrameKind.Entry -> Some ProviderRequestKind.BloggerMain
-        | None -> requestKindWithoutBloggerReceipt port turn
 
     let private recordSuccessIfValid
         (journal: AgentJournal option)
@@ -134,6 +133,68 @@ module OrdinaryTurnWorkflow =
             | _ -> return ()
         }
 
+    let private dispatchIdleTurn
+        (quiescence: ISessionQuiescenceGate)
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (eventPort: IEventObservationPort)
+        (journal: AgentJournal option)
+        (observation: TurnObservationJournalPort option)
+        (context: ReconciledTurnContext)
+        (observer: ContinuationAcceptanceObserver option)
+        : Task =
+        task {
+            let! workGate = longWorkGate journal context
+
+            match workGate, context.Turn.Observation, context.Turn.Outcome with
+            | Wait, _, _ -> return ()
+            | Continue, _, _ ->
+                return!
+                    InteractionRepairWorkflow.repairUnfinishedWork
+                        quiescence
+                        context
+                        sessionPort
+                        rootWorkspace
+                        eventPort
+                        journal
+                        observer
+            | _, Some ReconcileProgram.TurnUnknown, _ ->
+                return!
+                    InteractionRepairWorkflow.repairMissingFinalReport
+                        quiescence
+                        context
+                        sessionPort
+                        rootWorkspace
+                        eventPort
+                        journal
+                        observation
+                        observer
+            | _, None, ReconcileProgram.TurnInProgress ->
+                return!
+                    InteractionRepairWorkflow.repairIncompleteInteraction
+                        quiescence
+                        context
+                        sessionPort
+                        rootWorkspace
+                        eventPort
+                        journal
+                        observation
+                        observer
+            | _, None, ReconcileProgram.TurnNeedsContinuation _ ->
+                return!
+                    InteractionRepairWorkflow.repairMissingFinalReport
+                        quiescence
+                        context
+                        sessionPort
+                        rootWorkspace
+                        eventPort
+                        journal
+                        observation
+                        observer
+            | _, None, (ReconcileProgram.TurnCompleted | ReconcileProgram.TurnAborted _ | ReconcileProgram.TurnFailed _) ->
+                return ()
+        }
+
     /// Revisit a previously delivered turn only for work whose authority comes
     /// from a fresh idle observation. Terminal plumbing remains first-delivery only.
     let observeIdle
@@ -151,56 +212,10 @@ module OrdinaryTurnWorkflow =
             || (observation
                 |> Option.exists (fun port -> port.IsFissionActive context.Turn.SessionId))
 
-        let workGate =
-            if isFissionReplaced then
-                Wait
-            else
-                longWorkGate journal context
-
-        match isFissionReplaced, context.Turn.Observation, context.Turn.Outcome with
-        | true, _, _ -> AsyncSupport.completedTask ()
-        | false, _, _ when workGate = Wait -> AsyncSupport.completedTask ()
-        | false, _, _ when workGate = Continue ->
-            InteractionRepairWorkflow.repairUnfinishedWork
-                quiescence
-                context
-                sessionPort
-                rootWorkspace
-                eventPort
-                journal
-                observer
-        | false, Some ReconcileProgram.TurnUnknown, _ ->
-            InteractionRepairWorkflow.repairMissingFinalReport
-                quiescence
-                context
-                sessionPort
-                rootWorkspace
-                eventPort
-                journal
-                observation
-                observer
-        | false, None, ReconcileProgram.TurnInProgress ->
-            InteractionRepairWorkflow.repairIncompleteInteraction
-                quiescence
-                context
-                sessionPort
-                rootWorkspace
-                eventPort
-                journal
-                observation
-                observer
-        | false, None, ReconcileProgram.TurnNeedsContinuation _ ->
-            InteractionRepairWorkflow.repairMissingFinalReport
-                quiescence
-                context
-                sessionPort
-                rootWorkspace
-                eventPort
-                journal
-                observation
-                observer
-        | false, None, (ReconcileProgram.TurnCompleted | ReconcileProgram.TurnAborted _ | ReconcileProgram.TurnFailed _) ->
+        if isFissionReplaced then
             AsyncSupport.completedTask ()
+        else
+            dispatchIdleTurn quiescence sessionPort rootWorkspace eventPort journal observation context observer
 
     /// Own the reconciled ordinary-turn outcome match.
     /// `abortCause` is the Host boundary typed outcome consumed exactly once (structured-workflow-017 ①).
@@ -356,7 +371,6 @@ module OrdinaryTurnWorkflow =
         (rootWorkspace: IRootWorkspaceReader)
         (eventPort: IEventObservationPort)
         (journal: AgentJournal option)
-        (recoveryScope: IBloggerRuntimeHost)
         (context: ReconciledTurnContext)
         (error: string)
         =
@@ -367,7 +381,6 @@ module OrdinaryTurnWorkflow =
                 rootWorkspace
                 eventPort
                 journal
-                recoveryScope
                 context.Turn
                 failure
                 error
@@ -386,7 +399,6 @@ module OrdinaryTurnWorkflow =
         (eventPort: IEventObservationPort)
         (journal: AgentJournal option)
         (observation: TurnObservationJournalPort option)
-        (recoveryScope: IBloggerRuntimeHost)
         (joinGuardNudges: HashSet<string>)
         (hasLivePty: string -> bool)
         (abortCause: AbortCause)
@@ -423,7 +435,7 @@ module OrdinaryTurnWorkflow =
                 observer
         | ReconcileProgram.TurnAborted reason -> handleAborted eventPort abortCause turn reason
         | ReconcileProgram.TurnFailed error ->
-            handleFailedTurn sessionPort rootWorkspace eventPort journal recoveryScope context error
+            handleFailedTurn sessionPort rootWorkspace eventPort journal context error
         | ReconcileProgram.TurnCompleted ->
             handleCompleted
                 sessionPort
@@ -437,13 +449,80 @@ module OrdinaryTurnWorkflow =
                 context
                 completeAgent
 
+    /// degenerate attempt from entering the ordinary completion path and
+    /// re-triggers execution on that branch.
+    /// If execution failed (e.g. timeout), report the error and do not record
+    /// completion.
+    /// If tool execution had an error, complete the turn anyway (the LLM can see
+    /// the tool error in the next turn).
+    let private dispatchTurnObservation
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (eventPort: IEventObservationPort)
+        (journal: AgentJournal option)
+        (observation: TurnObservationJournalPort option)
+        (joinGuardNudges: HashSet<string>)
+        (hasLivePty: string -> bool)
+        (abortCause: AbortCause)
+        (quiescence: ISessionQuiescenceGate)
+        (context: ReconciledTurnContext)
+        (observer: ContinuationAcceptanceObserver option)
+        : Task =
+        let turn = context.Turn
+
+        task {
+            let! workGate = longWorkGate journal context
+
+            match workGate, turn.Observation with
+            | Wait, _ -> return ()
+            | Continue, _ ->
+                return!
+                    InteractionRepairWorkflow.repairUnfinishedWork
+                        quiescence
+                        context
+                        sessionPort
+                        rootWorkspace
+                        eventPort
+                        journal
+                        observer
+            | _, Some ReconcileProgram.TurnUnknown ->
+                return!
+                    InteractionRepairWorkflow.repairMissingFinalReport
+                        quiescence
+                        context
+                        sessionPort
+                        rootWorkspace
+                        eventPort
+                        journal
+                        observation
+                        observer
+            | _, None ->
+                let completeAgent () =
+                    let tracePort = journal |> Option.map TerminalTracePort.forJournal
+                    TerminalReporter.completeWithEvidence eventPort tracePort turn
+
+                return!
+                    handleOutcome
+                        sessionPort
+                        rootWorkspace
+                        eventPort
+                        journal
+                        observation
+                        joinGuardNudges
+                        hasLivePty
+                        abortCause
+                        quiescence
+                        context
+                        completeAgent
+                        observer
+        }
+
     let observe
         (sessionPort: ISessionHostPort)
         (rootWorkspace: IRootWorkspaceReader)
         (eventPort: IEventObservationPort)
         (journal: AgentJournal option)
         (observation: TurnObservationJournalPort option)
-        (recoveryScope: IBloggerRuntimeHost)
         (joinGuardNudges: HashSet<string>)
         (hasLivePty: string -> bool)
         (abortCause: AbortCause)
@@ -457,50 +536,18 @@ module OrdinaryTurnWorkflow =
             FissionRuntime.isSilentInterrupt turn.SessionId
             || (observation |> Option.exists (fun port -> port.IsFissionActive turn.SessionId))
 
-        let workGate =
-            if isFissionReplaced then
-                Wait
-            else
-                longWorkGate journal context
-
-        match isFissionReplaced, turn.Observation with
-        | true, _ -> AsyncSupport.completedTask ()
-        | false, _ when workGate = Wait -> AsyncSupport.completedTask ()
-        | false, _ when workGate = Continue ->
-            InteractionRepairWorkflow.repairUnfinishedWork
-                quiescence
-                context
-                sessionPort
-                rootWorkspace
-                eventPort
-                journal
-                observer
-        | false, Some ReconcileProgram.TurnUnknown ->
-            InteractionRepairWorkflow.repairMissingFinalReport
-                quiescence
-                context
+        if isFissionReplaced then
+            AsyncSupport.completedTask ()
+        else
+            dispatchTurnObservation
                 sessionPort
                 rootWorkspace
                 eventPort
                 journal
                 observation
-                observer
-        | false, None ->
-            let completeAgent () =
-                let tracePort = journal |> Option.map TerminalTracePort.forJournal
-                TerminalReporter.completeWithEvidence eventPort tracePort turn
-
-            handleOutcome
-                sessionPort
-                rootWorkspace
-                eventPort
-                journal
-                observation
-                recoveryScope
                 joinGuardNudges
                 hasLivePty
                 abortCause
                 quiescence
                 context
-                completeAgent
                 observer

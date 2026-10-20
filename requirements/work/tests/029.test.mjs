@@ -14,7 +14,7 @@ import * as journalSurface from '../../../dist/Persistence/Journal/Surface.js'
 // store is a real workspace store with one opened plan work.
 const openPlanStore = async (root, workId) => {
   execFileSync('git', ['init', '--quiet', root])
-  const store = workspaceEvents.acquire(journalSurface.JournalSurface_initializeStateRoot(root))
+  const store = workspaceEvents.acquire(await journalSurface.JournalSurface_initializeStateRoot(root))
   const opened = await lifecycle.seedOpen(store, 'plan', workId, root, 1n)
   assert.equal(opened.ok, true, opened.error)
   return store

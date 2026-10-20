@@ -29,8 +29,9 @@
  *
  *   a turn declares `tools`, and tools are part of the wire identity, so two turns of one
  *   lane with different tool sets cannot share a seal chain — `manager`'s
- *   `manager-guard` (fork/join/list) and `blogger` (no tools) would break ARCH-004 on the
- *   second request and the sequence would be testing the seal instead of the lookup
+ *   `manager-guard` (fork/join/list) and a sibling manager turn with a different tool set
+ *   would break ARCH-004 on the second request and the sequence would be testing the seal
+ *   instead of the lookup
  *
  *   an `internal` turn declares no lane at all, and `resolveEntry` admits
  *   `entry.lane === undefined` at ANY session, so its session can simply stay unbound —
@@ -326,8 +327,8 @@ export function deriveRequests(scenario) {
     // declaration), and later deliveries of the same entry append to it.
     //
     // A chat request carries its system prompt as `messages[0]` on the real wire, and
-    // the prefix-probe admission compares that head byte-for-byte — so the derived
-    // sequence must carry one too, or every probe-declared entry would look like it
+    // the boundary admission compares that head byte-for-byte — so the derived
+    // sequence must carry one too, or every boundary-declared entry would look like it
     // rewrote the fixed parts. Title requests keep their marker shape (the seal does
     // not compare them).
     const model = 'forest-lib-model';

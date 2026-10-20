@@ -23,7 +23,7 @@ export const CASES = Object.freeze([
     fail_example: Object.freeze({
       role: 'engineer',
       toolCalls: Object.freeze([
-        Object.freeze({ name: 'todowrite-for-devops', args: Object.freeze({ program: 'js.run' }) }),
+        Object.freeze({ name: 'todowrite-for-devops', args: Object.freeze({ program: 'js.call' }) }),
       ]),
     }),
   }),
@@ -76,9 +76,9 @@ export const CASES = Object.freeze([
       role: 'devops',
       mutations: true,
       toolCalls: Object.freeze([
-        Object.freeze({ name: 'todowrite-for-devops', args: Object.freeze({ program: 'js.run' }) }),
+        Object.freeze({ name: 'todowrite-for-devops', args: Object.freeze({ program: 'js.call' }) }),
         Object.freeze({ name: 'todowrite-for-devops', args: Object.freeze({ program: "this.write('src/bug.ts', 'fixed')" }) }),
-        Object.freeze({ name: 'todowrite-for-devops', args: Object.freeze({ program: 'js.run' }) }),
+        Object.freeze({ name: 'todowrite-for-devops', args: Object.freeze({ program: 'js.call' }) }),
       ]),
     }),
     fail_example: Object.freeze({
@@ -101,7 +101,7 @@ export const CASES = Object.freeze([
       toolCalls: Object.freeze([
         Object.freeze({
           name: 'todowrite-for-devops',
-          args: Object.freeze({ program: 'js.run' }),
+          args: Object.freeze({ program: 'js.call' }),
         }),
       ]),
     }),

@@ -49,7 +49,7 @@ module HostSessionNudge =
     /// truncating the system prompt and breaking the ARCH-004 seal. Using the
     /// root workspace gives a stable, deterministic set of root instructions,
     /// which differs from the previous worktree version by design; the
-    /// scenario's prefix-probe boundary carries that transition.
+    /// scenario's declared boundary carries that transition.
     let private liveDirectory (rootWorkspace: IRootWorkspaceReader) (directory: string option) =
         RootWorkspaceDirectory.select System.IO.Directory.Exists rootWorkspace directory
 
@@ -344,7 +344,7 @@ module HostSessionNudge =
         (prompt: string)
         (directory: string option)
         (journal: AgentJournal option)
-        (requestId: BloggerRequestId)
+        (requestId: RepairRequestId)
         (terminalProviderRun: ProviderRunIdentity)
         (repairKind: string)
         (durable: AgentJournal)
@@ -355,7 +355,7 @@ module HostSessionNudge =
         if rt.RepairAlreadyClaimed profile requestId terminalProviderRun repairKind then
             Task.FromResult InteractionRepairSendOutcome.AlreadyAdmitted
         else
-            // Blogger repair must know whether Host transport accepted or
+            // Repair must know whether Host transport accepted or
             // refused this nudge so a hard refusal can immediately advance
             // to AABB. Await waits only the SendPrompt transport result; it
             // never waits for provider execution/slots.
@@ -374,9 +374,8 @@ module HostSessionNudge =
 
     /// provider-attempt-recovery-008: an empty / XML-only terminal earns at most one repair.
     ///
-    /// `requestId + terminalProviderRun` names the exact Blogger repair occasion.
-    /// Neither the long-lived session nor LogicalRun alone may spend another
-    /// Blogger request's protocol budget.
+    /// `requestId + terminalProviderRun` names the exact repair occasion.
+    /// Neither the long-lived session nor LogicalRun alone may spend another request's protocol budget.
     ///
     /// The budget check is a read of durable `ClaimSequences`, so a repair claimed
     /// before a crash is still spent after it.
@@ -387,7 +386,7 @@ module HostSessionNudge =
         (prompt: string)
         (directory: string option)
         (journal: AgentJournal option)
-        (requestId: BloggerRequestId)
+        (requestId: RepairRequestId)
         (terminalProviderRun: ProviderRunIdentity)
         (repairKind: string)
         : Task<InteractionRepairSendOutcome> =
@@ -650,9 +649,7 @@ module HostSessionNudge =
             terminalProviderRun
             None
 
-    /// Blogger-request + terminal-scoped idle interaction repair. This narrower
-    /// occasion identity distinguishes same-terminal re-entry from a new bad
-    /// terminal without leaking repair budget across Blogger requests.
+    /// Request + terminal-scoped idle interaction repair.
     let private sendIdleInteractionRepairWithProfile
         (quiescence: ISessionQuiescenceGate)
         (permit: QuiescencePermit)
@@ -662,7 +659,7 @@ module HostSessionNudge =
         (prompt: string)
         (directory: string option)
         (journal: AgentJournal option)
-        (requestId: BloggerRequestId)
+        (requestId: RepairRequestId)
         (terminalProviderRun: ProviderRunIdentity)
         (repairKind: string)
         (durable: AgentJournal)
@@ -695,7 +692,7 @@ module HostSessionNudge =
         (prompt: string)
         (directory: string option)
         (journal: AgentJournal option)
-        (requestId: BloggerRequestId)
+        (requestId: RepairRequestId)
         (terminalProviderRun: ProviderRunIdentity)
         (repairKind: string)
         : Task<IdleContinuationOutcome> =

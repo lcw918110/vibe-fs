@@ -2,7 +2,7 @@
 
 本目录不定义额外规则；条款正文在 `../WHAT.md`，用例标题以 `WHAT[advisor-NNN]` 锚定条款。当前只有 002、003、006 三个条款有可执行用例，其余条款的证明缺口见文末。
 
-- `002.test.mjs`（`WHAT[advisor-002]`）：对编译产物 `dist/Execution/Delegation/Advisor/Surface.js` 断言 view prompt 的 blogger 形状——`# ` 注释表头、空行之后每记录一张 `[[new_work_to_record]]` 表，记录保持调用者 anchor 序，`prefixUntil` 上的 anchor 一律不进 view；`thenRemove` 命中的 anchor 以摘要（而非原文本）到达；空增量报 `hasNewMaterial = false` 且不产出任何数据表，只留表头。JS 面由该 Surface 自己承担 Fable list/set 表示转换，故本目录不再有共享适配器。
+- `002.test.mjs`（`WHAT[advisor-002]`）：对编译产物 `dist/Execution/Delegation/Advisor/Surface.js` 断言 view prompt 的顾问 TOML 形状——`# ` 注释表头、空行之后每记录一张 `[[new_work_to_record]]` 表，记录保持调用者 anchor 序，`prefixUntil` 上的 anchor 一律不进 view；`thenRemove` 命中的 anchor 以摘要（而非原文本）到达；空增量报 `hasNewMaterial = false` 且不产出任何数据表，只留表头。JS 面由该 Surface 自己承担 Fable list/map 的展开，不另写 host 投影。
 - `003.test.mjs`（`WHAT[advisor-003]`）：同一 `Surface.js` 里的 plan 走真实 follow-up——带上次 `deliveredAnchors` 的第二次规划只发出新增 anchor 的表，已交付 anchor 不重发，`thenRemove` 也不会重新打开已交付的 anchor；再走同一 Surface 的游标成员——游标按调用 session 累积、只增不减、session 之间不共享，`clear` 只重置一个 session。
 - `006.test.mjs`（`WHAT[advisor-006]`）：`generateRole('manager','en')` 的生成面在成员表、描述文本、基类 stub 与运行时绑定四处都携带 advisor，且去掉 `ToolPermission.Advisor` 后四处同时消失；`installDelegationHost` 注入的宿主闭包值被 `js.advisor` 原样按数据返回（不重渲染、不落到 fork/join/fission/horizon 的宿主），未注入宿主时以 `code = "DELEGATION_UNAVAILABLE"` 拒绝，且拒绝不使程序失败。
 

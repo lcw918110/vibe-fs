@@ -196,7 +196,7 @@ const Dispatch = await import("../../../dist/Interaction/Dispatch/DispatchSurfac
 const Fission = await import("../../../dist/Execution/Fission/Surface.js");
 const Authority = await import("../../../dist/Interaction/Authority/Surface.js");
 const Runtime = await import("../../../dist/Interaction/Authority/RuntimeSurface.js");
-const Strength = await import("../../../dist/Strength/Surface.js");
+
 const Persona = await import("../../../dist/Participant/Persona/Surface.js");
 
 const hash = (value) => `H(${value})`
@@ -277,9 +277,7 @@ const EXPECTED = {
   manager: { role: 'manager', persona: 'Lead' },
   engineer: { role: 'engineer', persona: 'Engineer' },
   devops: { role: 'devops', persona: 'Operator' },
-  blogger: { role: 'blogger', persona: 'Chronicler' },
   bookkeeper: { role: 'bookkeeper', persona: 'Curator' },
-  predictor: { role: 'engineer', persona: 'Engineer' },
 }
 const expectedView = (name, origin = 'ResolvedAtRoot') => ({
   name,

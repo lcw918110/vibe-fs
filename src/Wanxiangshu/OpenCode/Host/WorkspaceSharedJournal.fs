@@ -58,11 +58,11 @@ module WorkspaceEventStoreSurface =
     /// runtime-path owner as the composition root. Returns a standard
     /// `JournalHandle` suited for `JournalSurface` operations.
     let acquireSharedForWorkspace (workspace: string) (processId: int) (startedAt: string) : Task<obj> =
-        acquireJournal
-            (RuntimePath.initializeStateRoot workspace)
-            (RuntimePath.forWorkspace workspace)
-            processId
-            startedAt
+        task {
+            let! commonDir = RuntimePath.initializeStateRoot workspace
+            let! runtimeDir = RuntimePath.forWorkspace workspace
+            return! acquireJournal commonDir runtimeDir processId startedAt
+        }
 
     /// Release a workspace journal handle.
     let release (handle: JournalHandle) : unit = handle.Dispose()

@@ -19,8 +19,6 @@ module PairProgrammingThoughtSurface =
     val appendContextReanchored:
         journal: obj -> session: string -> previousEpoch: int64 -> nextEpoch: int64 -> observedRun: string -> Task<obj>
 
-    val appendPrefixRebaseCommitted:
-        journal: obj -> session: string -> previousEpoch: int64 -> nextEpoch: int64 -> cutoffExclusive: int -> Task<obj>
 
     val projectionFlags: journal: obj -> session: string -> obj
 

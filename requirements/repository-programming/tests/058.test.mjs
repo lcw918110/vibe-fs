@@ -21,12 +21,12 @@ const runProgram = (dir, body, sessionId = 'sess-058') =>
 
 const sanity = (nextStep) => `sanity() {
         return {
-          nextDone: () => this.next({ root: "/", step: ${nextStep} }),
-          watchVeto: () => this.watch({ root: "/", step: 0, stdout: "", stderr: "", exited: true, exitCode: 2, backgrounds: [{ name: "echoer", exited: true, exitCode: 1 }], elapsedMs: 0, remainingMs: 60000 }),
+          nextDone: () => [{ root: "/", step: ${nextStep} }],
+          watchVeto: () => [{ root: "/", step: 0, stdout: "", stderr: "", exited: true, exitCode: 2, backgrounds: [{ name: "echoer", exited: true, exitCode: 1 }], elapsedMs: 0, remainingMs: 60000 }],
         };
       }`
 
-test('WHAT[repository-programming-058] js.run drives an interactive child through send and observes the deltas', async () => {
+test('WHAT[repository-programming-058] js.call drives an interactive child through send and observes the deltas', async () => {
   const { dir, cleanup } = sandbox()
   try {
     // A child that echoes each stdin line back, prefixed.
@@ -34,7 +34,7 @@ test('WHAT[repository-programming-058] js.run drives an interactive child throug
     const outcome = await runProgram(
       dir,
       `    const seen = [];
-    const out = await js.run(class extends js.Runnable {
+    const out = await js.call(class extends js.Callable {
       maxDuration = 15000;
       interval = 100;
       next(ctx) {
@@ -63,12 +63,12 @@ test('WHAT[repository-programming-058] js.run drives an interactive child throug
   }
 })
 
-test('WHAT[repository-programming-058] send to an unknown child fails with RUN_CHILD_UNKNOWN', async () => {
+test('WHAT[repository-programming-058] send to an unknown child fails with CALL_CHILD_UNKNOWN', async () => {
   const { dir, cleanup } = sandbox()
   try {
     const outcome = await runProgram(
       dir,
-      `    return await js.run(class extends js.Runnable {
+      `    return await js.call(class extends js.Callable {
       maxDuration = 3000;
       interval = 100;
       next(ctx) { return ctx.step === 0 ? { send: { name: "nobody", input: "hi" } } : null; }
@@ -80,7 +80,7 @@ test('WHAT[repository-programming-058] send to an unknown child fails with RUN_C
     });`,
     )
     assert.equal(caseName(outcome), 'Failed')
-    assert.match(render(outcome), /RUN_CHILD_UNKNOWN/)
+    assert.match(render(outcome), /CALL_CHILD_UNKNOWN/)
   } finally {
     cleanup()
   }

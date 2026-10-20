@@ -8,7 +8,7 @@ test('WHAT[repository-investigation-008] actual consumer admission rejects other
   await withWorkspace(async (directory) => {
     const calls = []
     const search = async (query, workspace) => { calls.push({ query, workspace }); return [hint('source.fs', 'candidate')] }
-    for (const role of ['Manager', 'Orchestrator', 'Blogger', 'Bookkeeper']) {
+    for (const role of ['Manager', 'Orchestrator', 'Bookkeeper']) {
       const result = await warmStart.prepareWithSearch(search, 'investigation-role', role, directory, 'query', 'Inspect.')
       assert.equal(result.ok, false, role)
       assert.equal(calls.length, 0)

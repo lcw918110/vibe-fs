@@ -20,10 +20,11 @@
 
     <ProjectReference Include="Wanxiangshu.Owner.repository-programming.repository-programming-js-event-vocabulary-contract.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-fatal-effect.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-taskresult.fsproj"/>
     <Compile Include="Process/JsSandbox.fsi"/>
     <Compile Include="Process/JsSandbox.fs"/>
-    <Compile Include="Process/JsRunLoop.fsi"/>
-    <Compile Include="Process/JsRunLoop.fs"/>
+    <Compile Include="Process/JsCallLoop.fsi"/>
+    <Compile Include="Process/JsCallLoop.fs"/>
     <Compile Include="Repository/Programming/Js/TransactionStore.fsi"/>
     <Compile Include="Repository/Programming/Js/TransactionStore.fs"/>
     <Compile Include="Repository/Programming/Js/DeliveredValues.fsi"/>

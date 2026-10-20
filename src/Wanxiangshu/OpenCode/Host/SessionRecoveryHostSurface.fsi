@@ -54,10 +54,6 @@ module SessionRecoveryHostSurface =
     val signalProviderStartBoundaryRejected:
         handle: RecoveryHostHandle -> sessionId: string -> physicalUserMessageId: string -> reason: string -> Task<obj>
 
-    /// provider-attempt-recovery-024：加载期废弃 stale Blogger open request 后，
-    /// 定夺同源 `Accepted ∧ ¬ProviderStarted` 的执行。返回 `{ settled,
-    /// alreadyTerminal, manuals }`。
-    val settleStaleBloggerAcceptedExecutions: handle: RecoveryHostHandle -> sessionId: string -> Task<obj>
 
     val disposeRecoveryHost: handle: RecoveryHostHandle -> unit
 

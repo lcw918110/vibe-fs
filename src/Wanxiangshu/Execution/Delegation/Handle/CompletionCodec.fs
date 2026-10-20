@@ -33,7 +33,7 @@ module HandleCompletionCodec =
                 [ "schemaVersion", box 2
                   "finality", str "completed"
                   "run_id", str runId
-                  "work_record", str payload.WorkRecord
+                  "view", str payload.View
                   "child_session_id",
                   str (payload.ChildSessionId |> Option.map SessionId.value |> Option.defaultValue "")
                   "authority_root",
@@ -121,7 +121,7 @@ module HandleCompletionCodec =
         Current(
             CompletedV2
                 { RunId = runId
-                  WorkRecord = field raw "work_record"
+                  View = field raw "view"
                   ChildSessionId = field raw "child_session_id"
                   AuthorityRoot = field raw "authority_root"
                   ProviderRun = field raw "provider_run"
@@ -219,7 +219,7 @@ module HandleCompletionCodec =
                       Role = role
                       AuthorityRoot = optId AuthorityRootUserMessageId.create payload.AuthorityRoot
                       ProviderRun = optId ProviderRunIdentity.create payload.ProviderRun
-                      WorkRecord = payload.WorkRecord
+                      View = payload.View
                       Directory = directoryOpt payload.Directory }
               CompletedAt = completedAt }
         | FailedV2 payload ->

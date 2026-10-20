@@ -12,7 +12,7 @@ class Js extends JsProgram {
     const section = manifest.slice(heading);
     const url = section.slice(section.indexOf("https://")).split(/\s/)[0];
 
-    return await js.run(class extends js.Runnable {
+    return await js.call(class extends js.Callable {
       maxDuration = 3600000; // 整个工程：60 分钟
       interval = 10000;      // watch() 每 10 秒时间片跑一次
 
@@ -33,20 +33,20 @@ class Js extends JsProgram {
       stalled = 0;
       slow = 0;
 
-      // 控制流自证：两个 thunk，宿主驱动并机械检查。跑在独立实例上
-      // （真实运行用全新构造）——写 thunk 就是在设计出口。
+      // 控制流自证：两个 thunk，只拨状态并返回参数数组。宿主调用 next/watch
+      // 并机械检查。跑在独立实例上（真实运行用全新构造）——写 thunk 就是在设计出口。
       sanity() {
         return {
           nextDone: () => {
             this.index = this.files.length;
-            return this.next({ root: "/", step: 99 });
+            return [{ root: "/", step: 99 }];
           },
-          watchVeto: async () => {
+          watchVeto: () => {
             this.index = 0;
             this.current = this.files[0];
             this.seenBytes = 0;
             this.stalled = 6;
-            return await this.watch({ root: "/", step: 0, stdout: "", stderr: "", exited: false, exitCode: null, backgrounds: [], elapsedMs: 0, remainingMs: 60000 });
+            return [{ root: "/", step: 0, stdout: "", stderr: "", exited: false, exitCode: null, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }];
           },
         };
       }
@@ -85,8 +85,8 @@ class Js extends JsProgram {
         this.stalled = grew <= 0 ? this.stalled + 1 : 0;
         this.slow = grew > 0 && grew < this.minBytesPerSlice ? this.slow + 1 : 0;
 
-        if (this.stalled >= 6) return { abort: `${this.current.name}: 连续 6 片无新字节` };
-        if (this.slow >= 12) return { abort: `${this.current.name}: 连续 12 片低于 ${this.minBytesPerSlice} 字节/片` };
+        if (this.stalled >= 6) return { abort: `${this.current.name}: no new bytes for 6 slices` };
+        if (this.slow >= 12) return { abort: `${this.current.name}: under ${this.minBytesPerSlice} bytes per slice for 12 slices` };
         return null; // 观察过了，没有异常——继续
       }
 

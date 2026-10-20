@@ -27,7 +27,7 @@ type HandleRecord =
       LastCompletion: HandleCompletion option
       Work: HandleWorkId option }
 
-type HandleWorkRecord =
+type HandleWork =
     { Work: HandleWorkId
       LogicalRunId: LogicalRunId
       Lifecycle: HandleLifecycle
@@ -43,7 +43,7 @@ module AdmittedWork =
 type AgentLinkageProjection =
     { Handles: Map<HandleId, HandleRecord>
       NextCreationOrder: int
-      Works: Map<HandleWorkId, HandleWorkRecord>
+      Works: Map<HandleWorkId, HandleWork>
       LegacyWorkHandles: Set<HandleId> }
 
 type HandleTransitionRejection =
@@ -68,7 +68,7 @@ module HandleProjection =
         AgentLinkageProjection ->
             Result<AgentLinkageProjection, HandleTransitionRejection>
 
-    val tryWork: HandleWorkId -> AgentLinkageProjection -> HandleWorkRecord option
+    val tryWork: HandleWorkId -> AgentLinkageProjection -> HandleWork option
     val tryAdmittedWork: HandleWorkId -> AgentLinkageProjection -> Result<AdmittedWork, HandleTransitionRejection>
 
     val completeWork:
@@ -92,7 +92,7 @@ module HandleProjection =
         AgentLinkageProjection ->
             Result<AgentLinkageProjection, HandleTransitionRejection>
 
-    val workRecords: AgentLinkageProjection -> HandleRecord list
+    val workBindings: AgentLinkageProjection -> HandleRecord list
     val tryBinding: HandleId -> AgentLinkageProjection -> HandleRecord option
 
     val linkNamed:
@@ -149,6 +149,4 @@ module HandleProjection =
     val reportableAbandoned: current: AgentLinkageProjection -> HandleRecord list
     val activeHandles: current: AgentLinkageProjection -> HandleRecord list
     val tryFindByChildSession: childSessionId: SessionId -> current: AgentLinkageProjection -> HandleRecord option
-    val lifecycleSealsBlogger: lifecycle: HandleLifecycle -> bool
-    val recordSealsBlogger: record: HandleRecord -> bool
     val linkedChildren: current: AgentLinkageProjection -> HandleRecord list

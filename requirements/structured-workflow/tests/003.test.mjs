@@ -132,7 +132,7 @@ test('WHAT[structured-workflow-003] SW_009_recovery_surface_drives_ordinary_work
   // entrypoints are callable.
   const entrypoints = [
     ['src/Wanxiangshu/Participant/Provider/Attempt/Fallback/Workflow.fs', 'continueAfterConfirmedFailure'],
-    ['src/Wanxiangshu/Participant/Provider/Attempt/Fallback/Workflow.fs', 'awaitRecoveryMaterial'],
+    ['src/Wanxiangshu/Participant/Provider/Attempt/Fallback/Workflow.fs', 'continueDelegateCallAfterConfirmedFailure'],
     ['src/Wanxiangshu/Composition/Turn/Workflow.fs', 'observe'],
     ['src/Wanxiangshu/Mission/Manager/Workflow.fs', 'observe'],
     ['src/Wanxiangshu/Mission/Manager/Workflow.fs', 'observeIdle'],
@@ -222,7 +222,6 @@ test('WHAT[structured-workflow-003] SW_003_domain_flow_and_outcome_types_are_dom
     'src/Wanxiangshu/Context/Companion/Model.fs',
     'src/Wanxiangshu/Context/Companion/Runtime.fs',
     'src/Wanxiangshu/Context/Companion/Host.fs',
-    'src/Wanxiangshu/Context/Companion/HostBlogger.fs',
     'src/Wanxiangshu/Context/Companion/JournalPort.fs',
     'src/Wanxiangshu/Context/Companion/Transform.fs',
   ]

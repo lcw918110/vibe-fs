@@ -4,8 +4,6 @@ open System
 open System.Threading.Tasks
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Composition.Durable
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Foundation
@@ -29,8 +27,6 @@ module ProviderLifecycle =
         | FrozenAttemptPlanMissing of ChatExecutionKey * ProviderRunIdentity
         | AcceptedExecutionMissing of ChatExecutionKey
         | AcceptedExecutionAlreadyTerminal of ChatExecutionKey
-        | BloggerRequestMissing of SessionId
-        | BloggerRequestKindUnsupported of string
         | AuthorityEvidenceInvalid of AcceptedChatExecutionEvidence
         | PersistenceFailed of ManagedChatProviderLifecycleError
 
@@ -42,40 +38,8 @@ module ProviderLifecycle =
         | ProviderStartObservationError.FrozenAttemptPlanMissing _ -> "frozen-attempt-plan-missing"
         | ProviderStartObservationError.AcceptedExecutionMissing _ -> "accepted-execution-missing"
         | ProviderStartObservationError.AcceptedExecutionAlreadyTerminal _ -> "accepted-execution-already-terminal"
-        | ProviderStartObservationError.BloggerRequestMissing _ -> "blogger-request-missing"
-        | ProviderStartObservationError.BloggerRequestKindUnsupported _ -> "blogger-request-kind-unsupported"
         | ProviderStartObservationError.AuthorityEvidenceInvalid _ -> "authority-evidence-invalid"
         | ProviderStartObservationError.PersistenceFailed _ -> "persistence-failed"
-
-    let private bloggerRequestKind<'bindingError>
-        (projection: ProjectionSet)
-        (execution: ChatExecutionState)
-        : Result<ProviderRequestKind option, ProviderStartObservationError<'bindingError>> =
-        match
-            SessionAssociationProjection.tryMainSessionOf
-                execution.acceptedEvidence.SessionId
-                projection.AgentProjections.Associations
-        with
-        | None -> Ok None
-        | Some mainSessionId ->
-            result {
-                let openRequest =
-                    AgentProjection.tryFind mainSessionId projection.AgentProjections
-                    |> Option.bind (fun session -> session.BloggerCycles)
-                    |> Option.bind (BloggerCycleProjection.tryOpenByBlogger execution.acceptedEvidence.SessionId)
-
-                match openRequest, execution.startedEvidence |> Option.map (fun started -> started.RequestKind) with
-                | Some request, _ ->
-                    return!
-                        OpenBloggerRequest.providerRequestKind request
-                        |> Result.map Some
-                        |> Result.mapError ProviderStartObservationError.BloggerRequestKindUnsupported
-                | None, Some(ProviderRequestKind.BloggerMain as established) -> return Some established
-                | None, None when execution.terminalDisposition.IsSome -> return None
-                | None, _ ->
-                    return!
-                        Error(ProviderStartObservationError.BloggerRequestMissing execution.acceptedEvidence.SessionId)
-            }
 
     let private freezeOrdinaryPlan<'bindingError>
         (durable: AgentJournal)
@@ -90,11 +54,7 @@ module ProviderLifecycle =
                 |> Result.requireSome (ProviderStartObservationError.AcceptedExecutionMissing key)
 
             let accepted = execution.acceptedEvidence
-            let! bloggerKind = bloggerRequestKind projection execution
-
-            let requestKind =
-                bloggerKind
-                |> Option.defaultValue (AttemptPlanner.ordinaryRequestKind accepted.Origin)
+            let requestKind = AttemptPlanner.ordinaryRequestKind accepted.Origin
 
             let! pending =
                 AttemptPlanner.freezeOrdinary accepted requestKind
@@ -180,7 +140,6 @@ module ProviderLifecycle =
                         acceptedEvidence
                         profile.ProviderRun
                         profile.RequestKind
-                        profile.ProjectionChoice
                     |> TaskResult.mapError ProviderStartObservationError.PersistenceFailed
 
                 return true

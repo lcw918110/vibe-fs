@@ -47,20 +47,10 @@ test('WHAT[execution-model-routing-008] EMR_008_host_inventory_no_longer_exposes
   const managed = await source('src/Wanxiangshu/OpenCode/Host/ManagedAgentConfig.fs')
   const port = await source('src/Wanxiangshu/OpenCode/Host/OpenCodePort.fs')
   const wiring = await source('src/Wanxiangshu/OpenCode/Plugin/PluginSessionWiring.fs')
-  const strengthScope = await source('src/Wanxiangshu/Strength/OpenCode/PluginScope.fs')
 
   assert.doesNotMatch(managed, /tryBoundModel|tryOpencodeModel|DuplicatePairModel|liveInventory|Model:\s*string/)
   assert.doesNotMatch(port, /ManagedAgentConfig\.tryBoundModel/)
   assert.doesNotMatch(wiring, /ManagedAgentInventory|tryOpencodeModel|promptModelFor/)
-  assert.doesNotMatch(strengthScope, /ManagedAgentInventory|RecordManagedAgentInventory/)
-})
-test('WHAT[execution-model-routing-008] SPEC_INV_fast_and_deep_physical_model_equality_is_not_an_eligibility_gate', async () => {
-  // Strength/OpenCode/Speculate.fs was removed by the readonly-delegation clean
-  // break; its host-inventory independence is asserted over the surviving
-  // delegation owner files above and over Policy.fs here.
-  const policy = await source('src/Wanxiangshu/Strength/Policy.fs')
-
-  assert.doesNotMatch(policy, /ModelBindingsDistinct|model-bindings-not-distinct/)
 })
 }
 
@@ -74,13 +64,13 @@ const { withExecutablePlugin } = await import("../../verification-system/tests/s
 test('WHAT[execution-model-routing-008] EMR_008_distinct_current_roles_may_hold_the_same_physical_target', async () => {
   const sameTarget = { model: 'provider/shared', reasoning: 'none' }
   const runtime = routing.createRuntime(() => sameTarget)
-  for (const role of ['engineer', 'devops', 'manager', 'orchestrator', 'blogger']) {
+  for (const role of ['engineer', 'devops', 'manager', 'orchestrator', 'plan']) {
     const acquired = await routing.acquireExecutionAdmission(runtime, role, `msg-${role}`, role, role, null, 'normal')
     assert.equal(acquired.kind, 'Acquired')
     assert.deepEqual(routing.executionAdmissionTarget(runtime, acquired.lease), sameTarget)
   }
   assert.deepEqual(routing.snapshotOccupied(runtime), Array.from({ length: 5 }, () => sameTarget))
-  for (const role of ['engineer', 'devops', 'manager', 'orchestrator', 'blogger']) {
+  for (const role of ['engineer', 'devops', 'manager', 'orchestrator', 'plan']) {
     routing.releasePhysicalExecution(runtime, role, `msg-${role}`)
   }
 })

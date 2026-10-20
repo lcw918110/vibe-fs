@@ -162,7 +162,7 @@ module ProcessSurface =
     val supervisorList: supervisor: obj -> string array
     val supervisorSignalName: name: string -> obj
     val supervisorEnsureSpawn: supervisor: obj -> Task<unit>
-    val supervisorSpawnSync: supervisor: obj -> command: string -> cwd: string -> obj
+    val supervisorSpawn: supervisor: obj -> command: string -> cwd: string -> Task<obj>
     val supervisorFailPending: pending: obj -> reason: string -> unit
     val supervisorTakePending: supervisor: obj -> id: obj -> obj
     val supervisorDropPending: supervisor: obj -> id: obj -> obj

@@ -13,7 +13,6 @@ type CompanionProjectionChange =
 
 [<RequireQualifiedAccess>]
 type CompanionFoldRejection =
-    | CompanionBloggerLinkedRejected of AssociationRejection
     | XTraceOpeningRejected of XTraceFoldRejection
     | XTracePartRejected of XTraceFoldRejection
     | XTraceTerminalRejected of XTraceFoldRejection

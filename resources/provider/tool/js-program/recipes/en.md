@@ -1,42 +1,21 @@
-The old `glob`/`grep` members are retired. Enumeration and search are compositions over `ls` + `cat` + `whereAll`; `ls` already applies the workspace `.gitignore` rules (per-directory `.gitignore` plus the root `.git/info/exclude`), so a walk that starts at the workspace root sees exactly what a git-aware enumerator would.
-
-## Recursive walk
+Search and enumeration go through `rg(argv)`. It takes one argv and returns a JSON object, never text. A content search is `rg --json` plus that argv. `--files`, `--files-with-matches`, `-l`, `--count` and the other summary modes cannot be combined with `--json`, so those argv are passed through and returned as `paths`:
 
 ```js
-async function walk(dir = ".") {
-  const found = [];
-  const entries = await this.ls(dir);
-  for (const entry of entries) {
-    const full = dir === "." ? entry : `${dir}/${entry}`;
-    if (entry.endsWith("/")) {
-      found.push(...(await walk.call(this, full.slice(0, -1))));
-    } else {
-      found.push(full);
-    }
-  }
-  return found;
-}
+const found = await this.rg(["RetryPolicy", "src", "-g", "*.fs"]);
+const matches = found.messages.filter((message) => message.type === "match");
 ```
 
-Pick only what you need while walking (`entry.endsWith(".fs")`, `entry.includes("retry")`) so the recursion stays cheap on a large tree.
+`found` is `{ exitCode, messages }`. `messages` is the parsed JSON Lines array (`begin`, `match`, `context`, `end`, `summary`). `exitCode` `0` means at least one match; `1` means the search succeeded and found nothing — that is data, not a failure. A bad argv fails as `RG_FAILED`.
 
-## Content search
+Pass the path yourself. `rg --json` with no path does not search the workspace. The member does not add `--no-ignore`; put it in the argv when ignored paths must be searched.
+
+`rg --files` and `rg --files-with-matches` return `{ exitCode, paths }`. A content search returns the hits.
 
 ```js
-const hits = [];
-for (const path of await walk.call(this, "src")) {
-  const text = await this.cat(path);
-  for (const [begin, end] of this.whereAll(text, "RetryPolicy")) {
-    hits.push({ path, span: [begin, end] });
-  }
-}
+const listed = await this.rg(["--files", "src", "-g", "*.fs"]);
+const paths = listed.paths;
 ```
 
-`whereAll` is the normalized exact matcher (whitespace runs collapse). For a regex, filter the walked paths with JS `RegExp` before reading, or test `text.split("\n")` yourself — the primitives only promise file access and normalized search.
+A path in the argv stays inside the workspace. `..`, an absolute path outside it, or an option that reads outside it, is `PATH_DENIED`.
 
-## Patterns the old members covered
-
-- `glob("src/**/*.fs")` → walk from `src` and keep `path.endsWith(".fs")`.
-- `glob("{src,tests}/**")` → walk each root in one loop.
-- `grep(needle, "*.txt")` → walk, keep `path.endsWith(".txt")`, then `whereAll`.
-- Ignored paths never appear: `ls` filters them, so neither does the walk.
+`where` / `whereAll` stay the edit locators. They return UTF-16 spans of one snapshot; `rg` does not.

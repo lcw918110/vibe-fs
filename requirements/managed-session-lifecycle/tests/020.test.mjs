@@ -58,7 +58,6 @@ const propertyOptions = { seed: 0x53554241, numRuns: 200 }
 const subagentAgents = [
   'engineer',
   'devops',
-  'blogger',
 ]
 const arbitrarySubagentAgent = fc.constantFrom(...subagentAgents)
 const arbitraryToken = fc

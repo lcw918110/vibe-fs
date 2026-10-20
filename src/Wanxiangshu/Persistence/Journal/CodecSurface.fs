@@ -149,10 +149,6 @@ module JournalCodecSurface =
                           IdentitySeed = identitySeedOfJs (payload?IdentitySeed) }
                 )
             )
-        | "Companion", "CompanionBloggerClosed" ->
-            Fact.Agent(
-                CompanionFact.CompanionBloggerClosed {| SessionId = SessionId.create (text (payload?SessionId)) |}
-            )
         | familyName, caseName -> failwith $"JournalCodecSurface: unknown fact '{familyName}.{caseName}'"
 
     let private factToJs (fact: Fact) : obj =
@@ -168,11 +164,6 @@ module JournalCodecSurface =
                        AuthorityRootUserMessageId = AuthorityRootUserMessageId.value payload.AuthorityRootUserMessageId
                        AuthorityKind = payload.AuthorityKind
                        IdentitySeed = identitySeedToJs payload.IdentitySeed |} |}
-        | Fact.Agent(AgentFact.Companion(CompanionFactCases.CompanionBloggerClosed payload)) ->
-            box
-                {| family = "Companion"
-                   case = "CompanionBloggerClosed"
-                   payload = {| SessionId = SessionId.value payload.SessionId |} |}
         | _ ->
             box
                 {| family = "Unknown"

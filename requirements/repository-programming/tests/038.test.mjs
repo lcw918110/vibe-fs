@@ -34,8 +34,8 @@ test('WHAT[repository-programming-038] park stays out of the filesystem members 
   const names = surface.members.map((fragment) => fragment.memberName)
   assert.deepEqual(
     names,
-    ['write', 'rm', 'mv', 'cat', 'ls', 'stat', 'mkdir', 'whereAll', 'where'],
-    'the members list carries the nine filesystem primitives in canonical order without park',
+    ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where'],
+    'the members list carries the filesystem primitives in canonical order without park',
   )
 })
 

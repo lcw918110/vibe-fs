@@ -45,9 +45,7 @@ const arbitraryBudget = fc.constantFrom('Available', 'Exhausted')
 const arbitraryBreaker = fc.constantFrom('Closed', 'Open')
 const arbitraryRequestKind = fc.constantFrom(
   'WorkMain',
-  'BloggerMain',
   'InteractionRepair',
-  'StrengthReplica',
 )
 const arbitraryCapacityFence = fc.constantFrom(null, capacityFence)
 const arbitraryExecutionFailureInput = fc.record({
@@ -104,10 +102,10 @@ test('WHAT[execution-failure-policy-003] finite provider budget matrix fixes pol
         assert.deepEqual(decision.executionKey, executionKey)
       }
 
-      // Invariant 4: Non-provider failure, non-ProviderStarted phase, or StrengthReplica never recovers
+      // Invariant 4: Non-provider failure or non-ProviderStarted phase never recovers
       const isProviderFailure =
         input.failure === 'ProviderTransient' || input.failure === 'ProviderPermanent'
-      if (!isProviderFailure || input.phase !== 'ProviderStarted' || input.provider.requestKind === 'StrengthReplica') {
+      if (!isProviderFailure || input.phase !== 'ProviderStarted') {
         assert.ok(!isRecoveryResolution(decision.resolution), `${JSON.stringify(input.failure)}/${input.phase} must not recover`)
       }
 
@@ -120,7 +118,6 @@ test('WHAT[execution-failure-policy-003] finite provider budget matrix fixes pol
       if (
         isProviderFailure &&
         input.phase === 'ProviderStarted' &&
-        input.provider.requestKind !== 'StrengthReplica' &&
         input.provider.breaker === 'Closed' &&
         input.provider.retryBudget === 'Available'
       ) {
@@ -323,20 +320,13 @@ const providerCases = [
     resolution: 'TerminalizeProviderStarted',
     breaker: 'RecordProviderPermanentFailure',
   },
-  ...['BloggerMain', 'InteractionRepair'].map((requestKind) => ({
+  ...['WorkMain', 'InteractionRepair'].map((requestKind) => ({
     label: `${requestKind} remains provider-recoverable`,
     failure: 'ProviderTransient',
     facts: { ...provider, requestKind },
     resolution: 'RetryFreshAttempt',
     breaker: 'RecordProviderTransientFailure',
   })),
-  {
-    label: 'StrengthReplica cannot consume owner recovery',
-    failure: 'ProviderTransient',
-    facts: { ...provider, requestKind: 'StrengthReplica' },
-    resolution: 'TerminalizeProviderStarted',
-    breaker: 'RecordProviderTransientFailure',
-  },
 ]
 
 test('WHAT[execution-failure-policy-003] production retry matrix excludes other failures and gives stable attempt-bound authorization', () => {
@@ -381,6 +371,12 @@ test('WHAT[execution-failure-policy-003] production retry matrix excludes other 
 
   const exhausted = decide({ failure: 'ProviderPermanent', provider: { ...provider, retryBudget: 'Exhausted' } })
   assert.notEqual(exhausted.resolution, 'RetryFreshAttempt')
+
+  for (const retired of ['BloggerMain', 'StrengthReplica', 'BloggerSquash']) {
+    assert.throws(() => decide({
+      provider: { ...provider, requestKind: retired },
+    }), /unknown provider request kind/)
+  }
 })
 }
 

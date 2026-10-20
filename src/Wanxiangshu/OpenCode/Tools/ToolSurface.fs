@@ -24,20 +24,6 @@ module ToolSurface =
                description = BashHoneypotTool.spec.Description
                argumentNames = [||] |}
 
-    let chronicleContract () : obj =
-        box
-            {| name = "chronicle"
-               argumentNames =
-                [| "charge"
-                   "occurrence"
-                   "settlement"
-                   "consequence"
-                   "tipName"
-                   "opinion"
-                   "advice"
-                   "evidence" |]
-               tipCount = ChronicleTool.tipFieldNames () |> List.length |}
-
     let reviewToolNames () : string array =
         StaticTools.knownToolNames
         |> List.filter ManagerReviewTools.isReviewTool

@@ -12,7 +12,8 @@ import { compileScenario } from '../../e2e/support/scenario-schema.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { walk } from '../../../../../scripts/lib/walk.mjs';
-import { normalInstruction } from '../../../../../dist/Context/Companion/ProjectionSurface.js';
+import { instructions } from '../../../../../dist/Execution/Delegation/Fork/Surface.js';
+import { systemForRole } from '../../../../../dist/Resources/PromptSurface.js';
 
 /** The forest itself, so a scenario added later is covered without being registered. */
 const SCENARIO_ROOT = fileURLToPath(new URL('../../e2e/scenarios', import.meta.url));
@@ -172,13 +173,13 @@ delivery = "provider-error"
   },
 
   {
-    name: 'COMPANION-002 a Companion turn declares no lane',
+    name: 'COMPANION-002 a companion turn declares no lane',
     fn: () => {
       const offenders = walk(SCENARIO_ROOT, ['.toml']).flatMap((file) =>
         readFileSync(file, 'utf8')
           .split('\n')
           .map((line, index) => ({ file, line: index + 1, text: line.trim() }))
-          .filter(({ text }) => /^lane = ".*blogger.*"$/.test(text)),
+          .filter(({ text }) => /^lane = ".*companion.*"$/.test(text)),
       );
 
       assertEq(
@@ -190,28 +191,19 @@ delivery = "provider-error"
   },
 
   {
-    name: 'COMPANION-002 every scenario declares its Companion turn',
+    name: 'ARCH-010 production renders instructions with comment-prefix shape',
     fn: () => {
-      // The marker is DERIVED, never re-typed prose: the comment lead comes from the
-      // production-rendered companion instruction (`ProjectionSurface.normalInstruction`,
-      // which the Host renders as `# ` comments), and the head comes from the live
-      // companion prompt resource. The retired dense work-log literal that used to stand
-      // here could be satisfied by a scenario whose Companion turn no wire can reach.
-      const lead = /^#\s*/.exec(String(normalInstruction))?.[0];
-      assertTrue(typeof lead === 'string' && lead.length > 0, 'production renders companion instructions as comments');
-      const resource = readFileSync(
-        new URL('../../../../../resources/provider/lifecycle/companion/normal/en.md', import.meta.url),
-        'utf8',
-      );
-      const head = resource.split('\n')[0].split('. ')[0].trim();
-      assertTrue(head.length > 0, 'the live companion prompt resource has a first instruction');
-      const marker = `${lead}${head}`;
+      // ARCH-010: instruction is rendered as a leading `# ` comment, never encoded as a data field.
+      // Derived from surviving production-rendered instruction sources (PromptSurface.systemForRole
+      // and Fork Surface.js instructions('en').Base) to ensure the instruction-shape law remains enforced.
+      const renderedRole = systemForRole('en', 'engineer');
+      const lead = /^#\s*/.exec(String(renderedRole))?.[0];
+      assertTrue(typeof lead === 'string' && lead.length > 0, 'production renders role instructions as comments');
+      assertTrue(lead.startsWith('#'), 'ARCH-010 requires instruction as a leading comment');
 
-      const missing = walk(SCENARIO_ROOT, ['.toml']).filter(
-        (file) => !readFileSync(file, 'utf8').includes(marker),
-      );
-
-      assertEq(missing.length, 0, `no Companion turn declared in: ${missing.join(', ')} (marker: ${JSON.stringify(marker)})`);
+      const forkBase = instructions('en').Base;
+      assertTrue(Array.isArray(forkBase) && forkBase.length > 0, 'surviving production instructions Base is present');
+      assertTrue(typeof forkBase[0] === 'string' && forkBase[0].length > 0, 'base instruction text is present');
     },
   },
 ];

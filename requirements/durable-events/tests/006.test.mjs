@@ -322,8 +322,8 @@ const journal = await import("../../../dist/Persistence/Journal/Surface.js");
 
 const CLOSED_AGENT = {
   family: 'Companion',
-  case: 'CompanionBloggerClosed',
-  payload: { SessionId: 'ses_es_writer' },
+  case: 'TerminalOutputCaptured',
+  payload: { SessionId: 'ses_es_writer', TextRef: 'blob-term', TextDigest: 'sha-term', ProviderRun: 'run-term' },
 }
 const mustOk = (result, label) => {
   assert.equal(result.ok, true, `${label}: ${JSON.stringify(result.error)}`)

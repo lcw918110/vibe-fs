@@ -134,46 +134,44 @@ test('WHAT[execution-model-routing-017] condemnFailedTarget poisons the provider
   assert.equal(condemnFailedTarget(runtime, 'run-c1'), null, 'witness is single-consumption')
 })
 
-test('WHAT[execution-model-routing-017] provider loss settles queued demands by role and purpose without cancelling other pools', async () => {
-  for (const purpose of ['normal', 'readonly-delegate']) {
-    let poisoned = false
-    const scheduler = (role, running) =>
-      role === 'engineer' && !poisoned && running.length === 0 ? target('only/model') : null
-    scheduler.markProviderFailed = () => { poisoned = true }
-    scheduler.hasTheoreticalCapacity = (role, requestedPurpose) =>
-      role !== 'engineer' || requestedPurpose !== purpose || !poisoned
-    const runtime = createRuntime(scheduler)
-    const begin = (session, role, requestedPurpose) =>
-      routing.beginExecutionAdmission(runtime, session, `msg-${session}`, role, 'alice', null, requestedPurpose)
-    const holder = await begin('holder', 'engineer', purpose)
-    assert.equal(holder.kind, 'Acquired')
-    commitExecutionAdmission(runtime, holder.lease, {
-      sessionId: 'holder',
-      physicalUserMessageId: 'msg-holder',
-      role: 'engineer',
-      participant: 'alice',
-      target: target('only/model'),
-    })
-    endProviderStep(runtime, 'holder', 'msg-holder', 'failed-run')
-    const waiting = await begin('waiting', 'engineer', purpose)
-    const otherPool = await begin('other-pool', 'manager', purpose)
-    assert.equal(waiting.kind, 'Queued')
-    assert.equal(otherPool.kind, 'Queued')
+test('WHAT[execution-model-routing-017] provider loss settles queued demands by role without cancelling other pools', async () => {
+  let poisoned = false
+  const scheduler = (role, running) =>
+    role === 'engineer' && !poisoned && running.length === 0 ? target('only/model') : null
+  scheduler.markProviderFailed = () => { poisoned = true }
+  scheduler.hasTheoreticalCapacity = (role) =>
+    role !== 'engineer' || !poisoned
+  const runtime = createRuntime(scheduler)
+  const begin = (session, role) =>
+    routing.beginExecutionAdmission(runtime, session, `msg-${session}`, role, 'alice', null)
+  const holder = await begin('holder', 'engineer')
+  assert.equal(holder.kind, 'Acquired')
+  commitExecutionAdmission(runtime, holder.lease, {
+    sessionId: 'holder',
+    physicalUserMessageId: 'msg-holder',
+    role: 'engineer',
+    participant: 'alice',
+    target: target('only/model'),
+  })
+  endProviderStep(runtime, 'holder', 'msg-holder', 'failed-run')
+  const waiting = await begin('waiting', 'engineer')
+  const otherPool = await begin('other-pool', 'manager')
+  assert.equal(waiting.kind, 'Queued')
+  assert.equal(otherPool.kind, 'Queued')
 
-    assert.deepEqual(condemnFailedTarget(runtime, 'failed-run'), target('only/model'))
-    assert.equal(routing.pendingCount(runtime), 1, 'only the pool with no remaining candidate must stop waiting')
-    const rejected = await routing.awaitQueuedExecutionAdmission(waiting.queue)
-    assert.equal(rejected.kind, 'QueueFull')
-    assert.equal(rejected.failure, 'CapacityQueueFull')
-    assert.strictEqual(routing.tryReadExecution(runtime, 'holder', 'msg-holder'), holder.lease,
-      'provider health does not authorize releasing an existing exact lease')
-    assert.equal(condemnFailedTarget(runtime, 'failed-run'), null)
-    assert.equal(routing.pendingCount(runtime), 1, 'a duplicate failure cannot settle unrelated work')
+  assert.deepEqual(condemnFailedTarget(runtime, 'failed-run'), target('only/model'))
+  assert.equal(routing.pendingCount(runtime), 1, 'only the pool with no remaining candidate must stop waiting')
+  const rejected = await routing.awaitQueuedExecutionAdmission(waiting.queue)
+  assert.equal(rejected.kind, 'QueueFull')
+  assert.equal(rejected.failure, 'CapacityQueueFull')
+  assert.strictEqual(routing.tryReadExecution(runtime, 'holder', 'msg-holder'), holder.lease,
+    'provider health does not authorize releasing an existing exact lease')
+  assert.equal(condemnFailedTarget(runtime, 'failed-run'), null)
+  assert.equal(routing.pendingCount(runtime), 1, 'a duplicate failure cannot settle unrelated work')
 
-    routing.cancelPendingExecution(runtime, 'other-pool')
-    assert.equal((await routing.awaitQueuedExecutionAdmission(otherPool.queue)).kind, 'Cancelled')
-    releasePhysicalExecution(runtime, 'holder', 'msg-holder')
-  }
+  routing.cancelPendingExecution(runtime, 'other-pool')
+  assert.equal((await routing.awaitQueuedExecutionAdmission(otherPool.queue)).kind, 'Cancelled')
+  releasePhysicalExecution(runtime, 'holder', 'msg-holder')
 })
 
 test('WHAT[execution-model-routing-017] provider loss immediately routes an existing waiter to a surviving candidate', async () => {

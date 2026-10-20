@@ -5,21 +5,20 @@
 Wanxiangshu 的 managed 模型调度由 `~/.config/opencode/wanxiangshu.mjs` 的 default export 唯一决定。其余来源（`opencode.json`、环境变量、Host-final agent inventory、内建表）一律不得覆盖或替代该权威。
 若文件不存在，系统在加载时确保目录存在并原子创建推荐策略模板，随后加载该文件。已有文件严禁自动覆盖。文件缺失、加载失败或导出非法时直接 fail closed。
 
-## [002] scheduler ABI 为 `role + running + previous + purpose → target | null`，协议版本 `routingProtocol = 2`
+## [002] scheduler ABI 为 `role + running + previous → target | null`，协议版本 `routingProtocol = 2`
 
 调度函数的签名合同为：
 ```js
 export const routingProtocol = 2
-export const hasTheoreticalCapacity = (role, purpose) => { ... }
-export const predictorConfiguration = () => ({ state, reason })
-export default function route(role, running, previous, purpose) { ... }
+export const hasTheoreticalCapacity = (role) => { ... }
+export default function route(role, running, previous) { ... }
 ```
 - `role`：当前请求由 IdentitySeed 确立且在 logical run 内不可变的 fixed canonical Role。每次 fresh physical execution 均以该固定 Role 作为调度输入。participant 由 IdentitySeed 确立，随 acquire 输入与 capacity identity 显式传递，不作为调度函数参数。系统严格区分本地 participant 与远端 ModelTarget。
 - `running`：当前进程所有活跃 provider capacity token 的 ModelTarget multiset，元素形状固定为 `{ model: string, reasoning: string }`，保留重复项。
-- `previous`：仅当同一 SessionId 的当前活跃物理执行被原子取代时，才将该被取代执行的 target 作为同一 demand 的 fresh 调度输入；新 Session、exact terminal 释放后重建、无关 Session 一律传 `null`。`previous` 只是接续偏好提示，不占容量。只读委托的新鲜 Replica 物理执行不得继承 owner 当前活跃执行的 target 作为自己的 `previous`：Replica 入场按新 physical execution 规则收到 `null`（或本条已定义的 recovery retry 偏好），由 purpose 选择 Predictor 池。
-- `purpose`：独立于身份的调度用途，仅取 `"normal"` 或 `"readonly-delegate"`。`"normal"` 沿用按 Role 的模型池；`"readonly-delegate"` 从同一份模型配置中的 Predictor 模型池选择，且不更换 role/participant 身份。该用途由 Host 真实请求类型与授权 binding 推导（不从工具参数、用户文本或角色名推导），沿 pending demand、目标可用性复查、`previous` 偏好与同 physical 重试一并传递与保存，不得只在首次 route 传递、复查时退回默认 `normal`。
-- `routingProtocol`：模板必须导出 `routingProtocol = 2`；它是协议格式版本，不是启用开关。加载器显式验证 `routingProtocol === 2`；旧三参数配置不得凭「JS 忽略多余参数、调用不抛错」假意通过，必须给出可操作的升级错误并 fail closed，且不得自动覆盖用户已有的 `wanxiangshu.mjs`。
-- 协议 2 的导出形状除 `route` 外还包含两个只读查询：`hasTheoreticalCapacity(role, purpose)` 与 `predictorConfiguration()`。`hasTheoreticalCapacity` 的输入从旧 `(role)` 扩展为 `(role, purpose)`：理论容量必须按用途分别回答（`"normal"` 按 Role 池、`"readonly-delegate"` 按 Predictor 池），不得沿用只回答角色池的旧形状；它与 [020] 的配置存在性查询是两个不同问题，互不顶替。`predictorConfiguration()` 的返回形状与「未导出查询即配置错误」规则由 [020] 规定。
+- `previous`：仅当同一 SessionId 的当前活跃物理执行被原子取代时，才将该被取代执行的 target 作为同一 demand 的 fresh 调度输入；新 Session、exact terminal 释放后重建、无关 Session 一律传 `null`。`previous` 只是接续偏好提示，不占容量。不存在只读副本入场，也不存在第二模型池。
+
+- `routingProtocol`：模板必须导出 `routingProtocol = 2`；它是协议格式版本，不是启用开关。加载器显式验证 `routingProtocol === 2`；缺 `route` 或 `hasTheoreticalCapacity`、或另设只读委托参数来打开第二模型池的配置，必须给出可操作的错误并 fail closed，且不得自动覆盖用户已有的 `wanxiangshu.mjs`。
+- 协议 2 的导出形状除 `route` 外还包含只读查询 `hasTheoreticalCapacity(role)`。理论容量只按 Role 的模型池回答。不要求单独的配置存在性查询；该查询存在或缺失都不得打开只读副本池。
 - 返回值：必须包含非空 `provider/model` 与 `reasoning`，或返回 `null`。
 - 抛出异常、返回 Promise 或非法结构均视为配置错误，直接 fail closed。
 
@@ -42,7 +41,7 @@ Runtime 仅负责加载 scheduler、校验 ABI、维护进程共享的 token led
 
 成功建立新物理执行的 `Admitted` lease 或 `Queued` demand 才构成原子替代。调度返回 `null` 且 pending queue 已满时，新输入必须以 `CapacityQueueFull` 拒绝，保留旧 exact lease、token 和 pending ownership；不得先退休旧执行后再发现无处排队。队列已满但 scheduler 能立即发放 target 时，仍允许直接入场，不得仅凭队列长度拒绝。
 
-同一 LogicalRun、authority root 与 IdentitySeed 的 `HumanMessage` / `BusyAgentNudge` 若遇到旧活跃 committed lease，属于追加材料而非上述 fresh 调度。`chat.message` 保留旧 lease 并投影其 target；实际 provider transform 选择可见新输入后，才按旧 opaque lease 验证所有权、转交同一 token/借用 credit 并建立新 physical key 的 fresh fence。保持原 role、participant、target、purpose 与 lender，不再调用 scheduler，不另占容量，不提前取消旧请求的 step。旧 exact 结算不能释放新 fence。
+同一 LogicalRun、authority root 与 IdentitySeed 的 `HumanMessage` / `BusyAgentNudge` 若遇到旧活跃 committed lease，属于追加材料而非上述 fresh 调度。`chat.message` 保留旧 lease 并投影其 target；实际 provider transform 选择可见新输入后，才按旧 opaque lease 验证所有权、转交同一 token/借用 credit 并建立新 physical key 的 fresh fence。保持原 role、participant、target 与 lender，不再调用 scheduler，不另占容量，不提前取消旧请求的 step。旧 exact 结算不能释放新 fence。
 
 durable Accepted 之后、Host projection 之前，容量 owner 以 exact 新输入 key 保留旧 opaque lease 的 credit。旧输出自然终结时若仍有未选入请求的已接纳材料，返回 typed `HeldForInput`，不丢失已投影的模型与借用关系；下一次可见输入准入才交接并撤销本次保留。较晚的未选入材料随同一 credit 更新保留的 opaque handle，不能被较早请求结算掉。投影失败、材料精确终结或作用域关闭均须清理自己的保留；最后一份材料撤销后完成延后的旧资源归还，borrowed credit 不退休 lender。
 
@@ -57,7 +56,7 @@ Host 的 `opencode.json` 不作为 managed model 的真相源。系统不要求�
 
 ## [009] managed model 准入与读取分离；dispatch message 保持 model-free
 
-所有内部 synthetic prompt 分派均保持 `Model=None`。Host 接收物理 user message 后的 `chat.message` hook 负责获取租约，并将 `{providerID, modelID, variant}` 投影至 mutable message。后续 hook（`chat.params`、transform、tool）通过容量所有者的只读查询读取该 exact execution 已提交的租约；该查询不得调用 scheduler、不得发放 fence、不得 commit/release，也不得因读取增加 duplicate/stale/conflict 计数；观测通过后，managed 请求只投影 `temperature = 1.0`，不改写宿主 model 对象。运行时观测只读，不再校验 agent 或 model/reasoning 与租约是否一致；「agent 与 model/reasoning 不漂移」由测试期 fast-check 性质保证（`execution-model-routing/tests/009`：对任意 `route(role, running, previous, purpose)` 决策，`chat.message` 投影的 target 恒等于已提交租约 target，`chat.params` 对同一 target 的观测恒通过且只投影 temperature）。取舍：运行时不再校验漂移，若漂移真实发生将静默通过、不阻断，不再抛 PROMPT-006 漂移拒绝。
+所有内部 synthetic prompt 分派均保持 `Model=None`。Host 接收物理 user message 后的 `chat.message` hook 负责获取租约，并将 `{providerID, modelID, variant}` 投影至 mutable message。后续 hook（`chat.params`、transform、tool）通过容量所有者的只读查询读取该 exact execution 已提交的租约；该查询不得调用 scheduler、不得发放 fence、不得 commit/release，也不得因读取增加 duplicate/stale/conflict 计数；观测通过后，managed 请求只投影 `temperature = 1.0`，不改写宿主 model 对象。运行时观测只读，不再校验 agent 或 model/reasoning 与租约是否一致；「agent 与 model/reasoning 不漂移」由测试期 fast-check 性质保证（`execution-model-routing/tests/009`：对任意 `route(role, running, previous)` 决策，`chat.message` 投影的 target 恒等于已提交租约 target，`chat.params` 对同一 target 的观测恒通过且只投影 temperature）。取舍：运行时不再校验漂移，若漂移真实发生将静默通过、不阻断，不再抛 PROMPT-006 漂移拒绝。
 
 [006] 的追加材料在 `chat.message` 只投影旧目标；provider transform 先调用独立的可见输入准入操作，完成 exact lease 交接，再执行上述只读查询。这不是缺失租约的通用回填：没有 exact Accepted evidence、同 run 证明或旧 committed lease 时仍须 fail closed。
 
@@ -77,7 +76,7 @@ Managed chat execution 必须先为 exact `(SessionId, PhysicalUserMessageId)` d
 1. durable accept：写入包含 exact session、physical message 与 canonical participant 的 durable `Accepted` 事实；
 2. exact capacity acquire：将 IdentitySeed 确立的 fixed canonical Role 经 MJS scheduler 解析为 ModelTarget（同一 physical execution 复用原 target；acquire 输入同时携带 IdentitySeed 派生的 participant 与可选的 `lenderSessionId`），并以包含 SessionId + PhysicalUserMessageId + fixed Role + Participant + target + fence 的 exact capacity identity 获取 capacity fence；
 3. Host projection：将 target 投影至 Host 消息。
-任一步失败只能交给 `execution-failure-policy` 结算已拥有的事实与资源；严禁 acquire-before-accept、先改 Host message 后补 capacity acquire，或让未接受的发送意图预占容量。此顺序只约束物理消息执行的普通准入；Strength 的非等待预约（reservation）语义按其原所属规范保持，本次修改不扩大、不否决。
+任一步失败只能交给 `execution-failure-policy` 结算已拥有的事实与资源；严禁 acquire-before-accept、先改 Host message 后补 capacity acquire，或让未接受的发送意图预占容量。此顺序只约束物理消息执行的普通准入。不存在只读副本的非等待预约。
 
 [006] 的活跃 run 追加材料不预占新的容量：durable accept 后可投影已经取得的旧 target；新 exact lease 只能在可见材料进入下一次 provider 请求时交接，provider effect 前仍须完成 exact commit 与 durable ProviderStarted。
 
@@ -92,7 +91,7 @@ capacity fence 至少因果绑定 exact session、physical message、fixed Role 
 
 `null` 或暂不可 acquire 的已接受 demand 只能进入有明确上限的 typed queue；entry 必须携带 exact `(SessionId, PhysicalUserMessageId)`、resolved target、role/participant/lender 输入与 supersession identity。队列满返回 typed `CapacityQueueFull` 并交给 failure policy，绝不得丢弃、无限扩容、解析错误文本后重试，或借 wall-clock timeout 清退。capacity release、exact supersede、session deletion 与 shutdown 是队列重算/移除事件；队列 correctness 不依赖 polling、sleep 或 elapsed time。
 
-已确认的 provider 驱逐同样触发队列重算。每个既有 demand 按自己的 role 与 purpose 查询理论容量：仍有候选时继续正常调度或排队；已无候选时以与新 admission 相同的 typed `CapacityQueueFull` 结算，不能等待已不存在的容量生产者。其它池的 demand 与已提交 exact lease 不因此被取消或释放。普通 route 返回 `null` 不等于理论容量为 false。
+已确认的 provider 驱逐同样触发队列重算。每个既有 demand 按自己的 role 查询理论容量：仍有候选时继续正常调度或排队；已无候选时以与新 admission 相同的 typed `CapacityQueueFull` 结算，不能等待已不存在的容量生产者。其它池的 demand 与已提交 exact lease 不因此被取消或释放。普通 route 返回 `null` 不等于理论容量为 false。
 
 ## [014] Capacity snapshot 与 reconciliation 只观察、绝不修复
 
@@ -115,23 +114,18 @@ provider 恢复的一次已确认失败由 `ModelRouting` 结算失败 attempt �
 
 两种结局都只属于该 exact witness：witness 单次消费，重复或过期证据不产生第二结局；无 witness（例如进程重启后）不产生任何结局。recovery retry 绑定不是 session 级 previous 缓存：它只由失败结算从 exact witness 显式写入、只服务该 session 的下一次 fresh admission，并在 force cleanup（`ReleaseExecution`）时清除。
 
-provider 健康变化只参与 fresh demand 的准入与既有队列的重算。同一 exact physical execution 重放时，先核对既有 role、participant、purpose 并复用原 fence；不得把后来的理论容量不足误作该已提交准入的拒绝，也不得为此替换或释放旧 lease。
+provider 健康变化只参与 fresh demand 的准入与既有队列的重算。同一 exact physical execution 重放时，先核对既有 role、participant 并复用原 fence；不得把后来的理论容量不足误作该已提交准入的拒绝，也不得为此替换或释放旧 lease。
 
 ## [018] 新角色集合模型路由与旧角色槽位解耦
 
-Wanxiangshu 的模型调度权威以当前合法角色集合（Engineer、DevOps、Manager、Orchestrator、Blogger 等）为唯一合法输入。
+Wanxiangshu 的模型调度权威以当前合法角色集合（Engineer、DevOps、Manager、Orchestrator、Plan）为唯一合法输入。
 推荐策略模板与 MJS 调度器仅要求当前合法角色模型槽位；若调度输入为已废除角色，系统必须 fail closed，严禁为其分配模型租约或发起 provider 物理准入。
 
 ## [019] 固定 DevOps 模型绑定持久性与禁止通过 resume 换模型
 
 同一道路内固定绑定的 DevOps 的 ModelTarget 由道路初始化阶段确定并持久化记录。
-后续该道路内所有针对 DevOps 的 resume、续行或崩溃恢复，必须严格继承并复用该既有 ModelTarget，严禁通过 resume 参数或运行时策略重新分配、篡改或覆盖 DevOps 的物理模型。固定 DevOps 目标绑定只约束原 owner execution：readonly-delegate 用途是新的只读委托 execution，不得借同一 Role 把 owner 的 ModelTarget 覆盖到 Replica；Replica 按用途经 scheduler 走 Predictor 池，并遵守自己的准入、`previous` 与终结规则。
+后续该道路内所有针对 DevOps 的 resume、续行或崩溃恢复，必须严格继承并复用该既有 ModelTarget，严禁通过 resume 参数或运行时策略重新分配、篡改或覆盖 DevOps 的物理模型。固定 DevOps 目标绑定只约束原 owner execution。不存在只读委托用途，也不得另立副本池覆盖该绑定。
 
-## [020] Predictor 配置存在性查询：Predictor 槽位存在且候选非空即已配置，与容量/健康分离
+## [020] 不存在只读委托池
 
-启用状态从同一份 MJS 模型配置派生：Predictor 槽位不存在或候选列表为空表示未配置；槽位存在、候选合法且非空表示已配置；配置结构非法是配置错误，必须明确报告，不得静默变成「未配置」。
-模型配置所有者提供只读的配置存在性查询，工具定义装饰与只读委托准入共用同一结果，不维护第二份 enabled 真相；查询在工具定义注册与呈现之前完成解析。
-查询的返回形状固定为 `{ state, reason }`：`state ∈ { "configured", "unconfigured", "invalid" }`，`reason` 仅在 `invalid` 时给出可操作原因、其余取 null。模板未导出 `predictorConfiguration()` 查询本身即配置错误：此时查询结果必须是 `invalid` 配置错误，不得因「没有查询可答」静默降级为「未配置」，也不得让加载假意通过。
-容量查询 `hasTheoreticalCapacity(role, purpose)` 与存在性查询回答两个不同问题：前者回答该用途下是否仍有理论可用候选，输入含用途；后者只回答 Predictor 配置是否存在。前者为 false（容量暂满或 provider 全数不可用）不得反推后者为「未配置」，后者也不得代替前者参与容量裁决。
-配置存在性与运行容量、provider 健康严格分离：容量暂满、provider 不可用或一次 route 返回 `null`，都不改变已配置状态，也不得用 `hasTheoreticalCapacity` 的 provider 健康检查或 route `null` 反推用户没有配置；具体请求按既有 pending、取消与失败规则处理。
-Predictor 与 owner 配置为相同模型是合法状态；不得因模型名相同或价格信息缺失关闭委托。
+只读委托用途与副本调度不是当前模型合同。加载器不要求单独的配置存在性查询，也不因任何查询存在或缺失而打开第二条调度轴。理论容量只按 Role 回答。容量暂满、provider 不可用或一次 route 返回 `null`，按既有 pending、取消与失败规则处理，不另造启用状态。

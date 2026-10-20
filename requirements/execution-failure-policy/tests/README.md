@@ -6,7 +6,6 @@ WHAT 决定允许的失败后果。本目录以编译后的策略、Host 解码�
 - 004：真实容量准入拒绝错消息和过期 lease；策略返回的字符串 fence 只是测试翻译，不能证明生产 fence 不可伪造，也不能替代实际 release 的反例。
 - 006：真实 pre-provider 结算先 terminal、再 unbind/release；hook membrane 单独验证 fatal 所需证据。两段记录不拼成一个物理 fatal 顺序证明。append 未提交/未知时的实际容量观察，以及同一子进程的 durable settlement → fatal exit，仍是 TODO。
 - 009/011：Host error 归类与真实 hook 原样抛出，未知异常不推定执行干净。单独的 messageID 字段不是末尾物理用户消息的证据。
-- 012：真实 admission 在 abort 完成前已拒绝目标 execution；成功、拒绝和异常都不重开 admission，另一 execution 仍可执行和确切释放。
 - 010/014：当前仓库索引检查与受控新增/漂移/缺失回归反例。索引存在不代表每个 fatal 分支不可达或已被实际执行证明。
 
 ## Fatal 索引的当前载体

@@ -17,4 +17,4 @@ WHAT 是合同；本文记录当前证据，不增加产品义务。先用 `node
 
 `support/admission.mjs` 仅给生产 admission 注入 Host 端口并记录实际调用，不自行复制准入算法。插件用例运行生产工具与 journal，但 Host 是受控端口，未运行真实模型。`missingIdleTerminalBridgeScenario` 直接给 scheduler 发布投影并 kick；名称不能证明 Host terminal 回调已接通 Fission。
 
-原 `startedLane` 接缝忽略物理 session，仅返回固定的 `hasAgentId/hasHandle/hasParent=false`，已删除。原源码词形与调用顺序扫描不能证明真实收敛/恢复，转为 GAP-158。两项发布节点同步降为 TODO。GAP-159 的 Predictor 配置反例实际执行并失败，不能算作通过或已证明运行时扩权。
+原 `startedLane` 接缝忽略物理 session，仅返回固定的 `hasAgentId/hasHandle/hasParent=false`，已删除。原源码词形与调用顺序扫描不能证明真实收敛/恢复，转为 GAP-158。两项发布节点同步降为 TODO。

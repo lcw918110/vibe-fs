@@ -1,9 +1,7 @@
 namespace Wanxiangshu.Execution.Delegation.SyncDelegate
 
 open Wanxiangshu.Persistence.Journal.JournalOutcome
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Failure
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Attachment
 open Wanxiangshu.Execution.Session.Wait
@@ -17,10 +15,7 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.Enforcer
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session.Recovery
@@ -90,7 +85,7 @@ type SyncDelegateRetryPort =
 /// member body flat while still seeing store/race primitives.
 module internal SyncDelegateInternals =
     /// The response belongs to the accepted terminal, not the reusable session
-    /// or its historical WorkRecord. Reasoning and tool material are excluded.
+    /// or its historical delivered view. Reasoning and tool material are excluded.
     let captureResponse (call: SyncDelegateCall) (turn: ReconciledTurn) =
         let response =
             { SessionId = turn.SessionId
@@ -108,15 +103,20 @@ module internal SyncDelegateInternals =
         (call: SyncDelegateCall)
         (turn: ReconciledTurn)
         : bool =
-        let resolved =
-            JsDeliveredValues.tryTakeRendered (SessionId.value turn.SessionId)
-            |> Option.orElseWith (fun () ->
-                let text = CompletedTurnClassifier.partsSessionText turn.Parts
+        let assistant = CompletedTurnClassifier.partsSessionText turn.Parts
 
-                if System.String.IsNullOrWhiteSpace text then
+        let resolved =
+            JsDeliveredValues.tryTakeRenderedWith
+                (SessionId.value turn.SessionId)
+                (if System.String.IsNullOrWhiteSpace assistant then
+                     None
+                 else
+                     Some assistant)
+            |> Option.orElseWith (fun () ->
+                if System.String.IsNullOrWhiteSpace assistant then
                     None
                 else
-                    Some text)
+                    Some assistant)
 
         match resolved with
         | Some record when not (System.String.IsNullOrWhiteSpace record) ->
@@ -125,18 +125,18 @@ module internal SyncDelegateInternals =
             AsyncSupport.trySetResult call.Answer (Ok record) |> ignore
             true
         | _ ->
-            store.FailCall(call, "EXEC-031: Completed without bounded WorkRecord")
+            store.FailCall(call, "EXEC-031: Completed without a bounded delivered view")
             true
 
 /// EXEC-026 / EXEC-031: reusable SyncDelegate CE (Acquire → GetOrCreate → Send →
-/// ordinary Completion → bounded WorkRecord). No return tool / dual-await.
+/// ordinary Completion → bounded delivered view). No return tool / dual-await.
 ///
 /// Composition seam: call state lives in SyncDelegateCallStore, the Invoke CE
 /// lives in SyncDelegateWorkflow, wait descriptors in SyncDelegateWait.
 type SyncDelegateRuntime
     (
         sessions: ISessionHostPort,
-        awaitWorkRecord: DiagnosticWait -> Task<Result<string, string>> -> Task<Result<string, string>>,
+        awaitView: DiagnosticWait -> Task<Result<string, string>> -> Task<Result<string, string>>,
         awaitInvocation:
             DiagnosticWait
                 -> Task<Result<SyncDelegateInvocationResult, string>>
@@ -398,7 +398,7 @@ type SyncDelegateRuntime
                     || profile.CanonicalRole = Role.Engineer)
                 ->
                 // The delegate session may still be running an in-flight physical
-                // execution (an earlier charge or a Blogger request). The new
+                // execution. The new
                 // continuation's chat.message admission would replace that lease and
                 // mark the old physical superseded; the Host loop would then keep
                 // executing the old step and fail closed in chat.params
@@ -477,7 +477,7 @@ type SyncDelegateRuntime
 
     let deps: SyncDelegateWorkflow.Dependencies =
         { Attached = attached
-          AwaitWorkRecord = awaitWorkRecord
+          AwaitView = awaitView
           AwaitInvocation = awaitInvocation
           ObserveChild = observeChild
           CreateChild = createChild
@@ -624,7 +624,7 @@ type SyncDelegateRuntime
     let singletonResult taskResult =
         task {
             match! taskResult with
-            | Ok(SyncDelegateInvocationResult.WorkRecord workRecord) -> return Ok workRecord
+            | Ok(SyncDelegateInvocationResult.View view) -> return Ok view
             | Ok(SyncDelegateInvocationResult.MergedInto _) ->
                 return Error "sync delegate protocol defect: singleton invocation was merged"
             | Error error -> return Error error
@@ -646,8 +646,6 @@ type SyncDelegateRuntime
 
     member _.TryFind(ownerSessionId: SessionId, role: SyncDelegateRole) = attached.TryFind(ownerSessionId, role)
 
-    /// Inverse lookup for Strength eligibility: a dedicated SyncDelegate session
-    /// is Work+Attached, never speculation material, regardless of its role.
     member _.TryFindDelegateOwner(delegateSessionId: SessionId) : SessionId option =
         attached.TryFindOwner(delegateSessionId, SyncDelegateRole.Inspector)
         |> Option.orElseWith (fun () -> attached.TryFindOwner(delegateSessionId, SyncDelegateRole.Coder))
@@ -736,7 +734,7 @@ type SyncDelegateRuntime
         |> singletonResult
 
     /// Program callers consume the exact formal response while ordinary callers
-    /// retain the bounded WorkRecord contract and the same authority/lifecycle.
+    /// retain the bounded delivered-view contract and the same authority/lifecycle.
     member _.InvokeResponsePrepared
         (
             ownerSessionKey: string,

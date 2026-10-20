@@ -21,7 +21,7 @@ const externalProducer = (kind, identity) => causal.externalProducer(kind, ident
 const readDiagnostic = (workspace) =>
   JSON.parse(fs.readFileSync(path.join(workspace, '.Herdchestra', 'diagnostics', 'causal-waits.json'), 'utf8'))
 
-test('WHAT[causal-wait-008] diagnostic bridge writes a non-Journal snapshot file (current behavior pending storage boundary decision)', () => {
+test('WHAT[causal-wait-008] diagnostic bridge writes a non-Journal snapshot file (current behavior pending storage boundary decision)', async () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'causal-bridge-'))
   const registry = causal.createRegistry()
   const wait = mkWait(
@@ -32,7 +32,7 @@ test('WHAT[causal-wait-008] diagnostic bridge writes a non-Journal snapshot file
   )
   const lease = causal.enter(registry, wait)
   try {
-    causal.writeSnapshot(workspace, registry)
+    await causal.writeSnapshot(workspace, registry)
     const filePath = path.join(workspace, '.Herdchestra', 'diagnostics', 'causal-waits.json')
     assert.equal(fs.existsSync(filePath), true)
     const gitignore = fs.readFileSync(path.join(workspace, '.Herdchestra', '.gitignore'), 'utf8')

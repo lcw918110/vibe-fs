@@ -137,6 +137,17 @@ module AnchorSurface =
 
     /// Capture one declaration for the next request. The declaration itself is
     /// one-turn; the replacements it names stand for their anchors from now on.
+    /// Validate one deliver/view declaration without capturing it for the next
+    /// request. The deliver view chooses what the child hands back; it is not
+    /// the next-request ANCHOR declaration.
+    let parse (declaration: obj) : Result<obj, JsFailure> =
+        if isNullish declaration then
+            invalid "view is missing"
+        else
+            match declarationOf declaration with
+            | Error failure -> Error failure
+            | Ok _ -> Ok declaration
+
     let setView (sessionId: string) (declaration: obj) : Result<unit, JsFailure> =
         if isNullish declaration then
             Ok()

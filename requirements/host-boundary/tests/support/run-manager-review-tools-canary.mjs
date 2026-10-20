@@ -150,18 +150,6 @@ const isManagerRequest = (request, body) => {
     return false;
   }
 
-  // Reject blogger requests that might slip through
-  const messages = Array.isArray(body?.messages) ? body.messages : [];
-  const hasBloggerPrompt = messages.some(
-    (m) =>
-      m?.role === 'system' &&
-      typeof m?.content === 'string' &&
-      (m.content.includes('role/blogger') || m.content.includes('BloggerSystemPrompt')),
-  );
-  if (hasBloggerPrompt) {
-    return false;
-  }
-
   return true;
 };
 
@@ -191,19 +179,6 @@ const provider = await startHttpServer(async (request, response) => {
 
     // Companion sidecars do not belong to a canary execution path.
     if (!isManagerRequest(request, body)) {
-      const chronicle = (body.tools ?? []).find((tool) => (tool?.function?.name ?? tool?.name) === 'chronicle');
-      if (chronicle) {
-        sendSSE(response, buildToolCallChunks(`chronicle_${providerRequests.length}`, 'chronicle', JSON.stringify({
-          charge: 'Preserve the canary observation that matters after this sidecar turn.',
-          occurrence: 'The Manager canary inspected its tool contract.',
-          settlement: 'The inspected contract is represented in the current canary record.',
-          consequence: 'The sidecar can finish without inventing additional work.',
-          tipName: 'canary-observation-preserved',
-          opinion: 'The inspected tool contract should stay represented in the current canary record.',
-          advice: 'Finish the sidecar turn once the current canary observation is recorded.',
-        }), 1));
-        return;
-      }
       sendSSE(response, buildTextChunks(`companion_${Date.now()}`, 'COMPANION_OK', 1));
       return;
     }

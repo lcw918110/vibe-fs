@@ -20,7 +20,6 @@ const personas = {
 }
 
 const rootSelection = (participant) => {
-  const role = participant === 'predictor' ? 'inspector' : participant
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -28,7 +27,7 @@ const rootSelection = (participant) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant,
-      role,
+      role: participant,
       selectedTier: 'deep',
       persona: personas[participant] ?? 'Unknown',
       personaCatalogVersion: 1,
@@ -105,8 +104,8 @@ test('WHAT[dispatch-protocol-006] DP_006_claim_sequence_advances_on_registration
 })
 
 test('WHAT[dispatch-protocol-006] DP_006_same_payload_landings_stay_exact_per_physical_message', () => {
-  // Blogger Main dispatches all carry one fixed instruction text: two
-  // independent acts, one payload digest. The payload view keeps only the
+  // Dispatches with one fixed instruction text: two independent acts,
+  // one payload digest. The payload view keeps only the
   // latest landing, and abandoning a later same-payload claim clears that
   // occasion slot; the exact landing of every physical message survives both.
   const root = profileOf()

@@ -1,7 +1,6 @@
 namespace Wanxiangshu.Execution.Session.ChatExecution
 
 open System
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Foundation
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Foundation.Identity
@@ -68,20 +67,14 @@ module AcceptedChatExecutionEvidence =
 type ProviderStartedEvidence =
     { Accepted: AcceptedChatExecutionEvidence
       ProviderRun: ProviderRunIdentity
-      RequestKind: ProviderRequestKind
-      ProjectionChoice: XProjectionChoice }
+      RequestKind: ProviderRequestKind }
 
 [<RequireQualifiedAccess>]
 module ProviderStartedEvidence =
 
     let validate (evidence: ProviderStartedEvidence) =
         AcceptedChatExecutionEvidence.validate evidence.Accepted
-        |> Result.bind (fun () ->
-            match evidence.ProjectionChoice with
-            | XProjectionChoice.UseCommittedEpoch -> Ok()
-            | XProjectionChoice.UsePrefixProbe _ when ProviderRequestKind.mayCarryProbe evidence.RequestKind -> Ok()
-            | XProjectionChoice.UsePrefixProbe _ ->
-                Error "Provider-started projection choice is incompatible with the request kind")
+
 
 [<RequireQualifiedAccess>]
 type ChatExecutionTerminalEvidence =

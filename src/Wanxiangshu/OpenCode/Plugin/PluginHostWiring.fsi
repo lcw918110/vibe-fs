@@ -4,8 +4,8 @@ open System.Threading.Tasks
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Git
-open Wanxiangshu.Strength.Persistence
 open Wanxiangshu.Persistence.EventStore
+
 open Wanxiangshu.Repository.Knowledge.Casebook
 
 module PluginHostWiring =
@@ -18,8 +18,9 @@ module PluginHostWiring =
             Task<CaseFinalizeSettlement>
 
     /// Composition-root handle for everything the Host needs after boot:
-    /// the ports `HostSignalBootstrap.wire` produced plus the durability
-    /// handle and the shared-terminal acquisition from `PluginHost.createHost`.
+    /// the ports `HostSignalBootstrap.wire` produced plus the shared-terminal
+    /// acquisition from `PluginHost.createHost`.
+
     type Host =
         { EventPort: IEventObservationPort
           SessionPort: ISessionHostPort
@@ -27,8 +28,8 @@ module PluginHostWiring =
           Wired: HostSignalBootstrap.WiredSignals
           SharedTerminalKey: string option
           SharedTerminalPort: Events.HostEventPort option
-          StrengthDurability: StrengthDurabilityPort option
           RootWorkspace: IRootWorkspaceReader
+
           CausalWaitObserver: IWaitObserver }
 
     /// Callback supplier: wiring hands the bound ports, the composition root

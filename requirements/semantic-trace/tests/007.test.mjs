@@ -91,4 +91,4 @@ test('WHAT[semantic-trace-007] canonical flatten preserves semantic part and rol
 })
 }
 
-test.todo('WHAT[semantic-trace-007] actual Y, prefix, WorkRecord and Casebook consumers share the same bounded durable history and exclude request presentation; GAP-101')
+test.todo('WHAT[semantic-trace-007] actual prefix, view and Casebook consumers share the same bounded durable history and exclude request presentation; GAP-101')

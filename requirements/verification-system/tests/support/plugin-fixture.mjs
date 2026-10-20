@@ -27,8 +27,6 @@ const eventsSurface = await import('../../../../dist/OpenCode/Host/EventsSurface
 const dispatchSurface = await import('../../../../dist/Interaction/Dispatch/DispatchSurface.js')
 const workspaceEventStoreSurface = await import('../../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js')
 const lifecycleSurface = await import('../../../../dist/Mission/Lifecycle/Surface.js')
-const bloggerRuntimeSurface = await import('../../../../dist/Context/Companion/RuntimeSurface.js')
-const bloggerOwnership = await import('./blogger-ownership.mjs')
 
 const withJournalRuntime = async (directory, action) => {
   const journalResult = await workspaceHost.acquireSharedForWorkspace(
@@ -63,39 +61,21 @@ const setupRoutingHome = (directory) => {
   writeFileSync(
     join(routingDir, 'wanxiangshu.mjs'),
     `export const routingProtocol = 2
-export default function route(role, running, previous, purpose) {
-  if (!new Set(['manager', 'orchestrator', 'engineer', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'blogger', 'bookkeeper', 'predictor', 'plan']).has(role)) throw new Error('unexpected managed role: ' + role)
+export default function route(role, running, previous) {
+  if (!new Set(['manager', 'orchestrator', 'engineer', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'bookkeeper', 'plan']).has(role)) throw new Error('unexpected managed role: ' + role)
   if (Array.isArray(globalThis.__wanxiangshu_test_routing_seen)) {
     globalThis.__wanxiangshu_test_routing_seen.push({ role, running: running.map((item) => ({ ...item })) })
   }
   if (typeof globalThis.__wanxiangshu_test_routing_decision === 'function') {
-    return globalThis.__wanxiangshu_test_routing_decision(role, running, previous, purpose)
+    return globalThis.__wanxiangshu_test_routing_decision(role, running, previous)
   }
   return { model: 'provider/' + role + '-model', reasoning: 'none' }
-}
-
-// + execution-model-routing-020: the read-only Predictor
-// configuration existence query, mirroring resources/wanxiangshu.mjs. The
-// scheduler is a process singleton (ModelRouting.initialize imports it once
-// per test process and never reloads), so the two observable states are
-// driven by a test-owned dynamic source instead of rewriting this file per
-// incarnation. The default is unconfigured: every existing fixture consumer
-// keeps the no-decoration baseline, and tests opt in explicitly.
-export const predictorConfiguration = () => {
-  const state = globalThis.__wanxiangshu_test_predictor_state ?? 'unconfigured'
-  if (state === 'configured') return { state: 'configured', reason: null }
-  if (state === 'invalid') {
-    return {
-      state: 'invalid',
-      reason: globalThis.__wanxiangshu_test_predictor_reason ?? 'test Predictor configuration is invalid',
-    }
-  }
-  return { state: 'unconfigured', reason: null }
 }\n`,
     'utf8',
   )
   return routingHome
 }
+
 
 export const configureManagedPlugin = (hooks) => {
   const agent = Object.fromEntries(
@@ -416,80 +396,6 @@ export const acceptAuthorityRoot = async (runtime, sessionId, agent, physicalMes
 }
 
 /**
- * Durable BloggerRequest chain (flight claim → landed dispatch PromptKey →
- * BloggerRequestMaterialized) for a companion Blogger session inside a
- * plugin-fixture workspace: the behavior-diagnosis-017 owner setup lifted
- * into the fixture registration context. `createScope` isolates the
- * process-shared flight registry, the exact live flight is claimed through
- * the RuntimeSurface entry, and `blogger-ownership.ownRequest` lands one
- * real dispatch and binds it as the request's durable open PromptKey through
- * the production binder (BlogSurface.bindRequestDispatch →
- * BloggerCoordinator.bindContinuationContext). The registered transform's
- * provider-attempt plan freeze (HOST-BOUNDARY-008) rejects companion Blogger
- * sessions that have no such durable open request (blogger-request-missing).
- *
- * `profile` is the accepted HumanRoot profile of the Blogger session (the
- * acceptAuthorityRoot return): sendContinuation only continues the exact
- * active run. The dispatch lands on its own physical message id, distinct
- * from the transform frontier user message, mirroring 017 where root,
- * dispatch and transform identities stay separate. Call the returned
- * `dispose` (e.g. via t.after) when the owning test ends: it first releases
- * the live flight through `releaseCurrentRequest` (the canonical
- * exact-requestId release entry, PluginScope.fs) and then disposes the
- * scope. Surface `dispose` alone only drains scope episodes and by design
- * never touches the process-shared BloggerFlights registry, so skipping the
- * release would leave the flight live and let step 11 project the canonical
- * view over the wire frontier (the 015 R-series zero-injection root cause).
- */
-export const claimBloggerRequest = async ({
-  runtime,
-  mainSession,
-  bloggerSession,
-  profile,
-  dispatchPhysical,
-  requestId,
-  toml = 'fixture-blogger-request',
-}) => {
-  const scope = bloggerRuntimeSurface.createScope()
-  const request = bloggerRuntimeSurface.main({ requestId, mainSession, bloggerSession, toml })
-  const claim = bloggerRuntimeSurface.claimCurrentRequest(scope, bloggerSession, request)
-  if (claim !== 'Claimed') {
-    bloggerRuntimeSurface.dispose(scope)
-    throw new Error(`claimCurrentRequest(${bloggerSession}, ${requestId}) returned ${claim}`)
-  }
-  const dispose = () => {
-    // releaseCurrentRequest is the canonical flight release entry (exact
-    // requestId match, PluginScope.fs); surface dispose only drains scope
-    // episodes (parked/pendingOffer) and by design never wipes the
-    // process-shared BloggerFlights registry, so skipping the release would
-    // leave the live flight replacing the wire frontier at step 11.
-    const release = bloggerRuntimeSurface.releaseCurrentRequest(scope, bloggerSession, requestId)
-    if (release !== 'Released') {
-      throw new Error(`releaseCurrentRequest(${bloggerSession}, ${requestId}) returned ${release}`)
-    }
-    bloggerRuntimeSurface.dispose(scope)
-  }
-  try {
-    const promptKey = await bloggerOwnership.ownRequest({
-      handle: runtime.journal,
-      durable: runtime.journal.journal,
-      scope,
-      bloggerSession,
-      profile,
-      request,
-      physical: dispatchPhysical,
-    })
-    return { scope, request, promptKey, dispose }
-  } catch (error) {
-    // Failure-path cleanup is best effort: the original error stays the
-    // reported failure, so an unexpected release outcome is not re-thrown.
-    bloggerRuntimeSurface.releaseCurrentRequest(scope, bloggerSession, requestId)
-    bloggerRuntimeSurface.dispose(scope)
-    throw error
-  }
-}
-
-/**
  * Record a durable parent→child handle link, the production evidence that makes
  * a session a managed child. This is the same HandleLinked writer the fork
  * runtime uses; it is not a test-local binding cache.
@@ -544,10 +450,11 @@ export const acceptChildAgentOwnerRoot = async (runtime, childSessionId, promptK
  * one vocabulary in one store; a test seeds real unified events there instead of
  * inventing a relay-shaped private surface.
  */
-const lifecycleStore = (runtime) => {
+const lifecycleStore = async (runtime) => {
   const directory = runtime?.directory
   if (!directory) throw new Error('lifecycle seeding needs an executable plugin runtime (runtime.directory)')
-  return workspaceEventStoreSurface.acquire(journalSurface.JournalSurface_initializeStateRoot(directory))
+  const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+  return workspaceEventStoreSurface.acquire(commonDir)
 }
 
 export const openIncumbency = async (
@@ -557,7 +464,7 @@ export const openIncumbency = async (
   kind = 'S4',
   ownerId = 'owner',
 ) => {
-  const store = lifecycleStore(runtime)
+  const store = await lifecycleStore(runtime)
   const result = await lifecycleSurface.seedOpenAs(store, kind, sessionId, runtime.directory, 1n, ownerId)
   if (!result?.ok) throw new Error(`openIncumbency(${sessionId}) rejected: ${result?.error ?? 'unknown error'}`)
   return result
@@ -565,8 +472,10 @@ export const openIncumbency = async (
 
 export const injectAuditPendingIncumbency = openIncumbency
 
-export const lifecycleWorkView = (runtime, sessionId) =>
-  lifecycleSurface.workView(lifecycleStore(runtime), sessionId)
+export const lifecycleWorkView = async (runtime, sessionId) => {
+  const store = await lifecycleStore(runtime)
+  return lifecycleSurface.workView(store, sessionId)
+}
 
 // The accepted review is a unified lifecycle fact (Reviewed). It is committed to
 // the workspace store the plugin reads, so no second representation crosses here.
@@ -577,7 +486,7 @@ export const injectAcceptedAssessment = async (
   outcome = 'Stayed',
   reviewerId = 'reviewer',
 ) => {
-  const store = lifecycleStore(runtime)
+  const store = await lifecycleStore(runtime)
   const opened = await lifecycleSurface.workView(store, sessionId)
   if (!opened?.found) {
     await openIncumbency(runtime, sessionId, incumbencyId)
@@ -596,7 +505,7 @@ export const activateLife = async (runtime, sessionId) => {
 }
 
 export const completeManagerLife = async (runtime, sessionId) => {
-  const store = lifecycleStore(runtime)
+  const store = await lifecycleStore(runtime)
   const view = await lifecycleSurface.workView(store, sessionId)
   if (!view?.found) await openIncumbency(runtime, sessionId)
   const reviewed = await lifecycleSurface.workView(store, sessionId)
@@ -615,14 +524,15 @@ export const completeManagerLife = async (runtime, sessionId) => {
  * opaque Host event capability the plugin subscribed to.
  *
  * `sessionWideText` maps to AgentRunResult.TerminalText (EXEC-006 IsValid).
- * Join LLM wire (EXEC-004 rev.2) renders LWR as entry-local `#` comments before
- * each [[result]], not as a `work_record =` field. The durable blob still carries
- * work_record JSON for HandleCompletionCodec. Fixture completions without an
- * Opening capture yield an empty LWR → no comment block before [[result]].
+ * Join LLM wire (EXEC-004 rev.2) renders the delivered view as entry-local `#`
+ * comments before each [[result]], not as a TOML data field. The durable blob
+ * still carries the delivered view JSON for HandleCompletionCodec. Fixture
+ * completions without an Opening capture yield an empty view → no comment block
+ * before [[result]].
  * `turnFormalText` is what a one-shot tool reports as output (COMPANION-005).
  */
 export const notifyCompleted = async (runtime, childSessionId, sessionWideText, turnFormalText, roleCaseTag = 2) => {
-  const roleLabels = ['manager', 'orchestrator', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'blogger']
+  const roleLabels = ['manager', 'orchestrator', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'engineer']
   const role = roleLabels[roleCaseTag] ?? 'coder'
   await eventsSurface.notifyCompleted(runtime.terminalPort, childSessionId, sessionWideText, turnFormalText, role)
 }

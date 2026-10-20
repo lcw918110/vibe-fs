@@ -23,6 +23,11 @@ module JsRuntimeSurface =
     val clearDelegationHost: sessionId: string -> unit
     val clearDelegationHosts: unit -> unit
     /// Test hook: the raw value a program handed over through `js.deliver`.
+    val recordDeliveredView: sessionId: string -> value: obj -> view: obj -> unit
+    val deliveredReturned: sessionId: string -> string array
+    val clearDeliveredReturned: sessionId: string -> unit
+    val takeDeliveredHandoffWith: sessionId: string -> assistantProse: string option -> obj
+    val takeDeliveredHandoff: sessionId: string -> obj
     val deliveredValue: sessionId: string -> obj
     val clearDeliveredValue: sessionId: string -> unit
     val stagedCount: handle: obj -> int

@@ -3,7 +3,6 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import * as checkpointWindow from '../../../dist/Context/Prefix/Surface.js'
 import * as journalSurface from '../../../dist/Persistence/Journal/Surface.js'
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
 import { acceptAuthorityRoot, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
@@ -11,7 +10,7 @@ import { acceptAuthorityRoot, withExecutablePlugin } from '../../verification-sy
 const here = path.dirname(fileURLToPath(import.meta.url))
 const installedTodoCanaryRunner = path.join(here, 'support/run-native-todo-replacement-canary.mjs')
 
-integrationTest('WHAT[obligation-ledger-002] programming-surface view declarations accumulate in the fixed K=3 window across todowrite-for-* roles', async () => {
+integrationTest('WHAT[obligation-ledger-002] programming-surface view declarations accumulate in the durable checkpoint window across todowrite-for-* roles', async () => {
   await withExecutablePlugin(async (hooks, _directory, _createdIds, runtime) => {
     const sessionID = 'obligation-view-window'
     await acceptAuthorityRoot(runtime, sessionID, 'engineer')
@@ -49,13 +48,6 @@ integrationTest('WHAT[obligation-ledger-002] programming-surface view declaratio
       window?.checkpoints,
       calls.map((c) => ({ callId: c.callID })),
       'all four completed view declarations are recorded in order',
-    )
-
-    const decision = checkpointWindow.desiredCutoffOfWindow(window.checkpoints, [1, 2, 3, 4])
-    assert.deepEqual(
-      decision,
-      { kind: 'KeepFrom', cutoffExclusive: 2 },
-      'fixed K=3 window retains the last 3 view checkpoints (turns 2, 3, 4) and folds before turn 2',
     )
   })
 })

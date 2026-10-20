@@ -6,7 +6,7 @@ open Wanxiangshu.Composition.Durable
 module CanonicalIntegrator =
 
     /// Journal-only spine: the structural frontier plus the journal fold.
-    /// Every domain rule (Strength, Sphinx, JsTransaction, Casebook) lives in
+    /// Every domain rule (Sphinx, JsTransaction, Casebook) lives in
     /// its owning module and is injected explicitly by composition owners
     /// through `createWithRules`.
     let baseRules: IntegrationRule list =

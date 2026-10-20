@@ -76,5 +76,4 @@ Fission, dispatch agents, browse, execute, mutate source, or decide acceptance.
 Return the case work to the runtime; do not delay an Engineer or organize the
 mission's next step.
 
-The Chronicle remembers the road.
 The Casebook remembers what the road taught.

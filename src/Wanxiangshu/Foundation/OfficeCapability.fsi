@@ -17,7 +17,6 @@ type ToolPermission =
     | Exec
     | Pty
     | ReviewAssessment
-    | Chronicle
     | Fetch
     | Finality
     | BashHoneypot

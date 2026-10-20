@@ -11,7 +11,6 @@ const personas = {
   manager: 'Lead',
 }
 const rootSelection = (agent) => {
-  const role = agent === 'predictor' ? 'inspector' : agent
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -19,7 +18,7 @@ const rootSelection = (agent) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant: agent,
-      role,
+      role: agent,
       selectedTier: 'deep',
       persona: personas[agent] ?? 'Unknown',
       personaCatalogVersion: 1,
@@ -211,7 +210,7 @@ test('WHAT[interaction-authority-019] duplicate gate-nudge claim is AlreadyAdmit
       assert.equal(turns.needsInteractionRepair(role, false, 'length', []), true)
       for (const finish of ['stop', 'aborted', 'error']) assert.equal(turns.needsInteractionRepair(role, false, finish, [text('done')]), false)
     }
-    for (const role of ['distiller', 'blogger', '']) assert.equal(turns.needsInteractionRepair(role, false, 'tool-calls', []), false)
+    for (const role of ['distiller', '']) assert.equal(turns.needsInteractionRepair(role, false, 'tool-calls', []), false)
     assert.equal(turns.roleOfAgent(undefined, 'coder'), 'coder')
     assert.equal(turns.roleOfAgent('coder', 'inspector'), 'coder')
     assert.equal(turns.roleOfAgent('not-a-managed-agent', 'inspector'), 'inspector')

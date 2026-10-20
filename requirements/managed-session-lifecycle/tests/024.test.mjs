@@ -32,4 +32,8 @@ test('WHAT[managed-session-lifecycle-024] road projection retains the supplied l
   assert.equal(folded.names.split(',').at(-1), 'DevOpsBound')
 })
 
-test.todo('WHAT[managed-session-lifecycle-024] actual DevOps crash recovery keeps one executable authority, fixed Persona/model, avoids command replay and drains real PTYs (GAP-133, GAP-129)')
+test('WHAT[managed-session-lifecycle-024] actual DevOps crash recovery keeps one executable authority, fixed Persona/model, avoids command replay and drains real PTYs (GAP-133, GAP-129)', { todo: 'GAP-133 / GAP-129: actual DevOps crash recovery requires real PTY process drain harness and D18 immutable binding scope decision' }, () => {
+  // 规约依据：
+  // 1. WHAT[managed-session-lifecycle-024]: 同一道路只有一个 DevOps 逻辑操作员权威，故障恢复可替换物理 Session，至多一个物理权威可执行；沿用初始化绑定的模型和 Persona，不借 resume 重置或切换。
+  // 2. 真实 OS 进程及 PTY 排空（真实 TERM/KILL 退出证据）依赖物理执行环境，且 GAP-129 绑定范围（D18 决策）未定，按规约保留 todo 并在原因中明确记录。
+})

@@ -6,8 +6,7 @@ open Wanxiangshu.Foundation.Identity
 ///
 /// Long-lived association is no longer a single `SatelliteKind` axis. Dedicated
 /// SyncInspector/SyncCoder/SyncEngineer are Work+Attached (MAY hold a Companion); Companion /
-/// Bookkeeper / StrengthReplica are InternalLeaf+Attached. StrengthReplica is
-/// NEVER a `SatelliteKind` case.
+/// Companion / Bookkeeper are InternalLeaf+Attached.
 /// HOST-008: whether the session is ordinary work or an internal leaf.
 [<RequireQualifiedAccess>]
 type SessionExecutionClass =
@@ -26,9 +25,7 @@ type AttachmentKind =
     /// identity (Work+Attached, same family as the other sync kinds).
     | SyncDevOps
     | Bookkeeper of transactionId: string
-    /// Short-lived decision-local InternalLeaf replica attachment.
-    /// Not a SatelliteKind case — Universal AttachmentKind ownership only.
-    | StrengthReplica
+
 
 /// HOST-008: Root work vs Attached ownership under one ownerSessionId.
 [<RequireQualifiedAccess>]

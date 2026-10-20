@@ -13,7 +13,7 @@ npm run diagnostics:collect
 npm run diagnostics:collect -- --run c7555bf6
 
 # 指定自定义事故标签采集
-npm run diagnostics:collect -- "blogger-spin-lock"
+npm run diagnostics:collect -- "provider-retry-loop"
 ```
 
 ### 输出规范

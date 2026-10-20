@@ -118,7 +118,7 @@ test('WHAT[host-boundary-021] HOST_021_plugin_load_graph_has_no_semantic_recover
     /scope\.AttachDurabilityActivation\(fun \(\) ->\s*scope\.RunBackground\(fun \(\) ->/,
   )
   assert.equal([...recoveryWiring.matchAll(/AttachDurabilityActivation/g)].length, 1)
-  assert.doesNotMatch(recoveryWiring, /restoreLinkedChildren|recoverFamilyDirect|defaultRecoverPromptClaims|defaultRecoverBlogger/)
+  assert.doesNotMatch(recoveryWiring, /restoreLinkedChildren|recoverFamilyDirect|defaultRecoverPromptClaims/)
 })
 test('WHAT[host-boundary-021] HOST_021_broken_tool_recovery_APIs_do_not_exist', () => {
   const fission = read('src/Wanxiangshu/Execution/Fission/OpenCode/Host.fs')
@@ -159,24 +159,9 @@ const acceptedRetryInput = (overrides = {}) => ({
   journal: true,
   sessionId: 'ses_x',
   acceptedRetry: true,
-  failures: 1,
-  prefixEpoch: 0,
   physicalUser: 'user-1',
   acceptedPhysicalUser: 'user-1',
-  snapshotPort: true,
   currentProjection: baseProjection,
-  committedSnapshot: null,
-  coverableCutoff: 2, // material exists (coverage ahead of request)
-  // The Companion's claim is proven at ITS cutoff; the frozen subset ends at the
-  // request boundary, which is where this attempt may fold (CTX-029).
-  coveredDigest: XWireSurface.coveredPrefixDigest(baseProjection, 2),
-  materialCutoff: 1,
-  requestStartCutoff: 1,
-  frozenRecordPrefixRef: 'blob/ref/frozen-1',
-  frozenRecordPrefixDigest: 'sha256:frozen-1',
-  frozenRecordPrefixBody: 'frozen record prefix body text',
-  memoryPreamble: 'companion memory preamble',
-  outcome: null,
   ...overrides,
 })
 
@@ -207,76 +192,37 @@ test('WHAT[host-boundary-021] XWIRE_unaccepted_retry_is_a_noop', () => {
   assert.equal(result.changed, false)
   assert.equal(result.consumed, false)
 })
-test('WHAT[host-boundary-021] XWIRE_accepted_retry_with_material_renders_synthetic_prefix', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ coverableCutoff: 2 }))
+test('WHAT[host-boundary-021] XWIRE_exact_accepted_retry_consumes_plan_without_message_rewrite', () => {
+  const result = XWireSurface.transform(acceptedRetryInput())
   assert.equal(result.ok, true)
   assert.equal(result.noop, false)
-  // When a probe is selected and the prefix intent renders a synthetic prefix,
-  // the transform changes the projection and consumes this accepted retry.
-  assert.equal(result.consumed, true)
-  // The output should differ from the input when a synthetic prefix is rendered.
-  if (result.changed) {
-    assert.ok(result.output, 'output must be present when changed')
-    assert.ok(result.output.messages, 'output must have messages')
-  }
-})
-test('WHAT[host-boundary-021] XWIRE_accepted_retry_without_material_has_no_probe', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ coverableCutoff: 0 }))
-  assert.equal(result.ok, true)
-  assert.equal(result.noop, false)
-  // NoCoverage sends the ordinary projection; this request's choice cannot
-  // migrate into a later physical retry.
-  assert.equal(result.consumed, true)
   assert.equal(result.changed, false)
-  assert.ok(result.noProbeReason, 'should have a no-probe reason')
+  assert.equal(result.consumed, true)
+  assert.equal(result.error, null)
+  assert.equal(result.output, baseProjection)
 })
-test('WHAT[host-boundary-021] XWIRE_completed_attempt_with_probe_promotes_prefix_rebase', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ outcome: 'completed', coverableCutoff: 2 }))
-  assert.equal(result.ok, true)
-  assert.equal(result.promoted, true)
-})
-test('WHAT[host-boundary-021] XWIRE_stale_probe_does_not_promote_after_prefix_rebase', () => {
-  const result = XWireSurface.reconcile({
-    hasPlan: true,
-    outcome: 'completed',
-    hasProbe: true,
-    currentEpoch: 2,
-    probeEpoch: 1,
-  })
-  assert.equal(result.promoted, false)
-  assert.equal(result.cleared, true)
-})
-test('WHAT[host-boundary-021] XWIRE_failed_attempt_does_not_promote', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ outcome: 'failed', coverableCutoff: 2 }))
-  assert.equal(result.ok, true)
-  assert.equal(result.promoted, false)
-})
-test('WHAT[host-boundary-021] XWIRE_reconcile_completed_with_probe_promotes_and_clears', () => {
-  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'completed', hasProbe: true, currentEpoch: 0, probeEpoch: 0 })
-  assert.equal(result.promoted, true)
+test('WHAT[host-boundary-021] XWIRE_reconcile_completed_clears_plan', () => {
+  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'completed' })
   assert.equal(result.cleared, true)
   assert.equal(result.keptPlan, false)
 })
-test('WHAT[host-boundary-021] XWIRE_reconcile_completed_without_probe_clears_without_promoting', () => {
-  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'completed', hasProbe: false })
-  assert.equal(result.promoted, false)
+test('WHAT[host-boundary-021] XWIRE_reconcile_failed_clears_plan', () => {
+  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'failed' })
   assert.equal(result.cleared, true)
+  assert.equal(result.keptPlan, false)
 })
-test('WHAT[host-boundary-021] XWIRE_reconcile_failed_clears_plan_without_promoting', () => {
-  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'failed', hasProbe: true })
-  assert.equal(result.promoted, false)
+test('WHAT[host-boundary-021] XWIRE_reconcile_aborted_clears_plan', () => {
+  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'aborted' })
   assert.equal(result.cleared, true)
   assert.equal(result.keptPlan, false)
 })
 test('WHAT[host-boundary-021] XWIRE_reconcile_unknown_reread_keeps_the_plan', () => {
-  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'in-progress', hasProbe: true })
-  assert.equal(result.promoted, false)
+  const result = XWireSurface.reconcile({ hasPlan: true, outcome: 'in-progress' })
   assert.equal(result.cleared, false)
   assert.equal(result.keptPlan, true)
 })
 test('WHAT[host-boundary-021] XWIRE_reconcile_no_plan_is_inert', () => {
-  const result = XWireSurface.reconcile({ hasPlan: false, outcome: 'completed', hasProbe: true })
-  assert.equal(result.promoted, false)
+  const result = XWireSurface.reconcile({ hasPlan: false, outcome: 'completed' })
   assert.equal(result.cleared, false)
   assert.equal(result.keptPlan, false)
 })

@@ -32,7 +32,7 @@ const { default: test } = await import("node:test");
 const { runInterleaving, validPermutations } = await import("./support/identity-capacity-interleaving.mjs");
 
 const parentAgents = ['manager', 'devops']
-const childAgents = ['engineer', 'blogger']
+const childAgents = ['engineer', 'plan']
 const capacities = [2, 3]
 const replayModes = [false, true]
 const duplicateDeliveryModes = [false, true]

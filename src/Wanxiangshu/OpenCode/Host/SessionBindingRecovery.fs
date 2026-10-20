@@ -63,7 +63,7 @@ module SessionBindingRecovery =
         |> Option.orElseWith (fun () ->
             // 2. Check durable Companion session associations
             SessionAssociationProjection.tryMainSessionOf childSessionId projections.Associations
-            |> Option.map (fun parentSessionId -> SessionId.value parentSessionId, "blogger"))
+            |> Option.map (fun parentSessionId -> SessionId.value parentSessionId, "companion"))
 
     /// Durable evidence for one fission lane: which owner and slot it belongs to.
     /// The fission projection is the truth; the lane registry is the cache of the

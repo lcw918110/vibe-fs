@@ -60,9 +60,7 @@ function makeConfig(llmUrl, pluginPaths = [], opts = {}) {
     manager: { model: 'test/test-model' },
     engineer: { model: 'test/test-model' },
     devops: { model: 'test/test-model' },
-    blogger: { model: 'test/test-model' },
     bookkeeper: { model: 'test/test-model' },
-    predictor: { model: 'test/test-model' },
   };
   return {
     formatter: false,
@@ -150,21 +148,10 @@ export function createIsolatedEnv(opts) {
   const defaultRoutingSource = `export const routingProtocol = 2
 export const hasTheoreticalCapacity = (role, purpose) => true;
 export default function route(role, running, previous, purpose) {
-  if (new Set(['manager', 'orchestrator', 'engineer', 'devops', 'blogger', 'bookkeeper', 'predictor']).has(role)) return { model: 'test/test-model', reasoning: 'none' }
+  if (new Set(['manager', 'orchestrator', 'engineer', 'devops', 'bookkeeper']).has(role)) return { model: 'test/test-model', reasoning: 'none' }
   throw new Error('unexpected managed role: ' + role + ' | stack: ' + new Error().stack)
 }
-
-export const predictorConfiguration = () => {
-  const state = globalThis.__wanxiangshu_test_predictor_state ?? 'unconfigured'
-  if (state === 'configured') return { state: 'configured', reason: null }
-  if (state === 'invalid') {
-    return {
-      state: 'invalid',
-      reason: globalThis.__wanxiangshu_test_predictor_reason ?? 'test Predictor configuration is invalid',
-    }
-  }
-  return { state: 'unconfigured', reason: null }
-}\n`;
+\n`;
   // An explicit scenario/host routingSource wins; the frozen default keeps every
   // caller that passes none byte-identical to the previous behavior.
   fs.writeFileSync(path.join(routingDir, 'wanxiangshu.mjs'), opts.routingSource ?? defaultRoutingSource, 'utf8');

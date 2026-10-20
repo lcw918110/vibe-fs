@@ -72,7 +72,39 @@ test('WHAT[durable-events-021] low-level append persists bad fact and cut togeth
   }
 })
 
-test.todo('WHAT[durable-events-021] the actual producing process exits after semantic cut and a distinct next process resumes from the reset Current')
+test('WHAT[durable-events-021] the actual producing process exits after semantic cut and a distinct next process resumes from the reset Current', async () => {
+  const dir = withTemp((base) => base)
+  const producer = eventStore.create(dir, 'producer-process')
+  try {
+    // 1. Producing process encounters a semantic failure, appending bad fact and ProjectionCutTail
+    const bad = event(20, [], 'InspectorCaseCaptured', {})
+    const appendResult = await eventStore.append(producer, [bad])
+    assert.equal(appendResult.ok, true)
+    assert.equal(appendResult.cuts.length, 1)
+    assert.equal(appendResult.cuts[0].failedEventId, id(20))
+    assert.equal(appendResult.cuts[0].rule, 'Casebook')
+  } finally {
+    // Producing process exits / disposes
+    eventStore.dispose(producer)
+  }
+
+  // 2. Distinct next process resumes from the reset Current
+  const consumer = eventStore.create(dir, 'consumer-process')
+  try {
+    // Next process appends valid event referencing after-cut state
+    const valid = event(21, [20], 'InspectorCaseAccessed', { session_id: 'resumed-session' })
+    const secondAppend = await eventStore.append(consumer, [valid])
+    assert.equal(secondAppend.ok, true)
+    assert.equal(secondAppend.cuts.length, 0)
+
+    const replayed = eventStore.read(consumer, id(21))
+    assert.ok(replayed)
+    assert.equal(replayed.id, id(21), 'next process successfully resumes and reads timeline')
+  } finally {
+    eventStore.dispose(consumer)
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 test('WHAT[durable-events-021] an uncut historical Journal fault suppresses only its own journal stream', async () => {
   const dir = withTemp((base) => base)

@@ -509,7 +509,7 @@ export const runtimeKeyCases = [
     fn: () => {
       // The property N3 bought, and the one the four-shape envelope made impossible. A scenario
       // author knows a child was forked and what the assignment said; they do not know whether the
-      // parent had produced a work record yet, and must not have to.
+      // parent had produced a delivered view yet, and must not have to.
       const entries = [entry({ id: 'child', lane: 'manager', turn: ['# Write proof.txt', ANCHOR] })];
 
       const shapes = [

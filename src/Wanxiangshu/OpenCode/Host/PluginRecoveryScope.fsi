@@ -73,7 +73,6 @@ type PluginRecoveryScope =
     /// Consumes the frozen plan exactly once on terminal reconciliation.
     member ConsumeAttemptPlan: sessionId: SessionId -> providerRun: ProviderRunIdentity -> AttemptPlan option
 
-    /// Read-only peek for Strength evidence — not for recovery branching.
     member TryPeekAttemptPlan: sessionId: SessionId -> providerRun: ProviderRunIdentity -> AttemptPlan option
 
     /// Read-only peek alias.

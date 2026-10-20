@@ -38,7 +38,7 @@ module JoinTool =
           AgentId: string
           Role: string
           Status: string
-          WorkRecord: string }
+          View: string }
 
     val admission: ToolAdmission
     val spec: scope: ToolRuntimeScope -> ToolSpec

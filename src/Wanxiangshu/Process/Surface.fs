@@ -1016,8 +1016,8 @@ module ProcessSurface =
     let supervisorEnsureSpawn (supervisor: obj) : Task<unit> =
         PtySupervisor.ensureSpawn (supervisorOf supervisor)
 
-    let supervisorSpawnSync (supervisor: obj) (command: string) (cwd: string) : obj =
-        PtySupervisor.spawnSync (supervisorOf supervisor) command cwd
+    let supervisorSpawn (supervisor: obj) (command: string) (cwd: string) : Task<obj> =
+        PtySupervisor.spawn (supervisorOf supervisor) command cwd
 
     let supervisorFailPending (pending: obj) (reason: string) : unit =
         let entries = (pending :?> PendingHandle).Entries

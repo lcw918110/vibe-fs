@@ -25,8 +25,7 @@
 
 `resources/ablation/profiles.json` 定义配置集。显式环境变量 `WANXIANGSHU_ABLATION_<node>=ablated|borrowed|active` 覆盖后仍须通过 DAG 校验。
 
-## [005] speculative-investigation 消融节点不是生产启用开关
+## [005] 只读副本与 Predictor 不是消融可以重新打开的功能
 
-Predictor 模型配置是只读委托唯一的生产启用依据：未配置 Predictor 即无功能；已配置即默认启用；预算为 0 只表示本次不委托，不等于未配置或关闭功能。
-`speculative-investigation` 消融节点保留，仅服务研究对照：测试 harness 可以以分开的完整运行比较新旧行为，但该节点（含 profile、环境变量单点覆盖与 DAG 约束）不得否决、延迟或替代 Predictor 配置决定的启用状态，不得成为 Predictor 配置之外的第二个启用条件。
+只读副本、Predictor 槽位与 speculative-investigation 不是生产功能，也不是消融节点可以重新打开的开关。研究对照不得把它们注册回当前合同。
 其他特性的消融行为不变，仍按 [001]-[004] 的三态与 DAG 规则运行。

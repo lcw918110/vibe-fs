@@ -6,11 +6,11 @@ open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Foundation
 open Wanxiangshu.Participant.Provider
 
-/// Entry-local join rendering owner surface. It accepts plain work-record data
+/// Entry-local join rendering owner surface. It accepts a plain delivered view
 /// and keeps join item unions/private non-empty batches inside the renderer.
 module JoinResultRendererSurface =
 
-    let renderAgentCompletion (language: string) (agentName: string) (workRecord: string) : string =
+    let renderAgentCompletion (language: string) (agentName: string) (view: string) : string =
         let providerLanguage = ProviderLanguage.parse language
 
         let payload: AgentCompletionPayload =
@@ -20,7 +20,7 @@ module JoinResultRendererSurface =
               Role = Role.Coder
               AuthorityRoot = None
               ProviderRun = None
-              WorkRecord = workRecord
+              View = view
               Directory = None }
 
         let batch =

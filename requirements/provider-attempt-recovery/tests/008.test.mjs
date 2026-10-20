@@ -70,32 +70,6 @@ test('WHAT[provider-attempt-recovery-008] unusable content alone cannot substitu
     assert.equal(reconcile.failureWitnessMintsTerminal(label, true), true, label)
   }
 })
-
-test('WHAT[provider-attempt-recovery-008] only_a_probe_attempt_with_a_usable_terminal_may_promote', () => {
-  const withProbe = planner.plan({
-    role: 'engineer',
-    kind: 'work-main',
-    policyAllowsProbe: true,
-    probe: {
-      probeId: 'probe-p1',
-      basedOnEpoch: 0,
-      candidate: {
-        ref: 'blob-frozen-5',
-        frozenDigest: 'frozen-5',
-        cutoff: 5,
-        prefixDigest: 'prefix-5',
-        sealRoot: 'seal-5',
-        syntheticId: 'synthetic-seal-5',
-      },
-    },
-  })
-
-  assert.equal(planner.promotableProbeId(withProbe, 'Completed'), 'probe-p1')
-  assert.equal(planner.promotableProbeId(withProbe, 'CompletedInvalid'), null)
-  assert.equal(planner.promotableProbeId(withProbe, 'Failed'), null)
-  assert.equal(planner.promotableProbeId(withProbe, 'Aborted'), null)
-})
-
 {
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");

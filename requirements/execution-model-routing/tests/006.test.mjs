@@ -299,7 +299,6 @@ const MANAGED = [
   'manager',
   'orchestrator',
   'devops',
-  'blogger',
 ]
 
 test('WHAT[execution-model-routing-006] EMR_006_recommended_template_prefers_previous_candidate_when_provider_has_capacity', async () => {

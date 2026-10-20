@@ -28,7 +28,6 @@ const evidence = {
   providerRun: 'provider-transaction',
   origin: 'HumanRoot',
   requestKind: 'work-main',
-  projectionChoice: { kind: 'UseCommittedEpoch' },
 }
 const run = (failurePoint = 'None', state = 'None') =>
   transaction.transactionScenario(evidence, failurePoint, state)
@@ -152,7 +151,6 @@ const startedWire = (physicalUserMessageId, providerRun = `provider-${physicalUs
       Accepted: JSON.parse(acceptedWire(physicalUserMessageId, { SessionId: sessionId }))[1][1][1].Evidence,
       ProviderRun: tagged('ProviderRunIdentity', providerRun),
       RequestKind: 'WorkMain',
-      ProjectionChoice: 'UseCommittedEpoch',
     },
     Key: keyWire(sessionId, physicalUserMessageId),
     SchemaVersion: 1,
@@ -164,7 +162,6 @@ const terminalWire = (physicalUserMessageId, disposition, sessionId = 'ses-chat'
       Accepted: JSON.parse(acceptedWire(physicalUserMessageId, { SessionId: sessionId }))[1][1][1].Evidence,
       ProviderRun: tagged('ProviderRunIdentity', `provider-${physicalUserMessageId}`),
       RequestKind: 'WorkMain',
-      ProjectionChoice: 'UseCommittedEpoch',
     }],
     Key: keyWire(sessionId, physicalUserMessageId),
     SchemaVersion: 1,

@@ -235,8 +235,8 @@ flow = [
 
 [[turn]]
 id = "blog"
-lane = "blogger"
-user = "You are the blogger of a coding agent session."
+lane = "background"
+user = "You are the background worker."
 
   [[turn.step]]
   neverEnd = true

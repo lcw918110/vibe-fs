@@ -16,7 +16,7 @@ module internal SyncDelegateWorkflow =
     /// runs against the store + dependencies without touching runtime fields.
     type Dependencies =
         { Attached: IAttachedSessionPort
-          AwaitWorkRecord: DiagnosticWait -> Task<Result<string, string>> -> Task<Result<string, string>>
+          AwaitView: DiagnosticWait -> Task<Result<string, string>> -> Task<Result<string, string>>
           AwaitInvocation:
               DiagnosticWait
                   -> Task<Result<SyncDelegateInvocationResult, string>>
@@ -60,9 +60,9 @@ module internal SyncDelegateWorkflow =
     let private completeCanonicalBatch
         (canonical: SyncDelegateInvocation)
         (siblings: SyncDelegateInvocation list)
-        (workRecord: string)
+        (view: string)
         =
-        AsyncSupport.trySetResult canonical.Completion (Ok(SyncDelegateInvocationResult.WorkRecord workRecord))
+        AsyncSupport.trySetResult canonical.Completion (Ok(SyncDelegateInvocationResult.View view))
         |> ignore
 
         match canonical.Batch with
@@ -73,7 +73,7 @@ module internal SyncDelegateWorkflow =
         match answered, invocations with
         | Error error, _ -> completeError invocations error
         | Ok _, [] -> ()
-        | Ok workRecord, canonical :: siblings -> completeCanonicalBatch canonical siblings workRecord
+        | Ok view, canonical :: siblings -> completeCanonicalBatch canonical siblings view
 
     let private failAdmission
         (store: SyncDelegateCallStore)
@@ -175,12 +175,12 @@ module internal SyncDelegateWorkflow =
             then
                 deps.NoteDelegatePrompt (SessionId.value delegateSession) request.Charge
 
-            let! workRecord =
-                deps.AwaitWorkRecord
+            let! view =
+                deps.AwaitView
                     (deps.DescribeWait(DelegateCompletion(batchOwner, delegateSession, role)))
                     call.Answer.Task
 
-            return workRecord
+            return view
         }
 
     let private dispatchBegunCall

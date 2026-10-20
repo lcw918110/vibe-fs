@@ -87,7 +87,7 @@ module HostSessionNudge =
         prompt: string ->
         directory: string option ->
         journal: AgentJournal option ->
-        requestId: BloggerRequestId ->
+        requestId: RepairRequestId ->
         terminalProviderRun: ProviderRunIdentity ->
         repairKind: string ->
             Task<InteractionRepairSendOutcome>
@@ -168,7 +168,7 @@ module HostSessionNudge =
         prompt: string ->
         directory: string option ->
         journal: AgentJournal option ->
-        requestId: BloggerRequestId ->
+        requestId: RepairRequestId ->
         terminalProviderRun: ProviderRunIdentity ->
         repairKind: string ->
             Task<IdleContinuationOutcome>

@@ -5,7 +5,6 @@ open Wanxiangshu.OpenCode
 open Wanxiangshu.Interaction.Dispatch.OpenCode
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Foundation
@@ -15,7 +14,6 @@ open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Persistence.Journal
 
@@ -160,10 +158,11 @@ module InteractionRepairWorkflow =
         (observer: ContinuationAcceptanceObserver option)
         : Task =
         let path =
-            if context.Turn.Role = Some Role.Manager then
-                "work/manager-continue"
-            else
-                "work/plan-continue"
+            match context.Turn.Role with
+            | Some Role.Manager -> "work/manager-continue"
+            | Some Role.Engineer -> "work/engineer-continue"
+            | Some Role.DevOps -> "work/devops-continue"
+            | _ -> "work/plan-continue"
 
         let prompt =
             ProviderProse.render (ProviderProse.languageOf context.Turn.SessionId) path Map.empty
@@ -213,109 +212,6 @@ module InteractionRepairWorkflow =
         | CompletedTurnClassifier.RepairDefectDecision.AwaitRepairTerminal
         | CompletedTurnClassifier.RepairDefectDecision.NoRepair -> AsyncSupport.completedTask ()
 
-    /// The `None` arm of `repairBloggerProtocol`: a reached-for journal that some
-    /// composition paths never install is an assembly gap, not a semantic cut.
-    /// The caller already showed the Failed terminal; kiling the process here
-    /// erases the durable trace a future replay could use to explain destruction.
-    let private notifyBloggerProtocolAudited
-        (eventPort: IEventObservationPort)
-        (turn: ReconciledTurn)
-        (reason: string)
-        =
-        eventPort.NotifyTerminal
-            turn.SessionId
-            (TerminalOutcome.Failed(TerminalStop.forAuthority turn.AuthorityRootUserMessageId reason))
-        |> ignore
-
-        Diagnostic.emit
-            "blogger-protocol-repair-failed"
-            [ "session_id", SessionId.value turn.SessionId; "result", reason ]
-
-
-    /// Blogger has a stricter terminal protocol than ordinary agents: prose-only
-    /// completion is not a closing report. Idle is the only guaranteed wake after
-    /// a zero-tool terminal, so idle forwards the exact observation to
-    /// BloggerCoordinator.observeIdleRepair, which owns the missing-chronicle
-    /// sequence instead of the generic MissingClosingReport
-    /// continuation.
-    /// Historical/unowned idle is observation only: without the exact live
-    /// BloggerRequest there is no protocol budget to spend.
-    let private consumeBloggerRepairOutcome (outcome: BloggerRepairOutcome) : unit =
-        match outcome with
-        | BloggerRepairOutcome.NudgeSent _
-        | BloggerRepairOutcome.AabbSent _
-        | BloggerRepairOutcome.RepairInjected _
-        | BloggerRepairOutcome.PendingRepairWait
-        | BloggerRepairOutcome.UnownedIdleIgnored
-        | BloggerRepairOutcome.SupersededIgnored
-        | BloggerRepairOutcome.UnprovenIgnored
-        | BloggerRepairOutcome.AbandonedExhausted
-        | BloggerRepairOutcome.Completed -> ()
-
-    let private sendOwnedBloggerRepair
-        (host: IBloggerRuntimeHost)
-        (durable: AgentJournal)
-        (request: BloggerRequestContext)
-        (quiescence: ISessionQuiescenceGate)
-        (context: ReconciledTurnContext)
-        (sessionPort: ISessionHostPort)
-        (rootWorkspace: IRootWorkspaceReader)
-        (eventPort: IEventObservationPort)
-        : Task =
-        task {
-            let! outcome =
-                BloggerCoordinator.observeIdleRepair
-                    host
-                    (Some durable)
-                    request
-                    quiescence
-                    context
-                    sessionPort
-                    rootWorkspace
-                    eventPort
-
-            consumeBloggerRepairOutcome outcome
-            return ()
-        }
-        :> Task
-
-    let private forwardOwnedBloggerRepair
-        (host: IBloggerRuntimeHost)
-        (durable: AgentJournal)
-        (request: BloggerRequestContext)
-        (quiescence: ISessionQuiescenceGate)
-        (context: ReconciledTurnContext)
-        (sessionPort: ISessionHostPort)
-        (rootWorkspace: IRootWorkspaceReader)
-        (eventPort: IEventObservationPort)
-        : Task =
-        sendOwnedBloggerRepair host durable request quiescence context sessionPort rootWorkspace eventPort
-
-    let repairBloggerProtocol
-        (host: IBloggerRuntimeHost)
-        (quiescence: ISessionQuiescenceGate)
-        (context: ReconciledTurnContext)
-        (sessionPort: ISessionHostPort)
-        (rootWorkspace: IRootWorkspaceReader)
-        (eventPort: IEventObservationPort)
-        (journal: AgentJournal option)
-        : Task =
-        let liveRequest = host.TryPeekCurrentRequest(SessionId.value context.Turn.SessionId)
-
-        match journal, liveRequest with
-        | None, _ ->
-            notifyBloggerProtocolAudited eventPort context.Turn "blogger protocol repair requires an AgentJournal"
-            AsyncSupport.completedTask ()
-        | Some _, None ->
-            Diagnostic.emit
-                "blogger-protocol-repair-unowned-idle"
-                [ "session_id", SessionId.value context.Turn.SessionId
-                  "result", "no live BloggerRequest; idle cannot spend protocol repair budget" ]
-
-            AsyncSupport.completedTask ()
-        | Some durable, Some request ->
-            forwardOwnedBloggerRepair host durable request quiescence context sessionPort rootWorkspace eventPort
-
     /// interaction-authority-023: a retry continuation suppresses idle repair only
     /// while its own attempt is unsettled. The race this guards is the interleaved
     /// idle of the retry attempt itself — finish=None (Unknown) or tool-calls
@@ -336,7 +232,7 @@ module InteractionRepairWorkflow =
             match observation with
             | Some port ->
                 port.TryContinuationKind turn.SessionId turn.PhysicalUserMessageId = Some
-                                                                                         PromptContinuationKind.ProviderRetryAttempt
+                    PromptContinuationKind.ProviderRetryAttempt
             | None -> continuationKindOf journal turn = Some PromptAuthority.ContinuationKind.ProviderRetryAttempt
 
         let hasDurableTerminal =

@@ -14,7 +14,7 @@
 - A2-D1有限完成：004两路径callback原Error传播且durable Accepted不倒退、两个确认者仍得exact Accepted；007两路径的非FIFO short timeout及全部waiter过期不干扰observer/journal，009两路径的明确Refused仍结算全部确认等待。gen163旧业务6个真实红，gen165正式3/3、36/0、1TODO，freshness前后一致；测试时钟只控制实际确认deadline，不用wall时间猜业务身份。D0上条“callback抛错未证”已在该范围补齐；lease、同步Host异常、call来源、真实Host及OS crash仍另验。证据见[正式记录](../../../proposals/archive/2026-10-05/Sphinx确认等待隔离-2026-10-06.md)。
 - 010/011 使用实际接受的 root profile 续行，验证发送参数、完整 PromptKey、Origin 与 LogicalRun 元数据。profile 没有 model 字段是投影证据，不代替全部调用者证明。
 - 010 的 B4 负编译（GAP-136 的 F# 类型级证明）按 durable-events/023 与 effect-accounting/001 的仓库成熟模式落地：正例 probe 先证明 root witness record（`OwnerIdentityWitnessInput` 四字段）、identity seed union 两个 case、`SendOutcome` 回执值与真实 `SendAgentOwnerRoot` 七参数公开构造在 dispatch-runtime shard 真实闭包内全部合法；随后三个 probe 分别尝试注入 witness record 的 `ModelTarget` 字段、root send 的第八个 model 参数、把 `SendOutcome` 回执塞进 identity seed 参数位置，各自必须以类型边界诊断失败。真实 `Send.fs`/`Send.fsi`/`Dispatcher.fs` 以 bytes/mtime 快照证明未被触碰。诊断正则含 Fable 实际措辞变体；若 Fable 措辞校准需要增补变体，属于措辞校准而非断言弱化。
-- 010 的 managed assignment 回归在 journal 重开后继续 Manager 与 Blogger 子会话，确认 run/root/participant 不变，副本的精确工具权限不丢失，且 continuation 不重新取得 root identity seed。
+- 010 的 managed assignment 回归在 journal 重开后继续 Manager 与 Engineer 子会话，确认 run/root/participant 不变，副本的精确工具权限不丢失，且 continuation 不重新取得 root identity seed。
 - 012 实际 claim acceptance 与独立 turn reconciliation，完整 handoff/容量所有权仍有 TODO。013 是 journal 重开与显式恢复，不能证明真实插件构造无副作用。014 的自造 fatal descriptor 已撤，真实 invariant incident 仍需证明。
 - 015 的载体属性测试、诱饵/getter/冲突输入继续保留；新增实际插件的非法 PromptKey 和非法 agent 反例，防止错误被折叠成 Missing 后获得新 authority。
 

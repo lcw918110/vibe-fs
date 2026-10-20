@@ -80,7 +80,7 @@
 
 ## [019] 唯一 canonical Integrator 与业务注册 integration oracle
 
-系统仅存在一个规范的 Integrator 负责历史事实的解释与积分。各业务模块仅向 Integrator 注册单个信封的纯计算折叠规则，业务模块自身不拥有读取底层历史或重写重放循环的权限。Structural、Journal、Strength、Casebook 与 JsTransaction 的注册必须可由 production surface 上的反例观察：删除任一注册后，该领域的合法 live fact 不得仍产生预期 Current；源码 token、注册名称或调用次数不构成语义证明。
+系统仅存在一个规范的 Integrator 负责历史事实的解释与积分。各业务模块仅向 Integrator 注册单个信封的纯计算折叠规则，业务模块自身不拥有读取底层历史或重写重放循环的权限。Structural、Journal、Casebook 与 JsTransaction 的注册必须可由 production surface 上的反例观察：删除任一注册后，该领域的合法 live fact 不得仍产生预期 Current；源码 token、注册名称或调用次数不构成语义证明。
 
 ## [020] plugin load 仅验证物理可读性且延迟业务激活
 
@@ -92,7 +92,7 @@
 
 ## [022] EventStore contract/runtime 编译闭包必须单向且有界
 
-`EventStore.Model.Contract` 只拥有 `EventEnvelope`、`EventStreamId`、`PayloadRef` 等稳定领域模型；`EventStore.Port.Contract` 只拥有 append/read 所需 request/result/error 与 `IEventStore` capability；`EventStore.EventVocabulary.Contract` 只拥有 canonical EventStore event type 集合，并仅依赖 `Strength.EventVocabulary.Contract` 等更基础词汇。`EventStore.Core.Runtime`、`EventStore.Git.Runtime`、Canonical Integrator、Journal、Host acquisition 与 test surface 必须依赖这些 contract，反向依赖禁止。业务 consumer 的 transitive compile input 不得包含 Git object/ref、process/file codec、Canonical Integrator、Strength predictor/replica/runtime 或 Host adapter。
+`EventStore.Model.Contract` 只拥有 `EventEnvelope`、`EventStreamId`、`PayloadRef` 等稳定领域模型；`EventStore.Port.Contract` 只拥有 append/read 所需 request/result/error 与 `IEventStore` capability；`EventStore.EventVocabulary.Contract` 只拥有 canonical EventStore event type 集合，并仅依赖 `Strength.EventVocabulary.Contract` 等更基础词汇。`EventStore.Core.Runtime`、`EventStore.Git.Runtime`、Canonical Integrator、Journal、Host acquisition 与 test surface 必须依赖这些 contract，反向依赖禁止。业务 consumer 的 transitive compile input 不得包含 Git object/ref、process/file codec、Canonical Integrator 或 Host adapter。
 
 旧 Git/sync physical adapters 已退役，不得重新引入业务 consumer 闭包。Contract locality 的 transitive production `.fs` 不得超过 100；focused EventStore runtime locality 不得超过 185。所有 locality compile 必须由 ProjectReference closure 生成一个零 ProjectReference flat project，并由一次 Fable invocation 编译。
 
@@ -106,7 +106,7 @@ semantic fold失败必须先durable写入对应bad fact与`ProjectionCutTail`，
 
 ## [025] persistence cut stores禁optional fatal hook，唯一fatal owner在composition
 
-`StrengthDurability` 与 `CasebookStore` 不得保留 module-global optional `fatalTripHandler`（默认 None、从未注册即为 dead capability）：semantic-cut 分支只返回 typed 结果（`StrengthPreparedPublish.Rejected` / `Error reason`），fatal 决策唯一归属 composition 侧既有 owner（Strength `Append` 侧 `PluginStrengthPorts.commitAppendResult` 的 `Diagnostic.fatal "strength-semantic-cut"`；`PublishPrepared` 侧 `Rejected` 即为 owner 可观测的 cut-settled 信号）。`JsToolsTransactionStore.appendPrepared/appendCommitted` 的 `FatalProcess.trip "js-transaction-semantic-cut"` 是同一 boundary 的 process-fatal 实现：cut 已由 Integrator 先行 durable settle（bad fact + `ProjectionCutTail` 同一次 append 落盘）才 trip。Prepared cut 前无任何 file effect；Committed cut 后 recovery 按 Committed/Unknown 精确区分，Unknown 永不视为 not-written。法律依据见 `requirements/durable-events/tests/` 下 Prepared/Committed cut 回归测试与各 owning package 的 WHAT-025/013/006 条款。
+`CasebookStore` 与 `JsToolsTransactionStore` 不得保留 module-global optional `fatalTripHandler`（默认 None、从未注册即为 dead capability）：semantic-cut 分支只把 settlement evidence 交给 composition 侧唯一 owner 决定，不在 store 内部另设 optional fallback。`JsToolsTransactionStore.appendPrepared/appendCommitted` 的 `FatalProcess.trip "js-transaction-semantic-cut"` 是同一 boundary 的 process-fatal 实现：cut 已由 Integrator 先行 durable settle（bad fact + `ProjectionCutTail` 同一次 append 落盘），trip 之前 caller 已持有 committed 或 unknown settlement evidence，fatal 不是对未结算截断的伪称。
 
 ## [026] 历史材料只能经离线迁移导入为全新导入事实
 

@@ -99,17 +99,17 @@ module FissionWorkBundle =
 
     let private value (FissionWorkBundle records) = records
 
-    let add laneIndex workRecordRef bundle =
+    let add laneIndex viewRef bundle =
         let records = value bundle
 
         match Map.tryFind laneIndex records with
-        | None -> Ok(FissionWorkBundle(Map.add laneIndex workRecordRef records))
-        | Some existing when existing = workRecordRef -> Ok bundle
-        | Some existing -> Error(FissionBundleError.ConflictingLaneRecord(laneIndex, existing, workRecordRef))
+        | None -> Ok(FissionWorkBundle(Map.add laneIndex viewRef records))
+        | Some existing when existing = viewRef -> Ok bundle
+        | Some existing -> Error(FissionBundleError.ConflictingLaneRecord(laneIndex, existing, viewRef))
 
     let merge left right =
-        let folder state (laneIndex, workRecordRef) =
-            state |> Result.bind (add laneIndex workRecordRef)
+        let folder state (laneIndex, viewRef) =
+            state |> Result.bind (add laneIndex viewRef)
 
         value right |> Map.toList |> List.fold folder (Ok left)
 

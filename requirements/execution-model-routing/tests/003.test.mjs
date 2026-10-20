@@ -94,7 +94,7 @@ test('WHAT[execution-model-routing-003] process restart drops process-local capa
   mkdirSync(dirname(config), { recursive: true })
   writeFileSync(
     config,
-    "export const routingProtocol = 2\nexport default function route(_role, running, previous, purpose) { return running.length < 1 ? { model: 'provider/restart', reasoning: 'none' } : null }\nexport const predictorConfiguration = () => { const state = globalThis.__wanxiangshu_test_predictor_state ?? 'unconfigured'; if (state === 'configured') return { state: 'configured', reason: null }; if (state === 'invalid') return { state: 'invalid', reason: globalThis.__wanxiangshu_test_predictor_reason ?? 'test Predictor configuration is invalid' }; return { state: 'unconfigured', reason: null } }\n",
+    "export const routingProtocol = 2\nexport const hasTheoreticalCapacity = () => true\nexport default function route(_role, running, previous) { return running.length < 1 ? { model: 'provider/restart', reasoning: 'none' } : null }\n",
   )
 
   let maxRetained = 0

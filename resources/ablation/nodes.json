@@ -114,13 +114,6 @@
       "borrowed_surface": []
     },
     {
-      "id": "requirement-grounding",
-      "package": "requirement-grounding",
-      "station": 16,
-      "kind": "package",
-      "borrowed_surface": []
-    },
-    {
       "id": "repository-programming",
       "package": "repository-programming",
       "station": 17,
@@ -180,27 +173,6 @@
       "id": "prefix-stability",
       "package": "prefix-stability",
       "station": 26,
-      "kind": "package",
-      "borrowed_surface": []
-    },
-    {
-      "id": "work-record",
-      "package": "work-record",
-      "station": 27,
-      "kind": "package",
-      "borrowed_surface": []
-    },
-    {
-      "id": "behavior-diagnosis",
-      "package": "behavior-diagnosis",
-      "station": 28,
-      "kind": "package",
-      "borrowed_surface": []
-    },
-    {
-      "id": "guidance-delivery",
-      "package": "guidance-delivery",
-      "station": 29,
       "kind": "package",
       "borrowed_surface": []
     },
@@ -331,13 +303,6 @@
       "id": "sphinx-v2",
       "package": "sphinx-v2",
       "station": 47,
-      "kind": "package",
-      "borrowed_surface": []
-    },
-    {
-      "id": "speculative-investigation",
-      "package": "speculative-investigation",
-      "station": 48,
       "kind": "package",
       "borrowed_surface": []
     },
@@ -481,11 +446,6 @@
     },
     {
       "from": "requirement-system",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-system",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -527,21 +487,6 @@
     {
       "from": "requirement-system",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-system",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-system",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-system",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -627,11 +572,6 @@
     {
       "from": "requirement-system",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-system",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -721,11 +661,6 @@
     },
     {
       "from": "verification-system",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "verification-system",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -767,21 +702,6 @@
     {
       "from": "verification-system",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "verification-system",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "verification-system",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "verification-system",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -867,11 +787,6 @@
     {
       "from": "verification-system",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "verification-system",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -956,11 +871,6 @@
     },
     {
       "from": "js-semantic-surface",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "js-semantic-surface",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -1002,21 +912,6 @@
     {
       "from": "js-semantic-surface",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "js-semantic-surface",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "js-semantic-surface",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "js-semantic-surface",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -1102,11 +997,6 @@
     {
       "from": "js-semantic-surface",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "js-semantic-surface",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -1186,11 +1076,6 @@
     },
     {
       "from": "structured-workflow",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "structured-workflow",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -1232,21 +1117,6 @@
     {
       "from": "structured-workflow",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "structured-workflow",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "structured-workflow",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "structured-workflow",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -1332,11 +1202,6 @@
     {
       "from": "structured-workflow",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "structured-workflow",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -1411,11 +1276,6 @@
     },
     {
       "from": "host-boundary",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-boundary",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -1457,21 +1317,6 @@
     {
       "from": "host-boundary",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-boundary",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-boundary",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-boundary",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -1557,11 +1402,6 @@
     {
       "from": "host-boundary",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-boundary",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -1631,11 +1471,6 @@
     },
     {
       "from": "session-ontology",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "session-ontology",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -1677,21 +1512,6 @@
     {
       "from": "session-ontology",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "session-ontology",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "session-ontology",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "session-ontology",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -1777,11 +1597,6 @@
     {
       "from": "session-ontology",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "session-ontology",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -1846,11 +1661,6 @@
     },
     {
       "from": "participant-identity",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-identity",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -1892,21 +1702,6 @@
     {
       "from": "participant-identity",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-identity",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-identity",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-identity",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -1992,11 +1787,6 @@
     {
       "from": "participant-identity",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-identity",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -2056,11 +1846,6 @@
     },
     {
       "from": "provider-language",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-language",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -2102,21 +1887,6 @@
     {
       "from": "provider-language",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-language",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-language",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-language",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -2202,11 +1972,6 @@
     {
       "from": "provider-language",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-language",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -2261,11 +2026,6 @@
     },
     {
       "from": "office-capability",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "office-capability",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -2307,21 +2067,6 @@
     {
       "from": "office-capability",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "office-capability",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "office-capability",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "office-capability",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -2407,11 +2152,6 @@
     {
       "from": "office-capability",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "office-capability",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -2461,11 +2201,6 @@
     },
     {
       "from": "capability-enforcement",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "capability-enforcement",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -2507,21 +2242,6 @@
     {
       "from": "capability-enforcement",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "capability-enforcement",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "capability-enforcement",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "capability-enforcement",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -2607,11 +2327,6 @@
     {
       "from": "capability-enforcement",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "capability-enforcement",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -2656,11 +2371,6 @@
     },
     {
       "from": "cognitive-environment",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "cognitive-environment",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -2702,21 +2412,6 @@
     {
       "from": "cognitive-environment",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "cognitive-environment",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "cognitive-environment",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "cognitive-environment",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -2802,11 +2497,6 @@
     {
       "from": "cognitive-environment",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "cognitive-environment",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -2846,11 +2536,6 @@
     },
     {
       "from": "action-affordance",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "action-affordance",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -2892,21 +2577,6 @@
     {
       "from": "action-affordance",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "action-affordance",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "action-affordance",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "action-affordance",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -2992,11 +2662,6 @@
     {
       "from": "action-affordance",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "action-affordance",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -3031,11 +2696,6 @@
     },
     {
       "from": "participant-horizon",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-horizon",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -3077,21 +2737,6 @@
     {
       "from": "participant-horizon",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-horizon",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-horizon",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-horizon",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -3177,11 +2822,6 @@
     {
       "from": "participant-horizon",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-horizon",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -3211,11 +2851,6 @@
     },
     {
       "from": "provider-projection",
-      "to": "requirement-grounding",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-projection",
       "to": "repository-programming",
       "kind": "station-order"
     },
@@ -3257,21 +2892,6 @@
     {
       "from": "provider-projection",
       "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-projection",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-projection",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-projection",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -3361,11 +2981,6 @@
     },
     {
       "from": "provider-projection",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-projection",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3382,11 +2997,6 @@
     {
       "from": "provider-projection",
       "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-investigation",
-      "to": "requirement-grounding",
       "kind": "station-order"
     },
     {
@@ -3436,21 +3046,6 @@
     },
     {
       "from": "repository-investigation",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-investigation",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-investigation",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-investigation",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -3536,11 +3131,6 @@
     },
     {
       "from": "repository-investigation",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-investigation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3556,176 +3146,6 @@
     },
     {
       "from": "repository-investigation",
-      "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "repository-programming",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "time-capability",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "process-execution",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "causal-wait",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "durable-events",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "effect-accounting",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "semantic-trace",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "context-compression",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "prefix-stability",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "attention-regulation",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "execution-failure-policy",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "interaction-authority",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "managed-chat-execution",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "execution-model-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "managed-session-lifecycle",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "dispatch-protocol",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "provider-attempt-recovery",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "host-provider-failure-ownership",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "degeneration-guard",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "crash-reconciliation",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "durable-convergence",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "delegation",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "concern-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "intra-participant-parallelism",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "knowledge-reuse",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "obligation-ledger",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "work",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
-      "to": "change-integration",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-grounding",
       "to": "distribution",
       "kind": "station-order"
     },
@@ -3771,21 +3191,6 @@
     },
     {
       "from": "repository-programming",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-programming",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-programming",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-programming",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -3867,11 +3272,6 @@
     {
       "from": "repository-programming",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-programming",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -3931,21 +3331,6 @@
     },
     {
       "from": "time-capability",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "time-capability",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "time-capability",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "time-capability",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -4027,11 +3412,6 @@
     {
       "from": "time-capability",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "time-capability",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -4086,21 +3466,6 @@
     },
     {
       "from": "process-execution",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "process-execution",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "process-execution",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "process-execution",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -4182,11 +3547,6 @@
     {
       "from": "process-execution",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "process-execution",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -4236,21 +3596,6 @@
     },
     {
       "from": "causal-wait",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "causal-wait",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "causal-wait",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "causal-wait",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -4332,11 +3677,6 @@
     {
       "from": "causal-wait",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "causal-wait",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -4381,21 +3721,6 @@
     },
     {
       "from": "durable-events",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "durable-events",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "durable-events",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "durable-events",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -4477,11 +3802,6 @@
     {
       "from": "durable-events",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "durable-events",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -4521,21 +3841,6 @@
     },
     {
       "from": "effect-accounting",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "effect-accounting",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "effect-accounting",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "effect-accounting",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -4617,11 +3922,6 @@
     {
       "from": "effect-accounting",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "effect-accounting",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -4656,21 +3956,6 @@
     },
     {
       "from": "semantic-trace",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "semantic-trace",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "semantic-trace",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "semantic-trace",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -4752,11 +4037,6 @@
     {
       "from": "semantic-trace",
       "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "semantic-trace",
-      "to": "speculative-investigation",
       "kind": "station-order"
     },
     {
@@ -4786,21 +4066,6 @@
     },
     {
       "from": "context-compression",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "context-compression",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "context-compression",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "context-compression",
       "to": "attention-regulation",
       "kind": "station-order"
     },
@@ -4886,11 +4151,6 @@
     },
     {
       "from": "context-compression",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "context-compression",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4907,21 +4167,6 @@
     {
       "from": "context-compression",
       "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "prefix-stability",
-      "to": "work-record",
-      "kind": "station-order"
-    },
-    {
-      "from": "prefix-stability",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "prefix-stability",
-      "to": "guidance-delivery",
       "kind": "station-order"
     },
     {
@@ -5011,11 +4256,6 @@
     },
     {
       "from": "prefix-stability",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "prefix-stability",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5031,351 +4271,6 @@
     },
     {
       "from": "prefix-stability",
-      "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "behavior-diagnosis",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "attention-regulation",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "execution-failure-policy",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "interaction-authority",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "managed-chat-execution",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "execution-model-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "managed-session-lifecycle",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "dispatch-protocol",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "provider-attempt-recovery",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "host-provider-failure-ownership",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "degeneration-guard",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "crash-reconciliation",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "durable-convergence",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "delegation",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "concern-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "intra-participant-parallelism",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "knowledge-reuse",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "obligation-ledger",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "work",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "change-integration",
-      "kind": "station-order"
-    },
-    {
-      "from": "work-record",
-      "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "guidance-delivery",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "attention-regulation",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "execution-failure-policy",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "interaction-authority",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "managed-chat-execution",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "execution-model-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "managed-session-lifecycle",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "dispatch-protocol",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "provider-attempt-recovery",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "host-provider-failure-ownership",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "degeneration-guard",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "crash-reconciliation",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "durable-convergence",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "delegation",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "concern-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "intra-participant-parallelism",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "knowledge-reuse",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "obligation-ledger",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "work",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "change-integration",
-      "kind": "station-order"
-    },
-    {
-      "from": "behavior-diagnosis",
-      "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "attention-regulation",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "execution-failure-policy",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "interaction-authority",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "managed-chat-execution",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "execution-model-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "managed-session-lifecycle",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "dispatch-protocol",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "provider-attempt-recovery",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "host-provider-failure-ownership",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "degeneration-guard",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "crash-reconciliation",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "durable-convergence",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "delegation",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "concern-routing",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "intra-participant-parallelism",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "knowledge-reuse",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "obligation-ledger",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "work",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
-      "to": "change-integration",
-      "kind": "station-order"
-    },
-    {
-      "from": "guidance-delivery",
       "to": "distribution",
       "kind": "station-order"
     },
@@ -5461,11 +4356,6 @@
     },
     {
       "from": "attention-regulation",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "attention-regulation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5561,11 +4451,6 @@
     },
     {
       "from": "execution-failure-policy",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "execution-failure-policy",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5656,11 +4541,6 @@
     },
     {
       "from": "interaction-authority",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "interaction-authority",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5746,11 +4626,6 @@
     },
     {
       "from": "managed-chat-execution",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "managed-chat-execution",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5831,11 +4706,6 @@
     },
     {
       "from": "execution-model-routing",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "execution-model-routing",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5911,11 +4781,6 @@
     },
     {
       "from": "managed-session-lifecycle",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "managed-session-lifecycle",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5986,11 +4851,6 @@
     },
     {
       "from": "dispatch-protocol",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "dispatch-protocol",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6056,11 +4916,6 @@
     },
     {
       "from": "provider-attempt-recovery",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-attempt-recovery",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6121,11 +4976,6 @@
     },
     {
       "from": "host-provider-failure-ownership",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-provider-failure-ownership",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6181,11 +5031,6 @@
     },
     {
       "from": "degeneration-guard",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "degeneration-guard",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6236,11 +5081,6 @@
     },
     {
       "from": "crash-reconciliation",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "crash-reconciliation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6286,11 +5126,6 @@
     },
     {
       "from": "durable-convergence",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "durable-convergence",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6331,11 +5166,6 @@
     },
     {
       "from": "delegation",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "delegation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6371,11 +5201,6 @@
     },
     {
       "from": "concern-routing",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "concern-routing",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6406,11 +5231,6 @@
     },
     {
       "from": "intra-participant-parallelism",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "intra-participant-parallelism",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6436,11 +5256,6 @@
     },
     {
       "from": "knowledge-reuse",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "knowledge-reuse",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6461,11 +5276,6 @@
     },
     {
       "from": "epistemic-reasoning",
-      "to": "speculative-investigation",
-      "kind": "station-order"
-    },
-    {
-      "from": "epistemic-reasoning",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -6481,26 +5291,6 @@
     },
     {
       "from": "epistemic-reasoning",
-      "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "speculative-investigation",
-      "to": "obligation-ledger",
-      "kind": "station-order"
-    },
-    {
-      "from": "speculative-investigation",
-      "to": "work",
-      "kind": "station-order"
-    },
-    {
-      "from": "speculative-investigation",
-      "to": "change-integration",
-      "kind": "station-order"
-    },
-    {
-      "from": "speculative-investigation",
       "to": "distribution",
       "kind": "station-order"
     },

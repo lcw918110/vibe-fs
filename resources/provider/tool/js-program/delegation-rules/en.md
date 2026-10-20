@@ -22,8 +22,8 @@ await js.fork({ charge: "index the parser", name: "parser-index", calling: "engi
 const { records, byName } = await js.join();
 ```
 
-- Result: `{ ok: true, records: [{ name, agentId, role, status, workRecord }], byName: { [name]: record } }`.
-- `status` is `completed` | `undelivered` | `failed` | `abandoned`; `workRecord` is the child's terminal record delivered via `js.deliver` (empty when `undelivered`, `failed`, or `abandoned`).
+- Result: `{ ok: true, records: [{ name, agentId, role, status, view }], byName: { [name]: record } }`.
+- `status` is `completed` | `undelivered` | `failed` | `abandoned`; `view` is the child's delivered TOML view from `js.deliver` (empty when `undelivered`, `failed`, or `abandoned`).
 - Membership-scoped: it collects the children this session created. Refusal codes: `context-unavailable`, `not-ready`, `nothing-to-join`, `join-in-progress`, `interrupted`, `abandoned`.
 
 ## fission
@@ -73,6 +73,6 @@ const advice = await js.advisor("Is the caching layer's eviction policy sound?",
 ```
 
 - Consult this session's **dedicated advisor** — a reviewer holding no tools that answers in prose — before committing to an approach or declaring work done. The same session always reaches the same advisor, and later calls append only the view delta plus the new intent, so it keeps the thread.
-- `intent` is the question, sent as its own prompt. `view` declares what the advisor may read, in the same shape as the round view declaration (`{ prefixUntil, thenRemove? }`); the host renders those records in the Chronicle shape and sends them as one prompt, then the intent as another. They are never merged.
+- `intent` is the question, sent as its own prompt. `view` declares what the advisor may read, in the same shape as the round view declaration (`{ prefixUntil, thenRemove? }`); the host renders those records as one TOML prompt, then the intent as another. They are never merged.
 - Result: `{ ok: true, advice }` (prose as data) or `{ ok: false, code: "advisor-unavailable", reason }`; a malformed view declaration refuses with `VIEW_DECLARATION_INVALID`.
 - Treat the answer as guidance: a plan, a correction, or a stop signal. The consult itself writes nothing into your transcript.

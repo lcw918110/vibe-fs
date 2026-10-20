@@ -10,13 +10,13 @@ for (const commitment of ['before', 'after']) {
       assert.equal(await forkTool.settle(runtime, owner, 'FIRST-ANSWER', 'provider-a'), true)
       const withheld = await forkTool.consumeWorkWithOutcome(runtime, owner, a.root, commitment)
       assert.equal(withheld.ok, false)
-      assert.equal(Object.hasOwn(withheld, 'workRecord'), false)
+      assert.equal(Object.hasOwn(withheld, 'view'), false)
       const state = forkTool.workSnapshot(runtime, owner)[0]
       assert.equal(state.lifecycle, commitment === 'before' ? 'CompletedAwaitingJoin' : 'Retired')
       await assertCold(runtime, directory, owner)
       const next = await forkTool.consumeWorkWithOutcome(runtime, owner, a.root, 'confirmed')
       assert.equal(next.ok, commitment === 'before')
-      if (next.ok) assert.match(next.workRecord, /FIRST-ANSWER/)
+      if (next.ok) assert.match(next.view, /FIRST-ANSWER/)
       assert.equal((await forkTool.consumeWorkWithOutcome(runtime, owner, a.root, 'confirmed')).ok, false)
       await assertCold(runtime, directory, owner)
     })
@@ -33,7 +33,7 @@ test('WHAT[managed-session-lifecycle-008] concurrent exact consumers deliver a w
       forkTool.consumeWorkWithOutcome(runtime, owner, a.root, 'confirmed'),
     ])
     assert.equal(outcomes.filter(outcome => outcome.ok).length, 1)
-    assert.match(outcomes.find(outcome => outcome.ok).workRecord, /FIRST-ANSWER/)
+    assert.match(outcomes.find(outcome => outcome.ok).view, /FIRST-ANSWER/)
   })
 })
 
@@ -250,11 +250,11 @@ test('WHAT[managed-session-lifecycle-008] actual join withholds payload until re
     // confirms.
     const dyingBefore = await forkTool.coldConsumeWorkWithOutcome(directory, owner, a.root, 'before')
     assert.equal(dyingBefore.ok, false)
-    assert.equal(Object.hasOwn(dyingBefore, 'workRecord'), false)
+    assert.equal(Object.hasOwn(dyingBefore, 'view'), false)
     assert.equal((await forkTool.coldWorkSnapshot(directory, owner)).find(work => work.root === a.root).lifecycle, 'CompletedAwaitingJoin')
     const recovered = await forkTool.coldConsumeWorkWithOutcome(directory, owner, a.root, 'confirmed')
     assert.equal(recovered.ok, true)
-    assert.match(recovered.workRecord, /CRASH-ANSWER-A/)
+    assert.match(recovered.view, /CRASH-ANSWER-A/)
     deliveries += 1
     assert.equal((await forkTool.coldWorkSnapshot(directory, owner)).find(work => work.root === a.root).lifecycle, 'Retired')
     const repeat = await forkTool.coldConsumeWorkWithOutcome(directory, owner, a.root, 'confirmed')
@@ -268,7 +268,7 @@ test('WHAT[managed-session-lifecycle-008] actual join withholds payload until re
     // tombstone instead of a second delivery.
     const dyingAfter = await forkTool.coldConsumeWorkWithOutcome(directory, owner, b.root, 'after')
     assert.equal(dyingAfter.ok, false)
-    assert.equal(Object.hasOwn(dyingAfter, 'workRecord'), false)
+    assert.equal(Object.hasOwn(dyingAfter, 'view'), false)
     assert.equal((await forkTool.coldWorkSnapshot(directory, owner)).find(work => work.root === b.root).lifecycle, 'Retired')
     const reclaimer = await forkTool.coldConsumeWorkWithOutcome(directory, owner, b.root, 'confirmed')
     assert.equal(reclaimer.ok, false)

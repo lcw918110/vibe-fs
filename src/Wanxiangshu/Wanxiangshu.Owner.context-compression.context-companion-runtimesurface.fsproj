@@ -7,29 +7,28 @@
     <WanxiangshuOwnerLocalityKind>composition</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.journal-outcome-contract.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.action-affordance.opencode-tools-managedagent.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.prefix-stability.mission-obligation-todo-prefixepoch.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-companionfactfold.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-foldsurface.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.execution-session-recovery-model.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-projection.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-agentjournal.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-session-contract.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.managed-session-lifecycle.session-attachment-runtime.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.participant-identity.participant-persona.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.provider-projection.participant-provider-projection-wire.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-composition.durable-trace-capture.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.semantic-trace.context-trace-model.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.session-ontology.execution-session-association.fsproj"/>
-    <Compile Include="Context/Companion/Transform.fsi"/>
-    <Compile Include="Context/Companion/Transform.fs"/>
-    <Compile Include="OpenCode/Host/HostCompactionGate.fsi"/>
-    <Compile Include="OpenCode/Host/HostCompactionGate.fs"/>
-    <Compile Include="OpenCode/Host/HostCompactionObserver.fsi"/>
-    <Compile Include="OpenCode/Host/HostCompactionObserver.fs"/>
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.journal-outcome-contract.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.action-affordance.opencode-tools-managedagent.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.prefix-stability.mission-obligation-todo-prefixepoch.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-companionfactfold.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-fact.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.execution-session-recovery-model.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-projection.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-agentjournal.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-session-contract.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.managed-session-lifecycle.session-attachment-runtime.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.participant-identity.participant-persona.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.provider-projection.participant-provider-projection-wire.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-composition.durable-trace-capture.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.semantic-trace.context-trace-model.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.session-ontology.execution-session-association.fsproj" />
+    <Compile Include="Context/Companion/Transform.fsi" />
+    <Compile Include="Context/Companion/Transform.fs" />
+    <Compile Include="OpenCode/Host/HostCompactionGate.fsi" />
+    <Compile Include="OpenCode/Host/HostCompactionGate.fs" />
+    <Compile Include="OpenCode/Host/HostCompactionObserver.fsi" />
+    <Compile Include="OpenCode/Host/HostCompactionObserver.fs" />
   </ItemGroup>
 </Project>

@@ -2,8 +2,6 @@ namespace Wanxiangshu.OpenCode
 
 open System
 open System.Threading.Tasks
-open Wanxiangshu.Context.Companion.Blogger.OpenCode
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Session.Attachment
 open Wanxiangshu.Execution.Session.ChatExecution
@@ -22,7 +20,6 @@ type PluginRuntimeScope
         isModelLeaseExternallyOwned: SessionId -> bool,
         jsLifecyclePersistence: Wanxiangshu.Repository.Programming.Js.IJsLifecyclePersistence option
     ) =
-    let blogger = PluginBloggerScope()
 
     let sessions =
         PluginSessionScope(journal, isModelLeaseExternallyOwned, jsLifecyclePersistence)
@@ -167,9 +164,6 @@ type PluginRuntimeScope
     member _.AttachScopeDispose(dispose: unit -> unit) =
         scopeDisposers <- dispose :: scopeDisposers
 
-    /// Composition-of-owners: Blogger parking/flight/drain state lives in its own scope.
-    member _.Blogger = blogger
-    member _.BloggerRuntimeHost: IBloggerRuntimeHost = blogger :> IBloggerRuntimeHost
 
     /// Composition-of-owners: per-instance session registries live in their own scope.
     member _.Sessions = sessions
@@ -447,15 +441,6 @@ type PluginRuntimeScope
             | Some active -> do! attempt (fun () -> active.DisposeSession sessionId)
             | None -> ()
 
-            // C6 item 27: waiters are keyed by BloggerSessionId. When the MAIN is
-            // deleted, cancel the linked Blogger's parked waiter + request slots too.
-            let linkedBloggerKeys =
-                try
-                    sessions.LinkedBloggerKeys sessionId
-                with failure ->
-                    remember failure
-                    []
-
             // managed-chat-execution-010: a session delete may not be declared
             // drained until this scope's unfinished executions carry a durable
             // terminal and their exact capacity is back, so ClearSession is awaited.
@@ -468,17 +453,7 @@ type PluginRuntimeScope
 
             attemptSync (fun () -> this.LoopSensor.DropSession(SessionId.create sessionId))
 
-            // Always cancel the deleted id; also cancel linked Blogger keys.
-            let cancelKeys = (sessionId :: linkedBloggerKeys) |> List.distinct
-
-            for key in cancelKeys do
-                attemptSync (fun () -> (blogger :> IBloggerRuntimeHost).CancelParked key)
-                attemptSync (fun () -> blogger.CancelEpisodesForSession key)
-
-                attemptSync (fun () ->
-                    lock SharedState.BloggerFlightGate (fun () -> SharedState.BloggerFlights.Remove key |> ignore))
-
-                attemptSync (fun () -> recovery.ClearAttemptPlansFor key)
+            attemptSync (fun () -> recovery.ClearAttemptPlansFor sessionId)
 
             this.RethrowFirstFailure firstFailure
         }
@@ -522,8 +497,6 @@ type PluginRuntimeScope
             remember (captureSyncFailure (fun () -> subscription |> Option.iter (fun active -> active.Dispose())))
             subscription <- None
 
-            blogger.BeginShutdown()
-
             let reconcileDrain = this.TakeReconcileDrain()
             let ownedWorkDrain = this.StopOwnedWorkAndDrain()
 
@@ -532,8 +505,6 @@ type PluginRuntimeScope
 
             let! backgroundFailure = ownedWorkDrain
             remember backgroundFailure
-
-            remember (captureSyncFailure (fun () -> blogger.Dispose()))
 
             let! runtimeFailure = captureTaskFailure (disposeRuntimeOwner (this.TakeRuntimeOwner()))
             remember runtimeFailure
@@ -545,8 +516,6 @@ type PluginRuntimeScope
             for dispose in List.rev scopeDisposers do
                 remember (captureSyncFailure dispose)
 
-            let! repairDrainFailure = captureTaskFailure (blogger.DrainRepairEpisodes())
-            remember repairDrainFailure
 
             // managed-session-lifecycle-018: the shared durable substrate is the last owner
             // released, after scheduler/background/process-local detach drains.

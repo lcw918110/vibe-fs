@@ -4,7 +4,6 @@ open System
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Durable.Fact
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Fission
@@ -128,17 +127,6 @@ module LoadRecoverySurface =
 
     let clearLane (session: string) : unit =
         FissionRuntime.unbindLane (SessionId.create session)
-
-    let staleBloggerRequests (state: obj) (liveFlight: string -> string -> bool) : obj array =
-        BloggerAbandon.staleOpenRequests
-            (fun session request -> liveFlight (SessionId.value session) (BloggerRequestId.value request))
-            (stateOf state).Projection.AgentProjections
-        |> List.map (fun (main, request) ->
-            box
-                {| main = SessionId.value main
-                   blogger = SessionId.value request.BloggerSessionId
-                   request = BloggerRequestId.value request.RequestId |})
-        |> List.toArray
 
     let drainCompletions (state: obj) (parent: string) (maxCount: int) (completedAt: string) : Task<obj> =
         task {

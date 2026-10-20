@@ -55,7 +55,7 @@ test('WHAT[repository-programming-057] ls honours .gitignore, negation, nested .
   }
 })
 
-test('WHAT[repository-programming-057] walk and search compositions over ls, cat, and whereAll work end-to-end', async () => {
+test('WHAT[repository-programming-057] rg returns parsed JSON and skips ignored paths', async () => {
   const { dir, cleanup } = sandbox()
   try {
     mkdirSync(join(dir, '.git', 'info'), { recursive: true })
@@ -74,40 +74,25 @@ test('WHAT[repository-programming-057] walk and search compositions over ls, cat
 
     const outcome = await runProgram(
       dir,
-      `  async walk(dir = ".") {
-    const found = [];
-    for (const entry of await this.ls(dir)) {
-      const full = dir === "." ? entry : dir + "/" + entry;
-      if (entry.endsWith("/")) {
-        found.push(...(await this.walk(full.slice(0, -1))));
-      } else {
-        found.push(full);
-      }
-    }
-    return found;
-  }
-  async run() {
-    const walked = await this.walk(".");
-    const hits = [];
-    for (const path of walked) {
-      const text = await this.cat(path);
-      for (const [begin, end] of this.whereAll(text, "targetNeedle")) {
-        hits.push({ path, matched: text.slice(begin, end) });
-      }
-    }
-    return { walked, hits };
+      `  async run() {
+    const found = await this.rg(["targetNeedle", "."]);
+    const hits = found.messages.flatMap((message) =>
+      message.type === "match"
+        ? [{ path: message.data.path.text, matched: message.data.submatches[0].match.text }]
+        : []);
+    return { exitCode: found.exitCode, hits };
   }`,
     )
 
     assert.equal(caseName(outcome), 'Succeeded')
     const doc = render(outcome)
-    assert.match(doc, /walked = \[".gitignore", "keep.bak", "src\/.gitignore", "src\/a.ts", "src\/sub\/b.ts"\]/)
+    assert.match(doc, /exitCode = 0/)
     assert.equal(doc.includes('dist/bundle.js'), false)
     assert.equal(doc.includes('old.bak'), false)
     assert.equal(doc.includes('src/skip.gen.ts'), false)
-    assert.match(doc, /path = "keep.bak"/)
-    assert.match(doc, /path = "src\/a.ts"/)
-    assert.match(doc, /path = "src\/sub\/b.ts"/)
+    assert.match(doc, /path = "\.\/keep\.bak"/)
+    assert.match(doc, /path = "\.\/src\/a\.ts"/)
+    assert.match(doc, /path = "\.\/src\/sub\/b\.ts"/)
   } finally {
     cleanup()
   }

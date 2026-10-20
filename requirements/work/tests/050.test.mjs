@@ -78,7 +78,7 @@ test('WHAT[work-050] js.ask in an S1 plan program records the question and parks
 
 test('WHAT[work-050] js.ask outside S1 is refused with ASK_REFUSED', async () => {
   await withPlanSession(async ({ hooks, runtime, session }) => {
-    const store = workspaceEventStoreSurface.acquire(journalSurface.JournalSurface_initializeStateRoot(runtime.directory))
+    const store = workspaceEventStoreSurface.acquire(await journalSurface.JournalSurface_initializeStateRoot(runtime.directory))
     const promoted = await lifecycleSurface.seedReviewAs(store, session, 'Promoted', 'reviewer')
     assert.equal(promoted.reviewed, true, 'the S1 tenure is promoted into S2')
     runtime.client.tui = { showToast: async () => ({}) }

@@ -423,7 +423,7 @@ const ProviderFailure = await import("../../../dist/Participant/Provider/Attempt
 const Dispatch = await import("../../../dist/Interaction/Dispatch/DispatchSurface.js");
 const Authority = await import("../../../dist/Interaction/Authority/Surface.js");
 const Runtime = await import("../../../dist/Interaction/Authority/RuntimeSurface.js");
-const Strength = await import("../../../dist/Strength/Surface.js");
+
 const Persona = await import("../../../dist/Participant/Persona/Surface.js");
 
 const hash = (value) => `H(${value})`
@@ -506,9 +506,7 @@ const EXPECTED = {
   manager: { role: 'manager', persona: 'Lead' },
   engineer: { role: 'engineer', persona: 'Engineer' },
   devops: { role: 'devops', persona: 'Operator' },
-  blogger: { role: 'blogger', persona: 'Chronicler' },
   bookkeeper: { role: 'bookkeeper', persona: 'Curator' },
-  predictor: { role: 'engineer', persona: 'Engineer' },
 }
 const expectedView = (name, origin = 'ResolvedAtRoot') => ({
   name,
@@ -590,17 +588,6 @@ export default function route(role, running, previous, purpose) {
   return { model: 'test/deep', reasoning: 'high' }
 }
 
-export const predictorConfiguration = () => {
-  const state = globalThis.__wanxiangshu_test_predictor_state ?? 'unconfigured'
-  if (state === 'configured') return { state: 'configured', reason: null }
-  if (state === 'invalid') {
-    return {
-      state: 'invalid',
-      reason: globalThis.__wanxiangshu_test_predictor_reason ?? 'test Predictor configuration is invalid',
-    }
-  }
-  return { state: 'unconfigured', reason: null }
-}
 `,
   'utf8',
 )
@@ -738,7 +725,7 @@ test('WHAT[participant-identity-008] an_inherited_seed_carries_the_owner_partici
   const session = 'ses_pid008_foreign'
   const profile = rootProfile(session, `root-${session}`, 'manager')
 
-  for (const childName of ['devops', 'engineer', 'blogger', 'orchestrator']) {
+  for (const childName of ['devops', 'engineer', 'orchestrator']) {
     const seed = inheritedSeed(childName, profile)
     assert.equal(
       seed.participantIdentity.name,

@@ -51,7 +51,7 @@ test('WHAT[work-011] Promoted deliver waits for its terminal attempt interrupt b
       ])
       assert.equal(first, 'interrupt', 'deliver must interrupt before returning')
       assert.equal(returned, false, 'deliver must wait for the Host interrupt acknowledgement')
-      const work = lifecycleWorkView(runtime, session)
+      const work = await lifecycleWorkView(runtime, session)
       assert.equal(work.delivered, true, 'interrupt follows durable delivery')
       assert.equal(work.active, false, 'a final delivery has no successor tenure')
       assert.deepEqual(runtime.abortedIds, [session])
@@ -93,7 +93,7 @@ for (const failure of ['rejected', 'thrown']) {
         }),
         new RegExp(reason),
       )
-      const work = lifecycleWorkView(runtime, session)
+      const work = await lifecycleWorkView(runtime, session)
       assert.equal(work.delivered, true, 'a failed physical interrupt must not undo committed delivery')
       assert.equal(work.active, false, 'interrupt failure must not create a successor')
       assert.equal(runtime.prompts.length, 0)
@@ -132,11 +132,11 @@ test('WHAT[work-011] actual Stayed deliver starts one same-session successor, th
       () => Promise.resolve(hooks['chat.params']({ sessionID: session, messageID: messageId(gate), agent: 'manager' }, supersededParamsOut)),
       'chat.params on a superseded retired attempt must not throw PROMPT-006',
     )
-    // WHAT[008] strips the predecessor's assistant and tool from the successor.
-    // The user root and the successor prompt stay.
+    // The relay keeps the predecessor's physical history: context retention
+    // belongs to the view declaration, not to the successor hand-off.
     assert.ok(output.messages.some(message => messageId(message) === 'user-root'))
     assert.ok(output.messages.some(message => messageId(message) === messageId(gate)))
-    assert.equal(output.messages.some(message => messageId(message) === 'review-run'), false)
+    assert.ok(output.messages.some(message => messageId(message) === 'review-run'))
     // The successor keeps the user root, strips the predecessor assistant, and does not abort.
     assert.deepEqual(runtime.abortedIds.filter(id => id === session), [])
     assert.equal(runtime.prompts.filter(p => p.sessionID === session).length, 1)
@@ -321,7 +321,7 @@ test('WHAT[work-011] a review whose reviewer identity is the incumbency owner is
   // incumbency with that same identity as owner: the reviewer equals the owner,
   // and the kernel refuses the self-review instead of recording it.
   await withReview(async ({execute, runtime, session}) => {
-    assert.equal(lifecycleWorkView(runtime, session).active, true)
+    assert.equal((await lifecycleWorkView(runtime, session)).active, true)
     await assert.rejects(
       execute(scores('PERFECT')),
       (error) => {
@@ -330,7 +330,7 @@ test('WHAT[work-011] a review whose reviewer identity is the incumbency owner is
       },
     )
     // The refusal wrote nothing: the tenure stays active and unreviewed.
-    const afterTool = lifecycleWorkView(runtime, session)
+    const afterTool = await lifecycleWorkView(runtime, session)
     assert.equal(afterTool.reviewed, '')
     assert.equal(afterTool.active, true)
     // The seeding path with the explicit reviewer identity is refused by the
@@ -342,7 +342,7 @@ test('WHAT[work-011] a review whose reviewer identity is the incumbency owner is
         return true
       },
     )
-    assert.equal(lifecycleWorkView(runtime, session).reviewed, '')
+    assert.equal((await lifecycleWorkView(runtime, session)).reviewed, '')
   }, {ownerId: 'manager-reviewer', session: 'review-manager-self-review'})
 })
 
@@ -380,7 +380,7 @@ test('WHAT[work-011] Stayed deliver enqueues the successor manager-assess prompt
 
 const withSeededManagerWork = async (outcome, body) => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-successor-context-'))
-  const stateRoot = journalSurface.JournalSurface_initializeStateRoot(root)
+  const stateRoot = await journalSurface.JournalSurface_initializeStateRoot(root)
   const store = workspaceSurface.acquire(stateRoot)
   try {
     const sessionId = `manager-${outcome ?? 'first'}`
@@ -400,11 +400,11 @@ const withSeededManagerWork = async (outcome, body) => {
   }
 }
 
-const successorPromptOf = (root, sessionId) => managerWorkflow.successorPromptContextOf(root, sessionId)
+const successorPromptOf = async (root, sessionId) => managerWorkflow.successorPromptContextOf(root, sessionId)
 
 test('WHAT[work-011] a first tenure with no retirement owes no successor prompt', async () => {
   await withSeededManagerWork(null, async ({root, sessionId}) => {
-    const context = successorPromptOf(root, sessionId)
+    const context = await successorPromptOf(root, sessionId)
     assert.equal(context.present, false, 'the first tenure has no predecessor to hand over')
     assert.equal(context.retirementId, '')
     assert.equal(context.providerRunId, '')
@@ -418,14 +418,14 @@ test('WHAT[work-011] a Relayed retirement owes the successor prompt until that s
     assert.equal(view.ActiveId.length > 0, true, 'the relay opened its successor in the same record')
     assert.equal(view.Reviewed, false, 'the successor starts unreviewed')
 
-    const context = successorPromptOf(root, sessionId)
+    const context = await successorPromptOf(root, sessionId)
     assert.equal(context.present, true, 'the unreviewed successor owes the successor prompt')
     assert.equal(context.retirementId, retirement.RetirementId, 'the occasion is named by the retirement')
     assert.equal(context.providerRunId, 'run-2', 'the cut carries the provider run that made the retirement')
 
     const reviewed = await life.seedReview(store, sessionId, 'Stayed')
     assert.equal(reviewed.ok, true, reviewed.error)
-    assert.equal(successorPromptOf(root, sessionId).present, false, 'a reviewed successor owes no successor prompt')
+    assert.equal((await successorPromptOf(root, sessionId)).present, false, 'a reviewed successor owes no successor prompt')
   })
 })
 
@@ -434,13 +434,13 @@ test('WHAT[work-011] the delivered hand-off reopens the occasion on the unreview
     const delivered = Array.from(view.Retirements ?? []).at(-1)
     assert.equal(delivered.Outcome, 'Delivered')
     assert.equal(view.ActiveId ?? null, null, 'a delivery leaves no open tenure')
-    assert.equal(successorPromptOf(root, sessionId).present, false, 'a delivered work owes no successor prompt')
+    assert.equal((await successorPromptOf(root, sessionId)).present, false, 'a delivered work owes no successor prompt')
 
-    const receipt = hostSurface.handOffDeliveredTenure(root, sessionId, 'hand-off:successor-context', 3)
+    const receipt = await hostSurface.handOffDeliveredTenure(root, sessionId, 'hand-off:successor-context', 3)
     assert.equal(receipt.ok, true, receipt.error)
     assert.equal(receipt.kind, 'HandOff')
 
-    const context = successorPromptOf(root, sessionId)
+    const context = await successorPromptOf(root, sessionId)
     assert.equal(context.present, true, 'the reopened tenure owes the successor prompt')
     assert.equal(context.retirementId, delivered.RetirementId, 'the delivered retirement is the cut')
     assert.equal(context.providerRunId, 'run-2', 'the cut carries the delivering provider run')

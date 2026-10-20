@@ -8,10 +8,23 @@ const journalCodec = await import("../../../dist/Persistence/Journal/CodecSurfac
 const factCodec = await import("../../../dist/Persistence/Journal/FactCodecSurface.js");
 
 const SESSION = 'ses_a'
-const CLOSED = {
-  family: 'Companion',
-  case: 'CompanionBloggerClosed',
-  payload: { SessionId: SESSION },
+const ROOT_ACCEPTED = {
+  family: 'Prompt',
+  case: 'AuthorityRootAccepted',
+  payload: {
+    SchemaVersion: 2,
+    SessionId: SESSION,
+    LogicalRunId: 'run_a',
+    AuthorityRootUserMessageId: 'msg_root_a',
+    AuthorityKind: 'HumanRoot',
+    IdentitySeed: {
+      kind: 'RootSelection',
+      ownerSession: null,
+      ownerLogicalRun: null,
+      ownerAuthorityRoot: null,
+      participantIdentity: { participant: 'engineer', role: 'engineer', persona: 'Engineer', personaCatalogVersion: 1, origin: 'ResolvedAtRoot' },
+    },
+  },
 }
 const env = (overrides = {}) => ({
   runtime: 'rt_a',
@@ -20,7 +33,7 @@ const env = (overrides = {}) => ({
   id: 'a'.repeat(32),
   stream: { kind: 'Session', id: SESSION },
   providerRun: null,
-  fact: CLOSED,
+  fact: ROOT_ACCEPTED,
   ...overrides,
 })
 const readEnvelope = (value) => ({
@@ -59,10 +72,23 @@ const journalCodec = await import("../../../dist/Persistence/Journal/CodecSurfac
 const eventCodec = await import("../../../dist/Persistence/EventStore/CodecSurface.js");
 
 const SESSION = 'ses_a'
-const CLOSED = {
-  family: 'Companion',
-  case: 'CompanionBloggerClosed',
-  payload: { SessionId: SESSION },
+const ROOT_ACCEPTED = {
+  family: 'Prompt',
+  case: 'AuthorityRootAccepted',
+  payload: {
+    SchemaVersion: 2,
+    SessionId: SESSION,
+    LogicalRunId: 'run_a',
+    AuthorityRootUserMessageId: 'msg_root_a',
+    AuthorityKind: 'HumanRoot',
+    IdentitySeed: {
+      kind: 'RootSelection',
+      ownerSession: null,
+      ownerLogicalRun: null,
+      ownerAuthorityRoot: null,
+      participantIdentity: { participant: 'engineer', role: 'engineer', persona: 'Engineer', personaCatalogVersion: 1, origin: 'ResolvedAtRoot' },
+    },
+  },
 }
 const env = (overrides = {}) => ({
   runtime: 'rt_a',
@@ -71,7 +97,7 @@ const env = (overrides = {}) => ({
   id: 'a'.repeat(40),
   stream: { kind: 'Session', id: SESSION },
   providerRun: null,
-  fact: CLOSED,
+  fact: ROOT_ACCEPTED,
   ...overrides,
 })
 const eventShape = (event) => ({
@@ -327,10 +353,23 @@ const { default: test } = await import("node:test");
 const journalCodec = await import("../../../dist/Persistence/Journal/CodecSurface.js");
 
 const SESSION = 'ses_meta'
-const CLOSED = {
-  family: 'Companion',
-  case: 'CompanionBloggerClosed',
-  payload: { SessionId: SESSION },
+const ROOT_ACCEPTED = {
+  family: 'Prompt',
+  case: 'AuthorityRootAccepted',
+  payload: {
+    SchemaVersion: 2,
+    SessionId: SESSION,
+    LogicalRunId: 'run_meta',
+    AuthorityRootUserMessageId: 'msg_root_meta',
+    AuthorityKind: 'HumanRoot',
+    IdentitySeed: {
+      kind: 'RootSelection',
+      ownerSession: null,
+      ownerLogicalRun: null,
+      ownerAuthorityRoot: null,
+      participantIdentity: { participant: 'engineer', role: 'engineer', persona: 'Engineer', personaCatalogVersion: 1, origin: 'ResolvedAtRoot' },
+    },
+  },
 }
 const envelope = (overrides = {}) => ({
   runtime: 'rt_meta',
@@ -339,7 +378,7 @@ const envelope = (overrides = {}) => ({
   id: 'a'.repeat(40),
   stream: { kind: 'Session', id: SESSION },
   providerRun: null,
-  fact: CLOSED,
+  fact: ROOT_ACCEPTED,
   ...overrides,
 })
 const readEnvelope = (value) => ({
@@ -403,12 +442,12 @@ test('WHAT[durable-events-002] schemaVersion without store context is not flagge
   ].join('\n')
   assert.equal(scanSchemaVersionInStoreContext(host, 'Session/HandleCompletionCodec.fs').length, 0)
 
-  const enforcer = [
-    'module EnforcerCatalog',
+  const domain = [
+    'module DomainConfig',
     'let validate (schemaVersion: int) rules =',
     '    if schemaVersion <> 1 then Error "bad" else Ok rules',
   ].join('\n')
-  assert.equal(scanSchemaVersionInStoreContext(enforcer, 'Domain/EnforcerCatalog.fs').length, 0)
+  assert.equal(scanSchemaVersionInStoreContext(domain, 'Domain/DomainConfig.fs').length, 0)
 })
 test('WHAT[durable-events-002] always-forbidden store version tokens are RED without extra context', () => {
   for (const token of ['storageVersion', 'journalVersion', 'formatVersion']) {

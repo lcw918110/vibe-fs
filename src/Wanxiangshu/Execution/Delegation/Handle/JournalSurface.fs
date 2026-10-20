@@ -61,7 +61,7 @@ module JournalSurface =
         | Retired -> "Retired"
         | Abandoned _ -> "Abandoned"
 
-    let private recordView (record: HandleWorkRecord) : obj =
+    let private recordView (record: HandleWork) : obj =
         let reason =
             match record.Lifecycle with
             | Abandoned reason -> Some(string reason)

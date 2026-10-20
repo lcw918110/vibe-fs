@@ -11,9 +11,8 @@ WHAT 是合同。这里说明当前证据，不为恢复增加隐含规则。用
 | 003、007 | 实际恢复决策及 TurnUnknown 不作为业务终态发布 | 未知外部 effect 的物理查询和全体普通入口重入 |
 | 011、013、014 | 实际闭包、permit membership、合并与授权函数 | 每次生产 join/await 都调用检查，或已有全家族的物理恢复证据 |
 | 015 | 实际附加会话分类及 SyncDelegate 的观察/创建端口，包含并发共用创建 | 重启替换时先证明消失、Close 再 Link 的完整链 |
-| 016 | 实际 Blogger scope 的显式 dispose 取消 waiter，新 scope 不继承 flight | 真实进程死亡后的全部能力清空 |
 | 018 | 实际插件 config hook 不注册显式续传命令；另保留旧文件名的结构审计 | 真正重启归位、中断历史可见性、全部观察者不触发副作用 |
-| 020 | 实际 canonical codec/fold、child load selection/void、取消结算桥接、JoinDrain 与 Blogger stale 判定；真实 child 结算的持久写入、失败传播和 journal 重开 | 插件激活顺序、普通执行前的结算门禁、真实命令不重放、模型绑定及进程崩溃 |
+| 020 | 实际 canonical codec/fold、child load selection/void、取消结算桥接、JoinDrain；真实 child 结算的持久写入、失败传播和 journal 重开 | 插件激活顺序、普通执行前的结算门禁、真实命令不重放、模型绑定及进程崩溃 |
 | 021 | durable handle 按 id/byname 查询、真实 binding cache fallback、由已折叠 Fission fact 解析 lane | 所有 reuse/placement/await 入口的接线、真实重启、物理资源所有权 |
 
 011 的接缝构造已授权的输入夹具，调用生产 permit/membership 函数；它不实际恢复这些成员。009 的 trace 检查器确实拒绝所给的乱序夹具，但合法 fixture 不是产品真实执行记录。所谓 `crashScenario` 的旧函数名实际仅驱动 handle projection，002/012 不再把它称为进程崩溃证明。
@@ -28,7 +27,7 @@ WHAT 是合同。这里说明当前证据，不为恢复增加隐含规则。用
 
 020/021 的 LoadRecoverySurface 保留 canonical fact 转换、实际 owner 与投影观察；新增 settleChildRuns 只把真实 JournalHandle 转交 ChildWorkRecovery，不模拟 append。020 的 integration 回归通过真实 Dispatcher 建立合法 parent 与 Engineer/DevOps 子 run，重开 journal 后结算，按 event_id 核对新增的两条 ChildRunVoided，不产生 completion；再次重开仍归零且重复结算不追加事实。另一用例先激活新 writer，再阻断 events 目录，要求实际 void 写入的 WriteUnknown 与随后 poisoned writer 的 WriterUnavailable 都传播为失败，Current 和磁盘保持旧事实；目录在 finally 恢复，换新 writer 后才可成功结算。该故障在旧吞错实现上取得了“缺少预期拒绝”的红测。
 
-这些回归调用真实 journal 结算入口，没有驱动 PluginRecoveryWiring、插件 activation 或 OS crash。crash-reconciliation-018/020 的 Load Phase 表述与 durable-events-020、host-boundary-021 的延迟激活边界仍需协调；本轮不改变激活时点和等待语义，不声称已经阻止普通执行越过未完成结算。JoinDrain 的受控 append port 仍只把实际事实交 production Fold，没有写磁盘。主动取消产生可收取 completion，ChildRunVoided 不产生 completion，二者不是同一场景。Blogger 仍在同一已打开请求的投影上追加 abandon，再证明下一请求可物化，不用空投影自证。
+这些回归调用真实 journal 结算入口，没有驱动 PluginRecoveryWiring、插件 activation 或 OS crash。crash-reconciliation-018/020 的 Load Phase 表述与 durable-events-020、host-boundary-021 的延迟激活边界仍需协调；本轮不改变激活时点和等待语义，不声称已经阻止普通执行越过未完成结算。JoinDrain 的受控 append port 仍只把实际事实交 production Fold，没有写磁盘。主动取消产生可收取 completion，ChildRunVoided 不产生 completion，二者不是同一场景。
 
 绑定/Fission 测试会在 finally 移除自己的 resolver/cache。canonical journal JSON 是持久协议载体，不是 Fable 内部 tag/fields 对象。018 的旧 `/continue` 材料链随新版合同退役；本轮逐项覆盖迁移表见[历史迁移记录](../../../proposals/archive/2026-10-03/20模块迁移-恢复与委托-2026-09-28.md)。
 

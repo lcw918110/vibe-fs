@@ -30,7 +30,7 @@ module ChildRecovery =
 
     type CompletedPayload =
         { RunId: string
-          WorkRecord: string
+          View: string
           ChildSessionId: string
           AuthorityRoot: string
           ProviderRun: string

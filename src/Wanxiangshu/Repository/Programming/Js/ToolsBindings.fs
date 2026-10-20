@@ -30,6 +30,9 @@ module JsToolsBindings =
     [<Import("realpathSync", "node:fs")>]
     let private realpathSync (path: string) : string = jsNative
 
+    [<Import("spawn", "node:child_process")>]
+    let private spawnProcess (file: string) (args: string array) (options: obj) : obj = jsNative
+
     [<Emit("$0 === undefined || $0 === null")>]
     let private isUndefined (value: obj) : bool = jsNative
 
@@ -42,11 +45,11 @@ module JsToolsBindings =
     [<Emit("new Error().stack")>]
     let private currentStack () : string = jsNative
 
-    /// `js.run` returns a structured outcome; a host failure must surface as a
+    /// `js.call` returns a structured outcome; a host failure must surface as a
     /// decoded js failure, so reject the promise with the `__jsFailure`
     /// sentinel the wrapper classifies instead of returning ok:false as data.
     [<Emit("Promise.resolve($0).then(function(value) { if (value && value.ok === false) { const err = new Error(value.reason || value.code); err.__jsFailure = { code: value.code, reason: value.reason || value.code }; throw err; } return value; })")>]
-    let private rejectRunFailure (promise: obj) : obj = jsNative
+    let private rejectCallFailure (promise: obj) : obj = jsNative
 
     /// A span must cross the vm boundary as a plain JS array, not a typed
     /// array: the parked payload is JSON round-tripped, and a typed array
@@ -324,6 +327,276 @@ module JsToolsBindings =
                 return createObj [ "ok" ==> true; "entries" ==> names ]
             }
             |> renderOutcome
+
+    [<Emit("Array.isArray($0)")>]
+    let private isStringArray (value: obj) : bool = jsNative
+
+    [<Emit("$0.length")>]
+    let private jsLength (value: obj) : int = jsNative
+
+    [<Emit("$0[$1]")>]
+    let private jsItem (value: obj) (index: int) : obj = jsNative
+
+    [<Emit("JSON.parse($0)")>]
+    let private parseJson (text: string) : obj = jsNative
+
+    let private optionValue (args: string array) (index: int) =
+        if index + 1 < args.Length && not (args[index + 1].StartsWith "-") then
+            Some args[index + 1]
+        else
+            None
+
+    let private pathOperand (token: string) =
+        if System.String.IsNullOrEmpty token || token = "-" || token.StartsWith "-" then
+            None
+        else
+            Some token
+
+    let private recordPatternFileOption (token: string) (value: string) (found: ResizeArray<string>) =
+        if token = "-f" || token = "--file" then
+            found.Add value
+
+    let private consumePatternOption
+        (args: string array)
+        (index: int)
+        (token: string)
+        (patterns: int ref)
+        (found: ResizeArray<string>)
+        =
+        match optionValue args index with
+        | Some value ->
+            recordPatternFileOption token value found
+            patterns.Value <- patterns.Value + 1
+            index + 2
+        | None -> index + 1
+
+    let private consumePositional (filesOnly: bool) (patterns: int ref) (token: string) (found: ResizeArray<string>) =
+        if not filesOnly && patterns.Value = 0 then
+            patterns.Value <- 1
+        else
+            found.Add token
+
+    let private consumeArgument
+        (args: string array)
+        (index: int)
+        (patterns: int ref)
+        (filesOnly: bool ref)
+        (found: ResizeArray<string>)
+        : int =
+        let token = args[index]
+
+        if token = "--" then
+            args[(index + 1) ..] |> Array.choose pathOperand |> found.AddRange
+            args.Length
+        elif token = "--files" then
+            filesOnly.Value <- true
+            index + 1
+        elif token = "-e" || token = "--regexp" || token = "-f" || token = "--file" then
+            consumePatternOption args index token patterns found
+        elif token.StartsWith "--file=" then
+            found.Add(token.Substring("--file=".Length))
+            patterns.Value <- patterns.Value + 1
+            index + 1
+        elif
+            token.StartsWith "--glob="
+            || token.StartsWith "--iglob="
+            || token.StartsWith "-g="
+        then
+            index + 1
+        elif token = "--glob" || token = "--iglob" || token = "-g" then
+            index + 2
+        elif token.StartsWith "--regexp=" then
+            patterns.Value <- patterns.Value + 1
+            index + 1
+        elif token.StartsWith "--ignore-file=" then
+            found.Add(token.Substring("--ignore-file=".Length))
+            index + 1
+        elif token = "--ignore-file" then
+            optionValue args index |> Option.iter found.Add
+            index + 2
+        elif
+            token.StartsWith "--pre="
+            || token.StartsWith "--hostname-bin="
+            || token.StartsWith "--hyperlink-format="
+        then
+            index + 1
+        elif token = "--pre" || token = "--hostname-bin" || token = "--hyperlink-format" then
+            index + 2
+        elif token.StartsWith "-" then
+            index + 1
+        else
+            consumePositional filesOnly.Value patterns token found
+            index + 1
+
+    /// Positional paths plus path-bearing options. Pattern files and search
+    /// roots must stay inside the workspace; nothing else is interpreted.
+    let private pathArguments (args: string array) =
+        let found = ResizeArray<string>()
+        // DSL-MUTABLE: algorithm-scratch — loop index cursor
+        let mutable index = 0
+        // DSL-MUTABLE: algorithm-scratch — pattern argument counter
+        let patterns = ref 0
+        // DSL-MUTABLE: algorithm-scratch — files-only flag
+        let filesOnly = ref false
+
+        while index < args.Length do
+            index <- consumeArgument args index patterns filesOnly found
+
+        if found.Count = 0 then
+            found.Add "."
+
+        List.ofSeq found
+
+    let private boundedPath (root: string) (path: string) =
+        result {
+            let! full = resolveInside root path
+            do! ensureRealPathInside root path full
+            return ()
+        }
+
+    /// `rg(argv)` is `rg --json <argv>` with the argv passed through. The
+    /// program receives one JSON object, never the JSONL text.
+    [<Emit("""
+(function (spawn, file, args, cwd, maxBuffer) {
+  return new Promise(function (resolve, reject) {
+    let settled = false;
+    const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
+    const fail = (error) => { if (!settled) { settled = true; reject(error); } };
+    let child;
+    try {
+      child = spawn(file, args, { cwd: cwd, stdio: ["ignore", "pipe", "pipe"] });
+    } catch (error) {
+      finish({ status: null, stdout: "", stderr: "", error: { message: String((error && error.message) || error) } });
+      return;
+    }
+    const outChunks = [];
+    const errChunks = [];
+    let outBytes = 0;
+    let errBytes = 0;
+    let overflow = false;
+    const take = (chunks, which) => (chunk) => {
+      const size = chunk && typeof chunk.length === "number" ? chunk.length : 0;
+      if (which === "out") outBytes += size; else errBytes += size;
+      chunks.push(chunk);
+      if (!overflow && (outBytes > maxBuffer || errBytes > maxBuffer)) {
+        overflow = true;
+        child.kill();
+      }
+    };
+    if (child.stdout) child.stdout.on("data", take(outChunks, "out"));
+    if (child.stderr) child.stderr.on("data", take(errChunks, "err"));
+    const text = (chunks) => (chunks.length === 0 ? "" : Buffer.concat(chunks).toString("utf8"));
+    child.on("error", (error) => {
+      if (overflow) {
+        fail(Object.assign(new Error("rg output exceeded " + maxBuffer + " bytes"), { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }));
+        return;
+      }
+      finish({ status: null, stdout: "", stderr: "", error: { message: String((error && error.message) || error) } });
+    });
+    child.on("close", (code) => {
+      if (overflow) {
+        fail(Object.assign(new Error("rg output exceeded " + maxBuffer + " bytes"), { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }));
+        return;
+      }
+      finish({ status: code, stdout: text(outChunks), stderr: text(errChunks), error: null });
+    });
+  });
+})($0, $1, $2, $3, $4)
+    """)>]
+    let private spawnRgAsync
+        (spawn: obj)
+        (file: string)
+        (args: string array)
+        (cwd: string)
+        (maxBuffer: int)
+        : Task<obj> =
+        jsNative
+
+    let private rgMissingStatusDetail (outcome: obj) : string =
+        if isNull (outcome?error) then
+            "rg produced no exit code"
+        else
+            string (outcome?error?message)
+
+    let private rgExitFailureDetail (stdout: string) (stderr: string) =
+        if System.String.IsNullOrWhiteSpace stderr then
+            stdout
+        else
+            stderr
+
+    let private splitRgPaths (args: string array) (stdout: string) : string array =
+        if Array.exists (fun token -> token = "-0" || token = "--null") args then
+            stdout.Split('\000', System.StringSplitOptions.RemoveEmptyEntries)
+        else
+            stdout.Split('\n', System.StringSplitOptions.RemoveEmptyEntries)
+
+    let private tryParseJsonLine (line: string) : Result<obj, string> =
+        try
+            Ok(parseJson line)
+        with error ->
+            Error(string error?message)
+
+    let private renderRgJsonOutcome (exitCode: int) (stdout: string) : obj =
+        let parsed =
+            stdout.Split('\n', System.StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map tryParseJsonLine
+
+        match parsed |> Array.tryFind _.IsError with
+        | Some(Error detail) -> failureObj (JsFailure.RgFailed detail)
+        | _ ->
+            let messages = parsed |> Array.map (fun item -> item |> Result.defaultValue null)
+            createObj [ "ok" ==> true; "exitCode" ==> exitCode; "messages" ==> messages ]
+
+    let private renderRgOutcome (summary: bool) (args: string array) (outcome: obj) : obj =
+        if isNull (outcome?status) then
+            failureObj (JsFailure.RgFailed(rgMissingStatusDetail outcome))
+        elif int outcome?status <> 0 && int outcome?status <> 1 then
+            let stdout = string outcome?stdout
+            let stderr = string outcome?stderr
+            failureObj (JsFailure.RgFailed(rgExitFailureDetail stdout stderr))
+        elif summary then
+            let exitCode = int outcome?status
+            let stdout = string outcome?stdout
+            createObj [ "ok" ==> true; "exitCode" ==> exitCode; "paths" ==> splitRgPaths args stdout ]
+        else
+            let exitCode = int outcome?status
+            let stdout = string outcome?stdout
+            renderRgJsonOutcome exitCode stdout
+
+    let private isRgSummary (args: string array) : bool =
+        args
+        |> Array.exists (fun token ->
+            token = "--files"
+            || token = "--files-with-matches"
+            || token = "-l"
+            || token = "--files-without-match"
+            || token = "--count"
+            || token = "-c"
+            || token = "--count-matches"
+            || token = "--quiet"
+            || token = "-q"
+            || token = "--vimgrep"
+            || token = "--type-list")
+
+    let private executeRg (root: string) (args: string array) : Task<obj> =
+        task {
+            match pathArguments args |> List.traverseResultM (boundedPath root) with
+            | Error failure -> return failureObj failure
+            | Ok _ ->
+                let summary = isRgSummary args
+                let invocation = if summary then args else Array.append [| "--json" |] args
+                let! outcome = spawnRgAsync spawnProcess "rg" invocation root 16777216
+                return renderRgOutcome summary args outcome
+        }
+
+    let private makeRgMember (root: string) =
+        "rg"
+        ==> fun (argv: obj) ->
+            if not (isStringArray argv) then
+                Task.FromResult(failureObj (JsFailure.InvalidArgument "rg requires one string array argv"))
+            else
+                let args = Array.init (jsLength argv) (fun index -> string (jsItem argv index))
+                executeRg root args
 
     /// stat(path): metadata; a missing path is a normal `exists = false`.
     let private makeStatMember (root: string) =
@@ -690,22 +963,22 @@ module JsToolsBindings =
     let private makeParkMember (parkState: Wanxiangshu.Process.JsSandbox.ParkState) =
         "park" ==> fun (payload: obj) -> suspend parkState payload
 
-    /// The host loop behind `js.run`. The closure is injected by the workflow
-    /// (Process.JsRunLoop) so this module stays free of process interop.
-    type JsRunHost =
+    /// The host loop behind `js.call`. The closure is injected by the workflow
+    /// (Process.JsCallLoop) so this module stays free of process interop.
+    type JsCallHost =
         { Loop: Wanxiangshu.Process.JsSandbox.ParkState option -> obj -> string -> Task<obj> }
 
-    /// `js.run(class extends js.Runnable { ... })`: hand the class to the host
+    /// `js.call(class extends js.Callable { ... })`: hand the class to the host
     /// loop and await its structured outcome. Without an injected host loop
-    /// the member refuses with RUN_HOST_UNAVAILABLE instead of pretending.
-    let private makeRunMember (host: JsRunHost option) (parkState: Wanxiangshu.Process.JsSandbox.ParkState option) =
+    /// the member refuses with CALL_HOST_UNAVAILABLE instead of pretending.
+    let private makeCallMember (host: JsCallHost option) (parkState: Wanxiangshu.Process.JsSandbox.ParkState option) =
         let settled =
-            fun (runnableClass: obj) ->
+            fun (callableClass: obj) ->
                 match host with
-                | Some injected -> box (injected.Loop parkState runnableClass (currentStack ()))
-                | None -> box (task { return failureObj JsFailure.RunHostUnavailable })
+                | Some injected -> box (injected.Loop parkState callableClass (currentStack ()))
+                | None -> box (task { return failureObj JsFailure.CallHostUnavailable })
 
-        "run" ==> fun (runnableClass: obj) -> rejectRunFailure (settled runnableClass)
+        "call" ==> fun (callableClass: obj) -> rejectCallFailure (settled callableClass)
 
     /// `js.fork(payload)` hands the payload to the wiring-owned fork spec and
     /// returns its receipt text; `js.join()` waits for this session's children.
@@ -763,7 +1036,7 @@ module JsToolsBindings =
         (explicitReads: ResizeArray<JsExplicitFileRead>)
         (ledger: JsAsIsLedger)
         (parkState: Wanxiangshu.Process.JsSandbox.ParkState option)
-        (runHost: JsRunHost option)
+        (callHost: JsCallHost option)
         (delegationHost: JsDelegationHost option)
         : obj =
         let members =
@@ -776,6 +1049,9 @@ module JsToolsBindings =
               if Set.contains JsCapability.Glob capabilities then
                   makeLsMember root
 
+              if Set.contains JsCapability.Grep capabilities then
+                  makeRgMember root
+
               if Set.contains JsCapability.Write capabilities then
                   makeWriteMember root staging readSnapshots ledger
                   makeMkdirMember root
@@ -787,7 +1063,7 @@ module JsToolsBindings =
                   makeMvMember root staging readSnapshots ledger
 
               if Set.contains JsCapability.Exec capabilities then
-                  makeRunMember runHost parkState
+                  makeCallMember callHost parkState
 
               if Set.contains JsCapability.Fork capabilities then
                   makeForkMember delegationHost
@@ -822,10 +1098,10 @@ module JsToolsBindings =
         (readSnapshots: ResizeArray<JsReadSnapshot>)
         (explicitReads: ResizeArray<JsExplicitFileRead>)
         (ledger: JsAsIsLedger)
-        (runHost: JsRunHost option)
+        (callHost: JsCallHost option)
         (delegationHost: JsDelegationHost option)
         : obj =
-        createApiCore capabilities root staging readSnapshots explicitReads ledger None runHost delegationHost
+        createApiCore capabilities root staging readSnapshots explicitReads ledger None callHost delegationHost
 
     /// Build the api object for one sandbox run that carries a park lifecycle
     /// state (PLAN S2 step 4). `parkState` is the mutable object shared with
@@ -838,7 +1114,7 @@ module JsToolsBindings =
         (explicitReads: ResizeArray<JsExplicitFileRead>)
         (ledger: JsAsIsLedger)
         (parkState: Wanxiangshu.Process.JsSandbox.ParkState)
-        (runHost: JsRunHost option)
+        (callHost: JsCallHost option)
         (delegationHost: JsDelegationHost option)
         : obj =
         createApiCore
@@ -849,5 +1125,5 @@ module JsToolsBindings =
             explicitReads
             ledger
             (Some parkState)
-            runHost
+            callHost
             delegationHost

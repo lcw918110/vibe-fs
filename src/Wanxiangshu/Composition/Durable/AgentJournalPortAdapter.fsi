@@ -4,8 +4,6 @@ open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
-open Wanxiangshu.OpenCode.Host.RequirementGrounding
-open Wanxiangshu.Requirement.Grounding
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Composition.Turn
@@ -16,7 +14,6 @@ module AgentJournalPortAdapter =
     val forDelegatedToolEstimate: journal: AgentJournal -> DelegatedToolEstimatePort
     val forSessionStartedAt: journal: AgentJournal -> SessionStartedAtPort
     val forProviderFailure: journal: AgentJournal -> ProviderFailureJournalPort
-    val forRequirementGrounding: journal: AgentJournal -> RequirementGroundingPort
     val forWire: journal: AgentJournal -> WireJournalPort
     val forTurnObservation: journal: AgentJournal -> TurnObservationJournalPort
     val forTerminalPolicy: journal: AgentJournal -> TerminalPolicyPort

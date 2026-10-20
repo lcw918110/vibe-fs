@@ -34,16 +34,19 @@ module OrchestratorProgram =
         (rebasedReady:
             {| RebasedCommit: CommitHash
                TargetHeadSnapshot: CommitHash |})
-        : Result<PublicationEvidence, OrchestratorVerdict> =
-        match deps.Relay.LifecycleReviewed job.ManagerSessionId job.Worktree.Path with
-        | None -> Error(failed job "publish refused: no durable Reviewed Promoted or Stayed")
-        | Some(_, authority) ->
-            Ok
-                { ManagerJobId = job.JobId
-                  TargetRef = job.TargetRef
-                  ExpectedHead = rebasedReady.TargetHeadSnapshot
-                  CandidateCommit = rebasedReady.RebasedCommit
-                  AuthorityRevision = AuthorityRevision.create authority }
+        : Task<Result<PublicationEvidence, OrchestratorVerdict>> =
+        task {
+            match! deps.Relay.LifecycleReviewed job.ManagerSessionId job.Worktree.Path with
+            | None -> return Error(failed job "publish refused: no durable Reviewed Promoted or Stayed")
+            | Some(_, authority) ->
+                return
+                    Ok
+                        { ManagerJobId = job.JobId
+                          TargetRef = job.TargetRef
+                          ExpectedHead = rebasedReady.TargetHeadSnapshot
+                          CandidateCommit = rebasedReady.RebasedCommit
+                          AuthorityRevision = AuthorityRevision.create authority }
+        }
 
     let private buildClaimPublicationEvidence
         (job: ManagerJob)
@@ -538,27 +541,31 @@ module OrchestratorProgram =
             (rebasedReady:
                 {| RebasedCommit: CommitHash
                    TargetHeadSnapshot: CommitHash |})
-            : Result<PublicationEvidence, OrchestratorVerdict> =
-            if candidate <> rebasedReady.RebasedCommit then
-                Error(
-                    failed
-                        job
-                        (sprintf
-                            "Candidate %s does not match rebased evidence pin %s"
-                            (CommitHash.value candidate)
-                            (CommitHash.value rebasedReady.RebasedCommit))
-                )
-            elif expectedHead <> rebasedReady.TargetHeadSnapshot then
-                Error(
-                    failed
-                        job
-                        (sprintf
-                            "Target head %s does not match rebased evidence snapshot %s"
-                            (CommitHash.value expectedHead)
-                            (CommitHash.value rebasedReady.TargetHeadSnapshot))
-                )
-            else
-                buildPublicationEvidence deps job rebasedReady
+            : Task<Result<PublicationEvidence, OrchestratorVerdict>> =
+            task {
+                if candidate <> rebasedReady.RebasedCommit then
+                    return
+                        Error(
+                            failed
+                                job
+                                (sprintf
+                                    "Candidate %s does not match rebased evidence pin %s"
+                                    (CommitHash.value candidate)
+                                    (CommitHash.value rebasedReady.RebasedCommit))
+                        )
+                elif expectedHead <> rebasedReady.TargetHeadSnapshot then
+                    return
+                        Error(
+                            failed
+                                job
+                                (sprintf
+                                    "Target head %s does not match rebased evidence snapshot %s"
+                                    (CommitHash.value expectedHead)
+                                    (CommitHash.value rebasedReady.TargetHeadSnapshot))
+                        )
+                else
+                    return! buildPublicationEvidence deps job rebasedReady
+            }
 
         let continueCertifiedWithRebased
             (rebasedReady:
@@ -566,7 +573,7 @@ module OrchestratorProgram =
                    TargetHeadSnapshot: CommitHash |})
             =
             task {
-                match certifiedEvidence rebasedReady with
+                match! certifiedEvidence rebasedReady with
                 | Error verdict -> return verdict
                 | Ok evidence -> return! publishValidated evidence
             }

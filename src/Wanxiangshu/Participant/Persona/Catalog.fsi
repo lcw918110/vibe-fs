@@ -13,10 +13,8 @@ type Persona =
     | Researcher
     | Analyst
     | Auditor
-    | Chronicler
     | Distiller
     | Curator
-    | Predictor
     | Planner
 
 [<RequireQualifiedAccess>]

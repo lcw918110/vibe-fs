@@ -23,7 +23,7 @@ test('WHAT[repository-programming-003] JS002_generation_is_deterministic_and_nam
   assert.equal(a.description, b.description)
   assert.equal(a.baseClassSource, b.baseClassSource)
   assert.deepEqual(a.examples, b.examples)
-  assert.equal(a.capabilities.length, 3)
+  assert.equal(a.capabilities.length, 4)
 })
 
 test('WHAT[repository-programming-003] JS002_same_capabilities_share_mechanics_but_role_shapes_the_ultra_example', () => {

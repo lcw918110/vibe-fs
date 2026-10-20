@@ -99,4 +99,8 @@ test('WHAT[managed-session-lifecycle-025] ToolRuntimeScope production wiring dra
   assert.ok(res.engineerAfter.includes('eng-pty-1'), 'Engineer child PTY must remain alive and unaffected')
 })
 
-test.todo('WHAT[managed-session-lifecycle-025] TERM must be followed by real process exit, and escalate to KILL when the grace window elapses; the controlled PTY port starts no OS process, so real exit and the KILL escalation cannot be observed in this harness (GAP-133)')
+test('WHAT[managed-session-lifecycle-025] TERM must be followed by real process exit, and escalate to KILL when the grace window elapses; the controlled PTY port starts no OS process, so real exit and the KILL escalation cannot be observed in this harness (GAP-133)', { todo: 'GAP-133: controlled PTY port starts no OS process; real process exit and KILL escalation require physical OS PTY harness' }, () => {
+  // WHAT[managed-session-lifecycle-025]:
+  // 固定 DevOps 每次 run 终态结算，立即收束其拥有的全部 PTY：TERM 后等待真实退出，必要时升级 KILL，随后清除记账。
+  // 本 harness 使用受控 PTY port，未启动真实 OS 进程，真实 exit 与 KILL 升级证据保留 GAP-133 物理边界。
+})

@@ -20,7 +20,7 @@ module OrchestratorHostSurface =
     /// Read-only probe: the durable loop signal this owner derives for one Manager
     /// session's work, from the same fold the acquisition program reads before it
     /// waits. Never dispatches and never writes.
-    val loopSignalOf: workspace: string -> managerSessionId: string -> obj
+    val loopSignalOf: workspace: string -> managerSessionId: string -> Task<obj>
 
     /// change-integration-005/013: the same Work's next tenure after a delivered
     /// manager life, through exactly the hand-off the Host applies when it
@@ -28,12 +28,12 @@ module OrchestratorHostSurface =
     /// for that session (null/undefined when none); the host itself never guesses
     /// one.
     val handOffDeliveredTenure:
-        workspace: string -> managerSessionId: string -> requestId: string -> observedCursor: obj -> obj
+        workspace: string -> managerSessionId: string -> requestId: string -> observedCursor: obj -> Task<obj>
 
     /// change-integration-005/013: the durable review evidence the publish gate
     /// reads for one Manager road. `Refused` means the gate refuses publishing with
     /// zero writes.
-    val publishReviewOf: workspace: string -> managerSessionId: string -> obj
+    val publishReviewOf: workspace: string -> managerSessionId: string -> Task<obj>
 
     val hasChild: handle: obj -> agentId: string -> bool
 

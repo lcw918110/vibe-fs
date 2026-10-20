@@ -1,6 +1,0 @@
-# Positive package-external path set. Repository-root relative; gitignore wildmatch syntax.
-# requirements/work-record/** is covered implicitly and must not be listed here.
-# Ordinary rules include matching paths. A leading ! excludes an exception from earlier includes.
-
-/src/Wanxiangshu/Mission/WorkRecord/**
-/src/Wanxiangshu/Context/Trace/**

@@ -11,7 +11,7 @@ module PromptResources =
         | Role.Orchestrator -> "role/orchestrator"
         | Role.Engineer -> "role/engineer"
         | Role.DevOps -> "role/devops"
-        | Role.Blogger -> "role/blogger"
+        // retired roles are not prompted
         | Role.Plan -> "role/plan"
         | Role.Advisor -> "role/advisor"
         | Role.Coder
@@ -31,7 +31,6 @@ module PromptResources =
           "role/engineer"
           "role/devops"
           "role/orchestrator"
-          "role/blogger"
           "role/bookkeeper"
           "role/plan"
           "role/advisor"
@@ -94,7 +93,7 @@ module PromptResources =
           EngineerSystemPrompt = systemForRole lang Role.Engineer
           DevopsSystemPrompt = systemForRole lang Role.DevOps
           OrchestratorSystemPrompt = systemForRole lang Role.Orchestrator
-          BloggerSystemPrompt = systemForRole lang Role.Blogger
+
           PlanSystemPrompt = systemForRole lang Role.Plan
           AdvisorSystemPrompt = systemForRole lang Role.Advisor }
 

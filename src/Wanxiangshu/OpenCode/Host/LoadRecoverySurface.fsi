@@ -17,5 +17,4 @@ module LoadRecoverySurface =
     val clearResolvers: unit -> unit
     val lane: session: string -> obj
     val clearLane: session: string -> unit
-    val staleBloggerRequests: state: obj -> liveFlight: (string -> string -> bool) -> obj array
     val drainCompletions: state: obj -> parent: string -> maxCount: int -> completedAt: string -> Task<obj>

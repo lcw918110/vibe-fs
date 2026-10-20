@@ -49,7 +49,6 @@ const startedWire = (physicalUserMessageId, providerRun = `provider-${physicalUs
       Accepted: JSON.parse(acceptedWire(physicalUserMessageId, { SessionId: sessionId }))[1][1][1].Evidence,
       ProviderRun: tagged('ProviderRunIdentity', providerRun),
       RequestKind: 'WorkMain',
-      ProjectionChoice: 'UseCommittedEpoch',
     },
     Key: keyWire(sessionId, physicalUserMessageId),
     SchemaVersion: 1,
@@ -61,7 +60,6 @@ const terminalWire = (physicalUserMessageId, disposition, sessionId = 'ses-chat'
       Accepted: JSON.parse(acceptedWire(physicalUserMessageId, { SessionId: sessionId }))[1][1][1].Evidence,
       ProviderRun: tagged('ProviderRunIdentity', `provider-${physicalUserMessageId}`),
       RequestKind: 'WorkMain',
-      ProjectionChoice: 'UseCommittedEpoch',
     }],
     Key: keyWire(sessionId, physicalUserMessageId),
     SchemaVersion: 1,
@@ -125,7 +123,6 @@ const startedEvidence = {
   Accepted: acceptedEvidence,
   ProviderRun: ['ProviderRunIdentity', 'provider-chat-fixture'],
   RequestKind: 'WorkMain',
-  ProjectionChoice: 'UseCommittedEpoch',
 }
 const started = factWire('ProviderStarted', {
   Evidence: startedEvidence,
@@ -183,7 +180,6 @@ test('WHAT[managed-chat-execution-002] schema v1 Accepted ProviderStarted and Te
         participant: 'engineer',
         role: 'engineer',
         requestKind: 'work-main',
-        projectionChoice: { kind: 'UseCommittedEpoch' },
       },
     },
   ])
@@ -226,7 +222,6 @@ const evidence = (overrides = {}) => ({
   providerRun: 'provider-provider-lifecycle',
   origin: 'HumanRoot',
   requestKind: 'work-main',
-  projectionChoice: { kind: 'UseCommittedEpoch' },
   ...overrides,
 })
 const accept = (attempt = evidence(), appendOutcome = 'Committed') => ({

@@ -29,7 +29,30 @@ const journalEnvelope = {
   id: 'a'.repeat(40),
   stream: { kind: 'Session', id: SESSION },
   providerRun: null,
-  fact: { family: 'Companion', case: 'CompanionBloggerClosed', payload: { SessionId: SESSION } },
+  fact: {
+    family: 'Prompt',
+    case: 'AuthorityRootAccepted',
+    payload: {
+      SchemaVersion: 2,
+      SessionId: SESSION,
+      LogicalRunId: 'run-durability',
+      AuthorityRootUserMessageId: 'root-durability',
+      AuthorityKind: 'HumanRoot',
+      IdentitySeed: {
+        kind: 'RootSelection',
+        ownerSession: null,
+        ownerLogicalRun: null,
+        ownerAuthorityRoot: null,
+        participantIdentity: {
+          participant: 'engineer',
+          role: 'engineer',
+          persona: 'Engineer',
+          personaCatalogVersion: 1,
+          origin: 'ResolvedAtRoot',
+        },
+      },
+    },
+  },
 }
 
 export const eventShape = (event) => ({

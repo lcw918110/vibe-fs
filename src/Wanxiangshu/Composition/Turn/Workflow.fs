@@ -2,7 +2,6 @@ namespace Wanxiangshu.Composition.Turn
 
 open System.Collections.Generic
 open System.Threading.Tasks
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Foundation
@@ -26,7 +25,6 @@ module TurnWorkflow =
         (rootWorkspace: IRootWorkspaceReader)
         (eventPort: IEventObservationPort)
         (journal: AgentJournal option)
-        (recoveryScope: IBloggerRuntimeHost)
         (syncDelegate: SyncDelegateRuntime option)
         (nudgeSent: HashSet<string>)
         (joinGuardNudges: HashSet<string>)
@@ -88,7 +86,6 @@ module TurnWorkflow =
                     eventPort
                     journal
                     observation
-                    recoveryScope
                     joinGuardNudges
                     hasLivePty
                     abortCause

@@ -18,8 +18,8 @@ module RolesSurface =
     /// The ten canonical role labels, sorted.
     let allRoleLabels: string array = labelsOf (fun _ -> true)
 
-    /// AGENT-008 public fork / horizon vocabulary (no Distiller, no Blogger).
+    /// AGENT-008 public fork / horizon vocabulary (no Distiller).
     let allPublicRoleLabels: string array = labelsOf (Roles.isInternal >> not)
 
-    /// Private runtimes: Distiller (map/reduce) and Blogger (companion).
+    /// Private runtimes: Distiller (map/reduce).
     let allInternalRoleLabels: string array = labelsOf Roles.isInternal

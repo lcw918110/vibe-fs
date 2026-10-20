@@ -20,7 +20,7 @@ const denied = /当前不可用|不可用|not available right now|not available 
 const devopsDispatchDenied = /尚未被系统接纳|不得向 DevOps 派发|assessment.*not.*accepted|not allowed until/i
 const bound = (sessionID, callID) => ({ sessionID, agent: 'manager', callID, messageID: `msg-${callID}`, providerRunID: `run-${callID}` })
 
-const storeOf = (directory) => workspaceEvents.acquire(journalSurface.JournalSurface_initializeStateRoot(directory))
+const storeOf = async (directory) => workspaceEvents.acquire(await journalSurface.JournalSurface_initializeStateRoot(directory))
 
 
 
@@ -73,12 +73,12 @@ test('WHAT[work-019] 有任期且评审尚未接纳时只读与观察放行，�
     assert.match(String(resumeDevops), devopsDispatchDenied)
     // Algorithm E3: an unreviewed tenure with no confirmation is not a denial.
     // deliver returns the completed-but-not-retired result and writes nothing.
-    const before = lifecycle.workView(storeOf(directory), sessionID)
+    const before = lifecycle.workView(await storeOf(directory), sessionID)
     const deliverResult = await hooks.tool.deliver.execute({}, bound(sessionID, 'call-unreviewed'))
     assert.match(String(deliverResult), /finished = false/)
     assert.match(String(deliverResult), /assessment_required = true/)
     assert.doesNotMatch(String(deliverResult), denied)
-    const after = lifecycle.workView(storeOf(directory), sessionID)
+    const after = lifecycle.workView(await storeOf(directory), sessionID)
     assert.equal(after.confirmed, false)
     assert.equal(after.active, before.active)
     assert.equal(after.reviewed, '')
@@ -106,7 +106,7 @@ test('WHAT[work-019] 确认先于评审时公开 Deliver 拒绝，且不落下�
     const sessionID = 'ses-confirm-first'
     await acceptAuthorityRoot(runtime, sessionID, 'manager')
     await openIncumbency(runtime, sessionID)
-    const store = storeOf(directory)
+    const store = await storeOf(directory)
     const before = lifecycle.workView(store, sessionID)
     const seeded = await lifecycle.seedConfirmation(
       store,

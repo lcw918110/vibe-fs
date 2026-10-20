@@ -10,7 +10,7 @@ test('WHAT[managed-session-lifecycle-011] missing restored child produces a repl
   assert.equal(observed.origin, 'Replacement')
   assert.deepEqual(observed.created, ['created-1'])
   assert.deepEqual(observed.closed, ['work'])
-  assert.deepEqual(observed.linked, [['work', 'created-1', 'blogger']])
+  assert.deepEqual(observed.linked, [['work', 'created-1', 'companion']])
 })
 
 test.todo('WHAT[managed-session-lifecycle-011] controlled append and real crash cuts prove new-child, old-close and new-link ordering without dual active association (GAP-133)')

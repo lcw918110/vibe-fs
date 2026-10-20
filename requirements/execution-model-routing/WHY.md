@@ -25,22 +25,10 @@ MJS 表达策略        ──► (role, running, previous) -> { model, reasonin
 
 ## 核心不变量扩充
 
-- **当前角色集合路由**：调度权威以 Engineer、DevOps、Manager、Orchestrator、Blogger 为准；当前配置仅要求活跃角色的模型槽位。
+- **当前角色集合路由**：调度权威以 Engineer、DevOps、Manager、Orchestrator、Plan 为准；当前配置仅要求活跃角色的模型槽位。
 - **DevOps 模型绑定持久性**：DevOps 模型在道路初始化时确立并持久化，后续 resume 与恢复必须严格沿用既有绑定，严禁借 resume 换模型。
 
-## 为什么只读委托的调度轴是 purpose 而不是新 Role
 
-Role 是由 IdentitySeed 确立、在 logical run 内不可变的身份轴，回答的是"这次物理执行是谁在动"。只读委托并不换人——同伴与 owner 共享 participant、Role、Persona 与语言，变的只是执行用途、模型池、可见工具与短期控制权。把只读委托立成新 Role，等于给同一位当事人另立一个身份户头：审计链会裂成两个人，固定 Role 的不可变性也随之腐蚀。
-
-"新池字段"与"改角色语义"同样是把问题搬家而非解决：前者让调度策略多一个只在单一场景生效的特例开关，纯函数签名按场景膨胀；后者直接摧毁身份轴本身。独立 purpose 参数是最小的诚实分界——身份照旧、用途显式，旧三参 scheduler 没有能力表达这个用途，协议版本校验又让"借同一 Role 覆盖"蒙混不过去（execution-model-routing-002、execution-model-routing-020）。
-
-反证条件：若将来出现一种执行方式，它确实改变 participant identity 或系统义务归属，而不只是用途与模型池，那么 purpose 轴就不够了——那需要身份轴自身的新条款，而不是给用途轴打补丁。
-
-## 为什么 Predictor 与 owner 配成相同模型是合法状态
-
-池身份由 execution purpose 决定，与模型名无关：只读委托按 `"readonly-delegate"` 用途从 Predictor 池选取目标，不更换 role/participant 身份（execution-model-routing-002）；同一份配置的存在性查询也早已明文划定这条边界——同模型是合法状态，不得因模型名相同或价格信息缺失而关闭委托，且配置存在性与容量、provider 健康严格分离（execution-model-routing-020）。拿模型名或价格当准入门禁，等于把运行期的经济测量塞进准入边界：准入只认配置存在性这一项事实，不认容量、健康与价格，否则「未配置」与「暂时贵」「暂时满」会被混为一谈，委托的可预测性随之消失。
-
-反证条件：若将来准入确实要按模型名或价格分池，本决策作废——那时同模型不再是合法状态，而需要身份与准入两侧的新条款共同规定。
 
 ## 破裂后果
 

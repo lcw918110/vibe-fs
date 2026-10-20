@@ -3,7 +3,7 @@ namespace Wanxiangshu.Persistence.EventStore
 /// The canonical durable-event integrator. It exposes only factory creation
 /// over an explicit rule program; all builder state and internal rule slots
 /// remain private to the durable-convergence owner. Every domain rule
-/// (Strength, Sphinx, JsTransaction, Casebook) lives in its owning module and
+/// (Sphinx, JsTransaction, Casebook) lives in its owning module and
 /// is injected through `createWithRules` in registration order.
 [<RequireQualifiedAccess>]
 module CanonicalIntegrator =

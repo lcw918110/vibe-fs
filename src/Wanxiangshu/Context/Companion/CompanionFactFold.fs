@@ -13,7 +13,6 @@ type CompanionProjectionChange =
 
 [<RequireQualifiedAccess>]
 type CompanionFoldRejection =
-    | CompanionBloggerLinkedRejected of AssociationRejection
     | XTraceOpeningRejected of XTraceFoldRejection
     | XTracePartRejected of XTraceFoldRejection
     | XTraceTerminalRejected of XTraceFoldRejection
@@ -22,14 +21,12 @@ type CompanionFoldRejection =
 module CompanionFoldRejection =
     let fact (rejection: CompanionFoldRejection) : string =
         match rejection with
-        | CompanionFoldRejection.CompanionBloggerLinkedRejected _ -> "CompanionBloggerLinked"
         | CompanionFoldRejection.XTraceOpeningRejected _ -> "OpeningPromptCaptured"
         | CompanionFoldRejection.XTracePartRejected _ -> "XTracePartAppended"
         | CompanionFoldRejection.XTraceTerminalRejected _ -> "TerminalOutputCaptured"
 
     let message (rejection: CompanionFoldRejection) : string =
         match rejection with
-        | CompanionFoldRejection.CompanionBloggerLinkedRejected r -> SessionAssociationProjection.describe r
         | CompanionFoldRejection.XTraceOpeningRejected XTraceFoldRejection.OpeningAlreadyCaptured ->
             "opening was already captured with different text (PERSIST-010)"
         | CompanionFoldRejection.XTraceOpeningRejected r -> sprintf "unexpected XTrace rejection: %A" r
@@ -41,55 +38,6 @@ module CompanionFoldRejection =
         | CompanionFoldRejection.XTraceTerminalRejected r -> sprintf "unexpected XTrace rejection: %A" r
 
 module CompanionFactFold =
-
-    let private foldCompanionBloggerLinked
-        (associations: Map<SessionId, SessionAssociation>)
-        (companionOf: SessionId -> CompanionProjection option)
-        (payload:
-            {| SessionId: SessionId
-               BloggerSessionId: SessionId
-               BloggerAgent: string |})
-        : Result<CompanionProjectionChange list, CompanionFoldRejection> =
-        // HOST-008 / COMPANION-002: one fact, two projections.
-        //
-        // The Companion cache records "my Y is this session"; the association
-        // records both directions of the relation, which is what makes "is this
-        // session itself a Companion" answerable without a scan (PERSIST-008).
-        //
-        // Both or neither. A cache entry without the association would leave the
-        // Y looking like an ordinary work session, and the next transform on it
-        // would give it a Y of its own — the recursion COMPANION-002 forbids.
-        match SessionAssociationProjection.link payload.SessionId payload.BloggerSessionId None associations with
-        | Ok linkedAssociations ->
-            let currentCompanion =
-                Option.defaultValue CompanionProjection.empty (companionOf payload.SessionId)
-
-            let linkedCompanion =
-                CompanionProjection.linkBlogger payload.BloggerSessionId currentCompanion
-
-            Ok
-                [ CompanionProjectionChange.AssociationsSet linkedAssociations
-                  CompanionProjectionChange.CompanionSet(payload.SessionId, linkedCompanion) ]
-        | Error rejection -> Error(CompanionFoldRejection.CompanionBloggerLinkedRejected rejection)
-
-    let private foldCompanionBloggerClosed
-        (associations: Map<SessionId, SessionAssociation>)
-        (companionOf: SessionId -> CompanionProjection option)
-        (payload: {| SessionId: SessionId |})
-        : Result<CompanionProjectionChange list, CompanionFoldRejection> =
-        // `unlink` is total: an unknown session or one with no Y is already in the
-        // state this fact describes, so replaying it changes nothing.
-        let unlinkedAssociations =
-            SessionAssociationProjection.unlink payload.SessionId associations
-
-        let currentCompanion =
-            Option.defaultValue CompanionProjection.empty (companionOf payload.SessionId)
-
-        let closedCompanion = CompanionProjection.closeBlogger currentCompanion
-
-        Ok
-            [ CompanionProjectionChange.AssociationsSet unlinkedAssociations
-              CompanionProjectionChange.CompanionSet(payload.SessionId, closedCompanion) ]
 
     let private foldOpeningPromptCaptured
         (xTraceOf: SessionId -> XTraceProjectionState option)
@@ -173,10 +121,6 @@ module CompanionFactFold =
         (fact: CompanionFactCases)
         : Result<CompanionProjectionChange list, CompanionFoldRejection> =
         match fact with
-        | CompanionFactCases.CompanionBloggerLinked payload ->
-            foldCompanionBloggerLinked associations companionOf payload
-        | CompanionFactCases.CompanionBloggerClosed payload ->
-            foldCompanionBloggerClosed associations companionOf payload
         | CompanionFactCases.OpeningPromptCaptured payload -> foldOpeningPromptCaptured xTraceOf payload
         | CompanionFactCases.XTracePartAppended payload -> foldXTracePartAppended xTraceOf payload
         | CompanionFactCases.TerminalOutputCaptured payload -> foldTerminalOutputCaptured xTraceOf payload

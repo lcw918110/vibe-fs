@@ -1,6 +1,5 @@
 namespace Wanxiangshu.Interaction.Attempt
 
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
@@ -14,8 +13,7 @@ type AttemptExecutionProfile =
       Origin: PromptAuthority.PromptOrigin
       SystemPromptId: SystemPromptId
       ToolCapabilitySet: Set<ToolPermission>
-      RequestKind: ProviderRequestKind
-      ProjectionChoice: XProjectionChoice }
+      RequestKind: ProviderRequestKind }
 
     member SessionId: SessionId
     member LogicalRunId: LogicalRunId
@@ -31,5 +29,4 @@ module InteractionAttempt =
         providerRun: ProviderRunIdentity ->
         origin: PromptAuthority.PromptOrigin ->
         requestKind: ProviderRequestKind ->
-        choice: XProjectionChoice ->
             AttemptExecutionProfile

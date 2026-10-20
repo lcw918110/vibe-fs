@@ -23,11 +23,6 @@ module RecoverySurface =
                 SessionId.create (text (value?main)),
                 SessionId.create (text (value?companion))
             )
-        | "blogger" ->
-            SessionRecovery.RecoveryNode.Blogger(
-                SessionId.create (text (value?main)),
-                SessionId.create (text (value?blogger))
-            )
         | "managerJob" ->
             SessionRecovery.RecoveryNode.ManagerJob(
                 ManagerJobId.create (text (value?job)),

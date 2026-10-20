@@ -6,7 +6,7 @@ import * as handles from '../../../dist/Execution/Delegation/Handle/Surface.js'
 test('WHAT[crash-reconciliation-002] child resolver uses durable completion or current terminal evidence while missing evidence remains incomplete', () => {
   assert.equal(child.resolve('active', 'missing', [], '').result, 'RecoveryIncomplete')
   assert.equal(child.resolve('completed', 'missing', [], '').result, 'RecoveredTerminal')
-  assert.equal(child.resolve('active', 'terminal', [], 'work-record').result, 'RecoveredTerminal')
+  assert.equal(child.resolve('active', 'terminal', [], 'delivered-view').result, 'RecoveredTerminal')
 })
 
 test('WHAT[crash-reconciliation-002] local handle projection preserves completion across a duplicate completion transition', () => {

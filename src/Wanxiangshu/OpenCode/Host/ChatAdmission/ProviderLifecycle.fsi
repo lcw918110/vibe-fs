@@ -21,8 +21,6 @@ module ProviderLifecycle =
         | FrozenAttemptPlanMissing of ChatExecutionKey * ProviderRunIdentity
         | AcceptedExecutionMissing of ChatExecutionKey
         | AcceptedExecutionAlreadyTerminal of ChatExecutionKey
-        | BloggerRequestMissing of SessionId
-        | BloggerRequestKindUnsupported of string
         | AuthorityEvidenceInvalid of AcceptedChatExecutionEvidence
         | PersistenceFailed of ManagedChatProviderLifecycleError
 

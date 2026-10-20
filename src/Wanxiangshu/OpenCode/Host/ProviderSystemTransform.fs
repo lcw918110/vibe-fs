@@ -13,17 +13,7 @@ open Wanxiangshu.Resources
 /// Wanxiangshu-owned system-prompt segment without disturbing Host/AGENTS text.
 module ProviderSystemTransform =
 
-    [<Literal>]
-    let private ReadonlyInvestigationPath = "delegation/readonly-investigation"
-
-    let private replicaConstraintFor lang =
-        ProviderProse.render lang ReadonlyInvestigationPath Map.empty
-
     let private canonical (text: string) = if isNull text then "" else text.Trim()
-
-    let private isReplicaConstraintLine (expectedZh: string) (expectedEn: string) (text: string) =
-        let c = canonical text
-        c = expectedZh || c = expectedEn
 
     let private updateMatchingConstraintLine
         (currentSystem: string array)
@@ -37,28 +27,11 @@ module ProviderSystemTransform =
 
         currentSystem |> Array.iteri replaceIfMatching
 
-    let private applyReplicaConstraint (lang: ProviderLanguage) (currentSystem: string array) =
-        let zhConstraint = replicaConstraintFor ProviderLanguage.SimplifiedChinese
-        let enConstraint = replicaConstraintFor ProviderLanguage.English
-        let expectedZh = canonical zhConstraint
-        let expectedEn = canonical enConstraint
-
-        let nextConstraint =
-            match lang with
-            | ProviderLanguage.SimplifiedChinese -> zhConstraint
-            | ProviderLanguage.English -> enConstraint
-
-        let isConstraintLine = isReplicaConstraintLine expectedZh expectedEn
-        let hasConstraint = currentSystem |> Array.exists isConstraintLine
-
-        match hasConstraint with
-        | true -> updateMatchingConstraintLine currentSystem isConstraintLine nextConstraint
-        | false -> emitJsExpr (currentSystem, nextConstraint) "$0.push($1)" |> ignore
-
     /// work-031: the three stage-method resources. The stage slot is one
     /// line whose content is decided by the current incumbency's stage and the
     /// current language; recognition stays byte-only across all six candidates
-    /// (3 stages × 2 languages), exactly like the replica constraint slot.
+    /// (3 stages × 2 languages).
+
     let private planStagePaths = [ "planning/s1"; "planning/s2"; "planning/s3" ]
 
     let private planStageGuidanceFor (lang: ProviderLanguage) (stagePath: string) =
@@ -90,7 +63,6 @@ module ProviderSystemTransform =
         | Role.Orchestrator -> Some catalog.OrchestratorSystemPrompt
         | Role.Engineer -> Some catalog.EngineerSystemPrompt
         | Role.DevOps -> Some catalog.DevopsSystemPrompt
-        | Role.Blogger -> Some catalog.BloggerSystemPrompt
         | Role.Plan -> Some catalog.PlanSystemPrompt
         | Role.Advisor -> Some catalog.AdvisorSystemPrompt
         | Role.Coder
@@ -99,14 +71,7 @@ module ProviderSystemTransform =
         | Role.Inquiry
         | Role.Distiller -> None
 
-    let private localizedRolePrompt lang role =
-        match role with
-        | Role.Blogger ->
-            EnforcerCatalogResource.composeBloggerSystemPromptFor
-                lang
-                (PromptResources.instructionTextsForRole lang role)
-                (RuntimeResources.enforcerRulesFor lang)
-        | _ -> PromptResources.systemForRole lang role
+    let private localizedRolePrompt lang role = PromptResources.systemForRole lang role
 
     let private replaceOwnedSegment (oldPrompt: string) (nextPrompt: string) (system: string array) =
         let expected = canonical oldPrompt
@@ -127,12 +92,7 @@ module ProviderSystemTransform =
             None
 
     let private activeRoles =
-        [ Role.Manager
-          Role.Orchestrator
-          Role.Engineer
-          Role.DevOps
-          Role.Blogger
-          Role.Plan ]
+        [ Role.Manager; Role.Orchestrator; Role.Engineer; Role.DevOps; Role.Plan ]
 
     let private chooseBookkeeperPrompt expectedEn expectedZh nextPrompt (text: string) =
         let c = canonical text
@@ -227,34 +187,31 @@ module ProviderSystemTransform =
 
     let private transformSystem
         (role: SessionId -> Role option)
-        (isReplica: SessionId -> bool)
-        (planStage: SessionId -> string option)
+        (planStage: SessionId -> Task<string option>)
         sessionText
         system
-        =
-        let sid = SessionId.create sessionText
-        let lang = GlobalProviderLanguage.current ()
+        : Task<unit> =
+        task {
+            let sid = SessionId.create sessionText
+            let lang = GlobalProviderLanguage.current ()
 
-        if replaceBookkeeperSystem lang sessionText system then
-            ()
-        else
-            replaceRoleSystem role sid lang system
+            if replaceBookkeeperSystem lang sessionText system then
+                ()
+            else
+                replaceRoleSystem role sid lang system
 
-        if isReplica sid then
-            applyReplicaConstraint lang system
-
-        match planStage sid with
-        | Some stagePath -> applyPlanStageGuidance lang system stagePath
-        | None -> ()
+            match! planStage sid with
+            | Some stagePath -> applyPlanStageGuidance lang system stagePath
+            | None -> ()
+        }
 
     let createWith
         (role: SessionId -> Role option)
-        (isReplica: SessionId -> bool)
-        (planStage: SessionId -> string option)
+        (planStage: SessionId -> Task<string option>)
         : obj -> obj -> Task<unit> =
         fun input output ->
             task {
                 match sessionTransformInput input output with
                 | None -> ()
-                | Some(sessionText, system) -> transformSystem role isReplica planStage sessionText system
+                | Some(sessionText, system) -> do! transformSystem role planStage sessionText system
             }

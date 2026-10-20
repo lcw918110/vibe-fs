@@ -113,7 +113,7 @@ let providerStep = 0
 const providerErrors = []
 
 // Plan leg requests carry the Plan tool surface; Host title generation and
-// blogger sidecars ride the same mock endpoint and must not shift the script.
+// internal sidecars ride the same mock endpoint and must not shift the script.
 const isPlanRequest = (body) =>
   (body?.tools ?? []).map((tool) => tool?.function?.name ?? tool?.name).includes('todowrite-for-plan')
 
@@ -181,10 +181,9 @@ const sessionIdOf = ({ data }) => data?.data?.data?.id ?? data?.data?.id ?? data
 const routingSource = `export const routingProtocol = 2
 export const hasTheoreticalCapacity = (role, purpose) => true
 export default function route(role, running, previous, purpose) {
-  if (new Set(['manager', 'orchestrator', 'engineer', 'devops', 'blogger', 'bookkeeper', 'predictor', 'plan']).has(role)) return { model: 'test/test-model', reasoning: 'none' }
+  if (new Set(['manager', 'orchestrator', 'engineer', 'devops', 'bookkeeper', 'plan']).has(role)) return { model: 'test/test-model', reasoning: 'none' }
   throw new Error('unexpected managed role: ' + role)
 }
-export const predictorConfiguration = () => ({ state: 'configured', reason: null })
 `
 
 let host = new ProcessHost()
@@ -300,7 +299,7 @@ const run = async () => {
     // request (request 4) whose transform runs under the NEW tenure: it is the
     // relay successor's first assembled request. It must still carry the
     // original instruction (U is never stripped), with prior assistant/tool
-    // stripped and no synthetic lwr-prev-* row injected. The successor is also
+    // stripped and no synthetic-prev-* row injected. The successor is also
     // re-anchored (fresh prefix epoch).
     await waitForProviderCount(4)
 

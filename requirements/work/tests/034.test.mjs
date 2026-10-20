@@ -13,7 +13,7 @@ import {
   ids,
   msgId,
   msgText,
-  syntheticLwr,
+  syntheticPredecessor,
   toolResult,
   userText,
 } from './support/plan-messages.mjs'
@@ -67,10 +67,10 @@ test('WHAT[work-034] initial tenure (S1) assembles U + current messages with no 
   )
 })
 
-test('WHAT[work-034] non-initial tenure strips prior assistant/tool messages, injects no lwr-prev-* row, and preserves the current user reply in chronological order', () => {
+test('WHAT[work-034] non-initial tenure strips prior assistant/tool messages, injects no synthetic-prev-* row, and preserves the current user reply in chronological order', () => {
   // Real Host rows: historical U, prior S1 assistant+tool, a current user
   // reply (feedback) and a current assistant row. Prior assistant/tool rows
-  // observed before openingCursor are stripped; no synthetic lwr-prev-* row
+  // observed before openingCursor are stripped; no synthetic-prev-* row
   // is ever injected.
   const rawMessages = [
     userText('u1', 'Initial user prompt'),
@@ -100,9 +100,9 @@ test('WHAT[work-034] non-initial tenure strips prior assistant/tool messages, in
     ['u1', 'u2', 'a-current', 't-current'],
   )
 
-  // Prior assistant/tool messages and any synthetic lwr-prev-* rows must be absent
+  // Prior assistant/tool messages and any synthetic-prev-* rows must be absent
   const assembledIds = ids(result.messages)
-  assert.ok(!assembledIds.some((id) => id.startsWith('lwr-prev-')), 'no lwr-prev-* row is injected')
+  assert.ok(!assembledIds.some((id) => id.startsWith('synthetic-prev-')), 'no synthetic-prev-* row is injected')
   assert.ok(!assembledIds.includes('a-old'), 'prior assistant message must be stripped')
   assert.ok(!assembledIds.includes('t-old'), 'prior tool message must be stripped')
 })
@@ -170,7 +170,7 @@ test('WHAT[work-034] a current assistant row with a Host id but no first-observa
   // the row and does not fail the exchange.
   const result = assemble(rawMessages, tenure, {})
   assert.ok(ids(result.messages).includes('a-no-cursor'))
-  assert.equal(result.messages.filter((m) => msgId(m).startsWith('lwr-prev-')).length, 0)
+  assert.equal(result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-')).length, 0)
 })
 
 test('WHAT[work-034] a semantic assistant row with no Host info.id rejects assembly', () => {
@@ -200,7 +200,7 @@ test('WHAT[work-034] a semantic assistant row with no Host info.id rejects assem
 test('WHAT[work-034] synthetic rows are stripped and no synthetic record is ever injected', () => {
   const rawMessages = [
     userText('u1', 'go'),
-    syntheticLwr('inc-old', 'work-1', 'stale synthesized row'),
+    syntheticPredecessor('inc-old', 'work-1', 'stale synthesized row'),
     assistantText('a-current', 'current work', 'u1'),
   ]
   const tenure = {
@@ -215,9 +215,9 @@ test('WHAT[work-034] synthetic rows are stripped and no synthetic record is ever
     tenure,
     cursors({ 'a-current': 25n }),
   )
-  const lwrRows = result.messages.filter((m) => msgId(m).startsWith('lwr-prev-'))
-  assert.equal(lwrRows.length, 0, 'no synthetic lwr-prev-* row is injected')
-  assert.ok(!result.messages.some((m) => msgId(m) === 'lwr-prev-inc-old'))
+  const syntheticRows = result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-'))
+  assert.equal(syntheticRows.length, 0, 'no synthetic-prev-* row is injected')
+  assert.ok(!result.messages.some((m) => msgId(m) === 'synthetic-prev-inc-old'))
   assert.deepEqual(ids(result.messages), ['u1', 'a-current'])
 })
 
@@ -315,7 +315,7 @@ test('WHAT[work-034] tenure assembly strips prior interactions by openingCursor 
   const assembledIds = ids(result.messages)
   assert.ok(!assembledIds.includes('a-old'))
   assert.ok(assembledIds.includes('a-new'))
-  assert.ok(!assembledIds.some((id) => id.startsWith('lwr-prev-')))
+  assert.ok(!assembledIds.some((id) => id.startsWith('synthetic-prev-')))
   assert.deepEqual(assembledIds, ['u1', 'a-new'])
 })
 
@@ -354,7 +354,7 @@ test('WHAT[work-034] reanchorRequested is true on fresh handover and deduplicate
   assert.equal(continuing.reanchorRequested, false)
 })
 
-test('WHAT[work-034] successor projection strips earlier assistant and tool messages and never inserts LWR_prev', () => {
+test('WHAT[work-034] successor projection strips earlier assistant and tool messages and never inserts a synthetic predecessor record', () => {
   const rawMessages = [
     userText('u-history', 'Original user request'),
     assistantText('a-old', 'previous tenure answer'),
@@ -374,8 +374,8 @@ test('WHAT[work-034] successor projection strips earlier assistant and tool mess
     tenure,
     cursors({ 'a-old': 4n, 't-old': 5n, 'a-current': 25n }),
   )
-  const lwrRows = result.messages.filter((m) => msgId(m).startsWith('lwr-prev-'))
-  assert.equal(lwrRows.length, 0, 'no synthetic LWR_prev is inserted')
+  const syntheticRows = result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-'))
+  assert.equal(syntheticRows.length, 0, 'no synthetic predecessor record is inserted')
   assert.deepEqual(ids(result.messages), ['u-history', 'a-current', 'a-uncaptured'])
 })
 
@@ -409,9 +409,9 @@ test('WHAT[work-034] post-S3 projection strips all S3-and-earlier context and in
   )
   const kept = ids(result.messages)
   assert.equal(
-    result.messages.filter((m) => msgId(m).startsWith('lwr-prev-')).length,
+    result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-')).length,
     0,
-    'post-S3 inherits no previous work record',
+    'post-S3 inherits no previous delivered view',
   )
   assert.ok(kept.includes('u-history'), 'historical user input is preserved verbatim')
   assert.ok(kept.includes('u-command'), 'the post-S3 command survives')
@@ -424,7 +424,7 @@ test('WHAT[work-034] post-S3 projection strips all S3-and-earlier context and in
 test('WHAT[work-034] a relaying tenure declaring view: { extra } commits ViewCheckpointCommitted and delivers the declared view to the successor request', async () => {
   clearAll()
   await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(directory)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
     const planRoot = join(commonDir, 'wanxiangshu')
     const sessionID = 'ses-plan-view-handover-034'
     await acceptAuthorityRoot(runtime, sessionID, 'plan', 'user-plan-root-034')
@@ -536,8 +536,8 @@ test('WHAT[work-034] a relaying tenure declaring view: { extra } commits ViewChe
     await hooks['experimental.chat.messages.transform']({ sessionID }, successorOut)
 
     assert.ok(
-      !successorOut.messages.some((m) => String(m?.info?.id ?? '').startsWith('lwr-prev-')),
-      'no lwr-prev-* message is injected for the successor tenure',
+      !successorOut.messages.some((m) => String(m?.info?.id ?? '').startsWith('synthetic-prev-')),
+      'no synthetic-prev-* message is injected for the successor tenure',
     )
     assert.ok(
       JSON.stringify(successorOut.messages).includes(declaredExtra),

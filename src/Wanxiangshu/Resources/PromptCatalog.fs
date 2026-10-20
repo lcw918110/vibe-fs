@@ -7,6 +7,5 @@ type PromptCatalog =
       EngineerSystemPrompt: string
       DevopsSystemPrompt: string
       OrchestratorSystemPrompt: string
-      BloggerSystemPrompt: string
       PlanSystemPrompt: string
       AdvisorSystemPrompt: string }

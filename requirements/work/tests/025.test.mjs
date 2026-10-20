@@ -69,7 +69,7 @@ test('WHAT[work-025] deliver without authorization relays: retires Relayed and o
 test('WHAT[work-025] an unauthorised durable deliver relays instead of refusing for a missing next owner', async () => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-planning-025-relay-'))
   execFileSync('git', ['init', '--quiet', root])
-  const commonDir = journalSurface.JournalSurface_initializeStateRoot(root)
+  const commonDir = await journalSurface.JournalSurface_initializeStateRoot(root)
   try {
     const opened = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, root, 'work-relay-owner', 0n)
     assert.equal(opened.ok, true, opened.error)

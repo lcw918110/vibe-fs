@@ -31,7 +31,7 @@ for (const language of ['en', 'zh-CN']) {
     assert.deepEqual(parse(document), {
       content: 'reference material',
       commissioner_record: commissioner,
-      attached_work_record: attachment,
+      attached_view: attachment,
     })
     assert.ok(document.startsWith('# Keep this charge.\n# Do not substitute the background.\n'))
     assert.match(document, /^# Preserve existing facts\.$/m)

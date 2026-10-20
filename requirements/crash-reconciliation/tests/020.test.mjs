@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as roles from '../../../dist/Foundation/RolesSurface.js'
 import * as recovery from '../../../dist/OpenCode/Host/LoadRecoverySurface.js'
-import { fold, link, acceptRun, terminal, canonical, materialized, abandoned } from './support/load-projection.mjs'
+import { fold, link, acceptRun, terminal, canonical } from './support/load-projection.mjs'
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
 import { hostPort } from '../../interaction-authority/tests/support/authority.mjs'
 
@@ -75,20 +75,6 @@ test('WHAT[crash-reconciliation-020] human roots and child runs without a durabl
   const child = acceptRun(unlinked)
   assert.deepEqual(recovery.childSettlements(unlinked), [])
   assert.equal(recovery.childView(unlinked, 'parent', 'child').activeRun, child.logicalRun)
-})
-
-test('WHAT[crash-reconciliation-020] stale Blogger selection respects exact live flight and abandonment clears the same folded open request', () => {
-  const state = recovery.create()
-  fold(state, materialized())
-  const expected = [{ main: 'parent', blogger: 'blogger', request: 'request' }]
-  assert.deepEqual(recovery.staleBloggerRequests(state, () => false), expected)
-  assert.deepEqual(recovery.staleBloggerRequests(state, (blogger, request) => blogger === 'blogger' && request === 'request'), [])
-  assert.deepEqual(recovery.staleBloggerRequests(state, (blogger, request) => blogger === 'blogger' && request === 'another-request'), expected)
-  assert.deepEqual(recovery.staleBloggerRequests(state, (blogger, request) => blogger === 'another-blogger' && request === 'request'), expected)
-  fold(state, abandoned())
-  assert.deepEqual(recovery.staleBloggerRequests(state, () => false), [])
-  fold(state, materialized('next-request'))
-  assert.deepEqual(recovery.staleBloggerRequests(state, () => false), [{ main: 'parent', blogger: 'blogger', request: 'next-request' }])
 })
 
 const managerRootSelection = {
@@ -245,5 +231,5 @@ integrationTest('WHAT[crash-reconciliation-020] actual child settlement propagat
   })
 })
 
-test.todo('WHAT[crash-reconciliation-020] actual plugin activation durably settles orphan child and Blogger work before ordinary execution, preserves exact live flights, and refuses append failure (GAP-149)')
+test.todo('WHAT[crash-reconciliation-020] actual plugin activation durably settles orphan child work before ordinary execution, preserves exact live flights, and refuses append failure (GAP-149)')
 test.todo('WHAT[crash-reconciliation-020] a real interrupted run and PTY input are not replayed after restart while unique DevOps authority and durable model Persona binding are retained (GAP-149; GAP-129; GAP-132)')

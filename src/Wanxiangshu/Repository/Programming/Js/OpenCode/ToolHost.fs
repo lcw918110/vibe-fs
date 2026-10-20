@@ -267,7 +267,7 @@ module JsToolSpec =
                         return JsToolsResult.render outcome
                 } }
 
-    /// Build a ToolSpec for the dedicated todowrite-for-predictor surface with PrivateAttachment admission.
+    /// Build a ToolSpec with dedicated ToolAdmission.
     let createWithAdmission
         (factory: HostToolFactory)
         (surface: JsSurface)

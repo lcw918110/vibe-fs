@@ -12,14 +12,6 @@ module CompletedTurnClassifier =
         | AwaitRepairTerminal
         | NoRepair
 
-    /// capability-enforcement-021: how one idle Blogger turn reaches the
-    /// protocol repair owner.
-    [<RequireQualifiedAccess>]
-    type BloggerIdleRoute =
-        | Observe
-        | Repair
-        | RepairThenObserve
-
     val partsText: parts: MessagePart array -> string
     val partsSessionText: parts: MessagePart array -> string
     val hasToolCallPart: parts: MessagePart array -> bool
@@ -45,15 +37,6 @@ module CompletedTurnClassifier =
         observation: ReconcileProgram.SnapshotObservation option ->
         outcome: ReconcileProgram.TurnOutcome ->
             RepairDefectDecision
-
-    /// A Blogger turn that no Host tool loop follows leaves its live request
-    /// with idle as the only wake; an aborted turn is such a turn too.
-    val bloggerIdleRoute:
-        bloggerQuiescent: bool ->
-        guardOwnsAbort: bool ->
-        outcome: ReconcileProgram.TurnOutcome ->
-        parts: MessagePart array ->
-            BloggerIdleRoute
 
     val roleOfAgent: agent: string option -> fallback: Role option -> Role option
 

@@ -124,14 +124,13 @@ export function deliverTwice(view, call) {
 }
 
 export function projectSuccessor(messages, openingCursor, first) {
-  const kept = messages.filter((message) => message.role === 'user' || message.firstSeen > openingCursor)
-  const stripped = messages.filter((message) => (message.role === 'assistant' || message.role === 'tool') && message.firstSeen <= openingCursor)
-  if (stripped.some((message) => kept.includes(message))) return { ok: false }
-  const projected = kept.filter((message) => !message.synthetic)
-  if (projected.some((message) => message.role === 'lwr_prev' || String(message.id ?? '').startsWith('lwr-prev-'))) {
+  // Relay no longer strips predecessor context. The projection keeps every
+  // physical row; only view declarations may remove history.
+  const projected = messages.filter((message) => !message.synthetic)
+  if (projected.some((message) => message.role === 'synthetic_predecessor' || String(message.id ?? '').startsWith('synthetic-prev-'))) {
     return { ok: false }
   }
-  return { ok: true, projected, first: Boolean(first), retainedPriorAssistant: false }
+  return { ok: true, projected, first: Boolean(first), retainedPriorAssistant: projected.some((message) => message.role === 'assistant' && message.firstSeen <= openingCursor) }
 }
 
 export function admitOldBytes(bytes) {

@@ -20,7 +20,6 @@ module PromptSurface =
                EngineerSystemPrompt = catalog.EngineerSystemPrompt
                DevopsSystemPrompt = catalog.DevopsSystemPrompt
                OrchestratorSystemPrompt = catalog.OrchestratorSystemPrompt
-               BloggerSystemPrompt = catalog.BloggerSystemPrompt
                PlanSystemPrompt = catalog.PlanSystemPrompt |}
 
     let private catalogValues (catalog: PromptCatalog) : string array =
@@ -28,7 +27,6 @@ module PromptSurface =
            catalog.EngineerSystemPrompt
            catalog.DevopsSystemPrompt
            catalog.OrchestratorSystemPrompt
-           catalog.BloggerSystemPrompt
            catalog.PlanSystemPrompt |]
 
     let private ruleToJs (rule: obj) : obj =
@@ -50,10 +48,6 @@ module PromptSurface =
     let private runtimeToJs (resources: RuntimeResources) : obj =
         box
             {| Prompts = catalogToJs resources.Prompts
-               EnforcerRules = resources.EnforcerRules |> List.map ruleToJs |> List.toArray
-               EnglishEnforcerRules = resources.EnglishEnforcerRules |> List.map ruleToJs |> List.toArray
-               SimplifiedChineseEnforcerRules =
-                resources.SimplifiedChineseEnforcerRules |> List.map ruleToJs |> List.toArray
                ProviderLanguageRootsReady = resources.ProviderLanguageRootsReady |}
 
     /// Canonical English public-role prompt catalog.
@@ -80,7 +74,6 @@ module PromptSurface =
         RuntimeResourceAssembly.loadFor (languageOf language) |> runtimeToJs
 
     /// Match plugin initialization: install the package-owned bundle before
-    /// consumers such as EnforcerTipGuidance resolve a localized rule.
     let runtimeInstallFromPackage () : unit =
         RuntimeResources.install (RuntimeResourceAssembly.load ())
 
@@ -90,7 +83,7 @@ module PromptSurface =
         | Role.Orchestrator -> "role/orchestrator"
         | Role.Engineer -> "role/engineer"
         | Role.DevOps -> "role/devops"
-        | Role.Blogger -> "role/blogger"
+        // retired roles are not prompted
         | Role.Plan -> "role/plan"
         | _ -> "role/engineer"
 

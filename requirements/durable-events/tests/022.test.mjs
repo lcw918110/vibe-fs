@@ -46,7 +46,6 @@ const CONTRACT_SHARDS = [
   'eventstore-port-contract',
   'eventstore-event-vocabulary-contract',
   'eventstore-git-contract',
-  'strength-event-vocabulary-contract',
   'casebook-event-vocabulary-contract',
   'js-transaction-event-vocabulary-contract',
 ]
@@ -105,7 +104,6 @@ const ALLOWED_CONTRACT_CLOSURE_SHARDS = new Set([
   'eventstore-port-contract',
   'eventstore-event-vocabulary-contract',
   'eventstore-git-contract',
-  'strength-event-vocabulary-contract',
   'casebook-event-vocabulary-contract',
   'js-transaction-event-vocabulary-contract',
   'identity',
@@ -120,7 +118,7 @@ test('WHAT[durable-events-022] EventStore contracts exclude physical and Strengt
   for (const shard of CONTRACT_SHARDS) {
     const { project, plan } = planShard(shard)
     assert.ok(
-      ['persistence', 'strength', 'knowledge', 'repository-programming'].includes(project.subsystem),
+      ['persistence', 'knowledge', 'repository-programming'].includes(project.subsystem),
       `${shard} belongs to expected contract subsystem`,
     )
 
@@ -150,7 +148,6 @@ test('WHAT[durable-events-022] EventStore contracts exclude physical and Strengt
     contractPlan.projectPaths.map((projectPath) => projectByPath.get(resolve(projectPath))?.shard),
   )
   for (const domainShard of [
-    'strength-event-vocabulary-contract',
     'casebook-event-vocabulary-contract',
     'js-transaction-event-vocabulary-contract',
   ]) {
@@ -172,7 +169,6 @@ test('WHAT[durable-events-022] EventStore contracts exclude physical and Strengt
     assemblyPlan.projectPaths.map((projectPath) => projectByPath.get(resolve(projectPath))?.shard),
   )
   for (const domainShard of [
-    'strength-event-vocabulary-contract',
     'casebook-event-vocabulary-contract',
     'js-transaction-event-vocabulary-contract',
   ]) {
@@ -183,7 +179,7 @@ test('WHAT[durable-events-022] EventStore contracts exclude physical and Strengt
   }
 
   const assemblySources = productionSources(assemblyPlan)
-  assert.ok(assemblySources.includes('Strength/EventVocabulary.fs'))
+  assert.ok(!assemblySources.includes('Strength/EventVocabulary.fs'))
   assert.ok(assemblySources.includes('Repository/Knowledge/Casebook/EventVocabulary.fs'))
   assert.ok(assemblySources.includes('Repository/Programming/Js/EventVocabulary.fs'))
   assert.ok(!assemblySources.includes('Strength/Events.fs'))

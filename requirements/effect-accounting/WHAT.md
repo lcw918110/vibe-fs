@@ -30,7 +30,7 @@
 
 ## [008] 效果家族
 
-工作区创建、分支发布与 Blogger 记录分别使用 WorktreeCreateRequested/WorktreeCreated、PublishClaimed/Published、BloggerRequestMaterialized/BlogObservationCommitted 表达意图与确认。编程面调用（`todowrite-for-<role>`）的待办与视图写入由 Host executor 完成；插件不改写其 provider 参数，不在 before/after 产生 checkpoint。只有 Host 随后的 `message.part.updated` 明确给出该 exact call 的 `completed` ToolPart（且 `state.input.view` 为非空对象），才追加 `ViewCheckpointCommitted`；`error` 只关闭候选而不推进压缩。各领域负责具体证据。
+工作区创建与分支发布分别使用 WorktreeCreateRequested/WorktreeCreated、PublishClaimed/Published 表达意图与确认。编程面调用（`todowrite-for-<role>`）的待办与视图写入由 Host executor 完成；插件不改写其 provider 参数，不在 before/after 产生 checkpoint。只有 Host 随后的 `message.part.updated` 明确给出该 exact call 的 `completed` ToolPart（且 `state.input.view` 为非空对象），才追加 `ViewCheckpointCommitted`；`error` 只关闭候选而不推进压缩。各领域负责具体证据。
 
 ## [010] 拒绝旧通用事实
 

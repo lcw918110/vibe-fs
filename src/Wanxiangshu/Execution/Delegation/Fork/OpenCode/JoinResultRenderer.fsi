@@ -6,13 +6,13 @@ open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Participant.Provider
 
-/// EXEC-004 / EXEC-017 / EXEC-030: LLM-facing join wire — natural language + WorkRecord only.
+/// EXEC-004 / EXEC-017 / EXEC-030: LLM-facing join wire — natural language + delivered view only.
 /// No status / count / ordinal / kind / agent / code / message DTO plane.
 ///
-/// Directional LWR plane (delegation-013 / delegation-019 / provider-projection-009):
-/// child → parent join MUST keep the WorkRecord in Instruction Plane. Do NOT
-/// wrap it in `work_record = …` or any other TOML data field. Parent → child fork payload is the opposite contract
-/// (`commissioner_record` / `attached_work_record` fields) — do not conflate.
+/// Directional delivered-view plane (delegation-013 / delegation-019 / provider-projection-009):
+/// child → parent join MUST keep the delivered view in Instruction Plane. Do NOT
+/// wrap it in `view = …` or any other TOML data field. Parent → child fork payload is the opposite contract
+/// (`commissioner_record` / `attached_view` fields) — do not conflate.
 module JoinResultRenderer =
 
     [<RequireQualifiedAccess>]

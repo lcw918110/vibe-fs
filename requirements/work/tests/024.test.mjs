@@ -21,7 +21,7 @@ const withStore = async (body) => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-work-024-'))
   execFileSync('git', ['init', '--quiet', root])
   try {
-    await body(workspace.acquire(journalSurface.JournalSurface_initializeStateRoot(root)), root)
+    await body(workspace.acquire(await journalSurface.JournalSurface_initializeStateRoot(root)), root)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

@@ -11,13 +11,13 @@ const budget = failureOwner.budget
 test('WHAT[context-compression-006] role is fixed across retry attempts and consecutive failures', () => {
   const planner = compression.attemptPlanner
 
-  const plan0 = planner.plan({ kind: requestKind.workMain, role: 'engineer', policyAllowsProbe: false, noCandidateReason: 'NoCoverage' })
-  const plan1 = planner.plan({ kind: requestKind.workMain, role: 'engineer', policyAllowsProbe: false, noCandidateReason: 'NoCoverage' })
-  const plan2 = planner.plan({ kind: requestKind.workMain, role: 'engineer', policyAllowsProbe: true, noCandidateReason: 'NoCoverage' })
+  const plan0 = planner.plan({ kind: requestKind.workMain, role: 'engineer' })
+  const plan1 = planner.plan({ kind: requestKind.workMain, role: 'engineer' })
+  const plan2 = planner.plan({ kind: requestKind.workMain, role: 'engineer' })
 
-  assert.equal(plan0.participant, 'engineer')
-  assert.equal(plan1.participant, 'engineer')
-  assert.equal(plan2.participant, 'engineer')
+  assert.equal(plan0.participant.toLowerCase(), 'engineer')
+  assert.equal(plan1.participant.toLowerCase(), 'engineer')
+  assert.equal(plan2.participant.toLowerCase(), 'engineer')
 
   assert.equal(plan0.participantIdentity.canonicalRole, 'engineer')
   assert.equal(plan1.participantIdentity.canonicalRole, 'engineer')
@@ -26,45 +26,8 @@ test('WHAT[context-compression-006] role is fixed across retry attempts and cons
   for (const plan of [plan0, plan1, plan2]) {
     assert.equal('budget' in plan, false, 'plans carry no budget snapshot')
     assert.equal('agent' in plan, false, 'plans carry no agent field')
+    assert.equal('projectionChoice' in plan, false, 'plans carry no projectionChoice')
   }
-})
-
-test('WHAT[context-compression-006] retry policy retries BloggerMain directly without a squash detour', () => {
-  assert.equal(compression.nextBloggerRequest('blogger-main', true), 'blogger-main')
-  assert.equal(compression.nextBloggerRequest('blogger-main', false), 'blogger-main')
-})
-
-test('WHAT[context-compression-006] prefix probe is selected when policy allows and candidate exists', () => {
-  const planner = compression.attemptPlanner
-
-  const probe = {
-    probeId: 'probe-alpha',
-    basedOnEpoch: 0,
-    candidate: prefix.snapshot({
-      ref: 'blob-frozen-1',
-      frozenDigest: 'frozen-1',
-      cutoff: 1,
-      prefixDigest: 'prefix-1',
-      sealRoot: 'seal-1',
-      syntheticId: 'synth-1',
-    }),
-  }
-
-  const allowedWithProbe = planner.plan({
-    kind: requestKind.workMain,
-    policyAllowsProbe: true,
-    probe,
-  })
-  assert.equal(allowedWithProbe.choice, 'UsePrefixProbe')
-  assert.equal(allowedWithProbe.probeId, 'probe-alpha')
-
-  const disallowed = planner.plan({
-    kind: requestKind.workMain,
-    policyAllowsProbe: false,
-    probe,
-  })
-  assert.equal(disallowed.choice, 'UseCommittedEpoch')
-  assert.equal(disallowed.probeId, null)
 })
 
 test('WHAT[context-compression-006] consecutive failures consume the failure budget and exhaustion halts auto-retry', () => {

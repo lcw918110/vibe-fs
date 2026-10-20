@@ -1,50 +1,95 @@
 namespace Wanxiangshu.Host.Contract
 
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 
 /// Preemptive bound for custom tool results returned to OpenCode Host.
 ///
-/// Host (`packages/opencode/src/tool/truncate.ts`):
+/// The Host truncates tool output in `packages/opencode/src/tool/truncate.ts`
+/// at a ceiling it declares through `config.tool_output` (`max_lines`,
+/// `max_bytes`), falling back to its own defaults when the config is absent:
 ///
 /// ```text
-/// MAX_LINES = 2000
-/// MAX_BYTES = 50 * 1024 = 51200
+/// default MAX_LINES = 2000
+/// default MAX_BYTES = 50 * 1024 = 51200
 /// direction default = "head"   // keep start, drop end
-/// pass-through iff lines ≤ 2000 AND utf8Bytes ≤ 51200
+/// pass-through iff lines ≤ MAX_LINES AND utf8Bytes ≤ MAX_BYTES
 /// lines = text.split("\n").length   // trailing empty counts
 /// ```
 ///
-/// We bound before Host sees the result and keep the **tail**. Marker is a
-/// fixed ASCII constant; content budgets are static literals — no iterative
-/// search, no safety fudge factor:
+/// We bound before the Host sees the result so it never re-truncates (which
+/// would keep the head and drop the decisive tail). We read the live Host
+/// ceiling — `HostMaxLines`/`HostMaxBytes`, set from the `config` hook — and
+/// keep the **tail**. Marker is a fixed ASCII constant; content budgets derive
+/// from the Host ceiling at call time, subtracting the marker's own cost, so
+/// `Marker + content` lands exactly at or under the ceiling — no fudge factor:
 ///
 /// ```text
-/// Marker        = "...head truncated (tail kept)...\n\n"   // 34 bytes, ASCII
+/// Marker        = "...head truncated (tail kept)...\n\n"   // 34 bytes, 2 lines
 ///
 /// When content is non-empty:
 ///   result = Marker + content
 ///   result.lines = 2 + content.lines     // "m\n\nx".split → 3 = 2+1
 ///   result.bytes = 34 + content.bytes
 ///
-/// ContentMaxLines = 2000 − 2  = 1998
-/// ContentMaxBytes = 51200 − 34 = 51166
+/// ContentMaxLines = HostMaxLines − 2
+/// ContentMaxBytes = HostMaxBytes − 34
 ///
-/// ⇒ result.lines ≤ 2000 ∧ result.bytes ≤ 51200  (Host no-ops)
+/// ⇒ result.lines ≤ HostMaxLines ∧ result.bytes ≤ HostMaxBytes  (Host no-ops)
 /// ```
 module ToolResultBound =
 
-    // Not [<Literal>]: Fable drops unused compile-time literals from JS exports.
-    // These are contract values tests and callers must observe.
-    let HostMaxLines = 2000
-    let HostMaxBytes = 51200
+    // Host transport-layer fallback ceiling (truncate.ts), used only while the
+    // Host has declared no `tool_output` limit. It mirrors the transport that
+    // receives the result; it is not a self-imposed bound.
+    let DefaultHostMaxLines = 2000
+    let DefaultHostMaxBytes = 51200
 
     /// Fixed ASCII prefix. UTF-8 byte length = char length = 34.
     /// Host line cost when concatenated with non-empty content: +2
     /// (`split("\n")` of `"…\n\n" + content` keeps the marker line + one empty).
     let Marker = "...head truncated (tail kept)...\n\n"
     let MarkerBytes = 34
-    let ContentMaxLines = 1998
-    let ContentMaxBytes = 51166
+    let MarkerLineCost = 2
+
+    // DSL-MUTABLE: resource — host-declared tool_output ceiling, set once from
+    // the `config` hook. Defaults mirror the Host transport; a Host that raises
+    // or lowers `tool_output` is followed exactly, never widened by us.
+    let mutable private hostMaxLines = DefaultHostMaxLines
+    // DSL-MUTABLE: resource — host-declared tool_output ceiling
+    let mutable private hostMaxBytes = DefaultHostMaxBytes
+
+    /// The live Host ceiling a bound result must not exceed.
+    let HostMaxLines () = hostMaxLines
+    let HostMaxBytes () = hostMaxBytes
+
+    /// Content budget: the marker's own cost subtracted from the live ceiling,
+    /// so `Marker + tail` lands exactly at or under it.
+    let ContentMaxLines () = hostMaxLines - MarkerLineCost
+    let ContentMaxBytes () = hostMaxBytes - MarkerBytes
+
+    let private ceilingOf (value: obj) (floor: int) : int option =
+        if emitJsExpr (value, floor) "typeof $0 === 'number' && Number.isFinite($0) && $0 > $1" then
+            Some(int (unbox<float> value))
+        else
+            None
+
+    /// Adopt the Host's declared `tool_output` limits. A dimension is taken only
+    /// when it is a finite number above the marker's own cost; anything else
+    /// (absent, non-number, non-positive, or too small to hold the marker) keeps
+    /// the current ceiling, so a malformed config never widens the bound.
+    let setHostLimits (maxLines: obj) (maxBytes: obj) : unit =
+        match ceilingOf maxLines MarkerLineCost with
+        | Some n -> hostMaxLines <- n
+        | None -> ()
+
+        match ceilingOf maxBytes MarkerBytes with
+        | Some n -> hostMaxBytes <- n
+        | None -> ()
+
+    let clearHostLimitsForTests () : unit =
+        hostMaxLines <- DefaultHostMaxLines
+        hostMaxBytes <- DefaultHostMaxBytes
 
     let private isHighSurrogate (c: char) =
         let code = int c
@@ -111,12 +156,14 @@ module ToolResultBound =
 
         p + 1, p
 
-    let private overflowTail (text: string) (segStart: int) (segEnd: int) : string list =
-        let tail = utf8Tail (text.Substring(segStart, segEnd - segStart)) ContentMaxBytes
+    let private overflowTail (text: string) (segStart: int) (segEnd: int) (maxBytes: int) : string list =
+        let tail = utf8Tail (text.Substring(segStart, segEnd - segStart)) maxBytes
         if tail = "" then [] else [ tail ]
 
     let rec private collectTail
         (text: string)
+        (maxLines: int)
+        (maxBytes: int)
         (segments: string list)
         (accBytes: int)
         (count: int)
@@ -126,22 +173,22 @@ module ToolResultBound =
         let line = text.Substring(segStart, segEnd - segStart)
         let lineBytes = LlmFacing.byteCount line
         let size = lineBytes + (if count = 0 then 0 else 1)
-        let overBudget = count >= ContentMaxLines || accBytes + size > ContentMaxBytes
+        let overBudget = count >= maxLines || accBytes + size > maxBytes
 
         if overBudget && count = 0 then
-            overflowTail text segStart segEnd
+            overflowTail text segStart segEnd maxBytes
         elif overBudget then
             segments
         elif newlineAt < 0 then
             line :: segments
         else
-            collectTail text (line :: segments) (accBytes + size) (count + 1) newlineAt
+            collectTail text maxLines maxBytes (line :: segments) (accBytes + size) (count + 1) newlineAt
 
-    /// Tail under ContentMaxLines / ContentMaxBytes. Host-compatible accounting:
-    /// `split('\n')` keeps empties; inter-line newline costs 1 byte.
-    /// Single backward walk from the end — never allocates a full line array.
-    let private takeTail (text: string) : string =
-        String.concat "\n" (collectTail text [] 0 0 text.Length)
+    /// Tail under the supplied budget. Host-compatible accounting: `split('\n')`
+    /// keeps empties; inter-line newline costs 1 byte. Single backward walk from
+    /// the end — never allocates a full line array.
+    let private takeTail (maxLines: int) (maxBytes: int) (text: string) : string =
+        String.concat "\n" (collectTail text maxLines maxBytes [] 0 0 text.Length)
 
     let private newlineBump (n: int) (c: char) = if c = '\n' then n + 1 else n
 
@@ -154,16 +201,26 @@ module ToolResultBound =
 
         n
 
-    /// Check whether text fits in the host tool result window without truncation.
-    let fitsInWindow (text: string) : bool =
+    let private fitsWith (maxLines: int) (maxBytes: int) (text: string) : bool =
         if isNull text || text = "" then
             true
         else
             let totalBytes = LlmFacing.byteCount text
             let totalLines = countLines text
-            totalLines <= HostMaxLines && totalBytes <= HostMaxBytes
+            totalLines <= maxLines && totalBytes <= maxBytes
 
-    /// Bound a custom tool result. Under Host limits → identity.
-    /// Over → `Marker + tail`, sized so Host does not re-truncate.
+    /// Check whether text fits in the live host tool result window without truncation.
+    let fitsInWindow (text: string) : bool =
+        fitsWith (HostMaxLines()) (HostMaxBytes()) text
+
+    /// Bound a custom tool result against the live Host ceiling. Under the
+    /// ceiling → identity. Over → `Marker + tail`, sized so the Host does not
+    /// re-truncate.
     let bound (text: string) : string =
-        if fitsInWindow text then text else Marker + takeTail text
+        let maxLines = HostMaxLines()
+        let maxBytes = HostMaxBytes()
+
+        if fitsWith maxLines maxBytes text then
+            text
+        else
+            Marker + takeTail (maxLines - MarkerLineCost) (maxBytes - MarkerBytes) text

@@ -11,7 +11,6 @@ const EXPECTED_ROLES = [
   'orchestrator',
   'engineer',
   'devops',
-  'blogger',
   'plan',
   'advisor',
 ]
@@ -19,8 +18,8 @@ const EXPECTED_ROLES = [
 test('WHAT[participant-identity-001] catalog_has_canonical_roles', () => {
   assertJsData(identity.allRoleLabels, 'allRoleLabels')
   assert.deepEqual([...identity.allRoleLabels].sort(), [...EXPECTED_ROLES].sort())
-  assert.equal(identity.allRoleLabels.length, 7)
-  assert.equal(identity.allPublicRoleLabels.length + identity.allInternalRoleLabels.length, 7)
+  assert.equal(identity.allRoleLabels.length, 6)
+  assert.equal(identity.allPublicRoleLabels.length + identity.allInternalRoleLabels.length, 6)
   assert.deepEqual(
     [...identity.allPublicRoleLabels, ...identity.allInternalRoleLabels].sort(),
     [...EXPECTED_ROLES].sort(),
@@ -28,12 +27,13 @@ test('WHAT[participant-identity-001] catalog_has_canonical_roles', () => {
 })
 test('WHAT[participant-identity-001] required_names_are_canonical_and_include_managed_agents', () => {
   assertJsData(identity.requiredNames, 'requiredNames')
-  assert.equal(identity.requiredNames.length, 9)
+  assert.equal(identity.requiredNames.length, 7)
   for (const role of EXPECTED_ROLES) {
     assert.equal(identity.isManagedName(role), true)
   }
   assert.equal(identity.isManagedName('bookkeeper'), true)
-  assert.equal(identity.isManagedName('predictor'), true)
+  assert.equal(identity.isManagedName('predictor'), false, 'predictor is retired and not registered')
+  assert.equal(identity.isManagedName('blogger'), false, 'blogger is retired and not registered')
 })
 }
 
@@ -137,10 +137,8 @@ const EXPECTED = {
   manager: { role: 'manager', persona: 'Lead' },
   engineer: { role: 'engineer', persona: 'Engineer' },
   devops: { role: 'devops', persona: 'Operator' },
-  blogger: { role: 'blogger', persona: 'Chronicler' },
   plan: { role: 'plan', persona: 'Planner' },
   bookkeeper: { role: 'bookkeeper', persona: 'Curator' },
-  predictor: { role: 'engineer', persona: 'Engineer' },
   advisor: { role: 'advisor', persona: 'Auditor' },
 }
 const expectedView = (name, origin = 'ResolvedAtRoot') => ({

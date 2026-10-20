@@ -8,7 +8,7 @@ module AssociationSurface =
     val entry: sessionId: string -> state: obj -> obj
     val classify: sessionId: string -> state: obj -> obj
     val ids: state: obj -> string array
-    val bloggerOf: sessionId: string -> state: obj -> obj
+
     val mainSessionOf: sessionId: string -> state: obj -> obj
     val isCompanion: sessionId: string -> state: obj -> bool
     val executionClass: kind: string -> obj
@@ -19,5 +19,3 @@ module AssociationSurface =
     val dedicatedExecutionClass: string
     val dedicatedOwnership: owner: string -> role: string -> obj
     val dedicatedAttachment: role: string -> string
-    val strengthExecutionClass: string
-    val strengthOwnership: owner: string -> obj

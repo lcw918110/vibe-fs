@@ -1,2 +1,0 @@
-One sharp, self-contained sentence naming the exact proposition that is not yet safe to believe or the exact state that must change. Name the entity, interface, or invariant directly; do not say merely that something needs investigation, clarification, or confirmation.
-Phrase it as a proposition that can be proved false/true or as a concrete invariant gap, not as a diary-style statement of what this turn intends to do.

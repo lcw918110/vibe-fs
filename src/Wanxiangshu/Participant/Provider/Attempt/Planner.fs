@@ -1,7 +1,6 @@
 namespace Wanxiangshu.Participant.Provider.Attempt
 
 open Wanxiangshu.Execution.Session.ChatExecution
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Interaction.Attempt
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Foundation
@@ -17,16 +16,9 @@ open Wanxiangshu.Foundation.Identity
 ///
 /// The plan bundles the profile with the prefix decision because the two are one
 /// choice: CTX-010 makes the probe part of the immutable profile, so a caller that
-/// received them separately could send a request whose profile says
-/// `UsePrefixProbe` while its message list carries the committed prefix.
-type AttemptPlan =
-    {
-        Profile: AttemptExecutionProfile
-        /// `None` when this attempt built no probe. CTX-011 lists five ordinary reasons for
-        /// that, and the caller treats them alike — it is kept so a diagnostic can say
-        /// which one happened (HOST-007).
-        NoProbeReason: NoCandidateReason option
-    }
+/// received them separately could send a request whose projection
+/// differed from its message list.
+type AttemptPlan = { Profile: AttemptExecutionProfile }
 
 /// Pre-inference half of an AttemptPlan.
 ///
@@ -40,10 +32,7 @@ type PendingAttemptPlan =
     { Authority: PromptAuthority.AuthorityExecutionProfile
       PhysicalUserMessageId: PhysicalUserMessageId
       Origin: PromptAuthority.PromptOrigin
-      RequestKind: ProviderRequestKind
-      ProjectionChoice: XProjectionChoice
-      CommittedPrefixSnapshot: PrefixSnapshot option
-      NoProbeReason: NoCandidateReason option }
+      RequestKind: ProviderRequestKind }
 
 [<RequireQualifiedAccess>]
 module AttemptPlanner =
@@ -54,22 +43,6 @@ module AttemptPlanner =
             ProviderRequestKind.InteractionRepair
         | _ -> ProviderRequestKind.WorkMain
 
-    let private chooseProjection
-        (requestKind: ProviderRequestKind)
-        (allowProbe: bool)
-        (selectProbe: unit -> Result<PrefixProbe, NoCandidateReason>)
-        =
-        let probe =
-            if allowProbe && ProviderRequestKind.mayCarryProbe requestKind then
-                Some(selectProbe ())
-            else
-                None
-
-        match probe with
-        | Some(Ok value) -> XProjectionChoice.UsePrefixProbe value, None
-        | Some(Error reason) -> XProjectionChoice.UseCommittedEpoch, Some reason
-        | None -> XProjectionChoice.UseCommittedEpoch, None
-
     /// Freeze every provider-request decision available before inference. The
     /// assistant run is deliberately absent: the Host has not created it yet.
     let freezePreInference
@@ -77,19 +50,11 @@ module AttemptPlanner =
         (physicalUserMessageId: PhysicalUserMessageId)
         (origin: PromptAuthority.PromptOrigin)
         (requestKind: ProviderRequestKind)
-        (committedPrefixSnapshot: PrefixSnapshot option)
-        (allowProbe: bool)
-        (selectProbe: unit -> Result<PrefixProbe, NoCandidateReason>)
         : PendingAttemptPlan =
-        let choice, noProbeReason = chooseProjection requestKind allowProbe selectProbe
-
         { Authority = authority
           PhysicalUserMessageId = physicalUserMessageId
           Origin = origin
-          RequestKind = requestKind
-          ProjectionChoice = choice
-          CommittedPrefixSnapshot = committedPrefixSnapshot
-          NoProbeReason = noProbeReason }
+          RequestKind = requestKind }
 
     let freezeOrdinary
         (accepted: AcceptedChatExecutionEvidence)
@@ -102,14 +67,7 @@ module AttemptPlanner =
             accepted.AuthorityKind
             accepted.IdentitySeed
         |> Result.map (fun authority ->
-            freezePreInference
-                authority
-                accepted.PhysicalUserMessageId
-                accepted.Origin
-                requestKind
-                None
-                false
-                (fun () -> Error NoCandidateReason.NoCoverage))
+            freezePreInference authority accepted.PhysicalUserMessageId accepted.Origin requestKind)
 
     /// Binds the immutable pre-inference decision to the
     /// exact assistant run for the already-frozen physical request.
@@ -120,48 +78,15 @@ module AttemptPlanner =
                 pending.PhysicalUserMessageId
                 providerRun
                 pending.Origin
-                pending.RequestKind
-                pending.ProjectionChoice
-          NoProbeReason = pending.NoProbeReason }
+                pending.RequestKind }
 
-    let pendingProbeOf (pending: PendingAttemptPlan) =
-        match pending.ProjectionChoice with
-        | XProjectionChoice.UsePrefixProbe probe -> Some probe
-        | XProjectionChoice.UseCommittedEpoch -> None
-
-    /// PROMPT-008: build the profile for one attempt.
-    ///
-    /// Material is proven by
-    /// running `selectProbe`; `Error NoCoverage` is therefore an explicit ordinary
-    /// no-probe result rather than an unreachable branch.
+    /// Build the profile for one attempt. Recovery does not select a second projection.
     let plan
         (authority: PromptAuthority.AuthorityExecutionProfile)
         (physicalUserMessageId: PhysicalUserMessageId)
         (providerRun: ProviderRunIdentity)
         (origin: PromptAuthority.PromptOrigin)
         (requestKind: ProviderRequestKind)
-        (allowProbe: bool)
-        (selectProbe: unit -> Result<PrefixProbe, NoCandidateReason>)
         : AttemptPlan =
-        freezePreInference authority physicalUserMessageId origin requestKind None allowProbe selectProbe
+        freezePreInference authority physicalUserMessageId origin requestKind
         |> bindProviderRun providerRun
-
-    /// CTX-010: the probe this attempt carries, if any.
-    let probeOf (plan: AttemptPlan) =
-        match plan.Profile.ProjectionChoice with
-        | XProjectionChoice.UsePrefixProbe probe -> Some probe
-        | XProjectionChoice.UseCommittedEpoch -> None
-
-    /// CTX-012: may this attempt's outcome promote a prefix.
-    ///
-    /// Two conditions. The attempt must carry a probe, and the terminal must be usable
-    /// (CTX-004). Everything else CTX-012 lists as non-promotable — a transport
-    /// receipt, `PhysicalAccepted`, the provider starting to stream — is not an
-    /// `AttemptOutcome` at all, so it cannot reach this function: those are states of
-    /// the send, and only a reconciled snapshot produces an outcome.
-    let promotableProbe (plan: AttemptPlan) (outcome: AttemptOutcome) =
-        match outcome with
-        | AttemptOutcome.Completed -> probeOf plan
-        | AttemptOutcome.CompletedInvalid
-        | AttemptOutcome.Failed
-        | AttemptOutcome.Aborted -> None

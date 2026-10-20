@@ -39,8 +39,8 @@ export const toolCall = (id, tool, args) =>
   })
 
 /** A synthetic row fixture used to verify that tenure assembly strips synthetic rows. */
-export const syntheticLwr = (incumbencyId, workId, text) =>
-  hostMessage(`lwr-prev-${incumbencyId}`, 'user', [{ type: 'text', text }], {
+export const syntheticPredecessor = (incumbencyId, workId, text) =>
+  hostMessage(`synthetic-prev-${incumbencyId}`, 'user', [{ type: 'text', text }], {
     sessionID: workId,
     synthetic: true,
     source: 'plan-tenure-record',

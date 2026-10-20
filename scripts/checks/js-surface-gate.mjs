@@ -42,7 +42,6 @@ export const REQUIRED_ACTIVE_JS_TOOLS = [
   'todowrite-for-bookkeeper',
   'todowrite-for-manager',
   'todowrite-for-orchestrator',
-  'todowrite-for-blogger',
 ]
 
 /** Files where the static enumeration is legitimate (permission matrix only). */

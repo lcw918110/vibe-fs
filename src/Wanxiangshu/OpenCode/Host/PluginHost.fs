@@ -14,10 +14,6 @@ open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Git
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Cycle
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Delegation.Handle
@@ -31,7 +27,7 @@ open Wanxiangshu.Interaction.Repair
 open Wanxiangshu.Participant.Persona
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
-open Wanxiangshu.Strength
+
 
 module PluginHost =
 
@@ -77,9 +73,11 @@ module PluginHost =
         }
 
     let private createWorkspaceJournal workspace : Task<Result<AgentJournal option, string>> =
-        let commonDir = RuntimePath.initializeStateRoot workspace
-        let runtimeDir = RuntimePath.forWorkspace workspace
-        acquireWorkspaceJournal commonDir runtimeDir
+        task {
+            let! commonDir = RuntimePath.initializeStateRoot workspace
+            let! runtimeDir = RuntimePath.forWorkspace workspace
+            return! acquireWorkspaceJournal commonDir runtimeDir
+        }
 
     /// Load may read durable bytes, but it never repairs semantic state. Physical
     /// corruption is a load error; a domain fold rejection only disables the journal
@@ -95,36 +93,40 @@ module PluginHost =
         (familyParent: (SessionId -> SessionId option) option)
         (isLifecycleTerminated: (SessionId -> bool) option)
         (isUserQuestionWaiting: (SessionId -> bool) option)
-        : Result<
-              IEventObservationPort *
-              ISessionHostPort *
-              ISessionSnapshotPort option *
-              string option *
-              Events.HostEventPort option,
-              string
+        : Task<
+              Result<
+                  IEventObservationPort *
+                  ISessionHostPort *
+                  ISessionSnapshotPort option *
+                  string option *
+                  Events.HostEventPort option,
+                  string
+               >
            >
         =
-        // Completion/output port is process-local per workspace runtime path so
-        // root + worktree plugin instances share AwaitAgent / NotifyTerminal.
-        // Host SSE remains only a coarse idle/retry/deleted signal source.
-        let shared = SharedTerminalBus.tryAcquireForWorkspace (workspaceDirectory input)
+        task {
+            // Completion/output port is process-local per workspace runtime path so
+            // root + worktree plugin instances share AwaitAgent / NotifyTerminal.
+            // Host SSE remains only a coarse idle/retry/deleted signal source.
+            let! shared = SharedTerminalBus.tryAcquireForWorkspace (workspaceDirectory input)
 
-        let hostEventPort, terminalKey =
-            match shared with
-            | Some(key, port) -> port, Some key
-            | None -> Events.HostEventPort(), None
+            let hostEventPort, terminalKey =
+                match shared with
+                | Some(key, port) -> port, Some key
+                | None -> Events.HostEventPort(), None
 
-        let eventPort = hostEventPort :> IEventObservationPort
+            let eventPort = hostEventPort :> IEventObservationPort
 
-        let sessionPort =
-            InjectedSessionPort(
-                portOpt,
-                eventPort,
-                ?familyParent = familyParent,
-                ?isLifecycleTerminated = isLifecycleTerminated,
-                ?isUserQuestionWaiting = isUserQuestionWaiting
-            )
+            let sessionPort =
+                InjectedSessionPort(
+                    portOpt,
+                    eventPort,
+                    ?familyParent = familyParent,
+                    ?isLifecycleTerminated = isLifecycleTerminated,
+                    ?isUserQuestionWaiting = isUserQuestionWaiting
+                )
 
-        let snapshotPort = SessionSnapshotPort.create input
+            let snapshotPort = SessionSnapshotPort.create input
 
-        Ok(eventPort, sessionPort :> ISessionHostPort, snapshotPort, terminalKey, Some hostEventPort)
+            return Ok(eventPort, sessionPort :> ISessionHostPort, snapshotPort, terminalKey, Some hostEventPort)
+        }

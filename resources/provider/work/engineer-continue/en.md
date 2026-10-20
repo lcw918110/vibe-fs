@@ -1,0 +1,1 @@
+This assignment has no accepted string delivery. Assistant text is not a return, and an object is not accepted. Call js.deliver(verboseReport) with one string: what changed, what was established, and what remains. Do not stop.

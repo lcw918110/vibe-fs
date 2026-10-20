@@ -101,53 +101,28 @@ const acceptedRetryInput = (overrides = {}) => ({
   journal: true,
   sessionId: 'ses_x',
   acceptedRetry: true,
-  failures: 1,
-  prefixEpoch: 0,
   physicalUser: 'user-1',
   acceptedPhysicalUser: 'user-1',
-  snapshotPort: true,
   currentProjection: baseProjection,
-  committedSnapshot: null,
-  coverableCutoff: 2, // material exists (coverage ahead of request)
-  // The Companion's claim is proven at ITS cutoff; the frozen subset ends at the
-  // request boundary, which is where this attempt may fold (CTX-029).
-  coveredDigest: XWireSurface.coveredPrefixDigest(baseProjection, 2),
-  materialCutoff: 1,
-  requestStartCutoff: 1,
-  frozenRecordPrefixRef: 'blob/ref/frozen-1',
-  frozenRecordPrefixDigest: 'sha256:frozen-1',
-  frozenRecordPrefixBody: 'frozen record prefix body text',
-  memoryPreamble: 'companion memory preamble',
-  outcome: null,
   ...overrides,
 })
 
-test('WHAT[host-boundary-020] XWIRE_missing_prefix_epoch_fail_closed', () => {
-  const withoutEpoch = acceptedRetryInput()
-  delete withoutEpoch.prefixEpoch
-  const result = XWireSurface.transform(withoutEpoch)
-  assert.equal(result.ok, false)
-  assert.equal(result.noop, false)
-  assert.match(result.error, /prefix epoch/)
-})
-test('WHAT[host-boundary-020] XWIRE_malformed_prefix_epoch_fail_closed', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ prefixEpoch: 'not-an-epoch' }))
-  assert.equal(result.ok, false)
-  assert.equal(result.noop, false)
-  assert.match(result.error, /prefix epoch/)
-})
-test('WHAT[host-boundary-020] XWIRE_missing_frozen_prefix_body_fail_closed', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ frozenRecordPrefixBody: undefined }))
-  assert.equal(result.ok, false)
-  assert.equal(result.noop, false)
-  assert.match(result.error, /frozen record prefix body/)
-})
-test('WHAT[host-boundary-020] XWIRE_covered_digest_mismatch_refuses_the_probe_fail_closed', () => {
-  const result = XWireSurface.transform(acceptedRetryInput({ coveredDigest: 'not-the-current-prefix-digest' }))
+test('WHAT[host-boundary-020] XWIRE_physical_user_mismatch_fails_closed_to_noop', () => {
+  const result = XWireSurface.transform(acceptedRetryInput({ acceptedPhysicalUser: 'user-2' }))
   assert.equal(result.ok, true)
-  assert.equal(result.consumed, true)
+  assert.equal(result.noop, true)
   assert.equal(result.changed, false)
-  assert.match(result.noProbeReason, /^CutoffProofFailed:/)
-  assert.equal(result.probe, null)
+  assert.equal(result.consumed, false)
+  assert.equal(result.error, null)
+  assert.equal(result.output, baseProjection)
+})
+test('WHAT[host-boundary-020] XWIRE_missing_physical_user_fails_closed_to_noop', () => {
+  const result = XWireSurface.transform(acceptedRetryInput({ physicalUser: '' }))
+  assert.equal(result.ok, true)
+  assert.equal(result.noop, true)
+  assert.equal(result.changed, false)
+  assert.equal(result.consumed, false)
+  assert.equal(result.error, null)
+  assert.equal(result.output, baseProjection)
 })
 }

@@ -45,7 +45,7 @@
 
 ## [011] 插件 user-shaped message 一律经 PROMPT-005
 
-Blogger 与只读副本的工作派发共用 `SendManagedAssignment`：目标尚无 active run 时认领 `AgentOwnerRoot`，已有 active run 时发送 `ManagedDelegationAssignment` continuation，继承原有身份与 root。只有首次 root 需要取得 owner identity seed；两条路径保持各自明确的工具权限，不从 owner 的普通工具集合继承权限。
+受管委托的工作派发使用 `SendManagedAssignment`：目标尚无 active run 时认领 `AgentOwnerRoot`，已有 active run 时发送 `ManagedDelegationAssignment` continuation，继承原有身份与 root。只有首次 root 需要取得 owner identity seed；两条路径保持各自明确的工具权限，不从 owner 的普通工具集合继承权限。
 
 所有内部生成的合成用户消息必须携带合法的 `PromptKey` 与结构化来源元数据。此举保证缺乏插件元数据的消息能够被无歧义地识别为真实的外部物理用户输入。
 

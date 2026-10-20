@@ -3,11 +3,6 @@ namespace Wanxiangshu.Context.Companion
 open Wanxiangshu.Foundation.Identity
 
 type CompanionFactCases =
-    | CompanionBloggerLinked of
-        {| SessionId: SessionId
-           BloggerSessionId: SessionId
-           BloggerAgent: string |}
-    | CompanionBloggerClosed of {| SessionId: SessionId |}
     | OpeningPromptCaptured of
         {| SessionId: SessionId
            AssignmentText: string
@@ -34,58 +29,9 @@ type CompanionFactCases =
            ProviderRun: ProviderRunIdentity |}
 
 type ContextFactCases =
-    | BlogObservationCommitted of
-        {| SessionId: SessionId
-           BloggerSessionId: SessionId
-           RequestId: BloggerRequestId
-           FrameEpochId: FrameEpochId
-           PreviousIngestedThroughSequence: int64
-           NextIngestedThroughSequence: int64
-           PreviousCoverableTurnCutoffExclusive: int
-           NextCoverableTurnCutoffExclusive: int
-           NextCoveredPrefixDigest: string
-           TextRef: BlobRef
-           TextDigest: BlobDigest
-           ProviderRun: ProviderRunIdentity
-           ToolCallIds: ToolCallId list
-           TipName: string
-           TipTextRef: BlobRef option
-           TipTextDigest: BlobDigest option
-           EvidenceRef: BlobRef option
-           ObservedPrefixEpochId: PrefixEpochId |}
-    | BloggerRequestMaterialized of
-        {| RequestId: BloggerRequestId
-           MainSessionId: SessionId
-           BloggerSessionId: SessionId
-           RequestKind: string
-           ContextRef: BlobRef
-           ContextDigest: BlobDigest
-           ObservedPrefixEpochId: PrefixEpochId
-           PreviousIngestedThroughSequence: int64
-           NextIngestedThroughSequence: int64
-           FrameEpochId: FrameEpochId
-           SelectedFrameDigests: BlobDigest list
-           PromptKey: PromptKey option |}
-    | BloggerRequestAbandoned of
-        {| RequestId: BloggerRequestId
-           MainSessionId: SessionId
-           BloggerSessionId: SessionId
-           Reason: string |}
     | ViewCheckpointCommitted of
         {| SessionId: SessionId
            ToolCallId: ToolCallId |}
-    | PrefixRebaseCommitted of
-        {| SessionId: SessionId
-           PreviousEpochId: PrefixEpochId
-           NextEpochId: PrefixEpochId
-           FrozenRecordPrefixRef: BlobRef
-           FrozenRecordPrefixDigest: BlobDigest
-           CutoffExclusive: int
-           CoveredPrefixDigest: string
-           SealRoot: string
-           SyntheticMessageId: string
-           ProbeId: string
-           SolvingProviderRun: ProviderRunIdentity |}
     | ContextReanchored of
         {| SessionId: SessionId
            PreviousEpochId: PrefixEpochId

@@ -20,8 +20,8 @@ identical `{{placeholder}}` sets, and protocol identifier parity (AC20).
 ## One current account of the work
 
 The public prompt catalog contains Orchestrator, Manager, Engineer, DevOps, and
-Blogger. Bookkeeper has a separate internal prompt; Predictor is an internal
-mechanism. Sphinx is program-controlled work, not another role to dispatch.
+Plan. Bookkeeper and Advisor have separate internal prompts. Sphinx is
+program-controlled work, not another role to dispatch.
 Retired role names must not resolve to an Engineer prompt or appear as public
 catalog aliases. Historical decoding is not permission to load a live prompt.
 
@@ -33,7 +33,7 @@ difference between source completion, current execution evidence, and acceptance
 
 Change the whole affected story, not only `role/`: `world/`, `library/`, `host/`,
 `lifecycle/`, `runtime/`, caller-facing tool descriptions and denials, generated
-JS examples, and `../enforcer/` must agree in both languages. Model pools choose
+JS examples must agree in both languages. Model pools choose
 physical targets; they do not grant new roles or resurrect retired ones.
 
 ## Stage and evidence resources

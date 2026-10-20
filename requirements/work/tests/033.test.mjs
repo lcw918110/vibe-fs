@@ -26,7 +26,7 @@ const withStore = async (body) => {
   try {
     // The journal directory is fixed next to the events dir; tests that open
     // the database directly create it here rather than relying on the host.
-    const stateDir = journalSurface.JournalSurface_initializeStateRoot(root)
+    const stateDir = await journalSurface.JournalSurface_initializeStateRoot(root)
     mkdirSync(join(stateDir, 'wanxiangshu'), { recursive: true })
     await body(workspace.acquire(stateDir), root)
   } finally {

@@ -42,6 +42,30 @@ test('WHAT[repository-programming-009] JS010_bindings_grep_returns_matches', asy
 {
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
+const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const { join } = await import("node:path");
+const { createApi, api: apiOf } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
+
+test('WHAT[repository-programming-009] rg binding returns a promise', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wxs-rg-promise-'))
+  try {
+    writeFileSync(join(dir, 'a.ts'), 'targetNeedle\n', 'utf8')
+    const pending = apiOf(createApi(dir)).js.rg(['targetNeedle', '.'])
+    assert.equal(typeof pending.then, 'function')
+    const found = await pending
+    assert.equal(found.ok, true)
+    assert.equal(found.exitCode, 0)
+    assert.equal(Array.isArray(found.messages), true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+}
+
+{
+const { default: assert } = await import("node:assert/strict");
+const { default: test } = await import("node:test");
 const { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");

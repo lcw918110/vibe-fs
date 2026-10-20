@@ -19,8 +19,8 @@ const RESOURCE_SAMPLES = [
   'provider/role/manager/en.md',
   'provider/role/manager/zh-CN.md',
   'provider/world/common-law/en.md',
-  'enforcer/primitive-obsession/lesson.md',
-  'enforcer/primitive-obsession/lesson.zh-CN.md',
+  'provider/lifecycle/manager/work-activation/en.md',
+  'provider/lifecycle/manager/work-activation/zh-CN.md',
 ]
 
 test('WHAT[distribution-002] DISTRIBUTION_resource_reads_resolve_under_package_root_regardless_of_cwd', async () => {
@@ -46,7 +46,7 @@ test('WHAT[distribution-002] DISTRIBUTION_fresh_process_with_foreign_cwd_imports
     import { readText } from ${JSON.stringify(packageResourcesUrl)};
     const text = readText('provider/role/manager/en.md');
     if (!text.includes('Manager')) process.exit(2);
-    if (!readText('enforcer/primitive-obsession/lesson.md').trim()) process.exit(3);
+    if (!readText('provider/lifecycle/manager/work-activation/en.md').trim()) process.exit(3);
     await import(${JSON.stringify(entryUrl)});
     console.log('ok');
   `

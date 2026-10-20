@@ -17,18 +17,20 @@ type FissionStartedLane =
 type FissionAdmission =
     { OwnerSessionId: SessionId
       ParentSessionId: SessionId option
-      OwnerWorkRecord: string
+      OwnerView: string option
       Lanes: FissionStartedLane list }
 
 [<CLIMutable>]
 type FissionAdmissionDependencies =
     { ParentOf: SessionId -> Task<Result<SessionId option, string>>
-      OwnerWorkRecord: SessionId -> Task<Result<string, string>>
+      OwnerView: SessionId -> Task<Result<string option, string>>
       CreateLane: SessionId -> SessionId option -> FissionLanePrompt -> Task<Result<SessionId, string>>
       StartLane: SessionId -> string -> Task<Result<unit, string>>
       AbortLane: SessionId -> Task
       SilentInterruptOwner: SessionId -> Task<Result<unit, string>> }
 
+// OnLanesCreated commits the admitted group. Its owner view is the text the lanes
+// actually received: the owner's delivered view, empty when the owner delivered none.
 [<CLIMutable>]
 type FissionAdmissionHooks =
     { OnLanesCreated: SessionId -> SessionId option -> string -> FissionStartedLane list -> Task<Result<unit, string>>
@@ -41,16 +43,26 @@ type FissionAdmissionRuntime internal (deps: FissionAdmissionDependencies, hooks
 
 module FissionStartup =
 
-    /// Fresh lane startup deliberately uses a bounded LWR rather than transcript
-    /// cloning. The lane input is copied exactly after the canonical parser.
-    let render laneCount (lane: FissionLanePrompt) (ownerWorkRecord: string) =
-        LlmFacing.instructions
+    /// Fresh lane startup deliberately uses the owner's delivered view rather than transcript
+    /// cloning. The lane input is copied exactly after the canonical parser. The owner's
+    /// delivered view is optional context: a lane starts from the lane input alone when the
+    /// owner has not delivered a view yet.
+    let render laneCount (lane: FissionLanePrompt) (ownerView: string option) =
+        let ownerViewInstructions =
+            match ownerView with
+            | Some view when not (String.IsNullOrWhiteSpace view) ->
+                [ "The owner's latest delivered view follows. Continue its unfinished responsibility."
+                  view ]
+            | _ -> []
+
+        let instructions =
             [ "You are one coequal present of the same logical participant after Fission."
               "Your lane input follows. Carry it as your own current responsibility."
-              lane.Prompt
-              "The owner lifecycle work record follows. Continue its unfinished responsibility."
-              ownerWorkRecord
-              "Continue the same participant's responsibility. Do not treat sibling lanes as delegated agents." ]
+              lane.Prompt ]
+            @ ownerViewInstructions
+            @ [ "Continue the same participant's responsibility. Do not treat sibling lanes as delegated agents." ]
+
+        LlmFacing.instructions instructions
         |> LlmFacing.withData [ LlmFacing.Data.intField "lane_count" laneCount ]
         |> LlmFacing.render
 
@@ -168,11 +180,11 @@ module FissionAdmission =
         (runtime: FissionAdmissionRuntime)
         ownerSessionId
         parentSessionId
-        ownerWorkRecord
+        ownerView
         (created: FissionStartedLane list)
         =
         task {
-            match! runtime.Hooks.OnLanesCreated ownerSessionId parentSessionId ownerWorkRecord created with
+            match! runtime.Hooks.OnLanesCreated ownerSessionId parentSessionId ownerView created with
             | Ok() -> return Ok()
             | Error error ->
                 do! rollback runtime ownerSessionId created
@@ -183,7 +195,7 @@ module FissionAdmission =
         (runtime: FissionAdmissionRuntime)
         ownerSessionId
         (parsed: ParsedFissionPrompts)
-        ownerWorkRecord
+        ownerView
         (created: FissionStartedLane list)
         =
         task {
@@ -193,7 +205,7 @@ module FissionAdmission =
                     let lane =
                         parsed.Lanes |> List.find (fun candidate -> candidate.Index = started.Index)
 
-                    let startup = FissionStartup.render parsed.Count lane ownerWorkRecord
+                    let startup = FissionStartup.render parsed.Count lane ownerView
                     runtime.Dependencies.StartLane started.SessionId startup)
 
             match outcome with
@@ -225,28 +237,31 @@ module FissionAdmission =
         (parsed: ParsedFissionPrompts)
         =
         taskResult {
-            let! ownerWorkRecord =
+            let! ownerView =
                 dependencyOrRelease
                     runtime
                     ownerSessionId
-                    "owner LWR materialization failed: "
-                    (runtime.Dependencies.OwnerWorkRecord ownerSessionId)
+                    "owner view materialization failed: "
+                    (runtime.Dependencies.OwnerView ownerSessionId)
 
-            if String.IsNullOrWhiteSpace ownerWorkRecord then
-                release runtime ownerSessionId
-                return! dependencyError "owner LWR materialization returned empty"
-            else
-                let physicalParent = Some parentSessionId
-                let! created = createAllLanes runtime ownerSessionId physicalParent parsed.Lanes
-                do! commitLanesCreated runtime ownerSessionId physicalParent ownerWorkRecord created
-                do! startAllLanes runtime ownerSessionId parsed ownerWorkRecord created
-                do! silentInterruptOwner runtime ownerSessionId created
+            // The owner's delivered view is optional context for the lanes, not an
+            // admission precondition: an owner that has not delivered yet still
+            // admits its lanes, and those lanes start from the lane input alone.
+            let physicalParent = Some parentSessionId
+            // The lanes' owner view is one text: the delivered view, or the empty
+            // view when the owner has delivered nothing. The durable commit and the
+            // lane startup both read it, so the fact and the lanes cannot disagree.
+            let ownerViewText = ownerView |> Option.defaultValue ""
+            let! created = createAllLanes runtime ownerSessionId physicalParent parsed.Lanes
+            do! commitLanesCreated runtime ownerSessionId physicalParent ownerViewText created
+            do! startAllLanes runtime ownerSessionId parsed ownerView created
+            do! silentInterruptOwner runtime ownerSessionId created
 
-                return
-                    { OwnerSessionId = ownerSessionId
-                      ParentSessionId = Some parentSessionId
-                      OwnerWorkRecord = ownerWorkRecord
-                      Lanes = created }
+            return
+                { OwnerSessionId = ownerSessionId
+                  ParentSessionId = Some parentSessionId
+                  OwnerView = ownerView
+                  Lanes = created }
         }
 
     let private admitFromPhysicalParent

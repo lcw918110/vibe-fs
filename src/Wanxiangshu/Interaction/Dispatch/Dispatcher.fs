@@ -627,7 +627,7 @@ module PromptDispatcher =
                     accepted.PromptKey = key
                     && accepted.SessionId = sessionId
                     && accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
-                                             PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
+                        PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
 
             let acceptExisting
                 (accepted: PromptAuthority.AcceptedDispatch)
@@ -782,7 +782,7 @@ module PromptDispatcher =
                 |> Option.iter (attachPhysicalAcceptanceObserver observer)
             | _ -> ()
 
-        /// provider-attempt-recovery-008: has this Blogger request + terminal occasion already spent its one interaction repair.
+        /// provider-attempt-recovery-008: has this request + terminal occasion already spent its one interaction repair.
         ///
         /// A read, not a claim. The previous `TryClaimInteractionRepair` mutated a
         /// `RepairClaims` set that no fact ever wrote, so the at-most-once guarantee
@@ -791,7 +791,7 @@ module PromptDispatcher =
         /// claimed before a crash is still spent after it.
         member this.RepairAlreadyClaimed
             (profile: PromptAuthority.AuthorityExecutionProfile)
-            (requestId: BloggerRequestId)
+            (requestId: RepairRequestId)
             (terminalProviderRun: ProviderRunIdentity)
             (repairKind: string)
             : bool =

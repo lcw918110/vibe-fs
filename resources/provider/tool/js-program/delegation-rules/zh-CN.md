@@ -22,8 +22,8 @@ await js.fork({ charge: "为解析器建索引", name: "parser-index", calling: 
 const { records, byName } = await js.join();
 ```
 
-- 结果：`{ ok: true, records: [{ name, agentId, role, status, workRecord }], byName: { [name]: record } }`。
-- `status` 为 `completed` | `undelivered` | `failed` | `abandoned`；`workRecord` 是子工作经 `js.deliver` 交付的终值记录（`undelivered`、`failed` 或 `abandoned` 时为空）。
+- 结果：`{ ok: true, records: [{ name, agentId, role, status, view }], byName: { [name]: record } }`。
+- `status` 为 `completed` | `undelivered` | `failed` | `abandoned`；`view` 是子工作经 `js.deliver` 交回的 TOML 视图（`undelivered`、`failed` 或 `abandoned` 时为空）。
 - 按成员归属收拢：收的是本会话创建的子工作。拒绝码：`context-unavailable`、`not-ready`、`nothing-to-join`、`join-in-progress`、`interrupted`、`abandoned`。
 
 ## fission
@@ -73,6 +73,6 @@ const advice = await js.advisor("Is the caching layer's eviction policy sound?",
 ```
 
 - 请教这个 session 的**专属顾问**——一位不持有任何工具、只以散文作答的评审者——用在敲定路线之前，或宣布收工之前。同一个 session 永远落到同一个顾问，之后的调用只追加 view 的增量与新 intent，所以这条线是延续的。
-- `intent` 是要问的问题，自成一条 prompt。`view` 声明顾问可以读什么，形状与本轮的视图声明相同（`{ prefixUntil, thenRemove? }`）；宿主把这些记录按 Chronicle 的形状渲染成一条 prompt，再把 intent 作为另一条发出。二者永不合并。
+- `intent` 是要问的问题，自成一条 prompt。`view` 声明顾问可以读什么，形状与本轮的视图声明相同（`{ prefixUntil, thenRemove? }`）；宿主把这些记录渲染成一条 TOML prompt，再把 intent 作为另一条发出。二者永不合并。
 - 结果：`{ ok: true, advice }`（散文即数据）或 `{ ok: false, code: "advisor-unavailable", reason }`；视图声明非法时以 `VIEW_DECLARATION_INVALID` 拒绝。
 - 把回答当作指引：一个 plan、一个 correction，或一个 stop signal。这次请教本身不会往你的会话里写入任何东西。

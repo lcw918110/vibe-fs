@@ -12,8 +12,8 @@ const started = event('ChildRecoveryStarted', { session: 'child' })
 
 test('WHAT[crash-reconciliation-009] abort-only evidence is incomplete and terminal proof requires a body', () => {
   assert.equal(child.resolve('active', 'missing', ['aborted:transport', 'restore'], '').result, 'RecoveryIncomplete')
-  assert.equal(child.resolve('active', 'terminal', [], 'work-record').result, 'RecoveredTerminal')
-  assert.deepEqual(child.provenTerminal('work-record'), { ok: true, finality: 'Succeeded', body: 'work-record' })
+  assert.equal(child.resolve('active', 'terminal', [], 'delivered-view').result, 'RecoveredTerminal')
+  assert.deepEqual(child.provenTerminal('delivered-view'), { ok: true, finality: 'Succeeded', body: 'delivered-view' })
   assert.equal(child.provenTerminal('').ok, false)
 })
 

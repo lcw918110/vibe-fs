@@ -6,7 +6,6 @@
     "AgentFact.Orchestrator": "change-integration",
     "AgentFact.Companion": "context-compression",
     "AgentFact.Context": "semantic-trace",
-    "AgentFact.Host": "requirement-grounding",
     "AgentFact.Fission": "intra-participant-parallelism",
     "AgentFact.Delegation": "delegation",
     "AgentFact.ChatExecution": "managed-chat-execution",

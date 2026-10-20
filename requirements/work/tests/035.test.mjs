@@ -19,7 +19,7 @@ const withStore = async (body) => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-work-035-'))
   execFileSync('git', ['init', '--quiet', root])
   try {
-    await body(workspace.acquire(journalSurface.JournalSurface_initializeStateRoot(root)), root)
+    await body(workspace.acquire(await journalSurface.JournalSurface_initializeStateRoot(root)), root)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -195,7 +195,7 @@ test('WHAT[work-035] recovery effects keep Done and Review for an open incumbenc
 
 test('WHAT[work-035] S4 recovery reads confirmation, relay and delivery from the fold, and a reopened delivered tenure is active again', async () => {
   await withStore(async (store, root) => {
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(root)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(root)
     const workId = 'work-rec-s4-successor'
     const accepted = ['Committed', 'Replayed', 'Observed']
     const commit = (requestId, command) => {

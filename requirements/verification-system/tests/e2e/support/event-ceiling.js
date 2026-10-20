@@ -1,7 +1,7 @@
 /**
  * event-ceiling.js — exact event-count upper bounds that fail closed on dead loops.
  *
- * Wall-clock silence (watchdog) is a 兜底. A blogger/join-guard/XTrace storm can keep
+ * Wall-clock silence (watchdog) is a 兜底. A join-guard/XTrace storm can keep
  * appending durable facts and SSE frames forever while never producing the awaited
  * causal fact — and a widened waitFact window (60s+) will sit through that storm.
  *

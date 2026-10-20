@@ -10,19 +10,19 @@ Host 侧展示给模型的工具 Schema 与运行时执行拦截 Gate 读同一 
 
 ## [003] capability projection 可按 office + request contract 收窄，但不得扩大 office entitlement
 
-能力投影允许根据特定 `RequestKind`（如投机副本或窄通道）对角色固有权限进行收窄，但任何投影出的能力集合必须是 `Roles.permissions(role)` 的严格子集，严禁发生权能扩大。
+能力投影允许根据特定 `RequestKind`（如窄通道）对角色固有权限进行收窄，但任何投影出的能力集合必须是 `Roles.permissions(role)` 的严格子集，严禁发生权能扩大。
 
 ## [004] execution tier 不改变同 office 的 authority：同一 CanonicalRole 的权限集与 tier 无关
 
-同一 Office 的工具权限集完全由 `CanonicalRole` 决定，与执行档位无关。执行档位仅代表底层机器与推理深度，不影响权限矩阵。托管 agent 使用 canonical bare 名称 (`manager`/`orchestrator`/`engineer`/`devops`/`blogger`/`bookkeeper`/`predictor`)，不再有 `fast-`/`deep-` 前缀。
+同一 Office 的工具权限集完全由 `CanonicalRole` 决定，与执行档位无关。执行档位仅代表底层机器与推理深度，不影响权限矩阵。托管 agent 使用 canonical bare 名称 (`manager`/`orchestrator`/`engineer`/`devops`/`plan`/`bookkeeper`)，不再有 `fast-`/`deep-` 前缀；已废弃的 `blogger` 与 `predictor` 不得注册。
 
-## [005] request-specific replica/leaf 可进一步收窄：StrengthReplica 只 {Read; Glob; Grep} 与只读 todowrite-for-predictor
+## [005] StrengthReplica 与只读副本工具面已废弃
 
-用于投机调查的 `StrengthReplica` 仅保留唯一专用的只读 JS 编程面 `todowrite-for-predictor`（能力面 {Read; Glob}；`grep` 成员已按 repository-programming [057] 退役，内容搜索由 walk + `whereAll` 组合完成）。其运行时工具映射在 deny 全部工具后精准放行这一项；原生 `read`/`glob`/`grep` 与其余修改、执行工具（包括 write, edit, run, fork, join 以及角色特权 js-* 面）在副本内全部 fail-closed。
+`StrengthReplica` 请求类型及 `todowrite-for-predictor` 已整体废弃，系统不再为投机调查副本开放专用工具面；任何未知或已退役请求类型在权限投影与运行时门禁中一律 fail-closed（空权限集）。
 
 ## [006] internal-only participants/actions 不进无资格 participant 的工具面
 
-内部专用工具（如 Blogger 的 `chronicle`、Bookkeeper 的 `todowrite-for-bookkeeper`）仅向对应内部角色开放，普通角色不可见亦不可执行。认知与交互效用工具（如 `assume` 等）及 Host 工具（如 `skill`）不属于领域业务权限，不进入 `Roles.permissions`，亦不得借此扩大角色的领域权能；内部伴随角色（Blogger）禁止获得 `skill` 与 `assume` 等效用工具。
+内部专用工具（如 Bookkeeper 的 `todowrite-for-bookkeeper`）仅向对应内部角色开放，普通角色不可见亦不可执行；已废弃的 `chronicle` 工具与 `todowrite-for-blogger` 不再注册。认知与交互效用工具（如 `assume` 等）及 Host 工具（如 `skill`）不属于领域业务权限，不进入 `Roles.permissions`，亦不得借此扩大角色的领域权能。
 
 ## [007] Host-native/MCP/plugin 等不同技术来源的 actions 服从同一 semantic capability policy
 
@@ -80,11 +80,9 @@ Witness、Capability 与 Receipt 的合同必须声明 subject、版本/序列�
 
 此边界不把普通可预期admission rejection升级为fatal。
 
-## [021] Blogger repair 单一 owner 发行物理效果：同 episode 幂等、quiescence 门控、耗尽一次性 abandon
+## [021] Blogger 与 Chronicle 修复机制已退役
 
-Blogger 缺失工具修复的认领与物理发送只能由 `BloggerCoordinator.observeTransformRepair / observeIdleRepair` 这一唯一 compiled owner 发行。同一 repair episode 内重复观察必须幂等等待、不重复认领亦不重复发送；非 quiescent 观察不产生认领、不消耗发送预算；nudge 与 aabb 各至多发送一次，耗尽后一次性 abandon 并释放 flight；journal 缺失时直接 abandon 且零物理发送。runtime shutdown 必须与 episode admission 原子关闸，关闸后新认领被拒，已认领 episode 被取消并可 drain。
-
-没有 Host 工具循环跟随的 Blogger turn——只有散文的完成，或被 continuation 自身停止、被外部中止的 run——其 live request 只剩 idle 这一个唤醒点。idle 必须把这类 turn 交给同一 repair owner（由 owner 证明它属于 live request）；忽略被中止的 turn 会让该 request 的 flight 永久占用、后续材料永远跳过。provider 失败归 provider-attempt recovery；degeneration guard 触发的中止已由 guard 自己拥有后继。
+`Role.Blogger`、`chronicle` 工具及 `BloggerCoordinator` 已整体废弃；系统不再保留 Blogger repair episode 或 `ToolPermission.Chronicle`。
 
 ## [022] Fission 仅准入已证明的 CanonicalRole 为 Engineer，其他角色与内部身份一律在运行入口与门禁 fail-closed 拒绝
 
@@ -96,7 +94,7 @@ Fission 能力在运行入口（Admission Gate）的准入逻辑严格限定为�
              ∧ 没有活跃 Fission group
              ∧ 其他现有准入条件成立
 ```
-唯一可赋予 Fission 的角色是 Engineer。Manager、Orchestrator、DevOps、Blogger、Bookkeeper、Predictor 以及任何未决或内部辅助身份调用 Fission 时，必须在运行时入口与 ToolRegistry 门禁直接拒绝（fail-closed），绝不只从 Schema 隐藏。
+唯一可赋予 Fission 的角色是 Engineer。Manager、Orchestrator、DevOps、Plan、Bookkeeper 以及任何未决或内部辅助身份调用 Fission 时，必须在运行时入口与 ToolRegistry 门禁直接拒绝（fail-closed），绝不只从 Schema 隐藏。
 
 ## [023] DevOps 角色固有直接源码修改与测试编写权能，禁止 allowRepair 等逐次授权开关
 

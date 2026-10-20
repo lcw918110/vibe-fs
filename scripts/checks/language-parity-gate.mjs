@@ -15,7 +15,6 @@ import { fileURLToPath } from 'node:url'
 import { walk } from '../lib/walk.mjs'
 
 export const PROVIDER_ROOT = 'resources/provider'
-export const ENFORCER_ROOT = 'resources/enforcer'
 export const LOCALE_FILES = Object.freeze(['en.md', 'zh-CN.md'])
 export const PROVIDER_RESOURCES_REL = 'src/Wanxiangshu/Participant/Provider/ProviderResources.fs'
 export const PROVIDER_LANGUAGE_BINDING_REL =
@@ -31,7 +30,6 @@ export const LLM_FACING_SOURCES = Object.freeze([
   'src/Wanxiangshu/Resources/PromptSurface.fs',
   'src/Wanxiangshu/Resources/PromptResources.fs',
   'src/Wanxiangshu/OpenCode/Host/ManagedAgentConfig.fs',
-  'src/Wanxiangshu/Context/Companion/ProjectionSurface.fs',
   'src/Wanxiangshu/Execution/Session/OpenCode/HorizonSurface.fs',
   'src/Wanxiangshu/Mission/Obligation/Todo/OpenCode/MagicTodoHostSurface.fs',
 ])
@@ -80,19 +78,6 @@ export const listSemanticResourceDirs = (providerAbs) => {
     dirs.add(norm(relative(providerAbs, dirname(abs))))
   }
   return [...dirs].sort()
-}
-
-/**
- * TipIdentity = enforcer tip directory basename.
- * @param {string} enforcerAbs
- * @returns {string[]}
- */
-export const listTipIdentities = (enforcerAbs) => {
-  if (!existsSync(enforcerAbs)) return []
-  return readdirSync(enforcerAbs, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name)
-    .sort()
 }
 
 /**
@@ -468,8 +453,7 @@ export const scanRepo = (repoRoot = process.cwd(), catalogOverrides) => {
     violations.push(...scanParity(semanticDirs, providerAbs))
   }
 
-  const tipIdentities =
-    catalogOverrides?.tipIdentities ?? listTipIdentities(resolve(repoRoot, ENFORCER_ROOT))
+  const tipIdentities = catalogOverrides?.tipIdentities ?? []
   const toolNames =
     catalogOverrides?.toolNames ??
     (() => {

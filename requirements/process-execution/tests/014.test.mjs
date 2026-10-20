@@ -9,7 +9,7 @@ import {
   renderString,
 } from '../../../dist/Foundation/SyntheticTomlSurface.js'
 
-// Host-native `run` tool is retired; `js.run` supersedes it (repository-programming [050]-[052]).
+// Host-native `run` tool is retired; `js.call` supersedes it (repository-programming [050]-[052]).
 
 const formatOutcomeDocument = (exitCode, raw) =>
   renderDocument([], [field('exit_code', renderInt(exitCode)), field('output', renderString(raw))])
@@ -21,11 +21,13 @@ test('WHAT[process-execution-014] raw_spooled_output_is_data_not_an_instruction'
     const cmd = nodeCommand(`process.stdout.write(${JSON.stringify(raw)}); process.exit(7)`)
     const outcome = await runProgram(
       dir,
-      `    return await js.run(class extends js.Runnable {
+      `    return await js.call(class extends js.Callable {
       maxDuration = 5000;
       interval = 50;
       next(ctx) { return ctx.step === 0 ? ${JSON.stringify(cmd)} : null; }
       check() { return true; }
+      watch(ctx) { if (ctx.exited && ctx.exitCode !== 0 && ctx.exitCode !== 7) return { abort: "command failed" }; return true; }
+      sanity() { return { nextDone: () => [{ root: '/', step: 1 }], watchVeto: () => [{ root: '/', step: 0, stdout: '', stderr: '', exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }] }; }
     });`,
     )
     assert.equal(caseName(outcome), 'Succeeded')
@@ -70,7 +72,7 @@ test('WHAT[process-execution-014] truncated_output_preserves_program_facts_witho
     const outcome = await runProgram(
       dir,
       `    let exited = null;
-    const r = await js.run(class extends js.Runnable {
+    const r = await js.call(class extends js.Callable {
       maxDuration = 10000;
       interval = 100;
       next(ctx) {
@@ -79,6 +81,8 @@ test('WHAT[process-execution-014] truncated_output_preserves_program_facts_witho
         return null;
       }
       check() { return true; }
+      watch(ctx) { if (ctx.exited && ctx.exitCode !== 0 && ctx.exitCode !== 7) return { abort: "command failed" }; return true; }
+      sanity() { return { nextDone: () => [{ root: '/', step: 2 }], watchVeto: () => [{ root: '/', step: 0, stdout: '', stderr: '', exited: true, exitCode: 2, backgrounds: [], elapsedMs: 0, remainingMs: 60000 }] }; }
       onExit(res) { exited = { exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr }; }
     });
     return { exitCode: r.exitCode, exitedCode: exited.exitCode, truncated: r.truncated, bytes: r.bytes, endsWithExitCodeZeroText: exited.stdout.endsWith("EXIT-CODE=0") };`,

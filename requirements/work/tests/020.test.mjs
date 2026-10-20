@@ -14,15 +14,15 @@ import {
   msgId,
   msgRole,
   msgText,
-  syntheticLwr,
+  syntheticPredecessor,
   userText,
 } from './support/plan-messages.mjs'
 
 // WHAT[work-020] fixes the closed input set a Plan runner receives:
 // U (verbatim, original order), current-tenure interactions, the predecessor's
-// declared ANCHOR view (durable ViewCheckpointCommitted + view.extra), and P
+// declared ANCHOR view (durable ViewCheckpointCommitted + view.thenRemove), and P
 // (the only writable surface, reached through todowrite-for-plan only); no
-// synthetic LWR_prev message is ever injected.
+// synthetic predecessor message is ever injected.
 
 const assemble = (rawMessages, tenure, messageCursors) =>
   surface.PlanningSurface.assembleTenureMessages(rawMessages, tenure, messageCursors)
@@ -52,7 +52,7 @@ test('WHAT[work-020] U messages are preserved verbatim in original order', () =>
   assert.deepEqual(userContents, ['设计缓存架构\n第二行', '补充约束: no cache invalidation'])
 })
 
-test('WHAT[work-020] neither initial nor later tenures ever inject a synthetic lwr-prev-* message', () => {
+test('WHAT[work-020] neither initial nor later tenures ever inject a synthetic-prev-* message', () => {
   const rawMessages = [
     userText('u-1', 'go'),
     assistantText('a-old', 'prior work', 'u-1'),
@@ -75,12 +75,12 @@ test('WHAT[work-020] neither initial nor later tenures ever inject a synthetic l
   const firstResult = assemble([userText('u-1', 'go')], firstTenure, {})
   const laterResult = assemble(rawMessages, laterTenure, cursors({ 'a-old': 10n, 'a-new': 25n }))
   assert.ok(
-    !firstResult.messages.some((m) => msgId(m).startsWith('lwr-prev-') || m.info.synthetic === true),
-    'first tenure must not carry any synthetic lwr-prev-* message',
+    !firstResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true),
+    'first tenure must not carry any synthetic-prev-* message',
   )
   assert.ok(
-    !laterResult.messages.some((m) => msgId(m).startsWith('lwr-prev-') || m.info.synthetic === true),
-    'later tenure must not carry any synthetic lwr-prev-* message',
+    !laterResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true),
+    'later tenure must not carry any synthetic-prev-* message',
   )
   assert.deepEqual(ids(firstResult.messages), ['u-1'])
   assert.deepEqual(ids(laterResult.messages), ['u-1', 'a-new'])
@@ -106,7 +106,7 @@ test('WHAT[work-020] assembled messages come only from U and current-tenure inte
   const inputIds = new Set(rawMessages.map(msgId))
   for (const m of result.messages) {
     assert.ok(
-      inputIds.has(msgId(m)) && !msgId(m).startsWith('lwr-prev-'),
+      inputIds.has(msgId(m)) && !msgId(m).startsWith('synthetic-prev-'),
       `assembled message id ${msgId(m)} must originate from the physical input messages`,
     )
   }
@@ -141,7 +141,7 @@ test('WHAT[work-020] a negative openingCursor rejects assembly fail-closed', () 
 test('WHAT[work-020] synthetic rows are stripped and never re-injected during assembly', () => {
   const rawMessages = [
     userText('u-1', 'go'),
-    syntheticLwr('inc-old', 'w-001', 'old synthesized previous row'),
+    syntheticPredecessor('inc-old', 'w-001', 'old synthesized previous row'),
     assistantText('a-1', 'current work', 'u-1'),
   ]
   const tenure = {
@@ -156,17 +156,17 @@ test('WHAT[work-020] synthetic rows are stripped and never re-injected during as
     tenure,
     cursors({ 'a-1': 30n }),
   )
-  const lwrRows = result.messages.filter((m) => msgId(m).startsWith('lwr-prev-'))
-  assert.equal(lwrRows.length, 0, 'no synthetic lwr-prev-* row is ever present')
-  assert.ok(!result.messages.some((m) => msgId(m) === 'lwr-prev-inc-old'))
+  const syntheticRows = result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-'))
+  assert.equal(syntheticRows.length, 0, 'no synthetic-prev-* row is ever present')
+  assert.ok(!result.messages.some((m) => msgId(m) === 'synthetic-prev-inc-old'))
   assert.deepEqual(ids(result.messages), ['u-1', 'a-1'])
 })
 
-test('WHAT[work-020] a relaying tenure declaring view: { extra } commits ViewCheckpointCommitted and carries the declared handover text into the successor request', async () => {
+test('WHAT[work-020] a relaying tenure declaring view: { prefixUntil, thenRemove } commits ViewCheckpointCommitted and carries the declared handover summary into the successor request', async () => {
   clearAll()
   const life = lifecycle.LifecycleSurface ?? lifecycle
   await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
-    const commonDir = journalSurface.JournalSurface_initializeStateRoot(directory)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
     const planRoot = join(commonDir, 'wanxiangshu')
     const sessionID = 'ses-plan-view-handover-020'
     await acceptAuthorityRoot(runtime, sessionID, 'plan', 'user-plan-root')
@@ -194,7 +194,7 @@ test('WHAT[work-020] a relaying tenure declaring view: { extra } commits ViewChe
     const firstOut = { messages: [structuredClone(userRoot)] }
     await hooks['experimental.chat.messages.transform']({ sessionID }, firstOut)
 
-    // Predecessor tenure calls todowrite-for-plan with view: { extra: [...] } before relaying
+    // Predecessor tenure calls todowrite-for-plan with a view declaration before relaying
     const handoverProse = 'HANDOVER_VIEW_020: S1 root-cause verified; successor must audit eviction trade-offs.'
     const planCallMsg = {
       info: { id: 'run-plan-view-1', role: 'assistant', sessionID, parentID: 'user-plan-root', time: { created: 2 } },
@@ -264,7 +264,7 @@ test('WHAT[work-020] a relaying tenure declaring view: { extra } commits ViewChe
     assert.notEqual(afterRelay.ActiveId, beforeRelay.ActiveId, 'deliver must open the successor tenure')
 
     // Successor request transform runs under the new tenure: strips predecessor assistant/tool,
-    // injects no lwr-prev-*, and carries the predecessor's declared view.extra prose.
+    // injects no synthetic-prev-*, and carries the predecessor's declared thenRemove summary.
     const successorFollowup = {
       info: { id: 'user-plan-followup', role: 'user', sessionID, agent: 'plan', time: { created: 4 } },
       parts: [{ id: 'part-u2', type: 'text', text: 'Continue with the next leg.' }],
@@ -291,10 +291,12 @@ test('WHAT[work-020] a relaying tenure declaring view: { extra } commits ViewChe
     await hooks['experimental.chat.messages.transform']({ sessionID }, successorOut)
 
     const wireIds = successorOut.messages.map((m) => m?.info?.id ?? '')
-    assert.ok(!wireIds.some((id) => id.startsWith('lwr-prev-')), 'successor request must never contain an lwr-prev-* message')
-    assert.ok(!wireIds.includes('run-plan-view-1'), 'predecessor tool exchange must be stripped')
-    assert.ok(!wireIds.includes('run-plan-deliver-1'), 'predecessor deliver exchange must be stripped')
+    assert.ok(!wireIds.some((id) => id.startsWith('synthetic-prev-')), 'successor request must never contain a synthetic-prev-* message')
+    assert.ok(!wireIds.includes('user-plan-root'), 'the view-covered anchor is replaced by its summary')
+    assert.ok(wireIds.includes('user-plan-root#summary'), 'the replaced anchor stands in as a synthetic summary row')
+    assert.ok(wireIds.includes('run-plan-view-1'), 'history outside the view boundary is retained by the relay')
+    assert.ok(wireIds.includes('run-plan-deliver-1'), 'history outside the view boundary is retained by the relay')
     const serialized = JSON.stringify(successorOut.messages)
-    assert.ok(serialized.includes(handoverProse), 'successor request must carry the predecessor declared view.extra text')
+    assert.ok(serialized.includes(handoverProse), 'successor request must carry the predecessor declared thenRemove summary')
   })
 })

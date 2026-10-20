@@ -9,11 +9,11 @@ test('WHAT[participant-horizon-009] real Manager fork rejects hidden and unknown
   await withForkRuntime(async ({ runtime, owner }) => {
     const count = forkTool.childCount(runtime)
     let generic
-    for (const calling of ['bookkeeper', 'predictor', 'blogger', 'unknown-role']) {
+    for (const calling of ['bookkeeper', 'unknown-role']) {
       const result = await forkTool.executeManagerFork(runtime, toolModule, owner, calling, 'Hidden', 'PRIVATE-CHARGE')
       if (generic === undefined) generic = result
       assert.equal(result, generic, calling)
-      assert.doesNotMatch(result, /bookkeeper|predictor|blogger|unknown-role|PRIVATE-CHARGE|internal/i)
+      assert.doesNotMatch(result, /bookkeeper|unknown-role|PRIVATE-CHARGE|internal/i)
       assert.equal(forkTool.childCount(runtime), count)
     }
     await placeEngineer(runtime, owner, 'Visible')

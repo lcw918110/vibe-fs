@@ -25,8 +25,8 @@ test('WHAT[durable-events-020] Journal boot creates no writer until the first bu
       assert.equal(existsSync(writer), false)
       const appended = await journal.JournalSurface_appendAgent(booted.journal, { kind: 'Session', session: 'session-proof' }, null, {
         family: 'Companion',
-        case: 'CompanionBloggerClosed',
-        payload: { SessionId: 'session-proof' },
+        case: 'TerminalOutputCaptured',
+        payload: { SessionId: 'session-proof', TextRef: 'blob-term', TextDigest: 'sha-term', ProviderRun: 'run-term' },
       })
       assert.equal(appended.ok, true)
       const lines = readFileSync(writer, 'utf8').trimEnd().split('\n').map(JSON.parse)

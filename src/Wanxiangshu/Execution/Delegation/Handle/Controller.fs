@@ -212,7 +212,7 @@ module HandleController =
         }
 
     let private activeWork (durable: AgentJournalPort) parentId agentId =
-        HandleProjection.workRecords (durable.HandleProjection parentId)
+        HandleProjection.workBindings (durable.HandleProjection parentId)
         |> List.tryFind (fun record -> record.Handle = agentHandle agentId && record.Lifecycle = Active)
         |> Option.bind _.Work
 

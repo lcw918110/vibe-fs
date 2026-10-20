@@ -9,7 +9,6 @@ const root = 'ses_root'
 const work = (session) => ({ kind: 'work', session })
 const child = (parent, session, handle) => ({ kind: 'child', parent, child: session, handle })
 const companion = (main, session) => ({ kind: 'companion', main, companion: session })
-const blogger = (main, session) => ({ kind: 'blogger', main, blogger: session })
 const managerJob = (job, manager) => ({ kind: 'managerJob', job, manager })
 
 test('WHAT[crash-reconciliation-014] closure validator accepts unique sessions and returns exact membership', () => {
@@ -26,7 +25,6 @@ test('WHAT[crash-reconciliation-014] CRASH_CLOSURE_member_tokens_are_stable_iden
   assert.equal(recovery.token(work('w')), 'W:w')
   assert.equal(recovery.token(child('p', 'c', 'h1')), 'A:p>c:h1')
   assert.equal(recovery.token(companion('m', 'c2')), 'C:m>c2')
-  assert.equal(recovery.token(blogger('m', 'b3')), 'B:m>b3')
   assert.equal(recovery.token(managerJob('j1', 'm4')), 'M:j1:m4')
 })
 test('WHAT[crash-reconciliation-014] CRASH_CLOSURE_members_set_matches_tokens', () => {
@@ -50,7 +48,7 @@ test('WHAT[crash-reconciliation-014] MISC_recovery_validate_closure_pure', () =>
   const cycle = recovery.validateClosure('a1', [
     { kind: 'work', session: 'a1' },
     { kind: 'child', parent: 'a1', child: 'a2', handle: 'h1' },
-    { kind: 'blogger', main: 'a2', blogger: 'a2' },
+    { kind: 'companion', main: 'a1', companion: 'a2' },
   ])
   assert.equal(cycle.ok, false)
   assert.equal(cycle.error, 'RecoveryCycle')

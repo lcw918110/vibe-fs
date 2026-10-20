@@ -19,7 +19,7 @@ module HostForkChildDispatch =
         journal: AgentJournal option ->
         parentId: SessionId ->
         sessions: ISessionHostPort ->
-        childWorkRecordForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
+        childViewForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) ->
         trackOwnedWork: ((unit -> Task) -> unit) ->
         runtime: ForkRuntime ->
         sendChildPrompt:

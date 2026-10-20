@@ -9,9 +9,9 @@
     { "id": "dispatch", "legacy_owners": ["dispatch-protocol"] },
     { "id": "application-composition", "legacy_owners": [] },
     { "id": "durable-composition", "legacy_owners": [] },
-    { "id": "enforcer", "legacy_owners": ["behavior-diagnosis", "degeneration-guard"] },
+    { "id": "enforcer", "legacy_owners": ["degeneration-guard"] },
     { "id": "host", "legacy_owners": ["host-boundary"] },
-    { "id": "interaction", "legacy_owners": ["action-affordance", "attention-regulation", "capability-enforcement", "concern-routing", "guidance-delivery"] },
+    { "id": "interaction", "legacy_owners": ["action-affordance", "attention-regulation", "capability-enforcement", "concern-routing"] },
     { "id": "knowledge", "legacy_owners": ["knowledge-reuse"] },
     { "id": "output", "legacy_owners": ["output-distillation"] },
     { "id": "participant", "legacy_owners": ["office-capability", "participant-identity"] },
@@ -21,13 +21,12 @@
     { "id": "provider", "legacy_owners": ["execution-model-routing", "host-provider-failure-ownership", "provider-attempt-recovery", "provider-language", "provider-projection"] },
     { "id": "repository-investigation", "legacy_owners": ["repository-investigation"] },
     { "id": "repository-programming", "legacy_owners": ["repository-programming"] },
-    { "id": "requirements", "legacy_owners": ["requirement-grounding"] },
+    { "id": "requirements", "legacy_owners": [] },
     { "id": "resources", "legacy_owners": ["cognitive-environment", "distribution"] },
     { "id": "runtime-platform", "legacy_owners": [] },
     { "id": "session-lifecycle", "legacy_owners": ["causal-wait", "managed-session-lifecycle", "session-ontology", "time-capability"] },
     { "id": "sphinx", "legacy_owners": ["epistemic-reasoning", "external-investigation"] },
-    { "id": "strength", "legacy_owners": ["speculative-investigation"] },
     { "id": "verification", "legacy_owners": ["verification-system"] },
-    { "id": "work", "legacy_owners": ["obligation-ledger", "work", "work-record"] }
+    { "id": "work", "legacy_owners": ["obligation-ledger", "work"] }
   ]
 }

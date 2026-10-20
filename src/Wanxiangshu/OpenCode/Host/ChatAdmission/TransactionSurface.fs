@@ -6,7 +6,6 @@ open System.Threading.Tasks
 open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Durable.Fact
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -67,7 +66,6 @@ module TransactionSurface =
             (ProviderRunIdentity.create (requiredText "providerRun" value?providerRun))
             (PromptAuthority.PromptOrigin.AuthorityRoot PromptAuthority.RootAuthorityKind.HumanRoot)
             ProviderRequestKind.WorkMain
-            XProjectionChoice.UseCommittedEpoch
 
     let private initialState
         (stateLabel: string)
@@ -76,8 +74,7 @@ module TransactionSurface =
         let started =
             { Accepted = evidence
               ProviderRun = ProviderRunIdentity.create "provider-transaction"
-              RequestKind = ProviderRequestKind.WorkMain
-              ProjectionChoice = XProjectionChoice.UseCommittedEpoch }
+              RequestKind = ProviderRequestKind.WorkMain }
 
         match stateLabel with
         | "None" -> None

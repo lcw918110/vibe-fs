@@ -13,7 +13,7 @@ if (mode === 'write') {
     escapes: [causal.escape('processLifetime')],
     source: 'old-process',
   }))
-  causal.writeSnapshot(workspace, registry)
+  await causal.writeSnapshot(workspace, registry)
 }
 const previous = JSON.parse(readFileSync(join(workspace, '.Herdchestra', 'diagnostics', 'causal-waits.json'), 'utf8'))
 const current = causal.snapshot(registry)

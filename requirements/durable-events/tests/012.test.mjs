@@ -11,8 +11,8 @@ const journal = await import("../../../dist/Persistence/Journal/Surface.js");
 
 const CLOSED_AGENT = {
   family: 'Companion',
-  case: 'CompanionBloggerClosed',
-  payload: { SessionId: 'ses_es_writer' },
+  case: 'TerminalOutputCaptured',
+  payload: { SessionId: 'ses_es_writer', TextRef: 'blob-term', TextDigest: 'sha-term', ProviderRun: 'run-term' },
 }
 const mustOk = (result, label) => {
   assert.equal(result.ok, true, `${label}: ${JSON.stringify(result.error)}`)
@@ -212,7 +212,7 @@ test('WHAT[durable-events-012] closure_is_empty_for_a_fact_without_blob_fields',
       handle,
       { kind: 'Session', session: 'ses_empty' },
       null,
-      { family: 'Companion', case: 'CompanionBloggerClosed', payload: { SessionId: 'ses_empty' } },
+      { family: 'Companion', case: 'TerminalOutputCaptured', payload: { SessionId: 'ses_empty', TextRef: 'blob-empty', TextDigest: 'sha-empty', ProviderRun: 'run-empty' } },
     )
     assert.equal(appended.ok, true, JSON.stringify(appended.error))
     assert.deepEqual(payloadRefsFromFile(commonDir, 'closure-empty').at(-1), [])

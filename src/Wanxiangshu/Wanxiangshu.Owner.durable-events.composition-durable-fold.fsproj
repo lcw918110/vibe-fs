@@ -8,46 +8,41 @@
   </PropertyGroup>
   <ItemGroup>
     
-    <ProjectReference Include="Wanxiangshu.Owner.change-integration.change-fold.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.prefix-stability.mission-obligation-todo-prefixepoch.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.change-integration.change-fold.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.prefix-stability.mission-obligation-todo-prefixepoch.fsproj" />
     
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-companionfactfold.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.delegation.delegation-linkage-projection.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-handle-surface.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-syncdelegate-model.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-fact.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.change-integration.change-facts.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-projection.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-promptfactcodec.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.guidance-delivery.opencode-host-pairprogramming-guidelineprojection.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-companionfactfold.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.delegation.delegation-linkage-projection.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-handle-surface.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-syncdelegate-model.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-fact.fsproj" /><ProjectReference Include="Wanxiangshu.Owner.change-integration.change-facts.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.composition-durable-projection.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-promptfactcodec.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.guidance-delivery.opencode-host-pairprogramming-guidelineprojection.fsproj" />
     
-    <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-fold.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-ledger.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-fact.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-fold.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-ledger.fsproj" />
     
-    <ProjectReference Include="Wanxiangshu.Owner.managed-chat-execution.execution-session-chatexecution-fold.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.provider-attempt-recovery.participant-provider-attempt-fallback-fold.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.requirement-grounding.host-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.requirement-grounding.requirement-grounding-projection.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.requirement-grounding.requirement-grounding-model.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.work.mission-work-core.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.time-capability.execution-session-sessionstartedatprojection.fsproj"/>
-    <Compile Include="Composition/Durable/HostFactFold.fsi"/>
-    <Compile Include="Composition/Durable/HostFactFold.fs"/>
-    <Compile Include="Composition/Durable/DelegationProjectionBridge.fsi"/>
-    <Compile Include="Composition/Durable/DelegationProjectionBridge.fs"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-facts.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.behavior-diagnosis.enforcer-projection.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.semantic-trace.context-trace-model.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.session-ontology.execution-session-association.fsproj"/>
-    <Compile Include="Context/Companion/Blogger/ContextFactFold.fsi"/>
-    <Compile Include="Context/Companion/Blogger/ContextFactFold.fs"/>
-    <Compile Include="Composition/Durable/DomainFamilyBridge.fsi"/>
-    <Compile Include="Composition/Durable/DomainFamilyBridge.fs"/>
-    <Compile Include="Composition/Durable/Fold.fsi"/>
-    <Compile Include="Composition/Durable/Fold.fs"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.interaction-repair-completedturn.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.managed-chat-execution.execution-session-chatexecution-fold.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.provider-attempt-recovery.participant-provider-attempt-fallback-fold.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.durable-composition.host-fact.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.work.mission-work-core.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.time-capability.execution-session-sessionstartedatprojection.fsproj" />
+    <Compile Include="Composition/Durable/HostFactFold.fsi" />
+    <Compile Include="Composition/Durable/HostFactFold.fs" />
+    <Compile Include="Composition/Durable/DelegationProjectionBridge.fsi" />
+    <Compile Include="Composition/Durable/DelegationProjectionBridge.fs" />
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-fact.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-facts.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.semantic-trace.context-trace-model.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.session-ontology.execution-session-association.fsproj" />
+    <Compile Include="Composition/Durable/DomainFamilyBridge.fsi" />
+    <Compile Include="Composition/Durable/DomainFamilyBridge.fs" />
+    <Compile Include="Composition/Durable/Fold.fsi" />
+    <Compile Include="Composition/Durable/Fold.fs" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.interaction-repair-completedturn.fsproj" />
   </ItemGroup>
 </Project>

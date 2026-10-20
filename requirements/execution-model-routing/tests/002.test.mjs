@@ -202,7 +202,7 @@ const writeConfig = async (path, body) => {
 const observingScheduler = (behaviour) => {
   const calls = []
   const scheduler = (role, running, previous, purpose) => {
-    calls.push({ role, previous: previous ?? null, purpose })
+    calls.push({ role, running, previous: previous ?? null, purpose })
     return behaviour(role, running, previous, purpose)
   }
   return { scheduler, calls }
@@ -266,177 +266,15 @@ export default function route(role, running, previous, purpose) {
   })
 })
 
-test('WHAT[execution-model-routing-002] EMR_002_purpose_reaches_scheduler_and_selects_predictor_pool', async () => {
-  const behaviour = (role, running, previous, purpose) =>
-    purpose === 'readonly-delegate'
-      ? { model: 'provider/predictor', reasoning: 'none' }
-      : { model: 'provider/owner', reasoning: 'none' }
-  const { scheduler, calls } = observingScheduler(behaviour)
-  const runtime = createRuntime(scheduler)
-
-  const normal = await acquire(runtime, 'ses-normal', 'msg-1', 'engineer', 'alice', 'normal')
-  assert.equal(normal.target.model, 'provider/owner')
-
-  const delegate = await acquire(runtime, 'ses-delegate', 'msg-1', 'engineer', 'alice', 'readonly-delegate')
-  assert.equal(delegate.target.model, 'provider/predictor')
-
-  assert.deepEqual(
-    calls.map((call) => call.purpose),
-    ['normal', 'readonly-delegate'],
+test('WHAT[execution-model-routing-002] EMR_002_invoke_scheduler_passes_role_running_and_previous', async () => {
+  const { scheduler, calls } = observingScheduler((role, running, previous) =>
+    ({ model: 'provider/owner', reasoning: 'none' }),
   )
-  assert.deepEqual(
-    calls.map((call) => call.previous),
-    [null, null],
-  )
-})
-
-test('WHAT[execution-model-routing-002] EMR_002_pending_demand_reroute_keeps_readonly_delegate_purpose', async () => {
-  // The Predictor provider has room for exactly one lease; the waiting demand
-  // must re-run through the scheduler with its own purpose after a release.
-  const behaviour = (role, running, previous, purpose) =>
-    running.length === 0 ? { model: 'provider/predictor', reasoning: 'none' } : null
-  const { scheduler, calls } = observingScheduler(behaviour)
-  const runtime = createRuntime(scheduler)
-
-  const first = await acquire(runtime, 'ses-first', 'msg-1', 'engineer', 'alice', 'readonly-delegate')
-  assert.equal(first.target.model, 'provider/predictor')
-
-  const waiting = await beginExecutionAdmission(
-    runtime,
-    'ses-waiting',
-    'msg-1',
-    'engineer',
-    'bob',
-    null,
-    'readonly-delegate',
-  )
-  assert.equal(waiting.kind, 'Queued')
-
-  releasePhysicalExecution(runtime, 'ses-first', 'msg-1')
-
-  const completed = await awaitQueuedExecutionAdmission(waiting.queue)
-  assert.equal(completed.kind, 'Acquired')
-  assert.equal(executionAdmissionTarget(runtime, completed.lease).model, 'provider/predictor')
-
-  assert.ok(calls.length >= 3, 'the waiting demand must re-enter the scheduler after the release')
-  for (const call of calls) {
-    assert.equal(call.purpose, 'readonly-delegate', 'a rerun of a delegate demand must not fall back to normal')
-  }
-})
-
-test('WHAT[execution-model-routing-002] EMR_002_provider_step_recheck_keeps_readonly_delegate_purpose', async () => {
-  const behaviour = (role, running, previous, purpose) =>
-    purpose === 'readonly-delegate'
-      ? { model: 'provider/predictor', reasoning: 'none' }
-      : running.length === 0
-        ? { model: 'provider/owner', reasoning: 'none' }
-        : null
-  const { scheduler, calls } = observingScheduler(behaviour)
-  const runtime = createRuntime(scheduler)
-
-  const owner = await acquire(runtime, 'ses-lender', 'msg-1', 'engineer', 'owner', 'normal')
-  assert.equal(owner.target.model, 'provider/owner')
-
-  // Owner holds the only provider step in flight; the delegate demand borrows
-  // the lender credit, so its provider-step availability recheck runs through
-  // the scheduler with the delegate target as the previous preference.
-  enterProviderStep(runtime, 'ses-lender', 'msg-1', [])
-
-  const delegate = await acquire(
-    runtime,
-    'ses-borrower',
-    'msg-1',
-    'engineer',
-    'delegate',
-    'readonly-delegate',
-    'ses-lender',
-  )
-  assert.equal(delegate.target.model, 'provider/predictor')
-
-  enterProviderStep(runtime, 'ses-borrower', 'msg-1', [])
-
-  const recheck = calls[calls.length - 1]
-  assert.equal(recheck.purpose, 'readonly-delegate', 'availability recheck must not fall back to normal')
-  assert.equal(recheck.previous.model, 'provider/predictor')
-})
-
-test('WHAT[execution-model-routing-002] EMR_002_readonly_delegate_never_inherits_owner_previous', async () => {
-  const behaviour = (role, running, previous, purpose) =>
-    purpose === 'readonly-delegate'
-      ? { model: 'provider/predictor', reasoning: 'none' }
-      : { model: 'provider/owner', reasoning: 'none' }
-  const { scheduler, calls } = observingScheduler(behaviour)
-  const runtime = createRuntime(scheduler)
-
-  const owner = await acquire(runtime, 'ses-shared', 'msg-1', 'engineer', 'alice', 'normal')
-  assert.equal(owner.target.model, 'provider/owner')
-
-  const delegate = await acquire(runtime, 'ses-shared', 'msg-2', 'engineer', 'alice', 'readonly-delegate')
-  assert.equal(delegate.target.model, 'provider/predictor')
-
-  const delegateCall = calls[calls.length - 1]
-  assert.equal(delegateCall.purpose, 'readonly-delegate')
-  assert.equal(delegateCall.previous, null, 'a delegate execution must not inherit the owner target as previous')
-
-  const leased = tryLease(runtime, 'ses-shared', 'msg-3', 'engineer', 'alice', null, 'readonly-delegate')
-  assert.equal(leased.model, 'provider/predictor')
-  const leaseCall = calls[calls.length - 1]
-  assert.equal(leaseCall.purpose, 'readonly-delegate')
-  assert.equal(leaseCall.previous, null, 'the lease/validation path must not inherit across purposes either')
-})
-
-test('WHAT[execution-model-routing-002] EMR_002_same_physical_execution_cannot_change_purpose', async () => {
-  const behaviour = () => ({ model: 'provider/target', reasoning: 'none' })
-  const { scheduler } = observingScheduler(behaviour)
-  const runtime = createRuntime(scheduler)
-
-  await acquire(runtime, 'ses-immutable', 'msg-1', 'engineer', 'alice', 'normal')
-
-  await assert.rejects(
-    acquireExecutionAdmission(
-      runtime,
-      'ses-immutable',
-      'msg-1',
-      'engineer',
-      'alice',
-      null,
-      'readonly-delegate',
-    ),
-    /changed execution purpose/,
-  )
-})
-
-test('WHAT[execution-model-routing-002] EMR_002_readonly_delegate_does_not_inherit_fixed_devops_binding', async () => {
-  const behaviour = (role, running, previous, purpose) =>
-    purpose === 'readonly-delegate'
-      ? { model: 'provider/predictor', reasoning: 'none' }
-      : previous ?? { model: 'provider/devops-owner', reasoning: 'high' }
-  const { scheduler, calls } = observingScheduler(behaviour)
-  const runtime = createRuntime(scheduler)
-
-  const owner = await acquire(runtime, 'ses-devops', 'msg-1', 'devops', 'devops', 'normal')
-  assert.equal(owner.target.model, 'provider/devops-owner')
-
-  const delegate = await acquire(runtime, 'ses-devops', 'msg-2', 'devops', 'devops', 'readonly-delegate')
-  assert.equal(delegate.target.model, 'provider/predictor')
-
-  const delegateCall = calls[calls.length - 1]
-  assert.equal(delegateCall.purpose, 'readonly-delegate')
-  assert.equal(delegateCall.previous, null, 'the fixed DevOps binding must not cover a delegate execution')
-
-  const ownerAgain = await acquire(runtime, 'ses-devops', 'msg-3', 'devops', 'devops', 'normal')
-  assert.equal(ownerAgain.target.model, 'provider/devops-owner', 'the owner binding survives the delegate execution')
-})
-
-test('WHAT[execution-model-routing-002] EMR_002_invoke_scheduler_passes_purpose_through_the_boundary', async () => {
-  const { scheduler } = observingScheduler((role, running, previous, purpose) =>
-    purpose === 'readonly-delegate'
-      ? { model: 'provider/predictor', reasoning: 'none' }
-      : { model: 'provider/owner', reasoning: 'none' },
-  )
-  const observed = invokeScheduler(scheduler, 'engineer', [], null, 'readonly-delegate')
-  assert.equal(observed.model, 'provider/predictor')
-  assert.equal(invokeScheduler(scheduler, 'engineer', [], null, 'normal').model, 'provider/owner')
+  const observed = invokeScheduler(scheduler, 'engineer', [], null)
+  assert.equal(observed.model, 'provider/owner')
+  assert.equal(calls[0].role, 'engineer')
+  assert.deepEqual(calls[0].running, [])
+  assert.equal(calls[0].previous, null)
 })
 
 }

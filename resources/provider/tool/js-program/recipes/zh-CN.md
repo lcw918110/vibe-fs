@@ -1,42 +1,19 @@
-旧的 `glob`/`grep` 成员已退役。枚举与搜索改为 `ls` + `cat` + `whereAll` 的组合；`ls` 已经应用工作区的 `.gitignore` 规则（逐级 `.gitignore` 加上根 `.git/info/exclude`），因此从工作区根开始的 walk 看到的正是 git 感知枚举器会看到的东西。
-
-## 递归 walk
+搜索和枚举走 `rg(argv)`。它只有一个 argv，返回 JSON 对象，不是文本。内容搜索等价于 `rg --json` 加上这个 argv。`--files`、`--files-with-matches`、`-l`、`--count` 及其他 summary 模式不能和 `--json` 同时使用，所以这些 argv 原样传给 `rg`，结果收成 `paths`：
 
 ```js
-async function walk(dir = ".") {
-  const found = [];
-  const entries = await this.ls(dir);
-  for (const entry of entries) {
-    const full = dir === "." ? entry : `${dir}/${entry}`;
-    if (entry.endsWith("/")) {
-      found.push(...(await walk.call(this, full.slice(0, -1))));
-    } else {
-      found.push(full);
-    }
-  }
-  return found;
-}
+const found = await this.rg(["RetryPolicy", "src", "-g", "*.fs"]);
+const matches = found.messages.filter((message) => message.type === "match");
 ```
 
-边走边筛（`entry.endsWith(".fs")`、`entry.includes("retry")`），大树上递归才不会失控。
+`found` 是 `{ exitCode, messages }`。`messages` 是解析后的 JSON Lines 数组（`begin`、`match`、`context`、`end`、`summary`）。`exitCode` 为 `0` 表示至少一条命中；为 `1` 表示搜索成功但没有命中——这是数据，不是失败。argv 不合法时以 `RG_FAILED` 失败。
 
-## 内容搜索
+路径要自己传。`rg --json` 没有路径时不会搜索工作区。成员不追加 `--no-ignore`；要搜索被忽略的路径，自己写进 argv。`rg --files` 和 `rg --files-with-matches` 返回 `{ exitCode, paths }`。内容搜索直接返回命中。
 
 ```js
-const hits = [];
-for (const path of await walk.call(this, "src")) {
-  const text = await this.cat(path);
-  for (const [begin, end] of this.whereAll(text, "RetryPolicy")) {
-    hits.push({ path, span: [begin, end] });
-  }
-}
+const listed = await this.rg(["--files", "src", "-g", "*.fs"]);
+const paths = listed.paths;
 ```
 
-`whereAll` 是规范化精确匹配（空白折叠）。要正则就先用 JS `RegExp` 过滤 walk 出来的路径，或自己对 `text.split("\n")` 判断——原语只承诺文件访问与规范化搜索。
+argv 里的路径必须留在工作区内。`..`、工作区外的绝对路径，或会读到区外的选项，都是 `PATH_DENIED`。
 
-## 旧成员覆盖的写法
-
-- `glob("src/**/*.fs")` → 从 `src` walk，保留 `path.endsWith(".fs")`。
-- `glob("{src,tests}/**")` → 一个循环里对每个根各 walk 一次。
-- `grep(needle, "*.txt")` → walk、保留 `path.endsWith(".txt")`，再 `whereAll`。
-- 被忽略的路径不会出现：`ls` 已经过滤，walk 自然也看不到。
+`where` / `whereAll` 仍是编辑定位器。它们返回一份快照上的 UTF-16 span；`rg` 不返回 span。

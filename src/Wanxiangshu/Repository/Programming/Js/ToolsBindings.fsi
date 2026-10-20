@@ -9,8 +9,8 @@ open System.Threading.Tasks
 /// through MutationFs at call time; the staging buffer records what was
 /// actually written (JS-012).
 module JsToolsBindings =
-    /// The host loop behind `js.run`, injected by the workflow.
-    type JsRunHost =
+    /// The host loop behind `js.call`, injected by the workflow.
+    type JsCallHost =
         { Loop: Wanxiangshu.Process.JsSandbox.ParkState option -> obj -> string -> Task<obj> }
 
     val createLedger: persistence: IJsTransactionPersistence option -> JsAsIsLedger
@@ -31,7 +31,7 @@ module JsToolsBindings =
         readSnapshots: ResizeArray<JsReadSnapshot> ->
         explicitReads: ResizeArray<JsExplicitFileRead> ->
         ledger: JsAsIsLedger ->
-        runHost: JsRunHost option ->
+        callHost: JsCallHost option ->
         delegationHost: JsDelegationHost option ->
             obj
 
@@ -46,6 +46,6 @@ module JsToolsBindings =
         explicitReads: ResizeArray<JsExplicitFileRead> ->
         ledger: JsAsIsLedger ->
         parkState: Wanxiangshu.Process.JsSandbox.ParkState ->
-        runHost: JsRunHost option ->
+        callHost: JsCallHost option ->
         delegationHost: JsDelegationHost option ->
             obj

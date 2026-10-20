@@ -12,9 +12,9 @@ managed session 分类只描述物理容器的执行能力与归属，不表示 
 
 Dedicated SyncInspector 与 SyncCoder 属于 `Work + Attached`，具备完整的执行能力路径与上下文支持，可拥有独立的 Companion，不得实现为无 Companion 的 InternalLeaf。
 
-## [004] Companion / Bookkeeper / StrengthReplica 属于 InternalLeaf + Attached
+## [004] Companion 与 Bookkeeper 属于 InternalLeaf + Attached
 
-Companion、Bookkeeper 与 StrengthReplica 属于 `InternalLeaf + Attached`。InternalLeaf 不得拥有任何 Attached 实体，包括 Companion 和其他内部叶子。
+Companion 与 Bookkeeper 属于 `InternalLeaf + Attached`。不存在只读副本这种会话种类。InternalLeaf 不得拥有任何 Attached 实体，包括 Companion 和其他内部叶子。
 
 ## [005] Attached 节点单一 Owner 且禁止自链
 
@@ -22,7 +22,7 @@ Attached session 只有一个 owner，且不得以自身为 owner；冲突归属
 
 ## [006] 物理 Host Parent 恒为 Family Root 且逻辑归属由 Journal 承载
 
-所有 managed child 在 Host 中直接挂在 family root 下。逻辑归属只由持久化关联事实决定，不从物理 parentID 推断；物理父节点也不构成 Role、Persona、身份来源或继承证据。对于空本地映射的已恢复会话或深层逻辑 owner，创建托管子会话与列表子节点时必须权威查询 Host 物理父链解析真实 Family Root（查询失败或检测到环路一律安全失败拒绝创建，禁止无证猜测 root）；托管子会话列表亦在真实根节点下查询物理子节点，保证平坦拓扑与常驻副本判定一致。
+所有 managed child 在 Host 中直接挂在 family root 下。逻辑归属只由持久化关联事实决定，不从物理 parentID 推断；物理父节点也不构成 Role、Persona、身份来源或继承证据。对于空本地映射的已恢复会话或深层逻辑 owner，创建托管子会话与列表子节点时必须权威查询 Host 物理父链解析真实 Family Root（查询失败或检测到环路一律安全失败拒绝创建，禁止无证猜测 root）；托管子会话列表亦在真实根节点下查询物理子节点，保证平坦拓扑一致。
 
 ## [007] Durable 关联事实与正交分类派生视图解耦
 
@@ -40,9 +40,9 @@ Attached session 只有一个 owner，且不得以自身为 owner；冲突归属
 
 容器分类不由 Role、Persona、工具或 logical run 决定，Companion 资格不设角色白名单。分类、关联、Session 缓存和 Host parent 也不得生成或修改 `ParticipantIdentity`。
 
-## [011] StrengthReplica 为 Universal 内部叶子且不跨决策复用
+## [011] 不存在可跨决策复用的只读副本会话
 
-StrengthReplica 是进程内的 `InternalLeaf + Attached`，不记录为持久化 satellite。每个 owner 至多有一个 active 副本，决策完成即销毁，不跨决策复用 transcript。
+只读副本不是会话种类，不得登记为 InternalLeaf、持久 satellite 或常驻副本。
 
 ## [012] Bookkeeper 绑定具体 TransactionId
 

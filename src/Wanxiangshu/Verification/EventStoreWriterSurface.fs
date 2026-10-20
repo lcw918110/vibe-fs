@@ -33,7 +33,15 @@ module EventStoreWriterSurface =
             member _.ReloadLocal() = Ok()
 
     let private writerFact (sessionId: SessionId) =
-        Fact.Agent(CompanionFact.CompanionBloggerClosed {| SessionId = sessionId |})
+        Fact.Agent(
+            AgentFact.Companion(
+                CompanionFactCases.OpeningPromptCaptured
+                    {| SessionId = sessionId
+                       AssignmentText = "test"
+                       AuthoritativeRequirements = []
+                       ProviderRun = None |}
+            )
+        )
 
     let private commitResultName (result: CommitResult<Envelope>) =
         match result with

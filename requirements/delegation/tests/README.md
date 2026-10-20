@@ -27,11 +27,11 @@ e1合并的gen77官方510文件与完整36文件integration均0 fail。003实际
 | 023 | 同步 workflow 消费注入 retry verdict，恢复成功或耗尽后返回 | 真实恢复 engine 各路径与最终失败组合 |
 | 024—026 | 同名/同角色复用、own child delta、因果完成/失败、实际 fork 接收与不确定发送后果；Host event port 保留身份（父到子 `DelegationHandoff` delta tracking 已随显式 charge 传递与共享 ANCHOR 地址空间退役） | 所有 terminal 分支、进程 crash cuts、未知接收的后续收敛 |
 | 028、029 | 当前编译清单的直接/传递闭包、额度及反向注入检测；部分源码词形审计 | 各 locality 独立真实编译、类型隔离和实际 capability 行为；路径/词形只是当前结构审计 |
-| 031 | 连续完成复用同一 child 并交付 bounded WorkRecord、旧 root 拒绝、parent supersede 取消、完成与删除在两种顺序下各结算一次（`HandoffCheckpointSettlement` 已随父到子 `DelegationHandoff` 退役） | 真正重复 terminal；SyncDelegate 不替 fork 证明 |
+| 031 | 连续完成复用同一 child 并交付 bounded view、旧 root 拒绝、parent supersede 取消、完成与删除在两种顺序下各结算一次（`HandoffCheckpointSettlement` 已随父到子 `DelegationHandoff` 退役） | 真正重复 terminal；SyncDelegate 不替 fork 证明 |
 
 `support` 只建立真实 runtime 所需的临时 journal、可控物理端口和清理。tool schema stub 仅支持构造工具，不证明真实 Host schema validation。等待同时考虑 prompt 与 invocation 拒绝，避免将合法拒绝误作挂死。新建角色限制不改变历史解码。
 
-Join 的条数上限、显示窗口和 WorkRecord 本身的有界物化不是同一预算。renderer 保留单个大 entry 的测试只证明未截断调用方给的材料，不能证明材料已由真实 bounded projector 限定。
+Join 的条数上限、显示窗口和交付视图本身的有界物化不是同一预算。renderer 保留单个大 entry 的测试只证明未截断调用方给的材料，不能证明材料已由真实 bounded projector 限定。
 
 014/015 保留 PR #42 新增的四项 mailbox 回归。三方合并曾各复制两遍；核实两份逐字相同后只删除重复副本，断言均保留一次。028 保留上游 Host adapter ratchet 312；旧说明中的 307 是此前认知 runtime 引入时的历史值，312 来自后续 prefix shard 显式依赖。
 
@@ -43,7 +43,7 @@ Join 的条数上限、显示窗口和 WorkRecord 本身的有界物化不是同
 
 稳定 handle、Byname、participant/TargetAgent 与物理 child 绑定不因工作结束改写。canonical authority 接纳的 exact physical landing、owner identity、child、Root、LogicalRun 与既有 binding 共同建立封闭 AdmittedWork；一个 Root 字符串或重复 HandleLinked 不发行新工作。新工作可以在旧 completion 未 join 时接纳，每份结果按 exact work 保留、消费，迟到 A 不关闭 B。
 
-024 增加只使用原有 fork/resume/settle/join API 的“两份 WorkRecord 均保留且各交付一次”测试，旧裸 link 重开并覆盖结果会被此断言击红。managed-session-lifecycle 006/007/008/015 再验证 scoped cell、历史墓碑、回执未知、并发消费与 canonical 冷重放。support/scoped-work.mjs 只调用正式 Surface；未知/确认前拒绝注入在 append capability 接缝，不模拟第二套 fold，不证明真实 kill/crash。
+024 增加只使用原有 fork/resume/settle/join API 的“两份交付视图均保留且各交付一次”测试，旧裸 link 重开并覆盖结果会被此断言击红。managed-session-lifecycle 006/007/008/015 再验证 scoped cell、历史墓碑、回执未知、并发消费与 canonical 冷重放。support/scoped-work.mjs 只调用正式 Surface；未知/确认前拒绝注入在 append capability 接缝，不模拟第二套 fold，不证明真实 kill/crash。
 
 历史无 scope completion/retirement 保留原字段、引用与审计含义，不自动绑定到新的 Root；混合或多轮无 scope 历史明确隔离。当前这些结果不由新运行链自动消费。旧物理布局仍不读取；若需要离线迁移，须外部 exact admission/terminal/closure/consume 身份与内容地址材料，不能在启动中推测。
 

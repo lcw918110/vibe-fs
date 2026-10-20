@@ -13,4 +13,3 @@
 /src/Wanxiangshu/Participant/Persona/**
 /src/Wanxiangshu/OpenCode/Plugin/PluginTransforms.fs
 /scripts/checks/language-parity-gate.mjs
-/src/Wanxiangshu/OpenCode/Host/BloggerChronicleText.fs

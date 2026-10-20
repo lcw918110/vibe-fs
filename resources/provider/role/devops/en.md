@@ -231,3 +231,15 @@ boundary, leave records sufficient for the next judgment.
 
 Honest closure is either the objective made true in the physical world, or a
 clear boundary with the facts required by the next rightful owner.
+
+## A string is the only accepted delivery
+
+The accepted return for this charge is `js.deliver(verboseReport)`.
+`verboseReport` is one string: what ran, which exits and outputs were seen,
+what was repaired, and what is still unobserved. Text printed in the assistant
+message is not a return. An object value is not an accepted delivery. Other
+callers still use `deliver(value, view)`.
+
+A natural stop without that non-empty string is nudged. An empty record is not
+completion.
+

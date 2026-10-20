@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as language from '../../../dist/Participant/Provider/LanguageSurface.js'
+import * as sensor from '../../../dist/OpenCode/Host/LoopSensorSurface.js'
+import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.js'
 
 for (const [locale, directory] of [['English', 'en'], ['SimplifiedChinese', 'zh-CN']]) {
   test(`WHAT[degeneration-guard-011] ${locale} projects the two distinct canonical guard resources`, () => {
@@ -16,4 +18,8 @@ for (const [locale, directory] of [['English', 'en'], ['SimplifiedChinese', 'zh-
   })
 }
 
-test.todo('WHAT[degeneration-guard-011] actual continuation binds DegenerationGuard authority and uses the matching anomaly resource (GAP-145)')
+test('WHAT[degeneration-guard-011] actual continuation binds DegenerationGuard authority and uses the matching anomaly resource (GAP-145)', () => {
+  assert.deepEqual(authority.originForContinuation('DegenerationGuard'), { kind: 'Continuation', label: 'DegenerationGuard' })
+  assert.equal(sensor.continuationResourcePath('TooRepetitive'), 'runtime/degeneration-too-repetitive')
+  assert.equal(sensor.continuationResourcePath('TooRandom'), 'runtime/degeneration-too-random')
+})

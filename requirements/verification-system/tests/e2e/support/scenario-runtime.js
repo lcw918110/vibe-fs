@@ -60,13 +60,12 @@ export class ScenarioRuntime {
     /**
      * Cold boundaries whose break was already admitted, keyed by entry id.
      *
-     * A `prefix-probe` declaration governs an entry across ALL its deliveries
-     * (probe slots and ordinary slots alternate as the cursor advances), so the
-     * declaration itself is checked on every request. This set records which
-     * declarations have fired at least once, so `unfiredBoundaries` can fail a
-     * declaration that never broke anything — the `boundary-not-reached` defence
-     * moved to scenario end, because an entry with several deliveries legitimately
-     * mixes breaking and non-breaking requests.
+     * A reusable `manager-loop` declaration governs an entry across ALL its
+     * deliveries, so the declaration itself is checked on every request. This set
+     * records which declarations have fired at least once, so `unfiredBoundaries`
+     * can fail a declaration that never broke anything — the `boundary-not-reached`
+     * defence moved to scenario end, because an entry with several deliveries
+     * legitimately mixes breaking and non-breaking requests.
      */
     this.firedBoundaries = new Set();
   }
@@ -104,7 +103,7 @@ export class ScenarioRuntime {
     this.seals.clear();
     // A restart rebuilds the request view from the journal: every previous seal is
     // incomparable, so the next request is a fresh baseline. Deliveries and
-    // `firedBoundaries` survive: a `prefix-probe` that already admitted a break
+    // `firedBoundaries` survive: a `manager-loop` that already admitted a break
     // before the kill is still a fired declaration (CTX-010 / X-B–X-D), and
     // `unfiredBoundaries` must not forget it. A boundary that never fired on
     // either timeline remains unfired and is still reported at scenario end.
@@ -200,14 +199,14 @@ export class ScenarioRuntime {
   /**
    * Declarations that never admitted a break.
    *
-   * `prefix-probe` and reusable `manager-loop` declarations permit append-only
-   * deliveries, so the "declared but never fired" check cannot live in
-   * `sealDecision` for them — it lives here, at scenario end.
+   * Reusable `manager-loop` declarations permit append-only deliveries, so the
+   * "declared but never fired" check cannot live in `sealDecision` for them — it
+   * lives here, at scenario end.
    */
   unfiredBoundaries() {
     return (this.scenario.boundaries ?? []).filter(
       (boundary) =>
-        (boundary.kind === 'prefix-probe' || boundary.kind === 'manager-loop')
+        boundary.kind === 'manager-loop'
         && boundary.optional !== true
         && !this.firedBoundaries.has(boundary.entryId),
     );

@@ -19,25 +19,7 @@
 
     <Compile Include="Host/CompactionPolicy.fsi"/>
     <Compile Include="Host/CompactionPolicy.fs"/>
-    <Compile Include="Context/Companion/Blogger/Toml.fsi"/>
-    <Compile Include="Context/Companion/Blogger/Toml.fs"/>
-    <Compile Include="Context/Companion/Blogger/ItemWire.fsi"/>
-    <Compile Include="Context/Companion/Blogger/ItemWire.fs"/>
-    <Compile Include="Context/Companion/Prompt.fsi"/>
-    <Compile Include="Context/Companion/Prompt.fs"/>
-    <Compile Include="Context/Companion/Identity.fsi"/>
-    <Compile Include="Context/Companion/Identity.fs"/>
-    <Compile Include="Context/Companion/Builder.fsi"/>
-    <Compile Include="Context/Companion/Builder.fs"/>
-    <Compile Include="Context/Companion/Blogger/Delta.fsi"/>
-    <Compile Include="Context/Companion/Blogger/Delta.fs"/>
-    <Compile Include="Context/Companion/Blogger/Request.fsi"/>
-    <Compile Include="Context/Companion/Blogger/Request.fs"/>
     <Compile Include="Context/Companion/Projection.fsi"/>
     <Compile Include="Context/Companion/Projection.fs"/>
-    <Compile Include="Context/Companion/Blogger/Projection.fsi"/>
-    <Compile Include="Context/Companion/Blogger/Projection.fs"/>
-    <Compile Include="Context/Companion/Blogger/Runtime/CycleProjection.fsi"/>
-    <Compile Include="Context/Companion/Blogger/Runtime/CycleProjection.fs"/>
   </ItemGroup>
 </Project>

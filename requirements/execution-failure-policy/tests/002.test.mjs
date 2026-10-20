@@ -342,20 +342,13 @@ const providerCases = [
     resolution: 'TerminalizeProviderStarted',
     breaker: 'RecordProviderPermanentFailure',
   },
-  ...['BloggerMain', 'InteractionRepair'].map((requestKind) => ({
+  ...['WorkMain', 'InteractionRepair'].map((requestKind) => ({
     label: `${requestKind} remains provider-recoverable`,
     failure: 'ProviderTransient',
     facts: { ...provider, requestKind },
     resolution: 'RetryFreshAttempt',
     breaker: 'RecordProviderTransientFailure',
   })),
-  {
-    label: 'StrengthReplica cannot consume owner recovery',
-    failure: 'ProviderTransient',
-    facts: { ...provider, requestKind: 'StrengthReplica' },
-    resolution: 'TerminalizeProviderStarted',
-    breaker: 'RecordProviderTransientFailure',
-  },
 ]
 
 test('WHAT[execution-failure-policy-002] every phase and failure yields exactly one resolution and orthogonal dimensions', () => {
@@ -378,6 +371,35 @@ test('WHAT[execution-failure-policy-002] every phase and failure yields exactly 
         assert.equal(typeof decision.breaker.kind, 'string')
         assert.equal(typeof decision.capacitySettlement.kind, 'string')
         assert.equal(typeof decision.fatality.kind, 'string')
+
+        // Re-derive expected resolution and disposition from Policy.fs
+        const failureKind = typeof failure === 'string' ? failure : failure.kind
+        const commitment = typeof failure === 'object' ? failure.commitment : null
+        let expectedResolution = 'PreserveCurrentFact'
+        let expectedDisposition = null
+
+        if (failureKind === 'AcceptanceUnknown' || (failureKind === 'PersistenceFailure' && commitment === 'Unknown')) {
+          expectedResolution = 'AwaitAcceptanceReconciliation'
+        } else if (failureKind === 'PersistenceFailure') {
+          expectedResolution = 'PreserveCurrentFact'
+        } else if (phase === 'AcceptedBeforeProvider') {
+          expectedResolution = 'TerminalizeAcceptedPreProvider'
+          expectedDisposition = ['UserCancelled', 'Superseded'].includes(failureKind) ? 'Cancelled'
+            : ['ProtocolRejection', 'AuthorizationDenied'].includes(failureKind) ? 'Rejected'
+            : 'Failed'
+        } else if (phase === 'ProviderStarted') {
+          if (['ProviderTransient', 'ProviderPermanent'].includes(failureKind) && provider.breaker === 'Closed' && provider.retryBudget === 'Available') {
+            expectedResolution = 'RetryFreshAttempt'
+          } else {
+            expectedResolution = 'TerminalizeProviderStarted'
+            expectedDisposition = ['UserCancelled', 'Superseded'].includes(failureKind) ? 'Cancelled'
+              : ['ProtocolRejection', 'AuthorizationDenied'].includes(failureKind) ? 'Rejected'
+              : 'Failed'
+          }
+        }
+        assert.equal(decision.resolution, expectedResolution)
+        assert.equal(decision.terminalDisposition, expectedDisposition)
+
         switch (decision.resolution) {
           case 'RetryFreshAttempt':
             assert.ok(decision.authorization)
@@ -408,5 +430,16 @@ test('WHAT[execution-failure-policy-002] every phase and failure yields exactly 
       }
     }
   }
+
+  for (const scenario of providerCases) {
+    const decision = decide({ failure: scenario.failure, provider: scenario.facts })
+    assert.equal(decision.resolution, scenario.resolution, scenario.label)
+    assert.equal(decision.breaker.kind, scenario.breaker, scenario.label)
+  }
+
+  // Attempt recovery contract: first retry as-is, second retry blacklists the provider
+  assert.equal(typeof policy.recoveryStep, 'function')
+  assert.equal(policy.recoveryStep(false), 'RetrySameProvider')
+  assert.equal(policy.recoveryStep(true), 'BlacklistProviderThenRetry')
 })
 }

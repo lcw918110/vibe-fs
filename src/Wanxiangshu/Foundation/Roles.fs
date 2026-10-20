@@ -13,7 +13,6 @@ type Role =
     | Inquiry
     | DevOps
     | Distiller
-    | Blogger
     | Plan
     /// On-demand second opinion: a dedicated reviewer participant that reads a
     /// view of the caller's context and answers in prose, holding no tools.
@@ -26,7 +25,6 @@ module Roles =
           Role.Manager
           Role.Engineer
           Role.DevOps
-          Role.Blogger
           Role.Plan
           Role.Advisor ]
 
@@ -37,7 +35,6 @@ module Roles =
         | Role.Orchestrator -> "orchestrator"
         | Role.Engineer -> "engineer"
         | Role.DevOps -> "devops"
-        | Role.Blogger -> "blogger"
         | Role.Plan -> "plan"
         | Role.Advisor -> "advisor"
         | Role.Coder -> "coder"
@@ -52,7 +49,6 @@ module Roles =
         | "orchestrator" -> Some Role.Orchestrator
         | "engineer" -> Some Role.Engineer
         | "devops" -> Some Role.DevOps
-        | "blogger" -> Some Role.Blogger
         | "plan" -> Some Role.Plan
         | "advisor" -> Some Role.Advisor
         | "coder" -> Some Role.Coder
@@ -64,11 +60,10 @@ module Roles =
 
     let tryParseHistoricalRole (value: string) : Role option = tryParseRole value
 
-    /// AGENT-008 / capability-enforcement-006: Distiller and Blogger are private runtimes, not
+    /// AGENT-008 / capability-enforcement-006: Distiller and Advisor are private runtimes, not
     /// public fork / horizon vocabulary.
     let isInternal (role: Role) : bool =
         match role with
-        | Role.Blogger
         | Role.Advisor
         | Role.Distiller -> true
         | _ -> false

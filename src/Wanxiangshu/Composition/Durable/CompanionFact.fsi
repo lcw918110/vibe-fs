@@ -5,15 +5,6 @@ open Wanxiangshu.Context.Companion
 open Wanxiangshu.Foundation.Identity
 
 module CompanionFact =
-    val inline CompanionBloggerLinked:
-        payload:
-            {| SessionId: SessionId
-               BloggerSessionId: SessionId
-               BloggerAgent: string |} ->
-            AgentFact
-
-    val inline CompanionBloggerClosed: payload: {| SessionId: SessionId |} -> AgentFact
-
     val inline OpeningPromptCaptured:
         payload:
             {| SessionId: SessionId
@@ -48,71 +39,10 @@ module CompanionFact =
             AgentFact
 
 module ContextFact =
-    val inline BlogObservationCommitted:
-        payload:
-            {| SessionId: SessionId
-               BloggerSessionId: SessionId
-               RequestId: BloggerRequestId
-               FrameEpochId: FrameEpochId
-               PreviousIngestedThroughSequence: int64
-               NextIngestedThroughSequence: int64
-               PreviousCoverableTurnCutoffExclusive: int
-               NextCoverableTurnCutoffExclusive: int
-               NextCoveredPrefixDigest: string
-               TextRef: BlobRef
-               TextDigest: BlobDigest
-               ProviderRun: ProviderRunIdentity
-               ToolCallIds: ToolCallId list
-               TipName: string
-               TipTextRef: BlobRef option
-               TipTextDigest: BlobDigest option
-               EvidenceRef: BlobRef option
-               ObservedPrefixEpochId: PrefixEpochId |} ->
-            AgentFact
-
-    val inline BloggerRequestMaterialized:
-        payload:
-            {| RequestId: BloggerRequestId
-               MainSessionId: SessionId
-               BloggerSessionId: SessionId
-               RequestKind: string
-               ContextRef: BlobRef
-               ContextDigest: BlobDigest
-               ObservedPrefixEpochId: PrefixEpochId
-               PreviousIngestedThroughSequence: int64
-               NextIngestedThroughSequence: int64
-               FrameEpochId: FrameEpochId
-               SelectedFrameDigests: BlobDigest list
-               PromptKey: PromptKey option |} ->
-            AgentFact
-
-    val inline BloggerRequestAbandoned:
-        payload:
-            {| RequestId: BloggerRequestId
-               MainSessionId: SessionId
-               BloggerSessionId: SessionId
-               Reason: string |} ->
-            AgentFact
-
     val inline ViewCheckpointCommitted:
         payload:
             {| SessionId: SessionId
                ToolCallId: ToolCallId |} ->
-            AgentFact
-
-    val inline PrefixRebaseCommitted:
-        payload:
-            {| SessionId: SessionId
-               PreviousEpochId: PrefixEpochId
-               NextEpochId: PrefixEpochId
-               FrozenRecordPrefixRef: BlobRef
-               FrozenRecordPrefixDigest: BlobDigest
-               CutoffExclusive: int
-               CoveredPrefixDigest: string
-               SealRoot: string
-               SyntheticMessageId: string
-               ProbeId: string
-               SolvingProviderRun: ProviderRunIdentity |} ->
             AgentFact
 
     val inline ContextReanchored:

@@ -115,9 +115,6 @@ module AblationSurface =
     let allowsPrimaryAgent (agentName: string) : bool =
         AblationGate.primaryAgentAllowed (AblationGate.registry ()) agentName
 
-    let strengthForcedOff () : bool =
-        AblationGate.modeFor (AblationGate.registry ()) "speculative-investigation" = AblationMode.Ablated
-
     let fissionVisible () : bool =
         AblationGate.fissionVisible (AblationGate.registry ())
 

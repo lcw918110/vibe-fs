@@ -64,10 +64,7 @@ module FissionWorkBundle =
     val empty: FissionWorkBundle
 
     val add:
-        laneIndex: int ->
-        workRecordRef: string ->
-        bundle: FissionWorkBundle ->
-            Result<FissionWorkBundle, FissionBundleError>
+        laneIndex: int -> viewRef: string -> bundle: FissionWorkBundle -> Result<FissionWorkBundle, FissionBundleError>
 
     val merge: left: FissionWorkBundle -> right: FissionWorkBundle -> Result<FissionWorkBundle, FissionBundleError>
     val keys: bundle: FissionWorkBundle -> int list

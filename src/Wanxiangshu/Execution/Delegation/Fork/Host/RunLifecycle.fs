@@ -2,9 +2,6 @@ namespace Wanxiangshu.Execution.Delegation.Fork.Host
 
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Delegation.SyncDelegate
@@ -231,23 +228,38 @@ module HostForkRunLifecycle =
             return interpretDispatchResult durable childId identitySeed prompt onAccepted sent
         }
 
-    let private chooseWorkRecord delivered observed =
+    let private chooseView delivered observed =
         match delivered with
         | Some record -> Some record
         | None -> observed
 
-    let workRecordForOutcome
-        (childWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
+    let private completedOutcomeView
+        (childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
+        (run: PendingHostRun)
+        (result: AgentRunResult)
+        =
+        task {
+            let! observed = childViewForRun run.ChildId result.ProviderRun
+
+            let prose =
+                if System.String.IsNullOrWhiteSpace result.TerminalText then
+                    None
+                else
+                    Some result.TerminalText
+
+            let delivered =
+                JsDeliveredValues.tryTakeRenderedWith (SessionId.value run.ChildId) prose
+
+            return chooseView delivered observed
+        }
+
+    let viewForOutcome
+        (childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
         (run: PendingHostRun)
         (outcome: TerminalOutcome)
         =
         match outcome with
-        | TerminalOutcome.Completed result ->
-            task {
-                let! observed = childWorkRecordForRun run.ChildId result.ProviderRun
-                let delivered = JsDeliveredValues.tryTakeRendered (SessionId.value run.ChildId)
-                return chooseWorkRecord delivered observed
-            }
+        | TerminalOutcome.Completed result -> completedOutcomeView childViewForRun run result
         | _ -> Task.FromResult None
 
     /// Idle existing child / first prompt for an AgentOwnerRoot work unit.
@@ -370,7 +382,7 @@ module HostForkRunLifecycle =
         | None -> Task.FromResult agentOutcome
         | Some j -> committedOutcome (Some j) parentId proof run agentOutcome
 
-    let private isWorkCommittedOrRetired (work: HandleWorkRecord) =
+    let private isWorkCommittedOrRetired (work: HandleWork) =
         match work.Lifecycle with
         | CompletedAwaitingJoin _
         | Retired -> true
@@ -514,14 +526,9 @@ module HostForkRunLifecycle =
         (sessions: ISessionHostPort)
         (run: PendingHostRun)
         (outcome: TerminalOutcome)
-        (workRecord: string option)
+        (view: string option)
         : Task =
-        // EXEC-006 / COMPANION-003: the completion's work record is the child's
-        // final LifecycleWorkRecord only — Opening + frames + gap + terminal,
-        // materialised by the same port as parent background. No TerminalText
-        // or session-A fallback: a missing LWR is an empty work_record, not a
-        // second channel.
-        let completedWorkRecord = workRecord
+        let completedView = view
         let runId = "run-" + run.AgentId
         let childId = run.ChildId
         let handle = HandleController.agentHandle run.AgentId
@@ -548,7 +555,7 @@ module HostForkRunLifecycle =
                         run.Role
                         result.AuthorityRootUserMessageId
                         result.ProviderRun
-                        (completedWorkRecord |> Option.defaultValue "")
+                        (completedView |> Option.defaultValue "")
                         result.Directory
 
                 let body = HandleCompletionCodec.encodeOutcome runId agentOutcome
@@ -619,7 +626,7 @@ module HostForkRunLifecycle =
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
-        (childWorkRecordForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
+        (childViewForRun: SessionId -> ProviderRunIdentity -> Task<string option>)
         (trackOwnedWork: (unit -> Task) -> unit)
         (agentId: string)
         (childId: SessionId)
@@ -654,24 +661,22 @@ module HostForkRunLifecycle =
         let deliverTerminal (outcome: TerminalOutcome) =
             trackOwnedWork (fun () ->
                 task {
-                    // EXEC-006: a work-record read is bounded auxiliary
-                    // evidence. Its failure is an empty work_record, never
+                    // EXEC-006: a view read is bounded auxiliary
+                    // evidence. Its failure is an empty view, never
                     // a reason to lose a proven terminal that already
                     // happened on the child.
-                    let! workRecord =
+                    let! view =
                         task {
                             try
-                                return! workRecordForOutcome childWorkRecordForRun run outcome
+                                return! viewForOutcome childViewForRun run outcome
                             with error ->
-                                logError
-                                    "FORK-WORKRECORD"
-                                    (sprintf "run %s work-record read faulted: %s" run.AgentId error.Message)
+                                logError "FORK-VIEW" (sprintf "run %s view read faulted: %s" run.AgentId error.Message)
 
                                 return None
                         }
 
                     try
-                        do! complete gate pendingRuns journal parentId sessions run outcome workRecord
+                        do! complete gate pendingRuns journal parentId sessions run outcome view
                     with error ->
                         // A terminal the child proved must still resolve
                         // this run's only completion promise even when
@@ -749,6 +754,6 @@ module HostForkRunLifecycle =
         (_parentId: SessionId)
         (_sessions: ISessionHostPort)
         (_run: PendingHostRun)
-        (_workRecord: string option)
+        (_view: string option)
         =
         ()

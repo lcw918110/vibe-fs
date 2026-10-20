@@ -445,29 +445,24 @@ module PromptAuthority =
         )
 
 
-    /// Blogger-request + terminal-scoped repair identity used by the exact-one
-    /// chronicle nudge→AABB state machine. Both axes matter: terminal identity
-    /// makes same-terminal re-entry idempotent, while BloggerRequestId prevents a
-    /// previous request on the same Session/LogicalRun from spending the next
-    /// request's protocol budget.
+    /// Request + terminal-scoped repair identity. Both axes matter: terminal identity
+    /// makes same-terminal re-entry idempotent.
     ///
-    /// This request+terminal digest is reserved for Blogger's explicit
-    /// nudge→AABB escalation protocol. Ordinary interaction nudges are gate
     /// reminders and use `gateNudgePayloadDigest` instead.
     let repairPayloadDigest
-        (requestId: BloggerRequestId)
+        (requestId: RepairRequestId)
         (terminalProviderRun: ProviderRunIdentity)
         (repairKind: string)
         =
         String.Join(
             "\u001f",
-            [| BloggerRequestId.value requestId
+            [| RepairRequestId.value requestId
                ProviderRunIdentity.value terminalProviderRun
                repairKind |]
         )
 
-    let repairPayloadBelongsToRequest (requestId: BloggerRequestId) (payloadDigest: string) =
-        payloadDigest.StartsWith(BloggerRequestId.value requestId + "\u001f", System.StringComparison.Ordinal)
+    let repairPayloadBelongsToRequest (requestId: RepairRequestId) (payloadDigest: string) =
+        payloadDigest.StartsWith(RepairRequestId.value requestId + "\u001f", System.StringComparison.Ordinal)
 
     /// Gate nudges are not a finite repair budget. They are repeatable while the
     /// guarded condition remains unsatisfied, but one exact terminal occasion is
@@ -528,8 +523,7 @@ module PromptAuthority =
             && dispatch.PayloadDigest = payloadDigest)
         |> Option.map (fun dispatch -> dispatch.PhysicalUserMessageId)
 
-    /// provider-attempt-recovery-008: has this Blogger request + terminal occasion already spent its one repair.
-    /// Blogger protocol repair deliberately uses both axes: request identity
+    /// provider-attempt-recovery-008: has this request + terminal occasion already spent its one repair.
     /// prevents cross-request leakage on a long-lived run, while terminal identity
     /// distinguishes same-terminal re-entry from a new invalid terminal.
     ///
@@ -540,7 +534,7 @@ module PromptAuthority =
     let repairAlreadyClaimed
         (sessionId: SessionId)
         (logicalRunId: LogicalRunId)
-        (requestId: BloggerRequestId)
+        (requestId: RepairRequestId)
         (terminalProviderRun: ProviderRunIdentity)
         (repairKind: string)
         (projection: PromptAuthorityProjection)
@@ -559,23 +553,8 @@ module PromptAuthority =
     let systemPromptIdFor (role: Role) : SystemPromptId =
         SystemPromptId.create (Roles.roleLabel role)
 
-    /// STRENGTH-004 / PROMPT-008: the request-specific authority is exact, not
-    /// inferred by intersecting the ordinary role surface. All active roles in
-    /// Roles.all carry exact readonly capabilities under StrengthReplica.
-    let private strengthReplicaReadonly =
-        set [ ToolPermission.Read; ToolPermission.Glob; ToolPermission.Grep ]
-
-    let private strengthReplicaCapabilities (role: Role) : Set<ToolPermission> =
-        if List.contains role Roles.all then
-            strengthReplicaReadonly
-        else
-            Set.empty
-
-    /// AGENT-007: ordinary requests use role permissions; StrengthReplica uses
-    /// its own narrower request contract and fails closed for every ineligible role.
+    /// AGENT-007: ordinary requests use role permissions.
     let toolCapabilitiesFor (role: Role) (requestKind: ProviderRequestKind) : Set<ToolPermission> =
         match requestKind with
-        | ProviderRequestKind.StrengthReplica -> strengthReplicaCapabilities role
         | ProviderRequestKind.WorkMain
-        | ProviderRequestKind.BloggerMain
         | ProviderRequestKind.InteractionRepair -> OfficeCapability.permissions role

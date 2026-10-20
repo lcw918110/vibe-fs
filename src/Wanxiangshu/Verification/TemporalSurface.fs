@@ -234,9 +234,13 @@ module TemporalSurface =
                        AuthorityRootUserMessageId = authorityRootOf (payload?AuthorityRootUserMessageId)
                        ProviderRun = providerRunOf (payload?ProviderRun) |}
             )
-        | "Companion", "CompanionBloggerClosed" ->
+        | "Companion", "OpeningPromptCaptured" ->
             AgentFact.Companion(
-                CompanionFactCases.CompanionBloggerClosed {| SessionId = sessionIdOf (payload?SessionId) |}
+                CompanionFactCases.OpeningPromptCaptured
+                    {| SessionId = sessionIdOf (payload?SessionId)
+                       AssignmentText = text (payload?AssignmentText)
+                       AuthoritativeRequirements = []
+                       ProviderRun = None |}
             )
         | other -> failwith $"TemporalSurface: unknown AgentFact {family}.{caseName}"
 
@@ -388,11 +392,14 @@ module TemporalSurface =
                            AuthorityRootUserMessageId =
                             AuthorityRootUserMessageId.value payload.AuthorityRootUserMessageId
                            ProviderRun = ProviderRunIdentity.value payload.ProviderRun |} |}
-        | Fact.Agent(AgentFact.Companion(CompanionFactCases.CompanionBloggerClosed payload)) ->
+        | Fact.Agent(AgentFact.Companion(CompanionFactCases.OpeningPromptCaptured payload)) ->
             box
                 {| family = "Companion"
-                   case = "CompanionBloggerClosed"
-                   payload = box {| SessionId = SessionId.value payload.SessionId |} |}
+                   case = "OpeningPromptCaptured"
+                   payload =
+                    box
+                        {| SessionId = SessionId.value payload.SessionId
+                           AssignmentText = payload.AssignmentText |} |}
         | _ -> failwith "TemporalSurface: persisted fact is outside the temporal trace contract"
 
     let private envelopeToJs (envelope: Envelope) : obj =

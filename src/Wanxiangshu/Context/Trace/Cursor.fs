@@ -8,7 +8,7 @@ namespace Wanxiangshu.Context.Trace
 /// 清零或重读（COMPANION-008）。因此 cursor 是自增序列，不是 turn/part 坐标。
 type XTraceCursor = private XTraceCursor of int64
 
-/// COMPANION-003: Y 已消化到哪（决定 LWR gap 起点）。可落在 turn 中间。
+/// COMPANION-003: 原始记录已覆盖到哪（决定其后未覆盖区间的起点）。可落在 turn 中间。
 type RecordCoverage = private RecordCoverage of XTraceCursor
 
 /// A trace-owned half-open interval. Consumers obtain and pass this value as
@@ -22,7 +22,6 @@ type XTraceCut =
       Digest: string }
 
 /// Stable copied Opening proof. Defined with the foundational trace vocabulary
-/// so WorkRecord can consume it without a Projection/WorkRecord compile cycle.
 type XTraceOpeningEvidence =
     { AssignmentText: string
       AuthoritativeRequirements: string list

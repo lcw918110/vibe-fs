@@ -1,23 +1,17 @@
 namespace Wanxiangshu.Participant.Provider.Attempt
 
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Attempt
 open Wanxiangshu.Interaction.Authority
 
-type AttemptPlan =
-    { Profile: AttemptExecutionProfile
-      NoProbeReason: NoCandidateReason option }
+type AttemptPlan = { Profile: AttemptExecutionProfile }
 
 type PendingAttemptPlan =
     { Authority: PromptAuthority.AuthorityExecutionProfile
       PhysicalUserMessageId: PhysicalUserMessageId
       Origin: PromptAuthority.PromptOrigin
-      RequestKind: ProviderRequestKind
-      ProjectionChoice: XProjectionChoice
-      CommittedPrefixSnapshot: PrefixSnapshot option
-      NoProbeReason: NoCandidateReason option }
+      RequestKind: ProviderRequestKind }
 
 [<RequireQualifiedAccess>]
 module AttemptPlanner =
@@ -28,9 +22,6 @@ module AttemptPlanner =
         physicalUserMessageId: PhysicalUserMessageId ->
         origin: PromptAuthority.PromptOrigin ->
         requestKind: ProviderRequestKind ->
-        committedPrefixSnapshot: PrefixSnapshot option ->
-        allowProbe: bool ->
-        selectProbe: (unit -> Result<PrefixProbe, NoCandidateReason>) ->
             PendingAttemptPlan
 
     val freezeOrdinary:
@@ -39,7 +30,6 @@ module AttemptPlanner =
             Result<PendingAttemptPlan, string>
 
     val bindProviderRun: providerRun: ProviderRunIdentity -> pending: PendingAttemptPlan -> AttemptPlan
-    val pendingProbeOf: pending: PendingAttemptPlan -> PrefixProbe option
 
     val plan:
         authority: PromptAuthority.AuthorityExecutionProfile ->
@@ -47,9 +37,4 @@ module AttemptPlanner =
         providerRun: ProviderRunIdentity ->
         origin: PromptAuthority.PromptOrigin ->
         requestKind: ProviderRequestKind ->
-        allowProbe: bool ->
-        selectProbe: (unit -> Result<PrefixProbe, NoCandidateReason>) ->
             AttemptPlan
-
-    val probeOf: plan: AttemptPlan -> PrefixProbe option
-    val promotableProbe: plan: AttemptPlan -> outcome: AttemptOutcome -> PrefixProbe option

@@ -116,8 +116,8 @@ module PtySupervisor =
         | Some _ -> Task.FromResult(())
         | None -> startSpawnLoad supervisor
 
-    [<Emit("$0('sh', ['-lc', $1], $2)")>]
-    let private invokeSpawn (spawn: obj) (command: string) (options: obj) : obj = jsNative
+    [<Emit("Promise.resolve().then(function(){ return $0('sh', ['-lc', $1], $2); })")>]
+    let private invokeSpawn (spawn: obj) (command: string) (options: obj) : Task<obj> = jsNative
 
     let private resolveCwd (cwd: string) : obj =
         if String.IsNullOrEmpty cwd then
@@ -125,7 +125,7 @@ module PtySupervisor =
         else
             box cwd
 
-    let spawnSync (supervisor: PtySupervisor) (command: string) (cwd: string) : obj =
+    let spawn (supervisor: PtySupervisor) (command: string) (cwd: string) : Task<obj> =
         match supervisor.SpawnFn with
         | None -> failwith "bun-pty is not loaded"
         | Some spawn ->

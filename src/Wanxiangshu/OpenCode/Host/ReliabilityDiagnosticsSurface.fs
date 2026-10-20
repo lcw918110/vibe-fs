@@ -4,7 +4,6 @@ open System
 open System.Text.RegularExpressions
 open Fable.Core
 open Fable.Core.JsInterop
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Execution.Session.ChatExecution
@@ -62,10 +61,9 @@ module ReliabilityDiagnosticsSurface =
     let private requestKindOf value =
         match requiredText "providerRequestKind" value with
         | "work-main" -> ProviderRequestKind.WorkMain
-        | "blogger-main" -> ProviderRequestKind.BloggerMain
         | "interaction-repair" -> ProviderRequestKind.InteractionRepair
-        | "strength-replica" -> ProviderRequestKind.StrengthReplica
         | kind -> invalidArg "providerRequestKind" $"unknown provider request kind '{kind}'"
+
 
     let private failureOf commitment value =
         match requiredText "failureClass" value with

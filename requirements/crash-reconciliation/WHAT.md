@@ -60,9 +60,7 @@ HandleController 的 `recordCompletion` 是提交完成态的唯一入口，采�
 
 重启后附加子会话恢复时：匹配唯一关联 ID、agent 与 title 时复用；关联不存在时新建；发生冲突或多重匹配时 fail-closed 阻断。Replacement 必须先证明旧物理会话消失，显式执行 Close 后再 Link 新会话。
 
-## [016] Blogger 修复只属于当前进程的 live owner
 
-Blogger 的 nudge/AABB 修复 episode、等待者与 flight lease 均为当前进程的物理所有权。进程死亡后这些能力消失；durable dispatch/terminal facts 仅供核对与诊断，严禁从其重建修复阶段或自动续发。新进程只能按 crash-reconciliation-017/018 的显式续传规则重新准入。
 
 ## [017] 工具中断不恢复；未来 session 续传必须显式
 
@@ -77,18 +75,19 @@ Blogger 的 nudge/AABB 修复 episode、等待者与 flight lease 均为当前�
 - 复用仍由 manager 显式发起；复用门禁、placement、await 一律以 durable handle 为存在性依据。
 
 被中断的工具调用保持失败并原样留在可见历史中，不得推断其完成、隐藏它或伪造终态。
-本进程完成加载归位后，会在下一次真实用户指令之前 prepend 一次只读的状态指导，向模型说明万象术已被重启及其含义。状态指导只出现一次；它不改写用户原文、不创建或延续 Interaction Authority、不改变角色、权限或主体，并按 guidance-delivery-011 冻结已交付的 provider wire 字节。除此之外，不存在独立的续传材料通道，也没有 disclosure-only 的 provider 轮次。
+本进程完成加载归位后，会在下一次真实用户指令之前 prepend 一次只读的状态指导，向模型说明万象术已被重启及其含义。状态指导只出现一次；它不改写用户原文、不创建或延续 Interaction Authority、不改变角色、权限或主体，并冻结已交付的 provider wire 字节。除此之外，不存在独立的续传材料通道，也没有 disclosure-only 的 provider 轮次。
 
 ## [019] 外部 effect 必须逐项闭合 crash reconciliation 合同
 
-每个高价值外部 effect 必须在唯一 owner 下登记类型化 `intent → process-local admission → physical receipt → durable outcome`；不适用阶段必须给出明确理由。登记项必须锚定物理 effect identity、有限且穷尽的歧义状态、查询或补偿入口、安全重试律（仅 `proven-not-applied` 或 `never`）、以及复用普通 CE 的重入入口。Host、provider、Git 与 process 边界必须同时具有确定性歧义证明和 Adapter 或 Long-Stroke 证据；证据层级由 verification owner 的独立 registry 按精确 `(path, title, WHAT)` 唯一分类，effect 行自报、改标或未登记分类均不得计入证明。Prompt dispatch 必须锚定物理发送前的 process-local `physicalAdmission`；Blogger 的外部 receipt 是 `TransportReceipt`/`PluginPromptSubmitted` 以及随后接受的 `PhysicalUserMessageId`，不是预先可派生的 `PromptKey`。恢复不得持久化 capability、continuation、`ResumeAt`、`RecoveryStage`、`RecoveryStep` 或 `NextAction` 程序计数器；未知、冲突、缺失证据一律 fail closed。登记的 owner、WHAT、source symbol 与 executable proof title 均为精确锚点，重复 WHAT ID、过期锚点或未闭合 effect 必须使 gate 失败。
+每个高价值外部 effect 必须在唯一 owner 下登记类型化 `intent → process-local admission → physical receipt → durable outcome`；不适用阶段必须给出明确理由。登记项必须锚定物理 effect identity、有限且穷尽的歧义状态、查询或补偿入口、安全重试律（仅 `proven-not-applied` 或 `never`）、以及复用普通 CE 的重入入口。Host、provider、Git 与 process 边界必须同时具有确定性歧义证明和 Adapter 或 Long-Stroke 证据；证据层级由 verification owner 的独立 registry 按精确 `(path, title, WHAT)` 唯一分类，effect 行自报、改标或未登记分类均不得计入证明。Prompt dispatch 必须锚定物理发送前的 process-local `physicalAdmission`；外部 receipt 是 `TransportReceipt`/`PluginPromptSubmitted` 以及随后接受的 `PhysicalUserMessageId`，不是预先可派生的 `PromptKey`。恢复不得持久化 capability、continuation、`ResumeAt`、`RecoveryStage`、`RecoveryStep` 或 `NextAction` 程序计数器；未知、冲突、缺失证据一律 fail closed。登记的 owner、WHAT、source symbol 与 executable proof title 均为精确锚点，重复 WHAT ID、过期锚点或未闭合 effect 必须使 gate 失败。
 
 ## [020] 固定 DevOps 崩溃恢复的单一逻辑执行权威与命令去重
 
 同一道路绑定的固定 DevOps 在崩溃恢复后必须且仅能映射到唯一的当前活跃物理会话，严禁生成两个并行生效的可执行物理权威。
 崩溃前未决的物理命令（`run`、PTY 输入）一律按中断处理，系统严禁在重启后自动重放、补写或隐式续发命令，杜绝物理副作用重复发生。
 恢复流程必须严格沿用道路初始化时持久化的绑定模型（ModelTarget）与 Persona，严禁在恢复或 resume 时切换模型；新会话与恢复只接纳合法新角色集合，历史旧状态不隐式跨边界恢复。
-Load Phase 必须一次性结算上一 runtime 遗留、本进程无法继续持有的 durable 未决工作：仍活跃的子工作 run 与仍开着的 Blogger `BloggerRequestMaterialized`（置 `BloggerRequestAbandoned`，reason `stale-open-at-load`；本进程仍有同 RequestId live flight 的不结算）。遗留的 open request 会让 coordinator 只为已死的 producer 暂存材料、永不物化新请求，Blogger 从此不再消费 raw 尾巴。
+Load Phase 必须一次性结算上一 runtime 遗留、本进程无法继续持有的 durable 未决工作（仍活跃的子工作 run）。
+该结算是加载归位的首个持久动作：作废事实必须先于下一次交接的身份判定落定，否则新交接会读到仍然活跃的旧根，把已经退休的子会话判成身份冲突。
 
 ## [021] 进程本地表是缓存，durable 投影是存在性真源
 

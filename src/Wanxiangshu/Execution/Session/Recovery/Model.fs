@@ -42,7 +42,6 @@ module SessionRecovery =
         | WorkSession of SessionId
         | AgentChild of parent: SessionId * child: SessionId * AgentHandleId
         | Companion of main: SessionId * companion: SessionId
-        | Blogger of main: SessionId * blogger: SessionId
         | ManagerJob of ManagerJobId * manager: SessionId
 
     module RecoveryNode =
@@ -60,7 +59,6 @@ module SessionRecovery =
                 + ":"
                 + AgentHandleId.value handle
             | RecoveryNode.Companion(main, companion) -> "C:" + SessionId.value main + ">" + SessionId.value companion
-            | RecoveryNode.Blogger(main, blogger) -> "B:" + SessionId.value main + ">" + SessionId.value blogger
             | RecoveryNode.ManagerJob(jobId, manager) -> "M:" + ManagerJobId.value jobId + ":" + SessionId.value manager
 
     type RecoveryReceipt =
@@ -168,9 +166,6 @@ module SessionRecovery =
         { SessionId: SessionId
           Outcome: SessionRecovery }
 
-    type BloggerRecovery =
-        { SessionId: SessionId
-          Outcome: SessionRecovery }
 
     type HandleRecovery =
         { SessionId: SessionId
@@ -319,7 +314,6 @@ module SessionRecovery =
         | RecoveryNode.WorkSession id
         | RecoveryNode.AgentChild(_, id, _)
         | RecoveryNode.Companion(_, id)
-        | RecoveryNode.Blogger(_, id)
         | RecoveryNode.ManagerJob(_, id) -> id
 
     /// Pure: duplicate session in ordered nodes → cycle block; else wrap.

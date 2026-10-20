@@ -1,5 +1,6 @@
 namespace Wanxiangshu.Execution.Fission
 
+open System
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
@@ -211,9 +212,9 @@ module FissionSurface =
             (fun bundle entry ->
                 let pair = unbox<obj array> entry
                 let laneIndex = intOf pair.[0]
-                let workRecordRef = string pair.[1]
+                let viewRef = string pair.[1]
 
-                match FissionWorkBundle.add laneIndex workRecordRef bundle with
+                match FissionWorkBundle.add laneIndex viewRef bundle with
                 | Ok next -> next
                 | Error(FissionBundleError.ConflictingLaneRecord(index, existing, proposed)) ->
                     invalidArg
@@ -233,8 +234,8 @@ module FissionSurface =
                    existingRef = existing
                    proposedRef = proposed |}
 
-    let workBundleAdd (laneIndex: int) (workRecordRef: string) (bundle: obj) : obj =
-        match FissionWorkBundle.add laneIndex workRecordRef (bundleOfJs bundle) with
+    let workBundleAdd (laneIndex: int) (viewRef: string) (bundle: obj) : obj =
+        match FissionWorkBundle.add laneIndex viewRef (bundleOfJs bundle) with
         | Ok next ->
             box
                 {| ok = true
@@ -300,10 +301,21 @@ module FissionSurface =
         |> Option.map (fun message -> Error message)
         |> Option.defaultValue (Ok())
 
-    let private jsResultToString (value: obj) : Result<string, string> =
+    /// The owner's delivered view is optional context: a JS dependency returns
+    /// null/undefined (or a blank string) when the owner has not delivered a view yet.
+    let private jsResultToOptionalString (value: obj) : Result<string option, string> =
         jsFailure value
         |> Option.map Error
-        |> Option.defaultWith (fun () -> Ok(string value))
+        |> Option.defaultWith (fun () ->
+            if isNullish value then
+                Ok None
+            else
+                let text = string value
+
+                if String.IsNullOrWhiteSpace text then
+                    Ok None
+                else
+                    Ok(Some text))
 
     let private jsResultToOptionalSessionId (value: obj) : Result<SessionId option, string> =
         jsFailure value
@@ -332,7 +344,7 @@ module FissionSurface =
 
     let private dependenciesOfJs (deps: obj) : FissionAdmissionDependencies =
         let parentOfFn = deps?parentOf
-        let workRecordFn = deps?ownerWorkRecord
+        let viewFn = deps?ownerView
         let createFn = deps?createLane
         let startFn = deps?startLane
         let abortFn = deps?abortLane
@@ -347,12 +359,12 @@ module FissionSurface =
                     with ex ->
                         return Error ex.Message
                 }
-          OwnerWorkRecord =
+          OwnerView =
             fun owner ->
                 task {
                     try
-                        let! value = invoke1 workRecordFn (box (SessionId.value owner))
-                        return jsResultToString value
+                        let! value = invoke1 viewFn (box (SessionId.value owner))
+                        return jsResultToOptionalString value
                     with ex ->
                         return Error ex.Message
                 }
@@ -408,10 +420,15 @@ module FissionSurface =
                        prompt = lane.Prompt |})
             |> List.toArray
 
+        let ownerView =
+            match admission.OwnerView with
+            | Some view -> box view
+            | None -> null
+
         box
             {| ok = true
                laneCount = lanes.Length
-               ownerWorkRecord = admission.OwnerWorkRecord
+               ownerView = ownerView
                lanes = lanes |}
 
     let createAdmission (deps: obj) : FissionAdmissionRuntime =

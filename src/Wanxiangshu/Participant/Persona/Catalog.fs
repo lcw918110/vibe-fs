@@ -15,10 +15,8 @@ type Persona =
     | Researcher
     | Analyst
     | Auditor
-    | Chronicler
     | Distiller
     | Curator
-    | Predictor
     | Planner
 
 [<RequireQualifiedAccess>]
@@ -35,10 +33,8 @@ module Persona =
         | Persona.Researcher -> "Researcher"
         | Persona.Analyst -> "Analyst"
         | Persona.Auditor -> "Auditor"
-        | Persona.Chronicler -> "Chronicler"
         | Persona.Distiller -> "Distiller"
         | Persona.Curator -> "Curator"
-        | Persona.Predictor -> "Predictor"
         | Persona.Planner -> "Planner"
 
     let tryParse (label: string) : Persona option =
@@ -53,10 +49,8 @@ module Persona =
         | "Researcher" -> Some Persona.Researcher
         | "Analyst" -> Some Persona.Analyst
         | "Auditor" -> Some Persona.Auditor
-        | "Chronicler" -> Some Persona.Chronicler
         | "Distiller" -> Some Persona.Distiller
         | "Curator" -> Some Persona.Curator
-        | "Predictor" -> Some Persona.Predictor
         | "Planner" -> Some Persona.Planner
         | _ -> None
 
@@ -72,7 +66,6 @@ module PersonaCatalog =
         | Role.Manager -> Persona.Lead
         | Role.Engineer -> Persona.Engineer
         | Role.DevOps -> Persona.Operator
-        | Role.Blogger -> Persona.Chronicler
         | Role.Plan -> Persona.Planner
         | Role.Coder -> Persona.Coder
         | Role.Inspector -> Persona.Investigator

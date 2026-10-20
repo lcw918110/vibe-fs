@@ -141,7 +141,6 @@ const startedEvidence = {
   Accepted: acceptedEvidence,
   ProviderRun: ['ProviderRunIdentity', 'provider-chat-fixture'],
   RequestKind: 'WorkMain',
-  ProjectionChoice: 'UseCommittedEpoch',
 }
 const started = factWire('ProviderStarted', {
   Evidence: startedEvidence,
@@ -199,7 +198,6 @@ const evidence = (overrides = {}) => ({
   providerRun: 'provider-provider-lifecycle',
   origin: 'HumanRoot',
   requestKind: 'work-main',
-  projectionChoice: { kind: 'UseCommittedEpoch' },
   ...overrides,
 })
 const accept = (attempt = evidence(), appendOutcome = 'Committed') => ({

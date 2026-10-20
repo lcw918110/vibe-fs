@@ -422,12 +422,24 @@ module SemanticTraceSurface =
         |> List.toArray
 
     let semanticCursorAfter cursor projection : obj =
-        let value =
+        let afterCursor =
             XTraceProjection.semanticCursorAfter (cursorOf cursor) (stateOf projection)
 
-        box
-            {| turn = value.TurnIndex
-               partIndex = value.PartIndex |}
+        let state = stateOf projection
+        let currentParts = XTraceProjection.currentGenerationSemanticParts state
+
+        match currentParts |> List.tryFind (fun part -> part.Cursor = afterCursor) with
+        | Some part ->
+            box
+                {| turn = part.Turn
+                   partIndex = part.PartIndex |}
+        | None ->
+            match List.tryLast currentParts with
+            | Some last ->
+                box
+                    {| turn = last.Turn + 1
+                       partIndex = 0 |}
+            | None -> box {| turn = 0; partIndex = 0 |}
 
     let originCursor: obj = XTraceCursor.originCursor |> cursorView
 
@@ -502,14 +514,6 @@ module SemanticTraceSurface =
         |> Array.toList
         |> List.map itemOf
         |> XTrace.forOpening
-        |> List.map itemView
-        |> List.toArray
-
-    let forWorkRecord values =
-        arrayOf values
-        |> Array.toList
-        |> List.map itemOf
-        |> XTrace.forWorkRecord
         |> List.map itemView
         |> List.toArray
 

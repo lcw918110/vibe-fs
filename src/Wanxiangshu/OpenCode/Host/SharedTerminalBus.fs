@@ -54,10 +54,14 @@ module SharedTerminalBus =
         | Some key, Some target -> releaseTarget key target
         | _ -> ()
 
-    let tryAcquireForWorkspace (workspace: string option) : (string * Events.HostEventPort) option =
-        match workspace with
-        | None -> None
-        | Some path when String.IsNullOrWhiteSpace path -> None
-        | Some path ->
-            let key = RuntimePath.forWorkspace path
-            Some(key, acquire key)
+    let tryAcquireForWorkspace
+        (workspace: string option)
+        : System.Threading.Tasks.Task<(string * Events.HostEventPort) option> =
+        task {
+            match workspace with
+            | None -> return None
+            | Some path when String.IsNullOrWhiteSpace path -> return None
+            | Some path ->
+                let! key = RuntimePath.forWorkspace path
+                return Some(key, acquire key)
+        }

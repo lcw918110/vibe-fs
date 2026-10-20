@@ -42,23 +42,18 @@ export const RAW_TIME_TOKENS = Object.freeze([
  */
 export const RAW_TIME_ALLOWLIST = Object.freeze([
   'Change/Host/Host.fs',
-  'Enforcer/Guidance/TipSurface.fs',
   'Execution/Delegation/Fork/OpenCode/JoinResultRenderer.fs',
   'Execution/Delegation/Fork/OpenCode/JoinTool.fs',
   'Execution/Delegation/Fork/OpenCode/ToolSurface.fs',
   'Execution/Delegation/SyncDelegate/Surface.fs',
   'Interaction/Dispatch/PhysicalAcceptance.fs',
-  'OpenCode/Host/BloggerChronicleSurface.fs',
   'OpenCode/Host/PairProgrammingThoughtSurface.fs',
   'OpenCode/Host/PluginHost.fs',
-  'OpenCode/Host/RequirementGroundingRepositorySurface.fs',
-  'OpenCode/Host/RequirementGroundingSurface.fs',
   'OpenCode/Tools/ToolRegistry.fs',
   'Persistence/EventStore/ProcessEventLog.fs',
-  'Persistence/EventStore/WriterStreamSync.fs',
   'Persistence/Journal/EventStoreJournalWriter.fs',
   'Process/JsSandbox.fs',
-  'Process/JsRunLoop.fs',
+  'Process/JsCallLoop.fs',
   'Process/NodeProcessWait.fs',
   'Process/ProcessRunner.fs',
   'Process/Pty.fs',
@@ -69,7 +64,6 @@ export const RAW_TIME_ALLOWLIST = Object.freeze([
   'Repository/Programming/Js/OpenCode/ToolHost.fs',
   'Repository/Programming/Js/OpenCode/ToolWorkflow.fs',
   'OpenCode/Host/PluginSessionScope.fs',
-  'Sphinx/McpServer.fs',
 ])
 
 const norm = (p) => p.replace(/\\/g, '/')

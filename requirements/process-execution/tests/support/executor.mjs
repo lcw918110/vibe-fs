@@ -1,5 +1,5 @@
 // Host-native `run` and the four PTY tools (`open-terminal`, `send-terminal`,
-// `read-terminal`, `signal-terminal`) are retired; `js.run` is the sole
+// `read-terminal`, `signal-terminal`) are retired; `js.call` is the sole
 // execution tool (repository-programming [050]-[052]).
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

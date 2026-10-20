@@ -7,8 +7,6 @@
  *
  *   COMPANION-009  epoch switch — new SealRoot, one explicit prefix rebase
  *   PROVIDER-RETRY model rotation — fixed Role routes to a new model target, so the banner does
- *   CTX-010        prefix probe — attempt-local head, fixed tool set
- *   ENFORCER-030   frame commit — Blogger frame list grows, fixed system/tools
  *   SyncDelegate   request-kind switch — per-request tool map swap, same transcript
  *   MANAGER-LOOP   manager tenure — same system/plan, root authority kept while
  *                  retired-tenure traffic and the wake are removed
@@ -31,23 +29,13 @@
  * declares it cannot use it to smuggle a message rewrite past the barrier.
  */
 
-import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { isAppendOnlyPrefix, wireOf } from './provider-wire.js';
-// The injected Blogger/Enforcer row shapes come from their registered JS surface, so a
-// reworded table or member name fails here instead of silently making every row-shaped
-// assistant count as ordinary history (the HOST-013 rule `runtime-key.js` follows).
-import {
-  renderHistoricFrame,
-  renderPreviousEnforcerTip,
-} from '../../../../../dist/Context/Companion/Blogger/TomlSurface.js';
 import { hostDotAckText } from './runtime-key.js';
 
 export const BOUNDARY_KINDS = [
   'epoch-switch',
   'fallback-side',
-  'prefix-probe',
-  'frame-commit',
   'request-kind-switch',
   'manager-loop',
 ];
@@ -120,20 +108,6 @@ const withoutHostModelBanner = (wire) => ({
   })),
 });
 
-/**
- * CTX-010 probe admission: the tool set is a fixed part of the attempt
- * (PROMPT-008), everything else may move.
- *
- * The system prompt is deliberately NOT compared, and this is a measured Host
- * fact rather than a compromise: Host 1.18.9 injects the model name into the
- * system prompt (`../opencode/packages/opencode/src/session/system.ts:67`:
- * "You are powered by the model named ${model.api.id}…"), so a fallback side
- * switch — which is exactly what accompanies a recovery attempt — changes the
- * system bytes by construction. The probe's own claim is about the MESSAGE
- * prefix; the declaration admits the whole recovery request.
- */
-const probeKeepsFixedParts = (previousWire, nextWire) => isDeepStrictEqual(previousWire.tools, nextWire.tools);
-
 // ── pure manager loop ───────────────────────────────────────────────────────
 //
 // Every manager tenure keeps the same workspace, tools and authority plan: a
@@ -185,39 +159,6 @@ const withoutGuidanceMessage = (message) =>
   message?.role === 'system' ? message : { ...message, parts: (message.parts ?? []).map(withoutGuidancePart) };
 
 /**
- * Every seal comparison reads the injected-drift-normalized wires.
- *
- * Retiring a guidance occurrence is plugin-injected INTENDED drift, not wire drift
- * (context-compression-019 / GAP-022): the Host appends each occurrence as a
- * `\0\uFEFF`-separated suffix to the request's terminal part — a user message or the last
- * completed tool result — and a later delivery retires that occurrence without rewriting
- * the message it was attached to. Declaring a boundary per entry would multiply
- * declarations for one phenomenon (the Manager's reusable nudge ladder alone spans
- * bounded cursors), so the normalization lives at the seal itself.
- *
- * The Blogger/Enforcer auxiliary rows are the same class: production renders the historic
- * frame and the previous enforcer tip as an assistant message whose body is one
- * `[[do_not_exec]]` TOML table (`Context/Companion/Blogger/Toml.fs`), and a later
- * delivery re-renders or retires that row — the frame list grows, the tip rotates. Their
- * exact prefixes are derived from the production renderer, never re-typed here.
- *
- * Fail-closed is kept exactly: only the known occurrence shape is normalized. Everything
- * before the separator must still match byte for byte, so a rewritten, dropped, inserted
- * or reordered message still surfaces as a break — declared or undeclared.
- */
-const PROBE = '\u0000probe';
-const auxiliaryRowPrefixes = [renderHistoricFrame(PROBE), renderPreviousEnforcerTip(PROBE, PROBE)].map(
-  (rendered) => rendered.slice(0, rendered.indexOf(PROBE)),
-);
-
-const isAuxiliaryRow = (message) =>
-  message?.role === 'assistant'
-  && message.parts?.length === 1
-  && message.parts[0]?.kind === 'text'
-  && typeof message.parts[0].text === 'string'
-  && auxiliaryRowPrefixes.some((prefix) => message.parts[0].text.startsWith(prefix));
-
-/**
  * A retired owner-facing readonly-replay block: one projected companion exchange —
  * `assistant(tool-call)` closed by its own `tool(result)`, followed by the Host's dot ack.
  * Production re-renders or retires that replay when the horizon advances, so the block may
@@ -254,45 +195,9 @@ const withoutReadonlyReplayBlocks = (messages) => {
 const withoutGuidanceOccurrences = (wire) => ({
   ...wire,
   messages: withoutReadonlyReplayBlocks(
-    (wire.messages ?? []).map(withoutGuidanceMessage).filter((message) => !isAuxiliaryRow(message)),
+    (wire.messages ?? []).map(withoutGuidanceMessage),
   ),
 });
-
-// The companion frame is the other retired auxiliary injection: the Host renders it as
-// a synthetic assistant ack row plus a user row carrying the memory preamble and the
-// prior work record. Match the complete rendered resource, never a keyword in user prose.
-const COMPANION_PREAMBLES = ['en', 'zh-CN'].map((language) =>
-  readFileSync(new URL(`../../../../../resources/provider/lifecycle/companion/memory-preamble/${language}.md`, import.meta.url), 'utf8')
-    .trim()
-    .split('\n')
-    .map((line) => `# ${line}`)
-    .join('\n'),
-);
-
-const isCompanionFrameRow = (message) =>
-  message?.role === 'user'
-  && message.parts?.length === 1
-  && message.parts[0]?.kind === 'text'
-  && typeof message.parts[0].text === 'string'
-  && COMPANION_PREAMBLES.some((preamble) => message.parts[0].text.startsWith(`${preamble}\n`));
-
-const withoutCompanionFrames = (messages) => {
-  const kept = [];
-  for (const message of messages) {
-    if (!isCompanionFrameRow(message)) {
-      kept.push(message);
-      continue;
-    }
-    const ack = kept.at(-1);
-    const isSyntheticAck = ack?.role === 'assistant'
-      && ack.parts?.length === 1
-      && ack.parts[0]?.kind === 'text'
-      && ack.parts[0].text === '.';
-    if (isSyntheticAck) kept.pop();
-    else kept.push(message);
-  }
-  return kept;
-};
 
 const managerLoopKeepsAuthority = (previousWire, nextWire) => {
   if (!sameProviderPlan(previousWire, nextWire)) return false;
@@ -301,11 +206,9 @@ const managerLoopKeepsAuthority = (previousWire, nextWire) => {
   const normalizedNext = withoutHostModelBanner(nextWire);
   if (!isDeepStrictEqual(systemOf(normalizedPrevious), systemOf(normalizedNext))) return false;
 
-  // Guidance occurrences are already retired by `sealDecision`; the companion frame is
-  // this kind's own retired auxiliary injection.
-  const messagesOf = (wire) => withoutCompanionFrames(wire.messages ?? []);
-  const previousMessages = messagesOf(normalizedPrevious);
-  const nextMessages = messagesOf(normalizedNext);
+  // Guidance occurrences are already retired by `sealDecision`.
+  const previousMessages = normalizedPrevious.messages ?? [];
+  const nextMessages = normalizedNext.messages ?? [];
   if (previousMessages.length === 0 || nextMessages.length === 0) return false;
 
   const usersOf = (messages) => messages.filter((message) => message?.role === 'user');
@@ -346,12 +249,12 @@ const managerLoopKeepsAuthority = (previousWire, nextWire) => {
  */
 export function sealDecision({ previousWire, body, boundary, stripAdmitted = false }) {
   if (previousWire === null || previousWire === undefined) {
-    // `prefix-probe`, `frame-commit`, and `manager-loop` share the multi-delivery
+    // `manager-loop` and `epoch-switch` share the multi-delivery
     // shape: the first request establishes the seal (nothing to break), later ones
     // break it. A `manager-loop` boundary sits on a reusable step-0 entry, so its
     // initial delivery has no previous wire and must be held.
     if (boundary !== null && boundary !== undefined
-        && (boundary.kind === 'prefix-probe' || boundary.kind === 'frame-commit' || boundary.kind === 'manager-loop' || boundary.kind === 'epoch-switch')) {
+        && (boundary.kind === 'manager-loop' || boundary.kind === 'epoch-switch')) {
       return { held: true };
     }
     return boundary === null || boundary === undefined
@@ -380,17 +283,7 @@ export function sealDecision({ previousWire, body, boundary, stripAdmitted = fal
   }
 
   if (held) {
-    // A `prefix-probe` declaration governs an ENTRY, and an entry is delivered
-    // several times across a recovery sequence (probe slots and ordinary slots
-    // alternate as the cursor advances). Only some of those deliveries break the
-    // prefix, so an append-only delivery is legal; "the declaration never fired at
-    // all" is checked at scenario end by `ScenarioRuntime.unfiredBoundaries`.
-    // `frame-commit` shares this shape: the Blogger session's first request
-    // establishes the seal (nothing to break), later requests break it as frames
-    // accumulate. `manager-loop` shares it too: a reusable step-0 entry may see
-    // append-only retries that stay held, with only the next tenure's restart
-    // breaking the seal.
-    return boundary.kind === 'prefix-probe' || boundary.kind === 'frame-commit' || boundary.kind === 'manager-loop' || boundary.kind === 'epoch-switch'
+    return boundary.kind === 'manager-loop' || boundary.kind === 'epoch-switch'
       ? { held: true }
       : { broken: 'boundary-not-reached', kind: boundary.kind };
   }
@@ -408,27 +301,6 @@ export function sealDecision({ previousWire, body, boundary, stripAdmitted = fal
       return messagesStillAppendOnly(previous, nextWire)
         ? { resealed: 'fallback-side' }
         : { broken: 'fallback-side-rewrote-messages' };
-
-    // CTX-010: an attempt-local X prefix probe replaces the committed prefix with a
-    // synthetic companion-memory head plus the tail after the candidate cutoff. The
-    // declaration admits exactly that: the system prompt and the tool set are fixed
-    // for the attempt (they belong to the profile, PROMPT-008), while the message
-    // prefix is deliberately rebased and the model may move with the fallback side
-    // switch that usually accompanies a recovery attempt. Anything that rewrites the
-    // fixed parts is not a probe.
-    case 'prefix-probe':
-      return probeKeepsFixedParts(previousWire, nextWire)
-        ? { resealed: 'prefix-probe' }
-        : { broken: 'prefix-probe-rewrote-fixed' };
-
-    // ENFORCER-030: a frame commit rebuilds the Blogger session's provider view —
-    // the frame list grows by one and the delta advances. The system prompt and
-    // the tool set (blog only) are fixed parts of the Blogger profile
-    // (ENFORCER-010), so only the message prefix may move.
-    case 'frame-commit':
-      return probeKeepsFixedParts(previousWire, nextWire)
-        ? { resealed: 'frame-commit' }
-        : { broken: 'frame-commit-rewrote-fixed' };
 
     // SyncDelegate: a dedicated Inspector/Coder CE may swap the per-request
     // tool map (Returned → Completion) without replacing its transcript.

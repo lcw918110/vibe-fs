@@ -36,11 +36,10 @@ type ToolRuntimeScope =
         currentPhysicalUserMessage: (string -> string option) *
         sessionDirectories: Dictionary<string, string> *
         onRunStarted: (SessionId -> Role -> string option -> unit) option *
-        parentWorkRecordFor: (string -> Task<string option>) option *
-        childWorkRecordFor: (string -> Task<string option>) option *
+        viewForSession: (string -> Task<string option>) option *
         snapshot: ISessionSnapshotPort option *
         cancelSignals: (SessionId seq -> unit) option *
-        ?childWorkRecordForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) *
+        ?childViewForRun: (SessionId -> ProviderRunIdentity -> Task<string option>) *
         ?continueManagerLoop: (SessionId -> string -> Task<Result<unit, string>>) *
         ?eventPort: IEventObservationPort ->
             ToolRuntimeScope
@@ -83,13 +82,12 @@ type ToolRuntimeScope =
 
     member SessionParents: Dictionary<string, string>
     member CurrentPhysicalUserMessage: sessionId: string -> string option
+    member ViewForSession: sessionId: string -> Task<string option>
     member DirectoryFor: sessionId: string -> string option
     member LogicalOwnerFor: sessionId: SessionId -> SessionId
 
     member RegisterPhysicalParent: sessionId: SessionId * parentId: SessionId option -> unit
 
-    member ParentWorkRecordFor: sessionId: string -> Task<string option>
-    member ChildWorkRecordFor: sessionId: string -> Task<string option>
 
     member RegisterDirectory: sessionId: string * path: string -> unit
 
@@ -100,10 +98,14 @@ type ToolRuntimeScope =
         sessionId: SessionId * resolveAgent: (SessionId -> Task<string option>) -> Task<string option>
 
     static member emptyManagerFacts: ManagerCapabilityFacts
-    member ManagerCapabilityFactsFor: sessionId: string -> ManagerCapabilityFacts
+    member ManagerCapabilityFactsFor: sessionId: string -> Task<ManagerCapabilityFacts>
+
+    member LifecycleWorkFor:
+        sessionId: string -> Task<Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option>
+
     member TryFreezeRetirement: sessionId: string * incumbentId: string -> bool
     member UnfreezeRetirement: sessionId: string -> unit
-    member IsRetirementFrozen: sessionId: string -> bool
+    member IsRetirementFrozen: sessionId: string -> Task<bool>
     member RetirementBlockersFor: sessionId: string -> string list
 
     /// AGENT-013 + PROMPT-008: the managed agent a PTY is opened for.

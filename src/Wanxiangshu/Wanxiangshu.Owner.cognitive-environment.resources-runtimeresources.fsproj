@@ -7,10 +7,9 @@
     <WanxiangshuOwnerLocalityKind>runtime</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.behavior-diagnosis.enforcer-catalog.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-promptcatalog.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.language.fsproj"/>
-    <Compile Include="Resources/RuntimeResources.fsi"/>
-    <Compile Include="Resources/RuntimeResources.fs"/>
+    <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-promptcatalog.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.language.fsproj" />
+    <Compile Include="Resources/RuntimeResources.fsi" />
+    <Compile Include="Resources/RuntimeResources.fs" />
   </ItemGroup>
 </Project>

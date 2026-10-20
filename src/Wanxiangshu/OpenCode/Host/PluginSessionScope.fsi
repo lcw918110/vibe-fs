@@ -49,9 +49,6 @@ type PluginSessionScope =
     /// Per-instance join interrupt registry.
     member JoinInterrupts: IJoinAttemptRegistry
 
-    /// Returns the keys to cancel (including sessionId itself when it is not
-    /// a Main with a linked Blogger).
-    member LinkedBloggerKeys: sessionId: string -> string list
 
     /// Drops the provider-language identity for this session idempotently.
     member DropSessionIdentity: sessionId: string -> unit

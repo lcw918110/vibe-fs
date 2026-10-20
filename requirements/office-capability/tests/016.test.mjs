@@ -9,7 +9,7 @@ test('WHAT[office-capability-016] Engineer owns local source work and exclusive 
   for (const permission of ['Exec', 'Pty', 'Fork', 'Resume']) {
     assert.equal(isAllowed('engineer', permission), false, permission)
   }
-  for (const role of ['manager', 'orchestrator', 'devops', 'blogger', 'bookkeeper', 'predictor', 'coder', 'inspector']) {
+  for (const role of ['manager', 'orchestrator', 'devops', 'bookkeeper', 'plan', 'blogger', 'predictor', 'coder', 'inspector']) {
     assert.equal(isAllowed(role, 'Fission'), false, role)
   }
 })

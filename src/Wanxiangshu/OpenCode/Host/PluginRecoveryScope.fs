@@ -5,10 +5,8 @@ open System.Collections.Generic
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.Enforcer
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session.Recovery
@@ -25,9 +23,6 @@ open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Execution.Session.Recovery.SessionRecovery
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
@@ -115,7 +110,7 @@ type PluginRecoveryScope(journal: AgentJournal option) =
 
     /// DSL-cross-callback-proof: physical single-flight — opaque frozen attempt plan channel.
     /// Owning recovery CE (XWire.reconcileAttempt) consumes via ConsumeAttemptPlan on terminal;
-    /// transform adapter records via RecordAttemptPlan; Strength peeks via TryAttemptPlan.
+    /// transform adapter records via RecordAttemptPlan.
     /// No stringly-typed TryGet/Clear drives business branching (structured-workflow-017②, structured-workflow-009, provider-attempt-recovery-011).
     // DSL-MUTABLE: single-flight — per-provider-run attempt plan channel (frozen decision, typed handle)
     let attemptPlans = Dictionary<string, AttemptPlan>()
@@ -311,7 +306,6 @@ type PluginRecoveryScope(journal: AgentJournal option) =
             Some plan
         | false, _ -> None
 
-    /// Read-only peek for Strength evidence — not for recovery branching.
     member this.TryPeekAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) =
         let key = providerPlanKey sessionId providerRun
 
@@ -341,7 +335,7 @@ type PluginRecoveryScope(journal: AgentJournal option) =
         |> Array.iter (fun key -> manualChatInterventions.Remove key |> ignore)
 
     /// Drops attempt plans whose key prefix matches (used for a session and
-    /// for its linked Blogger keys during session deletion). Prefer ConsumeAttemptPlan.
+    /// its linked keys during session deletion). Prefer ConsumeAttemptPlan.
     member this.ClearAttemptPlansFor(key: string) =
         attemptPlans.Keys
         |> Seq.filter (fun planKey -> planKey.StartsWith(key + "\u001f", StringComparison.Ordinal))

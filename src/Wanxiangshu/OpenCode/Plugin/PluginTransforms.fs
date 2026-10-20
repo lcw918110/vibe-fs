@@ -11,11 +11,8 @@ open Fable.Core.JsInterop
 open Wanxiangshu.OpenCode.Host
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Cycle
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Delegation.SyncDelegate.OpenCode
@@ -37,15 +34,10 @@ open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Participant.Provider.Projection
 open Wanxiangshu.Persistence.EventStore
-open Wanxiangshu.Strength
-open Wanxiangshu.Strength.Replica
 open Wanxiangshu.Participant.Provider.Projection.ProviderProjection
 open Wanxiangshu.Host
-open Wanxiangshu.OpenCode.Host.RequirementGrounding
 open Wanxiangshu.Change
 open Wanxiangshu.Change.Host
-open Wanxiangshu.Context.Companion.Blogger.OpenCode
-open Wanxiangshu.Enforcer
 open Wanxiangshu.Execution.Delegation.Fork.OpenCode
 open Wanxiangshu.Execution.Delegation.Handle.OpenCode
 open Wanxiangshu.Execution.Delegation.OpenCode
@@ -57,24 +49,17 @@ open Wanxiangshu.Interaction.Dispatch.OpenCode
 open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Repository.Investigation.Semble
 open Wanxiangshu.Resources
-open Wanxiangshu.Strength.OpenCode
-open Wanxiangshu.Strength.Persistence
 open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Context.Companion
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Session
-open Wanxiangshu.Enforcer
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Resources
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger.Runtime
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Cycle
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Delegation.Handle
@@ -88,7 +73,6 @@ open Wanxiangshu.Interaction.Repair
 open Wanxiangshu.Participant.Persona
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
-open Wanxiangshu.Strength
 open PluginHostInterop
 
 module PluginTransforms =
@@ -132,52 +116,24 @@ module PluginTransforms =
     type NormalTransformCapabilities =
         { BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
           BindSessionStartedAt: string option -> Task<DateTimeOffset option>
-          ApplyStrengthReplay: string option -> obj -> Task<StrengthReplayPlan list>
-          RestoreProtocolArguments: obj -> Task<unit>
           ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
           ApplyTenureIsolation: string option -> obj -> Task<unit>
           CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
-          CommitStrengthTrace: string option -> XTraceProjectionState option -> StrengthReplayPlan list -> Task<unit>
           RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
           ApplyCompanion: string option -> obj -> obj -> Task<unit>
-          ApplyXWire: obj -> Task<PrefixPresentationHorizon>
+          ApplyXWire: obj -> Task
           FreezeProviderAttemptPlan: string option -> PhysicalUserMessageId option -> Task<unit>
-          ApplyEnforcerContinuation: string option -> obj -> Task<unit>
-          ApplyReadonlyDelegation: string option -> PhysicalUserMessageId option -> obj -> Task<unit>
           InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
-          ProjectRequirementGrounding: string option -> obj -> Task<unit>
-          InjectBloggerChronicle:
-              string option -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option -> obj -> unit
           SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
           SanitizeMessages: obj -> unit }
 
-    type TransformBranchCapabilities =
-        { RegisterOwned: string -> unit
-          ReplicaRuntime: string option -> StrengthReplicaRuntime option
-          ReplicaXWire: obj -> Task<unit>
-          ReplicaSanitize: obj -> unit }
-
+    type TransformBranchCapabilities = { RegisterOwned: string -> unit }
 
     let private languageFor (_projectionSessionIdOpt: string option) : ProviderLanguage =
         GlobalProviderLanguage.current ()
 
-    // Explicit composition mode — replaces the previous implicit helper dispatch
-    // (strengthReplicaRuntime / ordinaryProviderTransform).
-    // This type is representation-level (composition topology), not a foreign domain decision.
-    type private TransformMode =
-        | StrengthReplica of StrengthReplicaRuntime
-        | Ordinary
-
-    let private failIfReplicaDecisionLost (handled: bool) : unit =
-        if not handled then
-            raise (InvalidOperationException "StrengthReplica transform lost its live decision binding")
-
     [<Emit("{ ...$0 }")>]
     let private shallowCopyObj (source: obj) : obj = jsNative
-
-    let private raiseFailClosed (fuse: string -> unit) (reason: string) : 'a =
-        fuse reason
-        raise (InvalidOperationException reason)
 
     let private canonicalCaptureMessages (journal: AgentJournal option) session rawMessages =
         let restore durable =
@@ -191,14 +147,7 @@ module PluginTransforms =
                         rawMessages
                 with
                 | Error error -> return Error error
-                | Ok paired ->
-                    return!
-                        PairProgrammingThoughtTransform.stripCursorSuffixesWithJournal
-                            durable
-                            session
-                            PairProgrammingThoughtTransform.CursorPresentationOwner.RequirementGrounding
-                            []
-                            paired
+                | Ok stripped -> return Ok stripped
             }
 
         journal
@@ -218,15 +167,6 @@ module PluginTransforms =
             |> Option.map PromptAuthority.PromptOrigin.Continuation
             |> Option.defaultValue PromptAuthority.PromptOrigin.UnknownOrigin
 
-    let private determineTransformMode
-        (branches: TransformBranchCapabilities)
-        (projectionSessionIdOpt: string option)
-        (outObj: obj)
-        : TransformMode =
-        match branches.ReplicaRuntime projectionSessionIdOpt with
-        | Some runtime -> StrengthReplica runtime
-        | None -> Ordinary
-
     let defaultCapabilities (boot: PluginBoot.Boot) (host: PluginHostWiring.Host) : NormalTransformCapabilities =
         let scope = boot.Scope
         let journal = boot.Journal
@@ -235,9 +175,7 @@ module PluginTransforms =
         let sessionPort = host.SessionPort
         let eventPort = host.EventPort
         let snapshotOpt = host.SnapshotOpt
-        let strengthDurability = host.StrengthDurability
         let wired = host.Wired
-        let strengthFailFuse = boot.StrengthFailFuse
 
         let requireProviderAdmission key =
             if ModelRouting.readExecutionAdmission key |> Option.isNone then
@@ -436,179 +374,6 @@ module PluginTransforms =
                         )
             }
 
-        // / speculative-investigation-014: the only
-        // enablement condition for explicit read-only delegation is that a
-        // Predictor model is configured. The read-only configuration
-        // existence query is the process-shared
-        // ModelRouting.sharedPredictorConfiguration, loaded once together
-        // with the sole MJS model configuration during the PluginBoot Load
-        // Phase (PluginBoot.create runs ModelRouting.initialize before any
-        // transform or hook is constructed), and is shared by tool
-        // decoration (PluginHooks) and delegation admission here, so this
-        // seam consumes that one query instead of holding a second enabled
-        // truth. Configured enables admission; NotConfigured authorizes
-        // nothing. ConfigurationInvalid is a malformed model configuration
-        // and fails closed here, the same choice as the PluginHooks
-        // tool-decoration seam and ModelRouting.requireRoutingProtocol: it
-        // is never silently degraded to "not configured". The transform
-        // hook's registered disposition (HookPolicy MessagesTransform:
-        // Workflow / TypedPolicyFailClosed, diagnostic operation
-        // plugin-hook-messages-transform-failed) carries the report.
-        let predictorConfigured () : bool =
-            match ModelRouting.sharedPredictorConfiguration () with
-            | ModelRouting.PredictorConfiguration.Configured -> true
-            | ModelRouting.PredictorConfiguration.NotConfigured -> false
-            | ModelRouting.PredictorConfiguration.ConfigurationInvalid reason ->
-                raise (
-                    InvalidOperationException(
-                        sprintf "execution-model-routing: Predictor model configuration is invalid: %s" reason
-                    )
-                )
-
-        // host-boundary-032 / provider-facing wire-layer
-        // restore of the protocol fields. The Host persists tool-call input
-        // after the before hook stripped the protocol fields, so every later
-        // provider request is built from stripped history. The before hook
-        // recorded the wire originals in the process-local vault; this step
-        // merges them back into the request's assistant tool-call parts before
-        // delegation capture (13.3) or the replica batch collector reads the
-        // same history. Pure per part: business arguments verbatim, protocol
-        // keys appended when missing or different, results untouched, no vault
-        // entry means fail-open.
-        let restoreMergedPart (part: obj) (state: obj) (hasStateInput: bool) (current: obj) (merged: obj) : obj =
-            if obj.ReferenceEquals(merged, current) then
-                part
-            elif hasStateInput then
-                let stateCopy = shallowCopyObj state
-                emitJsExpr (stateCopy, "input", merged) "$0[$1] = $2" |> ignore
-                let partCopy = shallowCopyObj part
-                emitJsExpr (partCopy, "state", stateCopy) "$0[$1] = $2" |> ignore
-                partCopy
-            else
-                let partCopy = shallowCopyObj part
-                emitJsExpr (partCopy, "args", merged) "$0[$1] = $2" |> ignore
-                partCopy
-
-        let readRestoreCurrent (state: obj) (part: obj) (hasStateInput: bool) : obj =
-            if hasStateInput then
-                ProviderWireDecode.readField state "input"
-            else
-                ProviderWireDecode.readField part "args"
-
-        let tryRestoreSnapshot (part: obj) (snapshot: ProtocolArgumentVault.Snapshot) : obj =
-            let state = ProviderWireDecode.readField part "state"
-
-            let hasStateInput =
-                not (isNull state) && not (isNull (ProviderWireDecode.readField state "input"))
-
-            let hasTopLevelArgs = not (isNull (ProviderWireDecode.readField part "args"))
-
-            if not hasStateInput && not hasTopLevelArgs then
-                part
-            else
-                let current = readRestoreCurrent state part hasStateInput
-                let merged = ProtocolArgumentVault.restoreArguments snapshot current
-                restoreMergedPart part state hasStateInput current merged
-
-        let tryRestoreWithSnapshot (part: obj) (snapshotOpt: ProtocolArgumentVault.Snapshot option) : obj =
-            match snapshotOpt with
-            | Some snapshot -> tryRestoreSnapshot part snapshot
-            | None -> part
-
-        let tryRestoreWithCallId
-            (vault: ProtocolArgumentVault.Vault)
-            (sessionId: string)
-            (part: obj)
-            (callId: string option)
-            : obj =
-            match callId with
-            | None -> part
-            | Some id -> tryRestoreWithSnapshot part (ProtocolArgumentVault.tryFind vault sessionId id)
-
-        let restoreToolCallPart
-            (vault: ProtocolArgumentVault.Vault)
-            (sessionId: string)
-            (part: obj)
-            (isToolCallPart: bool)
-            : obj =
-            if not isToolCallPart then
-                part
-            else
-                tryRestoreWithCallId
-                    vault
-                    sessionId
-                    part
-                    (ProviderWireDecode.firstString part [ "callID"; "callId"; "id" ])
-
-        let restorePart (vault: ProtocolArgumentVault.Vault) (sessionId: string) (part: obj) : obj =
-            if isNull part then
-                part
-            else
-                let kind =
-                    ProviderWireDecode.firstString part [ "type" ]
-                    |> Option.defaultValue ""
-                    |> fun value -> value.ToLowerInvariant()
-
-                let isToolCallPart = kind = "tool" || kind = "tool-call" || kind = "tool_call"
-                restoreToolCallPart vault sessionId part isToolCallPart
-
-        let restoreRawParts (raw: obj) (parts: obj list) (restoredParts: obj list) : obj =
-            if List.forall2 (fun a b -> obj.ReferenceEquals(a, b)) parts restoredParts then
-                raw
-            else
-                let copy = shallowCopyObj raw
-                copy?parts <- box (List.toArray restoredParts)
-                copy
-
-        let restoreMessage (vault: ProtocolArgumentVault.Vault) (sessionId: string) (raw: obj) : obj =
-            if isNull raw then
-                raw
-            else
-                let parts = ProviderWireDecode.rawPartsOf raw
-                let restoredParts = parts |> List.map (restorePart vault sessionId)
-                restoreRawParts raw parts restoredParts
-
-        let applyRewrittenMessages (outObj: obj) (rawMessages: obj list) (rewritten: obj list) : unit =
-            if not (List.forall2 (fun a b -> obj.ReferenceEquals(a, b)) rawMessages rewritten) then
-                HostMessageProjection.replaceMessagesInPlace outObj rewritten
-
-        let rewriteSessionMessages (vault: ProtocolArgumentVault.Vault) (outObj: obj) (sessionId: string) : unit =
-            let rawMessages = ProviderWireDecode.messagesFromTransformOutput outObj
-            let rewritten = rawMessages |> List.map (restoreMessage vault sessionId)
-            applyRewrittenMessages outObj rawMessages rewritten
-
-        let tryRestoreSessionArguments
-            (vault: ProtocolArgumentVault.Vault)
-            (outObj: obj)
-            (sessionIdOpt: string option)
-            : unit =
-            match sessionIdOpt with
-            | Some sessionId -> rewriteSessionMessages vault outObj sessionId
-            | None -> ()
-
-        let restoreProtocolArguments (outObj: obj) : Task<unit> =
-            task {
-                if not (isNull outObj) && not (isNull outObj?messages) then
-                    tryRestoreSessionArguments
-                        boot.ProtocolArgumentVault
-                        outObj
-                        (ProviderWireDecode.projectionSessionIdFromMessages outObj)
-            }
-
-        let applyReadonlyDelegation projectionSessionIdOpt hostPhysicalUserMessageId outObj =
-            StrengthDelegate.tryCaptureAndStart
-                snapshotOpt
-                journal
-                strengthDurability
-                boot.StrengthScope
-                scope.TryAttemptPlan
-                scope.SyncDelegateRuntime
-                (predictorConfigured ())
-                projectionSessionIdOpt
-                hostPhysicalUserMessageId
-                (Some boot.Timer)
-                outObj
-
         let captureXTraceMessages projectionSessionIdOpt (rawMessages: obj list) =
             task {
                 match projectionSessionIdOpt with
@@ -622,7 +387,7 @@ module PluginTransforms =
 
                     let observations =
                         canonical
-                        |> Result.defaultWith (raiseFailClosed strengthFailFuse)
+                        |> Result.defaultWith (fun reason -> raise (InvalidOperationException reason))
                         |> List.choose (fun rawMessage ->
                             ProviderWireCapture.decodeCapturedMessage rawMessage
                             |> Option.map (fun message ->
@@ -643,10 +408,10 @@ module PluginTransforms =
                             { RawMessages = rawMessages
                               Current = captured.Current
                               Receipt = Some captured.Receipt }
-                    | Error(XTraceCaptureError.Refused reason) -> return raiseFailClosed strengthFailFuse reason
+                    | Error(XTraceCaptureError.Refused reason) -> return invalidOp reason
                     | Error(XTraceCaptureError.StorageAppendFailed failure) ->
-                        return raiseFailClosed strengthFailFuse (JournalAppendFailure.describe failure)
-                    | Error(XTraceCaptureError.StorageFailed reason) -> return raiseFailClosed strengthFailFuse reason
+                        return invalidOp (JournalOutcome.JournalAppendFailure.describe failure)
+                    | Error(XTraceCaptureError.StorageFailed reason) -> return invalidOp reason
             }
 
         let ownerRole (sessionId: string) =
@@ -675,11 +440,16 @@ module PluginTransforms =
             | Some sid when not (String.IsNullOrWhiteSpace sid) && ownerRole sid = Some Role.Manager -> Some sid
             | _ -> None
 
-        let tryReadLifecycleWork (sid: string) =
-            workspaceDirectory
-            |> Option.bind (fun workspace ->
-                let commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
-                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir sid)
+        let tryReadLifecycleWork
+            (sid: string)
+            : Task<Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option> =
+            task {
+                match workspaceDirectory with
+                | Some workspace ->
+                    let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+                    return Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir sid
+                | None -> return None
+            }
 
 
         let tenureReanchorEpoch (durable: AgentJournal) (sessionId: SessionId) : ActivePrefixEpoch =
@@ -769,10 +539,9 @@ module PluginTransforms =
               OpeningCursor = work.OpeningCursor |> Option.defaultValue 0. |> int64
               IsFreshHandover = not (PrefixEpochProjection.isTenureReanchored incumbentId epoch) }
 
-        // The delivered Plan work is post-S3: the tenure is over and the
-        // session waits for the user's execution command. It inherits nothing
-        // from S3 or earlier: every assistant/tool interaction at-or-before the
-        // delivered retirement frontier is stripped.
+        // S1/S2/S3 and post-S3 no longer strip assistant/tool history. Context
+        // retention belongs to the view declaration. Reanchor still advances the
+        // prefix epoch; it does not remove messages.
         let tenureForPostS3
             (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork)
             (sid: string)
@@ -790,7 +559,6 @@ module PluginTransforms =
                     |> Option.defaultWith (fun () -> invalidOp "Plan journal is unavailable")
 
                 let sessionId = SessionId.create sid
-                do! restoreProtocolArguments outObj
                 let rawMessages = ProviderWireDecode.messagesFromTransformOutput outObj
 
                 let! captured =
@@ -816,7 +584,7 @@ module PluginTransforms =
                 if assembled.ReanchorRequested then
                     do! reanchorTenure durable sessionId tenure (tenureReanchorEpoch durable sessionId)
 
-                HostMessageProjection.replaceMessagesInPlace outObj assembled.Messages
+                ignore assembled.Messages
             }
 
         let currentEpochOf (sid: string) : Wanxiangshu.Context.Prefix.ActivePrefixEpoch =
@@ -826,7 +594,7 @@ module PluginTransforms =
 
         let applyResolvedTenure (sid: string) (outObj: obj) =
             task {
-                match tryReadLifecycleWork sid with
+                match! tryReadLifecycleWork sid with
                 | Some work when isPlanSequence work && work.ActiveId.IsSome ->
                     return! isolatePlanTenure (tenureForActive work (currentEpochOf sid) sid) sid outObj
                 | Some work when isPlanSequence work && work.Delivered ->
@@ -883,7 +651,11 @@ module PluginTransforms =
                         |> ProviderWireCapture.lastUserMessageId
 
                     let acceptedRequest = acceptedSuccessorRequestFor sessionId physicalUserMessageId
-                    let lifecycle = sessionId |> Option.bind tryReadLifecycleWork
+
+                    let! lifecycle =
+                        match sessionId with
+                        | Some sid -> tryReadLifecycleWork sid
+                        | None -> Task.FromResult None
 
                     if
                         not (
@@ -905,12 +677,6 @@ module PluginTransforms =
           BindSessionStartedAt =
             let port = journal |> Option.map AgentJournalPortAdapter.forSessionStartedAt
             SessionStartedAtLedger.bindSessionStartedAt port clock terminateSession Diagnostic.emit
-          ApplyStrengthReplay =
-            // The owner-facing replay must name the projected readonly exchange
-            // with the owner's own `js-<role>` surface. Resolve that role from the
-            // live authority projection for the session being transformed.
-            StrengthReplay.applyBeforeXTrace journal snapshotOpt strengthDurability strengthFailFuse ownerRole
-          RestoreProtocolArguments = restoreProtocolArguments
           ApplyRelayProjection =
             fun sidOpt outObj ->
                 task {
@@ -930,7 +696,16 @@ module PluginTransforms =
                         else
                             invalidOp ("MANAGER-LOOP-004: retired attempt interrupt failed: " + error)
 
-                    let lifecycle = sidOpt |> Option.bind tryReadLifecycleWork
+                    let! lifecycle =
+                        match sidOpt with
+                        | Some sid -> tryReadLifecycleWork sid
+                        | None -> Task.FromResult None
+
+                    let handleInterruptionError (error: string) : unit =
+                        if error.Contains "MANAGED-SESSION-016" then
+                            ()
+                        else
+                            invalidOp ("MANAGER-LOOP-004: retired attempt interrupt failed: " + error)
 
                     return!
                         RelayNarrativeTransform.apply
@@ -983,20 +758,6 @@ module PluginTransforms =
                         return captured
                     | Some _ -> return captured
                 }
-          CommitStrengthTrace =
-            fun projectionSessionIdOpt traceState strengthReplayPlans ->
-                match projectionSessionIdOpt with
-                | Some _ ->
-                    task {
-                        do!
-                            StrengthReplay.commitTracedAfterCapture
-                                journal
-                                strengthDurability
-                                strengthFailFuse
-                                traceState
-                                strengthReplayPlans
-                    }
-                | None -> Task.FromResult()
           RefreshCompanionXTrace =
             fun projectionSessionIdOpt traceState ->
                 let sessionId = projectionSessionIdOpt |> Option.defaultValue ""
@@ -1005,28 +766,10 @@ module PluginTransforms =
                 if found then
                     traceState |> Option.iter companion.RefreshXTrace
           ApplyCompanion =
-            let apply =
-                CompanionTransform.applyCompanionForOrdinaryMaterial
-                    scope.Sessions.Companions
-                    scope.Sessions.CompanionGate
-                    scope.CompanionLeases
-                    scope.BloggerRuntimeHost
-                    sessionPort
-                    journal
-
-                    (Some(fun bloggerId ->
-                        // Register ownership + ActiveRun so idle→reconcile
-                        // emits TerminalOutcome.Completed for this child.
-                        wired.RegisterOwned(SessionId.value bloggerId)
-                        wired.BindActiveRun bloggerId Role.Blogger None))
-
-                    (host.RootWorkspace.TryRead())
+            let apply _ _ _ = Task.FromResult()
 
             apply
           ApplyXWire =
-            let isReplica =
-                fun (sid: SessionId) -> boot.StrengthScope.StrengthRuntime.TryFindByReplica sid |> Option.isSome
-
             let attempts: AttemptPlanCapability =
                 { TryAttemptPlan = scope.TryAttemptPlan
                   TryBindAttemptPlan = scope.TryBindAttemptPlan
@@ -1035,21 +778,8 @@ module PluginTransforms =
                   TryPendingAttemptPlan = scope.Recovery.TryPendingAttemptPlan }
 
             let wirePort = journal |> Option.map AgentJournalPortAdapter.forWire
-            XWire.applyTransform isReplica snapshotOpt wirePort attempts
+            XWire.applyTransform snapshotOpt wirePort attempts
           FreezeProviderAttemptPlan = freezeProviderAttemptPlan
-          ApplyEnforcerContinuation =
-            fun projectionSessionIdOpt outObj ->
-                task {
-                    do!
-                        EnforcerContinuation.applyContinuation
-                            scope.BloggerRuntimeHost
-                            journal
-                            terminateSession
-                            projectionSessionIdOpt
-                            outObj
-                }
-
-          ApplyReadonlyDelegation = applyReadonlyDelegation
           InjectPairGuideline =
             fun projectionSessionIdOpt sessionStartedAt outObj ->
                 task {
@@ -1077,16 +807,6 @@ module PluginTransforms =
                             scope.MarkRestartGuidanceDelivered
                             outObj
                 }
-          ProjectRequirementGrounding =
-            RequirementGroundingTransform.projectOrTerminate journal workspaceDirectory terminateSession
-          InjectBloggerChronicle =
-            fun projectionSessionIdOpt physicalUserMessageId outObj ->
-                BloggerChronicleText.maybeInject
-                    journal
-                    projectionSessionIdOpt
-                    physicalUserMessageId
-                    (languageFor projectionSessionIdOpt)
-                    outObj
           SettleAndReplaceDeferredInspections =
             fun projectionSessionIdOpt outObj ->
                 task {
@@ -1099,15 +819,7 @@ module PluginTransforms =
                         let replaced = SyncDelegateBatching.applyReplacedResults currentMessages
                         HostMessageProjection.replaceMessagesInPlace outObj replaced
                 }
-          SanitizeMessages =
-            fun outObj ->
-                let rawMessages = ProviderWireDecode.messagesFromTransformOutput outObj
-
-                match StrengthReplicaTransform.tryEncodeOwnerMessages HostDigest.sha256Hex rawMessages with
-                | Error error -> raiseFailClosed strengthFailFuse error
-                | Ok encoded ->
-                    HostMessageProjection.replaceMessagesInPlace outObj encoded
-                    HostMessageProjection.sanitizeOutputMessages outObj }
+          SanitizeMessages = fun outObj -> HostMessageProjection.sanitizeOutputMessages outObj }
 
     let defaultBranchCapabilities (boot: PluginBoot.Boot) (host: PluginHostWiring.Host) : TransformBranchCapabilities =
         let scope = boot.Scope
@@ -1115,42 +827,17 @@ module PluginTransforms =
         let snapshotOpt = host.SnapshotOpt
         let wired = host.Wired
 
-        { RegisterOwned = wired.RegisterOwned
-          ReplicaRuntime =
-            fun projectionSessionIdOpt ->
-                match projectionSessionIdOpt, boot.StrengthScope.StrengthReplicaRuntime with
-                | Some sessionId, Some runtime when runtime.IsReplica(SessionId.create sessionId) -> Some runtime
-                | _ -> None
-          ReplicaXWire =
-            fun outObj ->
-                task {
-                    let isReplica =
-                        fun (sid: SessionId) -> boot.StrengthScope.StrengthRuntime.TryFindByReplica sid |> Option.isSome
-
-                    let attempts: AttemptPlanCapability =
-                        { TryAttemptPlan = scope.TryAttemptPlan
-                          TryBindAttemptPlan = scope.TryBindAttemptPlan
-                          ConsumeAttemptPlan = scope.ConsumeAttemptPlan
-                          FreezePendingAttemptPlan = scope.Recovery.FreezePendingAttemptPlan
-                          TryPendingAttemptPlan = scope.Recovery.TryPendingAttemptPlan }
-
-                    let wirePort = journal |> Option.map AgentJournalPortAdapter.forWire
-                    let! _ = XWire.applyTransform isReplica snapshotOpt wirePort attempts outObj
-                    return ()
-                }
-          ReplicaSanitize = HostMessageProjection.sanitizeOutputMessages }
+        { RegisterOwned = wired.RegisterOwned }
 
     /// 普通分支请求的静态管道上下文：预读的物理消息 id 与各 stage 产出的
-    /// 会话起点、Strength 重放计划、已捕获 XTrace、horizon 只经这份 frame 传递。
+    /// 会话起点、重放计划、已捕获 XTrace、horizon 只经这份 frame 传递。
     type private TransformFrame =
         { SessionId: string option
           InObj: obj
           OutObj: obj
           PhysicalUserMessageId: PhysicalUserMessageId option
           SessionStartedAt: DateTimeOffset option
-          ReplayPlans: StrengthReplayPlan list
-          TracedXTrace: XTraceProjectionState option
-          Horizon: PrefixPresentationHorizon }
+          TracedXTrace: XTraceProjectionState option }
 
     /// 普通分支 stage：具名、静态列出，Run 直接调用一个或一段 caps 入口。
     /// 返回 None 表示本次请求到此终止（退休旧 attempt 已被拦截）。
@@ -1235,25 +922,6 @@ module PluginTransforms =
                               do! caps.ApplyTenureIsolation frame.SessionId frame.OutObj
                               return Some frame
                           } }
-                  // 5. StrengthReplay.applyBeforeXTrace
-                  { Name = "strength-replay"
-                    Run =
-                      fun frame ->
-                          task {
-                              let! plans = caps.ApplyStrengthReplay frame.SessionId frame.OutObj
-                              return Some { frame with ReplayPlans = plans }
-                          } }
-                  // 5. host-boundary-032 / restore the protocol fields the Host
-                  // persisted away into the provider-facing request BEFORE
-                  // delegation capture (13.3) reads the same history; without
-                  // this the capture never sees the budget the model signed.
-                  { Name = "restore-protocol-arguments"
-                    Run =
-                      fun frame ->
-                          task {
-                              do! caps.RestoreProtocolArguments frame.OutObj
-                              return Some frame
-                          } }
                   // 6. XTraceCapture.captureObservedMessagesWithReceipt
                   { Name = "capture-xtrace"
                     Run =
@@ -1265,15 +933,6 @@ module PluginTransforms =
                                   Some
                                       { frame with
                                           TracedXTrace = capture.Current }
-                          } }
-                  // 7. StrengthReplay.commitTracedAfterCapture
-                  { Name = "commit-strength-trace"
-                    Run =
-                      fun frame ->
-                          task {
-                              do! caps.CommitStrengthTrace frame.SessionId frame.TracedXTrace frame.ReplayPlans
-
-                              return Some frame
                           } }
                   // 8. CompanionHost.RefreshXTrace
                   { Name = "refresh-companion-xtrace"
@@ -1289,15 +948,14 @@ module PluginTransforms =
                               do! caps.ApplyCompanion frame.SessionId frame.InObj frame.OutObj
                               return Some frame
                           } }
-                  // 10. XWire.applyTransform. A selected prefix probe creates a
-                  // tentative cold horizon for this physical request; downstream
-                  // historical auxiliaries must not replay the old horizon into it.
+                  // 10. XWire.applyTransform. Admits the attempt plan; message
+                  // content is never rewritten.
                   { Name = "apply-xwire"
                     Run =
                       fun frame ->
                           task {
-                              let! horizon = caps.ApplyXWire frame.OutObj
-                              return Some { frame with Horizon = horizon }
+                              do! caps.ApplyXWire frame.OutObj
+                              return Some frame
                           } }
                   // 11. ProviderLifecycle.freezeProviderAttemptPlanForTransform.
                   // Freeze the exact plan, then confirm the Host's real assistant
@@ -1309,40 +967,13 @@ module PluginTransforms =
                               do! caps.FreezeProviderAttemptPlan frame.SessionId frame.PhysicalUserMessageId
                               return Some frame
                           } }
-                  // 12. EnforcerContinuation.applyContinuation
-                  { Name = "apply-enforcer-continuation"
+                  { Name = "current-auxiliaries"
                     Run =
                       fun frame ->
                           task {
-                              do! caps.ApplyEnforcerContinuation frame.SessionId frame.OutObj
+                              do! caps.InjectPairGuideline frame.SessionId frame.SessionStartedAt frame.OutObj
                               return Some frame
                           } }
-                  // 13.1 PairProgrammingThoughtTransform.maybeInjectGuideline
-                  // 13.2 RequirementGroundingTransform.projectOrTerminate
-                  // 13.3 Capture and start on the final outgoing request so the
-                  //      preparation owns the same mirror and provider attempt plan.
-                  { Name = "current-horizon-auxiliaries"
-                    Run =
-                      fun frame ->
-                          task {
-                              if frame.Horizon = PrefixPresentationHorizon.Current then
-                                  do! caps.InjectPairGuideline frame.SessionId frame.SessionStartedAt frame.OutObj
-                                  do! caps.ProjectRequirementGrounding frame.SessionId frame.OutObj
-
-                                  do!
-                                      caps.ApplyReadonlyDelegation
-                                          frame.SessionId
-                                          frame.PhysicalUserMessageId
-                                          frame.OutObj
-
-                              return Some frame
-                          } }
-                  // 14. BloggerChronicleText.maybeInject
-                  { Name = "inject-blogger-chronicle"
-                    Run =
-                      fun frame ->
-                          caps.InjectBloggerChronicle frame.SessionId frame.PhysicalUserMessageId frame.OutObj
-                          Task.FromResult(Some frame) }
                   // 15. Re-apply replaced inspection results after any intermediate insertions
                   { Name = "reapply-deferred-inspections"
                     Run =
@@ -1364,9 +995,7 @@ module PluginTransforms =
                   OutObj = outObj
                   PhysicalUserMessageId = physicalUserMessageId
                   SessionStartedAt = None
-                  ReplayPlans = []
-                  TracedXTrace = None
-                  Horizon = PrefixPresentationHorizon.Current }
+                  TracedXTrace = None }
 
             do! runOrdinaryStages stages frame
 
@@ -1390,33 +1019,12 @@ module PluginTransforms =
                         else
                             None)
 
-                match determineTransformMode branches projectionSessionIdOpt outObj with
-                | StrengthReplica runtime ->
-                    projectionSessionIdOpt |> Option.iter branches.RegisterOwned
-
-                    let physicalUserMessageId =
-                        outObj
-                        |> ProviderWireDecode.messagesFromTransformOutput
-                        |> ProviderWireCapture.lastUserMessageId
-
-                    // STRENGTH-004/009: Replica uses exactly one request-plan
-                    // writer plus its mirror/K gate. XTrace, Manager narrative,
-                    // Companion, Enforcer, Pair and Review are owner-only.
-                    do! branches.ReplicaXWire outObj
-                    do! caps.FreezeProviderAttemptPlan projectionSessionIdOpt physicalUserMessageId
-                    // host-boundary-032 / same restore on the
-                    // Replica branch, before the runtime reads this request.
-                    do! caps.RestoreProtocolArguments outObj
-                    let! handled = runtime.HandleTransform outObj
-                    do failIfReplicaDecisionLost handled
-                    branches.ReplicaSanitize outObj
-                | Ordinary ->
-                    projectionSessionIdOpt |> Option.iter branches.RegisterOwned
-                    do! normalTransform caps projectionSessionIdOpt inObj outObj
+                projectionSessionIdOpt |> Option.iter branches.RegisterOwned
+                do! normalTransform caps projectionSessionIdOpt inObj outObj
             }
 
     /// Provider-facing transform composition: order only.
-    /// Relay cut → Strength replay/trace → Companion/XWire → speculation;
+    /// Relay cut → Companion/XWire → pair;
     /// retired raw history is removed before any downstream context owner.
     let create (boot: PluginBoot.Boot) (host: PluginHostWiring.Host) : obj -> obj -> Task<unit> =
         let caps = defaultCapabilities boot host

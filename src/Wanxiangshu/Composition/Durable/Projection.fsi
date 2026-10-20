@@ -2,12 +2,8 @@ namespace Wanxiangshu.Composition.Durable
 
 open Wanxiangshu.Change
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
-open Wanxiangshu.Enforcer
-open Wanxiangshu.Enforcer.Guidance
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session
@@ -15,22 +11,17 @@ open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.OpenCode.Host.PairProgramming
-open Wanxiangshu.OpenCode.Host.RequirementGrounding
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 type SessionAgentProjection =
     { Companion: CompanionProjection option
       XTrace: XTraceProjectionState option
-      Blog: BlogProjectionState option
+
       PrefixEpoch: ActivePrefixEpoch option
       Handles: AgentLinkageProjection option
       ProviderFailures: ProviderFailureProjection option
       PromptAuthority: PromptAuthority.PromptAuthorityProjection option
-      Enforcement: EnforcementProjectionState option
-      BloggerCycles: BloggerCycleProjectionState option
       Guidelines: GuidelineProjectionState option
-      RequirementGrounding: RequirementGroundingProjectionState option
-      TipDelivery: TipDeliveryProjectionState option
       SessionStartedAt: SessionStartedAtProjectionState option
       DelegatedToolEstimate: DelegatedToolEstimateProjectionState option }
 
@@ -52,7 +43,6 @@ module AgentProjection =
     val emptySession: SessionAgentProjection
     val empty: AgentProjectionSet
     val tryFind: sessionId: SessionId -> projection: AgentProjectionSet -> SessionAgentProjection option
-    val mainSealedForBlogger: mainSessionId: SessionId -> projection: AgentProjectionSet -> bool
     val hasActiveOrchestratorJobs: projection: AgentProjectionSet -> bool
     val activeOrchestratorJobPairs: projection: AgentProjectionSet -> (ManagerJobId * SessionId) list
 

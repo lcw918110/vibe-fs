@@ -1,6 +1,5 @@
 namespace Wanxiangshu.Execution.Session.ChatExecution
 
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
@@ -29,8 +28,7 @@ module AcceptedChatExecutionEvidence =
 type ProviderStartedEvidence =
     { Accepted: AcceptedChatExecutionEvidence
       ProviderRun: ProviderRunIdentity
-      RequestKind: ProviderRequestKind
-      ProjectionChoice: XProjectionChoice }
+      RequestKind: ProviderRequestKind }
 
 [<RequireQualifiedAccess>]
 module ProviderStartedEvidence =

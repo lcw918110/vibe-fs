@@ -21,8 +21,8 @@ type FissionTakeoverProjection =
       LaneSessionId: SessionId
       PromptKey: PromptKey option
       PhysicalUserMessageId: PhysicalUserMessageId option
-      AggregateWorkRecordRef: BlobRef
-      AggregateWorkRecordDigest: BlobDigest }
+      AggregateViewRef: BlobRef
+      AggregateViewDigest: BlobDigest }
 
 [<CLIMutable>]
 type FissionGroupProjection =
@@ -33,8 +33,8 @@ type FissionGroupProjection =
       LaneCount: int
       LaneSessions: Map<int, SessionId>
       LanePrompts: Map<int, string>
-      OwnerWorkRecordRef: BlobRef
-      OwnerWorkRecordDigest: BlobDigest
+      OwnerViewRef: BlobRef
+      OwnerViewDigest: BlobDigest
       PreFissionCompletionIds: Set<string>
       LaneWork: Map<int, BlobRef * BlobDigest>
       LaneProviderRuns: Map<int, ProviderRunIdentity>
@@ -74,8 +74,8 @@ module FissionProjection =
            LaneCount: int
            LaneSessions: SessionId list
            LanePrompts: string list
-           OwnerWorkRecordRef: BlobRef
-           OwnerWorkRecordDigest: BlobDigest
+           OwnerViewRef: BlobRef
+           OwnerViewDigest: BlobDigest
            PreFissionCompletionIds: string list |}
 
     type private LaneMaterializedPayload =
@@ -84,8 +84,8 @@ module FissionProjection =
            LaneIndex: int
            LaneSessionId: SessionId
            ProviderRun: ProviderRunIdentity
-           WorkRecordRef: BlobRef
-           WorkRecordDigest: BlobDigest |}
+           ViewRef: BlobRef
+           ViewDigest: BlobDigest |}
 
     type private CompletionCapturedPayload =
         {| GroupId: string
@@ -112,8 +112,8 @@ module FissionProjection =
            LaneIndex: int
            LaneSessionId: SessionId
            PhysicalUserMessageId: PhysicalUserMessageId
-           AggregateWorkRecordRef: BlobRef
-           AggregateWorkRecordDigest: BlobDigest |}
+           AggregateViewRef: BlobRef
+           AggregateViewDigest: BlobDigest |}
 
     type private TakeoverClaimedPayload =
         {| GroupId: string
@@ -121,16 +121,16 @@ module FissionProjection =
            LaneIndex: int
            LaneSessionId: SessionId
            PromptKey: PromptKey
-           AggregateWorkRecordRef: BlobRef
-           AggregateWorkRecordDigest: BlobDigest |}
+           AggregateViewRef: BlobRef
+           AggregateViewDigest: BlobDigest |}
 
     type private ConvergedPayload =
         {| GroupId: string
            OwnerSessionId: SessionId
            TerminalLaneSessionId: SessionId
            TerminalProviderRun: ProviderRunIdentity
-           AggregateWorkRecordRef: BlobRef
-           AggregateWorkRecordDigest: BlobDigest |}
+           AggregateViewRef: BlobRef
+           AggregateViewDigest: BlobDigest |}
 
     type private FailedPayload =
         {| GroupId: string
@@ -190,8 +190,8 @@ module FissionProjection =
         && existing.LaneCount = payload.LaneCount
         && (existing.LaneSessions |> Map.toList |> List.map snd) = payload.LaneSessions
         && (existing.LanePrompts |> Map.toList |> List.map snd) = payload.LanePrompts
-        && existing.OwnerWorkRecordRef = payload.OwnerWorkRecordRef
-        && existing.OwnerWorkRecordDigest = payload.OwnerWorkRecordDigest
+        && existing.OwnerViewRef = payload.OwnerViewRef
+        && existing.OwnerViewDigest = payload.OwnerViewDigest
         && existing.PreFissionCompletionIds = Set.ofList payload.PreFissionCompletionIds
 
     let private admissionPayloadValid (payload: AdmittedPayload) =
@@ -214,8 +214,8 @@ module FissionProjection =
                 payload.LanePrompts
                 |> List.mapi (fun index prompt -> index, prompt)
                 |> Map.ofList
-              OwnerWorkRecordRef = payload.OwnerWorkRecordRef
-              OwnerWorkRecordDigest = payload.OwnerWorkRecordDigest
+              OwnerViewRef = payload.OwnerViewRef
+              OwnerViewDigest = payload.OwnerViewDigest
               PreFissionCompletionIds = Set.ofList payload.PreFissionCompletionIds
               LaneWork = Map.empty
               LaneProviderRuns = Map.empty
@@ -261,7 +261,7 @@ module FissionProjection =
             Error(FissionProjectionRejection.LaneSessionMismatch payload.LaneIndex)
         | None, _, _ -> Error(FissionProjectionRejection.LaneSessionMismatch payload.LaneIndex)
         | Some _, Some existing, providerRun when
-            existing = (payload.WorkRecordRef, payload.WorkRecordDigest)
+            existing = (payload.ViewRef, payload.ViewDigest)
             && providerRun = Some payload.ProviderRun
             ->
             Ok state
@@ -269,8 +269,7 @@ module FissionProjection =
         | Some _, None, _ ->
             let next =
                 { group with
-                    LaneWork =
-                        Map.add payload.LaneIndex (payload.WorkRecordRef, payload.WorkRecordDigest) group.LaneWork
+                    LaneWork = Map.add payload.LaneIndex (payload.ViewRef, payload.ViewDigest) group.LaneWork
                     LaneProviderRuns = Map.add payload.LaneIndex payload.ProviderRun group.LaneProviderRuns }
 
             Ok(replaceGroup state payload.GroupId next)
@@ -356,15 +355,15 @@ module FissionProjection =
         laneSessionId
         promptKey
         physicalUserMessageId
-        aggregateWorkRecordRef
-        aggregateWorkRecordDigest
+        aggregateViewRef
+        aggregateViewDigest
         =
         existing.LaneIndex = laneIndex
         && existing.LaneSessionId = laneSessionId
         && existing.PromptKey = promptKey
         && existing.PhysicalUserMessageId = physicalUserMessageId
-        && existing.AggregateWorkRecordRef = aggregateWorkRecordRef
-        && existing.AggregateWorkRecordDigest = aggregateWorkRecordDigest
+        && existing.AggregateViewRef = aggregateViewRef
+        && existing.AggregateViewDigest = aggregateViewDigest
 
     let private foldTakeover
         (state: FissionProjectionState)
@@ -373,16 +372,16 @@ module FissionProjection =
         laneSessionId
         promptKey
         physicalUserMessageId
-        aggregateWorkRecordRef
-        aggregateWorkRecordDigest
+        aggregateViewRef
+        aggregateViewDigest
         =
         let takeover: FissionTakeoverProjection =
             { LaneIndex = laneIndex
               LaneSessionId = laneSessionId
               PromptKey = promptKey
               PhysicalUserMessageId = physicalUserMessageId
-              AggregateWorkRecordRef = aggregateWorkRecordRef
-              AggregateWorkRecordDigest = aggregateWorkRecordDigest }
+              AggregateViewRef = aggregateViewRef
+              AggregateViewDigest = aggregateViewDigest }
 
         match Map.tryFind groupId state.Groups with
         | None -> Error(FissionProjectionRejection.UnknownGroup groupId)
@@ -399,8 +398,8 @@ module FissionProjection =
                 laneSessionId
                 promptKey
                 physicalUserMessageId
-                aggregateWorkRecordRef
-                aggregateWorkRecordDigest
+                aggregateViewRef
+                aggregateViewDigest
             ->
             Ok state
         | Some { Takeover = Some _ } -> Error(FissionProjectionRejection.ConflictingTakeover groupId)
@@ -414,8 +413,8 @@ module FissionProjection =
             payload.LaneSessionId
             (Some payload.PromptKey)
             None
-            payload.AggregateWorkRecordRef
-            payload.AggregateWorkRecordDigest
+            payload.AggregateViewRef
+            payload.AggregateViewDigest
 
     let private foldTakeoverStarted (state: FissionProjectionState) (payload: TakeoverStartedPayload) =
         foldTakeover
@@ -425,8 +424,8 @@ module FissionProjection =
             payload.LaneSessionId
             None
             (Some payload.PhysicalUserMessageId)
-            payload.AggregateWorkRecordRef
-            payload.AggregateWorkRecordDigest
+            payload.AggregateViewRef
+            payload.AggregateViewDigest
 
     let private decideConverged
         (state: FissionProjectionState)
@@ -437,8 +436,8 @@ module FissionProjection =
         | FissionGroupTerminal.Converged(existingLane, existingRun, existingRef, existingDigest), _ when
             existingLane = payload.TerminalLaneSessionId
             && existingRun = payload.TerminalProviderRun
-            && existingRef = payload.AggregateWorkRecordRef
-            && existingDigest = payload.AggregateWorkRecordDigest
+            && existingRef = payload.AggregateViewRef
+            && existingDigest = payload.AggregateViewDigest
             ->
             Ok state
         | FissionGroupTerminal.Converged _, _
@@ -454,8 +453,8 @@ module FissionProjection =
                         FissionGroupTerminal.Converged(
                             payload.TerminalLaneSessionId,
                             payload.TerminalProviderRun,
-                            payload.AggregateWorkRecordRef,
-                            payload.AggregateWorkRecordDigest
+                            payload.AggregateViewRef,
+                            payload.AggregateViewDigest
                         ) }
 
             Ok

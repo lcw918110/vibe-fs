@@ -14,6 +14,6 @@ module ProviderSystemTransform =
     /// None otherwise (work-031 stage guidance).
     val createWith:
         role: (SessionId -> Role option) ->
-        isReplica: (SessionId -> bool) ->
-        planStage: (SessionId -> string option) ->
+        planStage: (SessionId -> Task<string option>) ->
+
             (obj -> obj -> Task<unit>)

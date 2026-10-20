@@ -4,15 +4,15 @@ import { parse as parseToml } from 'smol-toml'
 import * as join from '../../../dist/Execution/Delegation/Fork/OpenCode/JoinSurface.js'
 import { scanText } from '../../../scripts/checks/provider-leak-gate.mjs'
 
-const completed = (agentName, workRecord = '') => ({
-  kind: 'completed', agentId: 'private-agent', agentName, role: 'Engineer', runId: 'private-run', workRecord,
+const completed = (agentName, view = '') => ({
+  kind: 'completed', agentId: 'private-agent', agentName, role: 'Engineer', runId: 'private-run', view,
 })
 
 test('WHAT[participant-horizon-003] actual Join renderer distinguishes return, failure and abandonment without control DTO fields', () => {
   for (const name of ['Ada', 'engineer', 'weird raw name']) {
-    const text = join.renderBatch('en', [completed(name, 'Chronicle\nRecent work')])
+    const text = join.renderBatch('en', [completed(name, 'Summary\nRecent work')])
     assert.ok(text.includes(`${name} has returned.`))
-    assert.ok(text.includes('Chronicle'))
+    assert.ok(text.includes('Summary'))
     assert.ok(text.includes('Recent work'))
     assert.deepEqual(parseToml(text), {})
     assert.ok(!text.includes('private-agent'))

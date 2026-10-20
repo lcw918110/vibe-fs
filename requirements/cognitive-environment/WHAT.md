@@ -70,9 +70,7 @@ Manager assessment 的提示由 Role Law、Quality Ledger（八维观察抓手�
 
 结对指引的承载位置与重放遵循 prefix-stability-010。真实存在的 `skill` 工具保持完全可用。
 
-## [015] Blogger 临时记账提示
 
-仅对模型名前缀白名单（当前为 `step-3.5-flash`）中的 Blogger，每次 Provider 请求可注入一次直接记账的 assistant 文本提示。提示只要求把当前材料提炼为 `charge / occurrence / settlement / consequence` 后调用 `chronicle`，不教授额外领域知识；提示只作用于当次转换，不写入日志或历史。
 
 ## [016] Pair Hint 不承载微原语行为提醒
 

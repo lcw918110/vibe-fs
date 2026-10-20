@@ -19,8 +19,7 @@ const isSome = (value) => value !== null
 
 const PERMISSION_NAMES = [
   'Fork', 'Join', 'Horizon', 'Advisor', 'TodoWrite', 'Fission', 'Read', 'Write', 'Edit', 'Fetch', 'Glob', 'Grep', 'Move',
-  'Remove', 'Inspect', 'Behavior', 'Exec', 'Pty', 'Network', 'ReviewAssessment', 'Chronicle',
-  'Finality', 'BashHoneypot',
+  'Remove', 'Inspect', 'Behavior', 'Exec', 'Pty', 'Network', 'ReviewAssessment',
 ]
 
 const toolPermissionByName = Object.fromEntries(PERMISSION_NAMES.map((n) => [n, n]))
@@ -38,10 +37,11 @@ const fsPermissionsOf = (role) =>
 const MEMBERS_BY_PERMISSION = {
   Read: ['cat', 'stat', 'whereAll', 'where'],
   Glob: ['ls'],
+  Grep: ['rg'],
   Write: ['write', 'mkdir'],
   Move: ['mv'],
   Remove: ['rm'],
-  Exec: ['run'],
+  Exec: ['call'],
   Fork: ['fork', 'dag'],
   Join: ['join'],
   Fission: ['fission'],
@@ -55,11 +55,12 @@ const BINDING_BY_MEMBER = {
   mv: 'js.mv',
   cat: 'js.cat',
   ls: 'js.ls',
+  rg: 'js.rg',
   stat: 'js.stat',
   mkdir: 'js.mkdir',
   whereAll: 'js.whereAll',
   where: 'js.where',
-  run: 'js.run',
+  call: 'js.call',
   fork: 'js.fork',
   dag: 'js.dag',
   join: 'js.join',
@@ -70,8 +71,8 @@ const BINDING_BY_MEMBER = {
 
 const MEMBER_ORDER = [
   'write', 'rm', 'mv',
-  'cat', 'ls', 'stat', 'mkdir', 'whereAll', 'where',
-  'run',
+  'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where',
+  'call',
   'fork',
   'dag',
   'join',
@@ -96,7 +97,7 @@ const layersOf = (s) =>
   )
 
 test('WHAT[repository-programming-001] JS001_generate_none_when_no_filesystem_capability', () => {
-  for (const role of ['Inquiry', 'Distiller', 'Blogger']) {
+  for (const role of ['Inquiry', 'Distiller']) {
     const perms = caps(...permsOf(rolePermissions(role.toLowerCase())))
     assert.equal(isNone(surface(role, rolePermissions(role.toLowerCase()))), true, `${role} must get no js-* surface`)
     assert.equal(isGeneratedToolName(role, perms, `todowrite-for-${role.toLowerCase()}`), false)
@@ -113,7 +114,7 @@ test('WHAT[repository-programming-001] JS001_generate_none_when_no_filesystem_ca
 })
 
 test('WHAT[repository-programming-001] JS001_role_projection_is_exactly_roles_permissions_intersection', () => {
-  for (const role of ['Manager', 'Orchestrator', 'Engineer', 'Coder', 'Inspector', 'Browser', 'Inquiry', 'DevOps', 'Distiller', 'Blogger']) {
+  for (const role of ['Manager', 'Orchestrator', 'Engineer', 'Coder', 'Inspector', 'Browser', 'Inquiry', 'DevOps', 'Distiller']) {
     const fsPerms = fsPermissionsOf(role)
     const result = surface(role, rolePermissions(role.toLowerCase()))
     if (fsPerms.length === 0) {

@@ -26,9 +26,9 @@ const STRENGTH_IMPORT_RE = /^\s*open\s+Wanxiangshu\.Strength(?:\.|\b)/
 const STRENGTH_API_RE = /\btryApplyStrength[A-Za-z0-9_']*\b/g
 const POLICY_IDENTIFIER_RE = /\b[A-Za-z_][A-Za-z0-9_']*\b/g
 const FOREIGN_OWNER_REFERENCE_RE =
-  /\bWanxiangshu\.(?:Context|Enforcer|Interaction|Strength|Execution\.Session\.Recovery)(?:\.[A-Za-z_][A-Za-z0-9_']*)*/g
+  /\bWanxiangshu\.(?:Context|Interaction|Execution\.Session\.Recovery)(?:\.[A-Za-z_][A-Za-z0-9_']*)*/g
 const FOREIGN_MATERIALIZATION_RE =
-  /\b(?:ActivatePrefixEpoch|InsertBlogFrames|BlogFramesIntent|InsertRepair|SuppressTransportOnly|ReanchorAfterCompaction|CompanionProjectionBuilder)\b|\bProjectionConstants\.RepairInstruction\b/g
+  /\b(?:ActivatePrefixEpoch|InsertRepair|SuppressTransportOnly|ReanchorAfterCompaction)\b|\bProjectionConstants\.RepairInstruction\b/g
 const PROJECTION_CORE_FILE_SET = new Set(PROVIDER_PROJECTION_CORE_FILES)
 
 /**

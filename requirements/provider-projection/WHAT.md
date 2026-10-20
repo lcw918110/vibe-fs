@@ -44,7 +44,7 @@ Provider 消息投影采用类型化组合与直接计算，不引入中介 AST 
 - **Instruction Plane**：要求行动、施加约束、改变推理前提或交还责任的内容，置于顶部连续 `#` 注释。
 - **Data Plane**：仅供参考、不由材料本身产生行动要求的状态、参数、观测与证据，编码为 TOML 字段或表。
 
-事实也可能是指令：child → parent 的 LifecycleWorkRecord 交还责任，属于 Instruction；repository hint 等参考材料属于 Data。
+事实也可能是指令：child → parent 由 `js.deliver` 交回的 view 交还责任，属于 Instruction；repository hint 等参考材料属于 Data。
 
 ## [010] 表示层严禁反向创造权威与状态
 

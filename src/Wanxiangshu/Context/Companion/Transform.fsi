@@ -2,8 +2,6 @@ namespace Wanxiangshu.Context.Companion
 
 open System.Collections.Generic
 open System.Threading.Tasks
-open Wanxiangshu.Context.Companion.Blogger
-open Wanxiangshu.Context.Companion.Blogger.Runtime
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Attachment
 open Wanxiangshu.Foundation.Identity
@@ -12,25 +10,13 @@ open Wanxiangshu.Persistence.Journal
 
 module CompanionTransform =
 
-    val allowsBloggerCompanionForAgentName: agentName: string -> bool
-
-    val coordinateBloggerContext:
-        satellites: CompanionLeaseRuntime ->
-        bloggerHost: IBloggerRuntimeHost ->
-        companion: CompanionHost ->
-        journal: AgentJournal option ->
-        context: BloggerRequestContext ->
-            Task<BloggerCoordinator.DecisionEffect>
-
-    /// Main-session transform: Host view unchanged; material decision is sole coordinator.
+    /// Main-session transform: Host view unchanged.
     val handleCompanionTransform:
         companions: Dictionary<string, CompanionHost> ->
         gate: obj ->
         satellites: CompanionLeaseRuntime ->
-        bloggerHost: IBloggerRuntimeHost ->
         sessionPort: ISessionHostPort ->
         journal: AgentJournal option ->
-        onBloggerCreated: (SessionId -> unit) option ->
         workspaceDirectory: string option ->
         inObj: obj ->
         rawOutObj: obj ->
@@ -40,10 +26,8 @@ module CompanionTransform =
         companions: Dictionary<string, CompanionHost> ->
         gate: obj ->
         satellites: CompanionLeaseRuntime ->
-        bloggerHost: IBloggerRuntimeHost ->
         sessionPort: ISessionHostPort ->
         journal: AgentJournal option ->
-        onBloggerCreated: (SessionId -> unit) option ->
         workspaceDirectory: string option ->
         projectionSessionIdOpt: string option ->
         inObj: obj ->

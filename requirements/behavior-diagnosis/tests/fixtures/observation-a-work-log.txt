@@ -1,1 +1,0 @@
-Coder 修改 `/src/billing/transfer.ts`：`transfer(from, to)` 的 `accountId` 与 `orderId` 均声明为 string。订单号可当作账户号传入，类型检查不拒绝。未引入独立领域类型，转换也未限制在适配器边界。

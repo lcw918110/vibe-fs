@@ -1,7 +1,6 @@
 namespace Wanxiangshu.Composition.Durable
 
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Foundation.Identity
@@ -104,31 +103,10 @@ module CompanionProjectionBridge =
 
 module ContextProjectionBridge =
 
-    let private cyclesOf (projection: AgentProjectionSet) (sessionId: SessionId) =
-        Map.tryFind sessionId projection.Sessions
-        |> Option.bind (fun session -> session.BloggerCycles)
-
-    let private enforcementOf (projection: AgentProjectionSet) (sessionId: SessionId) =
-        Map.tryFind sessionId projection.Sessions
-        |> Option.bind (fun session -> session.Enforcement)
-
-    let private blogOf (projection: AgentProjectionSet) (sessionId: SessionId) =
-        Map.tryFind sessionId projection.Sessions
-        |> Option.bind (fun session -> session.Blog)
-
-    let private prefixEpochOf (projection: AgentProjectionSet) (sessionId: SessionId) =
-        Map.tryFind sessionId projection.Sessions
-        |> Option.bind (fun session -> session.PrefixEpoch)
-
     let private checkpointWindowOf (projection: AgentProjectionSet) (sessionId: SessionId) =
         projection.ViewCheckpoints
         |> Map.tryFind sessionId
         |> Option.defaultValue PhaseWindow.emptyWindow
-
-    let private turnOfCheckpoint (projection: AgentProjectionSet) (sessionId: SessionId) (callId: ToolCallId) =
-        AgentProjection.tryFind sessionId projection
-        |> Option.bind (fun session -> session.XTrace)
-        |> Option.bind (XTraceProjection.tryTurnOfToolCallId callId)
 
     let private setCheckpointWindow
         (sessionId: SessionId)
@@ -149,77 +127,21 @@ module ContextProjectionBridge =
         |> PhaseWindow.appendCheckpoint callId
         |> fun updated -> setCheckpointWindow sessionId updated projection
 
-    let private pruneCommittedPrefix projection sessionId cutoffExclusive =
-        checkpointWindowOf projection sessionId
-        |> PhaseWindow.pruneBefore (turnOfCheckpoint projection sessionId) cutoffExclusive
-        |> fun updated -> setCheckpointWindow sessionId updated projection
-
     let private clearCheckpointGeneration projection sessionId =
         { projection with
             ViewCheckpoints = Map.remove sessionId projection.ViewCheckpoints }
 
-    let private applyChange (projection: AgentProjectionSet) (change: ContextProjectionChange) =
-        match change with
-        | ContextProjectionChange.BloggerCyclesSet(sessionId, cycles) ->
-            ProjectionUpdate.updateSession
-                sessionId
-                (fun session ->
-                    { session with
-                        BloggerCycles = Some cycles })
-                projection
-        | ContextProjectionChange.EnforcementSet(sessionId, enforcement) ->
-            ProjectionUpdate.updateSession
-                sessionId
-                (fun session ->
-                    { session with
-                        Enforcement = Some enforcement })
-                projection
-        | ContextProjectionChange.BlogSet(sessionId, blog) ->
-            ProjectionUpdate.updateSession sessionId (fun session -> { session with Blog = Some blog }) projection
-        | ContextProjectionChange.PrefixEpochSet(sessionId, epoch) ->
-            ProjectionUpdate.updateSession
-                sessionId
-                (fun session ->
-                    { session with
-                        PrefixEpoch = Some epoch })
-                projection
-        | ContextProjectionChange.BlogReanchored sessionId ->
-            ProjectionUpdate.updateSession
-                sessionId
-                (fun session ->
-                    { session with
-                        Blog = session.Blog |> Option.map BlogProjection.applyReanchor })
-                projection
-        | ContextProjectionChange.AuxiliaryVisibilityRetired sessionId ->
-            ProjectionUpdate.updateSession sessionId ProjectionUpdate.retireAuxiliaryInjectionVisibility projection
-
-    let private foldOwned
-        (projection: AgentProjectionSet)
-        (fact: ContextFactCases)
-        : Result<AgentProjectionSet, FoldRejection> =
-        match
-            ContextFactFold.fold
-                (cyclesOf projection)
-                (enforcementOf projection)
-                (blogOf projection)
-                (prefixEpochOf projection)
-                fact
-        with
-        | Ok changes -> Ok(List.fold applyChange projection changes)
-        | Error rejection ->
-            FoldRejection.reject (ContextFoldRejection.fact rejection) (ContextFoldRejection.message rejection)
+    /// context-compression-019: a reanchor retires the auxiliary injection
+    /// visibility of the old provider horizon. The durable facts stay as audit
+    /// history; only the visible floor moves.
+    let private retireAuxiliaryVisibility projection sessionId =
+        ProjectionUpdate.updateSession sessionId ProjectionUpdate.retireAuxiliaryInjectionVisibility projection
 
     let fold (projection: AgentProjectionSet) (fact: ContextFactCases) : Result<AgentProjectionSet, FoldRejection> =
         match fact with
         | ContextFactCases.ViewCheckpointCommitted payload ->
             Ok(appendCheckpoint projection payload.SessionId payload.ToolCallId)
-        | ContextFactCases.PrefixRebaseCommitted payload ->
-            foldOwned projection fact
-            |> Result.map (fun updated -> pruneCommittedPrefix updated payload.SessionId payload.CutoffExclusive)
         | ContextFactCases.ContextReanchored payload ->
-            foldOwned projection fact
-            |> Result.map (fun updated -> clearCheckpointGeneration updated payload.SessionId)
+            Ok(clearCheckpointGeneration (retireAuxiliaryVisibility projection payload.SessionId) payload.SessionId)
         | ContextFactCases.TenureReanchored payload ->
-            foldOwned projection fact
-            |> Result.map (fun updated -> clearCheckpointGeneration updated payload.SessionId)
-        | _ -> foldOwned projection fact
+            Ok(clearCheckpointGeneration (retireAuxiliaryVisibility projection payload.SessionId) payload.SessionId)

@@ -1,1 +1,0 @@
-Coder 先改 `/src/auth/session.ts` 实现会话过期检查，再补 `/tests/auth.test.ts`。测试与实现同时变绿，没有先红的失败基线。需求未在生产改动之前以行为测试提出指控。

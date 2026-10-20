@@ -2,7 +2,6 @@ namespace Wanxiangshu.Context.Companion
 
 open Fable.Core
 open Fable.Core.JsInterop
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Foundation
@@ -27,60 +26,17 @@ module CompressionSurface =
     let private text (value: obj) : string =
         if isNullish value then "" else string value
 
-    let private intValue (value: obj) : int = int (text value)
-
-    let private int64Value (value: obj) : int64 = int64 (text value)
-
     let private optionalText (value: obj) : string option =
         if isNullish value then None else Some(text value)
-
-    let private snapshotOfJs (value: obj) : PrefixSnapshot =
-        { FrozenRecordPrefixRef = BlobRef.create (text value?ref)
-          FrozenRecordPrefixDigest = BlobDigest.create (text value?frozenDigest)
-          CutoffExclusive = intValue value?cutoff
-          CoveredPrefixDigest = text value?prefixDigest
-          SealRoot = text value?sealRoot
-          SyntheticMessageId = text value?syntheticId }
-
-    let private probeOfJs (value: obj) : PrefixProbe =
-        { ProbeId = text value?probeId
-          BasedOnEpochId = PrefixEpochId.create (int64Value value?basedOnEpoch)
-          Candidate = snapshotOfJs value?candidate }
-
-    let private reasonName (reason: NoCandidateReason) : string =
-        match reason with
-        | NoCandidateReason.NoCoverage -> "NoCoverage"
-        | NoCandidateReason.WouldRetreat _ -> "WouldRetreat"
-        | NoCandidateReason.NotNewerThanCommitted -> "NotNewerThanCommitted"
-        | NoCandidateReason.CutoffProofFailed _ -> "CutoffProofFailed"
-        | NoCandidateReason.BeyondPhaseBoundary _ -> "BeyondPhaseBoundary"
-        | NoCandidateReason.MaterialBeyondBoundary _ -> "MaterialBeyondBoundary"
-
-    let private reasonOf (value: obj) : NoCandidateReason =
-        match text value with
-        | "WouldRetreat" -> NoCandidateReason.WouldRetreat(0, 0)
-        | "NotNewerThanCommitted" -> NoCandidateReason.NotNewerThanCommitted
-        | "CutoffProofFailed" -> NoCandidateReason.CutoffProofFailed("", "")
-        | "BeyondPhaseBoundary" -> NoCandidateReason.BeyondPhaseBoundary(0, 0)
-        | "MaterialBeyondBoundary" -> NoCandidateReason.MaterialBeyondBoundary(0, 0)
-        | _ -> NoCandidateReason.NoCoverage
-
-    let private optionObj (value: 'a option) : obj =
-        match value with
-        | None -> null
-        | Some item -> box item
 
     let private requestKindOf (value: obj) : ProviderRequestKind option =
         match text value |> fun value -> value.ToLowerInvariant() with
         | "workmain"
         | "work-main" -> Some ProviderRequestKind.WorkMain
-        | "bloggermain"
-        | "blogger-main" -> Some ProviderRequestKind.BloggerMain
         | "interactionrepair"
         | "interaction-repair" -> Some ProviderRequestKind.InteractionRepair
-        | "strengthreplica"
-        | "strength-replica" -> Some ProviderRequestKind.StrengthReplica
         | _ -> None
+
 
     let private requestKindResult value : Result<ProviderRequestKind, string> =
         if isNullish value then
@@ -90,18 +46,7 @@ module CompressionSurface =
             | Some requestKind -> Ok requestKind
             | None -> Error(sprintf "unknown request kind: %s" (text value))
 
-    let private bloggerRetryErrorName (error: BloggerRetryError) : string =
-        match error with
-        | BloggerRetryError.MissingProjection -> "MissingProjection"
-        | BloggerRetryError.NoActiveBloggerRun -> "NoActiveBloggerRun"
 
-    let nextBloggerRequest (failedKind: string) (hasSquashMaterial: bool) : string =
-        match requestKindOf failedKind with
-        | None -> bloggerRetryErrorName BloggerRetryError.MissingProjection
-        | Some kind ->
-            match BloggerRetryPolicy.nextRequest kind hasSquashMaterial with
-            | Ok next -> ProviderRequestKind.label next
-            | Error error -> bloggerRetryErrorName error
 
     let private outcomeResult (value: obj) : Result<AttemptOutcome, string> =
         match text value with
@@ -120,18 +65,9 @@ module CompressionSurface =
             | Some role -> Ok role
             | None -> Error(sprintf "unknown role: %s" (text value))
 
-    let private attemptProbeOf (value: obj) : PrefixProbe = probeOfJs value
-
     let private attemptPlanCore (value: obj) : Result<AttemptPlan, string> =
         match roleResult value?role, requestKindResult value?kind with
         | Ok role, Ok requestKind ->
-
-            let selectProbe () =
-                if not (isNullish value?probe) then
-                    Ok(attemptProbeOf value?probe)
-                else
-                    Error(reasonOf value?noCandidateReason)
-
             ParticipantIdentity.resolveAtRoot (ManagedAgentCatalog.nameOf role)
             |> Result.mapError (fun error -> sprintf "invalid participant identity: %A" error)
             |> Result.bind (fun participantIdentity ->
@@ -147,10 +83,8 @@ module CompressionSurface =
                     (PhysicalUserMessageId.create "surface-user")
                     (ProviderRunIdentity.create "surface-provider-run")
                     (PromptAuthority.PromptOrigin.AuthorityRoot PromptAuthority.RootAuthorityKind.HumanRoot)
-                    requestKind
-                    (not (isNullish value?policyAllowsProbe) && unbox<bool> value?policyAllowsProbe
-                     || not (isNullish value?mayRecover) && unbox<bool> value?mayRecover)
-                    selectProbe)
+                    requestKind)
+
         | Error error, _
         | _, Error error -> Error error
 
@@ -171,7 +105,6 @@ module CompressionSurface =
         | ToolPermission.Exec -> "Exec"
         | ToolPermission.Pty -> "Pty"
         | ToolPermission.ReviewAssessment -> "ReviewAssessment"
-        | ToolPermission.Chronicle -> "Chronicle"
         | ToolPermission.Fetch -> "Fetch"
         | ToolPermission.Finality -> "Finality"
         | ToolPermission.BashHoneypot -> "BashHoneypot"
@@ -197,20 +130,11 @@ module CompressionSurface =
                 | PersonaOrigin.InheritedFromOwner -> "InheritedFromOwner" |}
 
     let private attemptPlanView (plan: AttemptPlan) : obj =
-        let choice, probeId =
-            match plan.Profile.ProjectionChoice with
-            | XProjectionChoice.UseCommittedEpoch -> "UseCommittedEpoch", None
-            | XProjectionChoice.UsePrefixProbe probe -> "UsePrefixProbe", Some probe.ProbeId
-
         box
-            {| choice = choice
-               probeId = optionObj probeId
-               noProbeReason = optionObj (plan.NoProbeReason |> Option.map reasonName)
-               participant = plan.Profile.Authority.SelectedAgent
+            {| participant = plan.Profile.Authority.SelectedAgent
                canonicalRole = Roles.roleLabel plan.Profile.CanonicalRole
                role = Roles.roleLabel plan.Profile.CanonicalRole
                requestKind = ProviderRequestKind.label plan.Profile.RequestKind
-               projectionChoice = choice
                participantIdentity = participantIdentityToJs plan.Profile.Authority.ParticipantIdentity
                systemPromptId = SystemPromptId.value plan.Profile.SystemPromptId
                toolCapabilities =
@@ -228,9 +152,8 @@ module CompressionSurface =
         | Ok plan -> attemptPlanView plan
         | Error error -> box {| ok = false; error = error |}
 
-    /// JSON/opaque owner API for semantic tests. `handle` is deliberately opaque:
-    /// only `promotableProbeId` can consume it, while the profile observations stay
-    /// plain JSON.
+    /// JSON/opaque owner API for semantic tests.
+
     let private attemptPlanWithHandle (value: obj) : obj =
         match attemptPlanCore value with
         | Error error -> box {| ok = false; error = error |}
@@ -241,37 +164,20 @@ module CompressionSurface =
             box
                 {| choice = viewObject?choice
                    probeId = viewObject?probeId
-                   noProbeReason = viewObject?noProbeReason
                    participant = viewObject?participant
                    canonicalRole = viewObject?canonicalRole
                    role = viewObject?role
                    requestKind = viewObject?requestKind
-                   projectionChoice = viewObject?projectionChoice
                    participantIdentity = viewObject?participantIdentity
                    systemPromptId = viewObject?systemPromptId
                    toolCapabilities = viewObject?toolCapabilities
                    handle = box (AttemptPlanHandle plan) |}
 
-    let private promotableProbeId (value: obj) (outcome: string) : obj =
-        let handleValue = value?handle
-
-        if isNullish handleValue then
-            null
-        else
-            let handle = unbox<AttemptPlanHandle> handleValue
-
-            match outcomeResult (box outcome) with
-            | Error _ -> null
-            | Ok outcome ->
-                match AttemptPlanner.promotableProbe handle.Value outcome with
-                | None -> null
-                | Some probe -> box probe.ProbeId
-
     let attemptPlanner =
         box
             {| plan = (fun value -> attemptPlanWithHandle value)
-               attemptPlan = (fun value -> attemptPlan value)
-               promotableProbeId = (fun value outcome -> promotableProbeId value outcome) |}
+               attemptPlan = (fun value -> attemptPlan value) |}
+
 
     let private terminalValidityResult (value: string) : Result<unit, TerminalValidity.Rejection> =
         TerminalValidity.check value
@@ -307,29 +213,6 @@ module CompressionSurface =
             box
                 {| valid = false
                    rejection = terminalRejectionName rejection |}
-
-    let terminalRequestOwnership (value: obj) : string =
-        let requestId = BloggerRequestId.create (text value?requestId)
-
-        let openRequestId =
-            optionalText value?openRequestId |> Option.map BloggerRequestId.create
-
-        let openPromptKey = optionalText value?openPromptKey |> Option.map PromptKey.create
-
-        let parent: BloggerTerminalParentEvidence option =
-            optionalText value?parentPromptKey
-            |> Option.map (fun promptKey ->
-                let isInteractionRepair = optionalText value?parentOrigin = Some "InteractionRepair"
-
-                { PromptKey = PromptKey.create promptKey
-                  IsRequestScopedRepair =
-                    isInteractionRepair
-                    && PromptAuthority.repairPayloadBelongsToRequest requestId (text value?parentPayloadDigest) })
-
-        match BloggerRequestOwnership.decide requestId openRequestId openPromptKey parent with
-        | BloggerTerminalRequestOwnership.Current -> "Current"
-        | BloggerTerminalRequestOwnership.Superseded -> "Superseded"
-        | BloggerTerminalRequestOwnership.Unproven -> "Unproven"
 
     let diagnosticEmit (operation: string) (fields: obj array) : unit =
         let pairs =

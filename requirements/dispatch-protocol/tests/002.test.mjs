@@ -19,7 +19,6 @@ const personas = {
   manager: 'Lead',
 }
 const rootSelection = (participant) => {
-  const role = participant === 'predictor' ? 'inspector' : participant
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -27,7 +26,7 @@ const rootSelection = (participant) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant,
-      role,
+      role: participant,
       selectedTier: 'deep',
       persona: personas[participant] ?? 'Unknown',
       personaCatalogVersion: 1,
@@ -206,7 +205,6 @@ const personas = {
   manager: 'Lead',
 }
 const rootSelection = (participant) => {
-  const role = participant === 'predictor' ? 'inspector' : participant
   return {
     kind: 'RootSelection',
     ownerSession: null,
@@ -214,7 +212,7 @@ const rootSelection = (participant) => {
     ownerAuthorityRoot: null,
     participantIdentity: {
       participant,
-      role,
+      role: participant,
       selectedTier: 'deep',
       persona: personas[participant] ?? 'Unknown',
       personaCatalogVersion: 1,
@@ -250,7 +248,7 @@ test('WHAT[dispatch-protocol-002] HOST_004_stale_idle_repair_is_abandoned_at_the
     assert.equal(opened.ok, true, opened.ok ? '' : JSON.stringify(opened.error))
     try {
       const session = 'ses_idle_race'
-      const accepted = await dispatch.acceptHumanRoot(opened.journal, session, 'msg-root', 'blogger')
+      const accepted = await dispatch.acceptHumanRoot(opened.journal, session, 'msg-root', 'orchestrator')
       assert.equal(accepted.ok, true, accepted.ok ? '' : accepted.error)
 
       let sends = 0

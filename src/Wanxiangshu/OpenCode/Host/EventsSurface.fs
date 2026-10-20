@@ -1,6 +1,7 @@
 namespace Wanxiangshu.OpenCode
 
 open System
+open System.Threading.Tasks
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Persistence.Journal
@@ -122,11 +123,15 @@ module EventsSurface =
                 let typed = port :?> IEventObservationPort
                 typed.NotifyTerminal (SessionId.create sessionId) (TerminalOutcome.Completed result)
 
-    let acquireSharedForWorkspace (workspace: string) : obj =
-        match SharedTerminalBus.tryAcquireForWorkspace (Some workspace) with
-        | Some(_, port) -> box port
-        | None -> null
+    let acquireSharedForWorkspace (workspace: string) : Task<obj> =
+        task {
+            match! SharedTerminalBus.tryAcquireForWorkspace (Some workspace) with
+            | Some(_, port) -> return box port
+            | None -> return null
+        }
 
-    let releaseSharedForWorkspace (workspace: string) (port: obj) : unit =
-        let key = RuntimePath.forWorkspace workspace
-        SharedTerminalBus.release (Some key) (Some(port :?> Events.HostEventPort))
+    let releaseSharedForWorkspace (workspace: string) (port: obj) : Task<unit> =
+        task {
+            let! key = RuntimePath.forWorkspace workspace
+            SharedTerminalBus.release (Some key) (Some(port :?> Events.HostEventPort))
+        }

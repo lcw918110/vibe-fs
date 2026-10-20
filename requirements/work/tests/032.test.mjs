@@ -18,7 +18,7 @@ import * as completedTurn from '../../../dist/Interaction/Repair/CompletedTurnSu
 
 test('WHAT[work-032] non-Plan roles never receive the Plan-only tool projection', () => {
   const planOnlyPermissions = ['JsPlan', 'DevOpsConsultation', 'Deliver', 'Review']
-  const nonPlanRoles = ['manager', 'engineer', 'devops', 'orchestrator', 'blogger']
+  const nonPlanRoles = ['manager', 'engineer', 'devops', 'orchestrator']
   // Each role label must resolve to a real role, so the deny below is a
   // genuine projection fact and not an unknown-role fallback.
   const roleWitness = {
@@ -26,7 +26,6 @@ test('WHAT[work-032] non-Plan roles never receive the Plan-only tool projection'
     engineer: 'Write',
     devops: 'Exec',
     orchestrator: 'Fork',
-    blogger: 'Chronicle',
   }
   for (const role of nonPlanRoles) {
     assert.equal(isAllowed(role, roleWitness[role]), true, `${role} must resolve as a real role`)
@@ -44,7 +43,7 @@ test('WHAT[work-032] non-Plan empty stops keep requiring interaction repair', ()
 
 test('WHAT[work-032] only Plan may ask the human; Manager and other roles are denied ask', () => {
   assert.equal(isAllowed('plan', 'Ask'), true)
-  for (const role of ['manager', 'engineer', 'devops', 'orchestrator', 'blogger', 'coder', 'inspector']) {
+  for (const role of ['manager', 'engineer', 'devops', 'orchestrator', 'coder', 'inspector']) {
     assert.equal(isAllowed(role, 'Ask'), false, role)
     assert.equal(isAllowed(role, 'DevOpsConsultation'), false, role)
   }

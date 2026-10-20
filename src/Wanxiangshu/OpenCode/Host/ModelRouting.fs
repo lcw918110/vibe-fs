@@ -91,9 +91,6 @@ module ModelRouting =
     [<Emit("$0($1, $2)")>]
     let private callCapacityQuery (query: obj) (role: string) (purpose: string) : obj = jsNative
 
-    [<Emit("$0()")>]
-    let private callPredictorConfiguration (query: obj) : obj = jsNative
-
     [<Emit("typeof $0 === 'number'")>]
     let private isNumber (value: obj) : bool = jsNative
 
@@ -151,7 +148,6 @@ module ModelRouting =
     let private purposeLabel =
         function
         | ModelExecutionPurpose.Normal -> "normal"
-        | ModelExecutionPurpose.ReadonlyDelegate -> "readonly-delegate"
 
     /// The protocol version is a stable contract version of the scheduler ABI,
     /// not an enable switch. A three-parameter JS function silently ignores the
@@ -162,58 +158,16 @@ module ModelRouting =
 
         if isNull declared then
             invalidOp
-                "execution-model-routing: wanxiangshu.mjs must export `routingProtocol = 2`; the scheduler ABI is route(role, running, previous, purpose). Migrate the existing configuration manually (the recommended template in resources/wanxiangshu.mjs shows the new shape); an existing user file is never overwritten."
+                "execution-model-routing: wanxiangshu.mjs must export `routingProtocol = 2`; the scheduler ABI is route(role, running, previous). Migrate the existing configuration manually (the recommended template in resources/wanxiangshu.mjs shows the new shape); an existing user file is never overwritten."
         elif not (isNumber declared) then
             invalidOp
-                "execution-model-routing: wanxiangshu.mjs routingProtocol must be the number 2; the scheduler ABI is route(role, running, previous, purpose). Migrate the existing configuration manually (the recommended template in resources/wanxiangshu.mjs shows the new shape); an existing user file is never overwritten."
+                "execution-model-routing: wanxiangshu.mjs routingProtocol must be the number 2; the scheduler ABI is route(role, running, previous). Migrate the existing configuration manually (the recommended template in resources/wanxiangshu.mjs shows the new shape); an existing user file is never overwritten."
         elif unbox<float> declared <> routingProtocolVersion then
             invalidOp (
                 sprintf
-                    "execution-model-routing: wanxiangshu.mjs declares routingProtocol = %s but this runtime requires 2 (route(role, running, previous, purpose)). Migrate the existing configuration manually (the recommended template in resources/wanxiangshu.mjs shows the new shape); an existing user file is never overwritten."
+                    "execution-model-routing: wanxiangshu.mjs declares routingProtocol = %s but this runtime requires 2 (route(role, running, previous)). Migrate the existing configuration manually (the recommended template in resources/wanxiangshu.mjs shows the new shape); an existing user file is never overwritten."
                     (string declared)
             )
-
-    [<RequireQualifiedAccess>]
-    type PredictorConfiguration =
-        | Configured
-        | NotConfigured
-        | ConfigurationInvalid of reason: string
-
-    let private matchPredictorState (value: obj) : PredictorConfiguration =
-        match string value?state with
-        | "configured" -> PredictorConfiguration.Configured
-        | "unconfigured" -> PredictorConfiguration.NotConfigured
-        | "invalid" ->
-            let reason = if isNull value?reason then "" else string value?reason
-            PredictorConfiguration.ConfigurationInvalid reason
-        | other ->
-            PredictorConfiguration.ConfigurationInvalid(
-                sprintf "predictor configuration query returned unknown state %s" other
-            )
-
-    let private predictorConfigurationOf (value: obj) : PredictorConfiguration =
-        if isNull value then
-            PredictorConfiguration.ConfigurationInvalid "predictor configuration query returned no result"
-        else
-            matchPredictorState value
-
-    /// Read-only existence query owned by the same MJS model configuration:
-    /// absent Predictor slot or empty candidates are not configured; valid
-    /// non-empty targets are configured; a malformed structure is a
-    /// configuration error. It is deliberately independent of capacity and
-    /// provider health, and must not be inferred from one route returning null.
-    let predictorConfiguration (scheduler: obj) : PredictorConfiguration =
-        let query =
-            if isNull scheduler then
-                null
-            else
-                scheduler?predictorConfiguration
-
-        if not (isFunction query) then
-            PredictorConfiguration.ConfigurationInvalid
-                "wanxiangshu.mjs must export predictorConfiguration() as the read-only Predictor slot existence query"
-        else
-            callPredictorConfiguration query |> predictorConfigurationOf
 
     let invokeScheduler
         (scheduler: obj)
@@ -300,7 +254,6 @@ module ModelRouting =
             if not (isNull moduleObj) then
                 scheduler?markProviderFailed <- moduleObj?markProviderFailed
                 scheduler?hasTheoreticalCapacity <- moduleObj?hasTheoreticalCapacity
-                scheduler?predictorConfiguration <- moduleObj?predictorConfiguration
 
             return scheduler
         }
@@ -365,8 +318,8 @@ module ModelRouting =
 
     /// A SessionId is a reusable container. Model occupancy belongs to the exact
     /// physical user material that caused the provider execution, never to the
-    /// session lifecycle or to a cursor-selected identity. Strength may reserve one
-    /// target before its physical prompt exists; chat.message later adopts that
+    /// session lifecycle or to a cursor-selected identity. An execution may reserve one
+    /// target before its physical prompt exists; chat.message adopts that
     /// reservation into the exact PhysicalUserMessageId without double-counting.
     let private failedTask<'T> (error: exn) : Task<'T> =
         let completion =
@@ -456,8 +409,6 @@ module ModelRouting =
         // carry a trailing chat.params without a committed lease.
         let stoppedPhysical = HashSet<string * string>()
         // DSL-MUTABLE: resource — execution purpose per admitted physical user
-        // message. The purpose outlives the active lease so a stale or superseded
-        // commit still knows whether it was a readonly-delegate execution;
         // purged with the session.
         let leasePurposeBySession =
             Dictionary<string, (string * ModelExecutionPurpose) list>()
@@ -488,9 +439,7 @@ module ModelRouting =
         let running () = capacity.Snapshot()
 
         /// A fresh execution inherits the replaced execution's target only as a
-        /// same-purpose continuation (execution-model-routing-002): an owner
-        /// execution never inherits a readonly-delegate target, and a readonly
-        /// delegate never inherits the owner target.
+        /// continuation hint.
         let activeTargetOfPurpose (purpose: ModelExecutionPurpose) sessionId =
             match activeBySession.TryGetValue sessionId with
             | true, lease when lease.PhysicalUserMessageId.IsSome && lease.Purpose = purpose -> Some lease.Target
@@ -675,17 +624,13 @@ module ModelRouting =
             | _ -> ()
 
         /// The fixed DevOps target binding belongs to the owner execution only
-        /// (execution-model-routing-019). A readonly-delegate execution is a new
-        /// physical execution: it must neither inherit nor overwrite the binding.
         let enforceImmutableDevopsBinding
             (sessionId: string)
             (role: Role)
             (target: ModelRoutingTarget)
             (purpose: ModelExecutionPurpose)
             =
-            match purpose with
-            | ModelExecutionPurpose.ReadonlyDelegate -> ()
-            | ModelExecutionPurpose.Normal -> enforceDevopsBindingNormal sessionId role target
+            enforceDevopsBindingNormal sessionId role target
 
         let tryGetBoundDevopsTarget (sessionId: string) (role: Role) =
             match role = Role.DevOps, boundDevopsTargetBySession.TryGetValue sessionId with
@@ -697,22 +642,12 @@ module ModelRouting =
             | Some t -> Some t
             | None -> tryGetBoundDevopsTarget sessionId role
 
-        /// A fresh readonly-delegate execution never inherits the owner's active
-        /// target or fixed DevOps binding as its previous hint: it enters as a
-        /// new physical execution and receives null (or the session's own
-        /// single-consumption recovery retry preference) while purpose selects
-        /// the Predictor pool.
         let previousForFreshPurpose (purpose: ModelExecutionPurpose) sessionId (role: Role) =
-            match purpose with
-            | ModelExecutionPurpose.ReadonlyDelegate -> takeRecoveryRetryTarget sessionId
-            | ModelExecutionPurpose.Normal ->
-                recoveryPreviousTarget ModelExecutionPurpose.Normal sessionId
-                |> Option.orElseWith (fun () -> tryGetBoundDevopsTarget sessionId role)
+            recoveryPreviousTarget ModelExecutionPurpose.Normal sessionId
+            |> Option.orElseWith (fun () -> tryGetBoundDevopsTarget sessionId role)
 
         let previousForReservationPurpose (purpose: ModelExecutionPurpose) sessionId (role: Role) =
-            match purpose with
-            | ModelExecutionPurpose.ReadonlyDelegate -> None
-            | ModelExecutionPurpose.Normal -> resolvePreviousTarget ModelExecutionPurpose.Normal sessionId role
+            resolvePreviousTarget ModelExecutionPurpose.Normal sessionId role
 
         let commit (demand: ExecutionAdmissionDemand) (target: ModelRoutingTarget) =
             enforceImmutableDevopsBinding demand.SessionId demand.Role target demand.Purpose
@@ -901,14 +836,7 @@ module ModelRouting =
 
                 Some(issueAdmission sessionId physicalUserMessageId role participant lease.Target)
             | None ->
-                let effectivePurpose =
-                    if
-                        lease.Purpose = ModelExecutionPurpose.ReadonlyDelegate
-                        && purpose = ModelExecutionPurpose.Normal
-                    then
-                        ModelExecutionPurpose.ReadonlyDelegate
-                    else
-                        purpose
+                let effectivePurpose = purpose
 
                 requireSameIdentity
                     sessionId
@@ -1256,9 +1184,8 @@ module ModelRouting =
             /// only as a same-purpose continuation; a purpose change is a
             /// different execution and receives no previous hint.
             let previous =
-                match purpose, oldLease.Purpose with
-                | ModelExecutionPurpose.Normal, ModelExecutionPurpose.Normal -> Some oldLease.Target
-                | _ -> None
+                match oldLease.Purpose with
+                | ModelExecutionPurpose.Normal -> Some oldLease.Target
 
             let oldPhysicalUserMessageId = oldLease.PhysicalUserMessageId
 
@@ -1690,9 +1617,6 @@ module ModelRouting =
 
         member _.CommitExecutionAdmission(lease: ExecutionAdmissionLease, observed: ExecutionAdmissionExactIdentity) =
             /// The fixed DevOps binding is a per-road rule of the owner execution.
-            /// While the committing physical execution is still the active one we
-            /// enforce with its own purpose: a readonly-delegate execution is a
-            /// new execution and never touches the owner binding. A stale or
             /// superseded commit has no live purpose to read, and the ordinary
             /// owner rule still applies — the immutable-binding check is keyed to
             /// the road, not to the currently active physical execution, and the
@@ -1714,8 +1638,8 @@ module ModelRouting =
 
         member _.ExecutionAdmissionLifecycle(lease: ExecutionAdmissionLease) = admissionOwner.LifecycleName lease
 
-        /// Strength-only nonwaiting reservation. It is capacity-bearing, but not
-        /// yet a provider execution identity. The exact chat.message later adopts
+        /// Nonwaiting reservation. It is capacity-bearing, but not yet a provider
+        /// execution identity. The exact chat.message adopts
         /// it without another scheduler decision or another running occurrence.
         member _.TryReserveManaged
             (sessionId: string, role: Role, purpose: ModelExecutionPurpose, lenderSessionId: string option)
@@ -1968,11 +1892,11 @@ module ModelRouting =
         member _.TakeProviderRunTarget(providerRun: string) : ModelRoutingTarget option =
             lock gate (fun () -> takeProviderRunTarget providerRun)
 
-        /// provider-attempt-recovery-021: the failed attempt itself carried the LWR-replaced context,
-        /// so its confirmed failure condemns the provider of the exact witness
-        /// target. The witness is single-consumption: duplicate observations,
-        /// stale callbacks, cancellations and unknown submissions hold no
-        /// second permission.
+        /// provider-attempt-recovery-021: the failed attempt was itself the
+        /// same-provider retry, so its confirmed failure condemns the provider of
+        /// the exact witness target. The witness is single-consumption: duplicate
+        /// observations, stale callbacks, cancellations and unknown submissions
+        /// hold no second permission.
         member _.CondemnFailedTarget(providerRun: string) : ModelRoutingTarget option =
             lock gate (fun () ->
                 match takeProviderRunWitness (providerRun.Trim()) with
@@ -1982,10 +1906,11 @@ module ModelRouting =
                     Some target
                 | None -> None)
 
-        /// provider-attempt-recovery-021: the failed attempt carried the original context, so its
-        /// provider is kept and the next fresh admission of this session is
-        /// bound to the exact failed target for the LWR retry. The witness
-        /// must belong to this session and the binding is consumed once.
+        /// provider-attempt-recovery-021: the failed attempt was this provider's
+        /// first confirmed failure, so its provider is kept and the next fresh
+        /// admission of this session is bound to the exact failed target for the
+        /// verbatim retry. The witness must belong to this session and the
+        /// binding is consumed once.
         member _.RetainFailedTargetForRetry(sessionId: string, providerRun: string) : ModelRoutingTarget option =
             match normalizeSessionId sessionId with
             | None -> None
@@ -1993,12 +1918,6 @@ module ModelRouting =
 
         member _.HasTheoreticalCapacity (role: string) (purpose: ModelExecutionPurpose) : bool =
             lock gate (fun () -> hasTheoreticalCapacityLocked role purpose)
-
-        /// Read-only Predictor slot existence query owned by the loaded MJS
-        /// configuration. Tool decoration and readonly-delegate admission share
-        /// this one result instead of keeping a second enabled truth.
-        member _.PredictorConfiguration: PredictorConfiguration =
-            predictorConfiguration scheduler
 
     let private sharedGate = obj ()
     // DSL-MUTABLE: resource — process-shared scheduler runtime singleton
@@ -2314,10 +2233,6 @@ module ModelRouting =
         | None -> CapacityTransitionOutcome.AlreadyApplied
 
     let internal capacitySnapshot () = current().CapacitySnapshot()
-
-    /// Same Predictor existence query on the process-shared scheduler, resolved
-    /// from the one loaded model configuration.
-    let internal sharedPredictorConfiguration () : PredictorConfiguration = current().PredictorConfiguration
 
     let enterProviderStep
         (sessionId: SessionId)

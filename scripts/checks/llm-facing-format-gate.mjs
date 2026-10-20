@@ -10,6 +10,7 @@ const lowLevelTomlAccess = /\bSyntheticToml\./
 const formattingOwners = new Set([
   'src/Wanxiangshu/Foundation/LlmFacing.fs',
   'src/Wanxiangshu/Foundation/SyntheticTomlSurface.fs',
+  'src/Wanxiangshu/Execution/Delegation/Advisor/View.fs',
 ])
 
 const walk = (directory) =>

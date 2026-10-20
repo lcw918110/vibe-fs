@@ -34,7 +34,6 @@ module JsGeneratorSurface =
         | "Exec" -> Some ToolPermission.Exec
         | "Pty" -> Some ToolPermission.Pty
         | "ReviewAssessment" -> Some ToolPermission.ReviewAssessment
-        | "Chronicle" -> Some ToolPermission.Chronicle
         | "Fetch" -> Some ToolPermission.Fetch
         | "Finality" -> Some ToolPermission.Finality
         | "BashHoneypot" -> Some ToolPermission.BashHoneypot
@@ -63,7 +62,6 @@ module JsGeneratorSurface =
         | ToolPermission.Exec -> "Exec"
         | ToolPermission.Pty -> "Pty"
         | ToolPermission.ReviewAssessment -> "ReviewAssessment"
-        | ToolPermission.Chronicle -> "Chronicle"
         | ToolPermission.Fetch -> "Fetch"
         | ToolPermission.Finality -> "Finality"
         | ToolPermission.BashHoneypot -> "BashHoneypot"
@@ -79,6 +77,7 @@ module JsGeneratorSurface =
         | JsCapability.Write -> "Write"
         | JsCapability.Edit -> "Edit"
         | JsCapability.Glob -> "Glob"
+        | JsCapability.Grep -> "Grep"
         | JsCapability.Move -> "Move"
         | JsCapability.Remove -> "Remove"
         | JsCapability.Exec -> "Exec"

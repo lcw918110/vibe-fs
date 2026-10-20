@@ -19,7 +19,7 @@ type DeliverResult =
 /// work-028: the outcome of one synchronous ask delegation.
 type AskResult =
     { Kind: string
-      WorkRecord: string
+      View: string
       Status: string }
 
 type DeliverySpawnOutcome =
@@ -1181,7 +1181,7 @@ module PlanTools =
                 return
                     Ok
                         { Kind = "delegated"
-                          WorkRecord = record
+                          View = record
                           Status = "completed" }
         }
 
@@ -1195,7 +1195,7 @@ module PlanTools =
             match delegation with
             | Error err -> return Error err
             | Ok record when String.IsNullOrWhiteSpace record ->
-                return Error "The DevOps delegation returned an empty work record"
+                return Error "The DevOps delegation returned an empty delivered view"
             | Ok record -> return! bindDevOpsAndComplete gitCommonDir workId activeId record
         }
 

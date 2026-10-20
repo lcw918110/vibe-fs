@@ -515,25 +515,46 @@ const { default: test } = await import("node:test");
 const XWireSurface = await import("../../../dist/Context/Prefix/XWireSurface.js");
 
 
-test('WHAT[prefix-stability-001] compiled XWireSurface exposes the production horizon decision', () => {
-  assert.equal(XWireSurface.presentationHorizon(false), 'Current')
-  assert.equal(XWireSurface.presentationHorizon(true), 'TentativeCold')
+test('WHAT[prefix-stability-001] compiled XWireSurface admits only an exact accepted retry and never rewrites messages', () => {
+  const projection = { messages: [{ role: 'user', parts: [{ kind: 'text', text: 'live request' }] }] }
+  const admitted = XWireSurface.transform({
+    journal: true,
+    sessionId: 'ses-xwire',
+    acceptedRetry: true,
+    physicalUser: 'retry-message',
+    acceptedPhysicalUser: 'retry-message',
+    currentProjection: projection,
+  })
+  assert.deepEqual(admitted, {
+    ok: true, noop: false, changed: false, consumed: true, error: null, output: projection,
+  })
+
+  const rejected = XWireSurface.transform({
+    journal: true,
+    sessionId: 'ses-xwire',
+    acceptedRetry: true,
+    physicalUser: 'other-message',
+    acceptedPhysicalUser: 'retry-message',
+    currentProjection: projection,
+  })
+  assert.deepEqual(rejected, {
+    ok: true, noop: true, changed: false, consumed: false, error: null, output: projection,
+  })
 })
 test('WHAT[prefix-stability-001] compiled XWireSurface reconciles completion and failure', () => {
   assert.deepEqual(
-    XWireSurface.reconcile({
-      hasPlan: true,
-      outcome: 'completed',
-      hasProbe: true,
-      currentEpoch: 4,
-      probeEpoch: 4,
-    }),
-    { promoted: true, cleared: true, keptPlan: false },
+    XWireSurface.reconcile({ hasPlan: true, outcome: 'completed' }),
+    { cleared: true, keptPlan: false },
   )
 
   assert.deepEqual(
-    XWireSurface.reconcile({ hasPlan: true, outcome: 'failed', hasProbe: true }),
-    { promoted: false, cleared: true, keptPlan: false },
+    XWireSurface.reconcile({ hasPlan: true, outcome: 'failed' }),
+    { cleared: true, keptPlan: false },
+  )
+
+  assert.deepEqual(
+    XWireSurface.reconcile({ hasPlan: true, outcome: 'in-progress' }),
+    { cleared: false, keptPlan: true },
   )
 })
 }
@@ -544,7 +565,7 @@ const { default: test } = await import("node:test");
 const canonicalJson = await import("../../../dist/OpenCode/Codec/CanonicalJsonSurface.js");
 const language = await import("../../../dist/Participant/Provider/LanguageSurface.js");
 const providerProjection = await import("../../../dist/Participant/Provider/Projection/Surface.js");
-const strength = await import("../../../dist/Strength/Surface.js");
+const promptSurface = await import("../../../dist/Resources/PromptSurface.js");
 const lifecycle = await import("../../../dist/Mission/Lifecycle/Surface.js");
 const tools = await import("../../../dist/OpenCode/Tools/ToolSurface.js");
 const pluginHooks = await import("../../../dist/OpenCode/Host/PluginHooksSurface.js");
@@ -705,7 +726,7 @@ test('WHAT[prefix-stability-001] manager_life_review_acceptance_provider_wire_is
   const workPromptDoc = language.readText('zh-CN', 'runtime/manager-work')
 
   // Manager system prompt remains stable across the life
-  const managerSystemPrompt = strength.systemPromptForRole('Manager')
+  const managerSystemPrompt = promptSurface.systemForRole('en', 'Manager')
 
   // Tools definition: identical tool set with contract-decorated schemas for review tools
   const toolsBefore = buildDecoratedManagerTools()

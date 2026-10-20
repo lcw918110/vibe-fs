@@ -191,14 +191,6 @@ export async function setupScenarioParallel(opts, tmpDir) {
         // forwarded here on purpose: `WANXIANGSHU_DIAG=1 node tests/e2e/cases/x.test.mjs` then
         // surfaces the plugin's own records in the Host stderr tail the watchdog already dumps.
         ...(process.env.WANXIANGSHU_DIAG === '1' ? { WANXIANGSHU_DIAG: '1' } : {}),
-        // Prefer the scenario's explicit contextLimit so canaries that shrink
-        // the model budget also shrink Y's self-rebase threshold. A global
-        // process env must not keep the production 32k default and prevent
-        // threshold-driven self-rebase in small fixtures.
-        WANXIANGSHU_BLOGGER_CONTEXT_LIMIT:
-          opts.contextLimit != null
-            ? String(opts.contextLimit)
-            : (process.env.WANXIANGSHU_BLOGGER_CONTEXT_LIMIT || '32000'),
         ...(acceptanceGateDirectory ? {
           WANXIANGSHU_E2E_ACCEPTANCE_GATE_DIR: acceptanceGateDirectory,
           WANXIANGSHU_E2E_ACCEPTANCE_GATE_PLUGIN: productionPluginPath,

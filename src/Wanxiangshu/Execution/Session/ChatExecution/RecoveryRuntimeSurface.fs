@@ -2,7 +2,6 @@ namespace Wanxiangshu.Execution.Session.ChatExecution
 
 open System.Threading.Tasks
 open Fable.Core.JsInterop
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Foundation.Identity
@@ -34,8 +33,7 @@ module RecoveryRuntimeSurface =
         : ProviderStartedEvidence =
         { Accepted = accepted
           ProviderRun = ProviderRunIdentity.create providerRun
-          RequestKind = ProviderRequestKind.WorkMain
-          ProjectionChoice = XProjectionChoice.UseCommittedEpoch }
+          RequestKind = ProviderRequestKind.WorkMain }
 
     let private acceptedState (accepted: AcceptedChatExecutionEvidence) : ChatExecutionState =
         ChatExecutionState.Accepted accepted

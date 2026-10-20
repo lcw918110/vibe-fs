@@ -82,7 +82,7 @@ module PromptDispatcherSend =
             port: IDispatchSessionPort ->
             sessionId: SessionId ->
             text: string ->
-            requestId: BloggerRequestId ->
+            requestId: RepairRequestId ->
             terminalProviderRun: ProviderRunIdentity ->
             repairKind: string ->
             profile: PromptAuthority.AuthorityExecutionProfile ->
@@ -130,7 +130,7 @@ module PromptDispatcherSend =
             port: IDispatchSessionPort ->
             sessionId: SessionId ->
             text: string ->
-            requestId: BloggerRequestId ->
+            requestId: RepairRequestId ->
             terminalProviderRun: ProviderRunIdentity ->
             repairKind: string ->
             profile: PromptAuthority.AuthorityExecutionProfile ->

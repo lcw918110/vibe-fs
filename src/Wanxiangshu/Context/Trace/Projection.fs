@@ -1,6 +1,5 @@
 namespace Wanxiangshu.Context.Trace
 
-open Wanxiangshu.Context.Companion.Blogger
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation
 
@@ -9,20 +8,21 @@ open Wanxiangshu.Foundation
 /// Append-only within one lifecycle: `Opening` is captured once and never
 /// overwritten, `Parts` grow strictly by cursor, terminal occurrences grow by
 /// ProviderRun as a reusable managed session completes successive work units.
-/// `RecordCoverage` (what Y has consumed) advances via `BlogObservationCommitted`,
-/// NOT here — this module holds the record itself, the Blog projection holds
-/// the ingest position, so the two can be validated against each other in the
-/// fold without a second copy.
+/// `RecordCoverage` (how far the trace has been consumed) is supplied by the
+/// caller, NOT advanced here — this module holds the record itself. The
+/// durable `ViewCheckpointCommitted` window (context-compression-028) records
+/// which view declarations were committed; what history is kept or replaced is
+/// decided by the model's own ANCHOR `view` declaration (prefixUntil /
+/// thenRemove), not by a second copy of the record.
 ///
 /// Bodies live in blobs (PERSIST-007): the journal line carries cursor, kind,
 /// role, digest and reference; the text is resolved at the read boundary, the
-/// same way `XWire.readFrames` resolves `BlogFrame.TextRef`.
+/// same way blob readers resolve text references.
 type XTraceProjectionState =
     private
         {
             /// InitialCharge, inline: first task prompt, bounded and
-            /// human-sized; fold materialises the LWR Opening section without a
-            /// second read. Opening interval end = WorkRecordStart (COMPANION-014).
+            /// human-sized.
             Opening: XTraceOpeningEvidence option
             /// Semantic parts. Stored newest-first so replay cons is O(1);
             /// `XTraceProjection.parts` restores oldest-first cursor order.
@@ -31,7 +31,6 @@ type XTraceProjectionState =
             /// Terminal occurrences, newest first. Reusable managed sessions may
             /// complete many work units; each occurrence keeps the ProviderRun and
             /// the XTrace part frontier at which that completion happened so a
-            /// bounded WorkRecord can project only its own formal statement.
             Terminals: XTraceTerminalRef list
             /// Composition-layer bridge to the underlying wanxiangli/trace instance.
             Bridge: WanxiangliTrace.ProjectionBridge
@@ -47,8 +46,8 @@ and internal XTracePartRef =
         /// Parsed once at fold from Provenance (`g:N/...`; legacy → 0).
         Generation: int
         Role: string
-        /// Host semantic coordinates, kept so the writer can map a BlogEntry's
-        /// SemanticCursor (turn/part) back to the XTrace cursor sequence it
+        /// Host semantic coordinates, kept so the writer can map a Host
+        /// message's turn/part back to the XTrace cursor sequence it
         /// corresponds to. The XTrace cursor itself is independent of them.
         Turn: int
         PartIndex: int
@@ -236,12 +235,10 @@ module XTraceProjection =
         | part :: tail when part.Generation = maxGen -> collectCurrentGeneration maxGen (part :: acc) tail
         | _ :: tail -> collectCurrentGeneration maxGen acc tail
 
-    let private cursorAfterSearch (searchable: XTracePartRef list) : SemanticCursor =
+    let private cursorAfterSearch (searchable: XTracePartRef list) : XTraceCursor =
         match List.tryLast searchable with
-        | Some last ->
-            { TurnIndex = last.Turn + 1
-              PartIndex = 0 }
-        | None -> { TurnIndex = 0; PartIndex = 0 }
+        | Some last -> XTraceCursor.nextCursor last.Cursor
+        | None -> XTraceCursor.create 0L
 
     let private appendPartRefToBridge (part: XTracePartRef) (bridge: WanxiangliTrace.ProjectionBridge) =
         WanxiangliTrace.appendPartDescriptorToBridge
@@ -557,8 +554,9 @@ module XTraceProjection =
         |> Option.map (fun part -> part.Turn)
 
     /// The first stable user message in the current Host generation is the raw
-    /// session Opening. Same-session prefix replacement must never delete it;
-    /// work-record-007 renders frozen-prefix records with includeOpening=false.
+    /// session Opening. Same-session prefix replacement never removes it from
+    /// the trace (semantic-trace-010); what the provider is shown is trimmed
+    /// only by the model's own ANCHOR `view` declaration (context-compression-031).
     let tryOpeningHostMessageId (state: XTraceProjectionState) : string option =
         state
         |> parts
@@ -590,7 +588,7 @@ module XTraceProjection =
     /// cursor against the current generation only so nextChunk / lastCoveredSequence
     /// share one numbering. Pre-reanchor sequences still advance coverage via
     /// absolute Sequence, but their Turn labels are never mixed with post-reanchor ones.
-    let internal semanticCursorFor (sequence: int64) (state: XTraceProjectionState) : SemanticCursor =
+    let internal semanticCursorFor (sequence: int64) (state: XTraceProjectionState) : XTraceCursor =
         let searchable =
             let ordered = parts state
             let current = currentGenerationParts ordered
@@ -601,13 +599,11 @@ module XTraceProjection =
             searchable
             |> List.tryFind (fun part -> XTraceCursor.sequence part.Cursor > sequence)
         with
-        | Some part ->
-            { TurnIndex = part.Turn
-              PartIndex = part.PartIndex }
+        | Some part -> part.Cursor
         | None -> cursorAfterSearch searchable
 
-    let semanticCursorAfter (cursor: XTraceCursor) (state: XTraceProjectionState) : SemanticCursor =
+    let semanticCursorAfter (cursor: XTraceCursor) (state: XTraceProjectionState) : XTraceCursor =
         semanticCursorFor (XTraceCursor.sequence cursor) state
 
-    let semanticCursorAfterCoverage (coverage: RecordCoverage) (state: XTraceProjectionState) : SemanticCursor =
+    let semanticCursorAfterCoverage (coverage: RecordCoverage) (state: XTraceProjectionState) : XTraceCursor =
         semanticCursorAfter (RecordCoverage.ingestedThrough coverage) state

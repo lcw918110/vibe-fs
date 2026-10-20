@@ -50,8 +50,6 @@ export const GIT_BYPASS_ALLOWLIST = Object.freeze([])
  * Listed for documentation; the store-context heuristic already excludes them.
  */
 export const NON_STORE_SCHEMA_VERSION_SITES = Object.freeze([
-  'Enforcer/Catalog.fs',
-  'Resources/EnforcerCatalogResource.fs',
   'Execution/Delegation/Handle/CompletionCodec.fs',
   'Execution/Delegation/Fork/ChildRecovery.fs',
 ])

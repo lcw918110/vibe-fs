@@ -42,15 +42,20 @@ test('WHAT[execution-failure-policy-001] provider adapter preserves kind exact i
     failure: 'ProviderTransient', providerRun: 'run-17', requestKind: 'work-main', firstTokenObserved: false, diagnostic: 'never retry',
   })
   const permanent = provider.classify({
-    providerRun: 'run-18', requestKind: 'BloggerMain', status: 'Permanent', firstTokenObserved: false, diagnostic: 'timeout',
+    providerRun: 'run-18', requestKind: 'WorkMain', status: 'Permanent', firstTokenObserved: false, diagnostic: 'timeout',
   })
   assert.equal(permanent.failure, 'ProviderPermanent')
   assert.equal(permanent.providerRun, 'run-18')
-  assert.equal(permanent.requestKind, 'blogger-main')
+  assert.equal(permanent.requestKind, 'work-main')
   const interrupted = provider.classify({
     providerRun: 'run-19', requestKind: 'InteractionRepair', status: 'Transient', firstTokenObserved: true, diagnostic: 'retryable',
   })
   assert.equal(interrupted.failure, 'StreamInterruptedAfterFirstToken')
   assert.equal(interrupted.providerRun, 'run-19')
   assert.equal(interrupted.requestKind, 'interaction-repair')
+  for (const retired of ['BloggerMain', 'StrengthReplica', 'BloggerSquash']) {
+    assert.throws(() => provider.classify({
+      providerRun: 'run-retired', requestKind: retired, status: 'Transient', firstTokenObserved: false, diagnostic: 'none',
+    }), /unknown provider request kind/)
+  }
 })

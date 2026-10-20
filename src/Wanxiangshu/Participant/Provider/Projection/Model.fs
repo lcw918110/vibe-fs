@@ -75,8 +75,7 @@ module ProviderProjection =
         { Role: string
           Parts: SemanticPart list }
 
-    /// Used for canary fixture matching (provider-projection-003), Blogger delta
-    /// (COMPANION-012) and behavioural comparison.
+    /// Used for canary fixture matching (provider-projection-003) and behavioural comparison.
     ///
     /// Excludes message IDs, call IDs, timestamps, runtime metadata, directory,
     /// status, finish reason, cost and usage. Comparable across Sessions and
@@ -234,7 +233,6 @@ module ProviderProjection =
         && List.length previous.Messages <= List.length next.Messages
         && (next.Messages |> List.truncate (List.length previous.Messages)) = previous.Messages
 
-    /// COMPANION-012: Blogger delta compares semantic projections, never wire
-    /// ones — otherwise a re-run with new call IDs would look like new content.
+    /// Compares semantic projections, never wire ones.
     let semanticallyEqual (left: ProviderSemanticProjection) (right: ProviderSemanticProjection) : bool =
         renderSemantic left = renderSemantic right

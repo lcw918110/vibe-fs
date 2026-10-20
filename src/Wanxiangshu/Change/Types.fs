@@ -103,7 +103,7 @@ type RelayPort =
         /// The durable unified review fact for a manager session, with the work's
         /// authority count. `None` when no review is durable yet: the publish gate
         /// then refuses with zero writes.
-        LifecycleReviewed: SessionId -> Wanxiangshu.Foundation.Identity.WorktreePath -> (string * string) option
+        LifecycleReviewed: SessionId -> Wanxiangshu.Foundation.Identity.WorktreePath -> Task<(string * string) option>
     }
 
 type OrchestratorJournalPort =

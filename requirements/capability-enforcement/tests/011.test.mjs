@@ -13,7 +13,6 @@ const ROLES = [
   'Orchestrator',
   'Engineer',
   'DevOps',
-  'Blogger',
 ]
 const agentName = (role) => `${role.toLowerCase()}`
 const buildConfig = () => {
@@ -24,7 +23,6 @@ const buildConfig = () => {
     }
   }
   agent.bookkeeper = { model: 'bookkeeper-model' }
-  agent.predictor = { model: 'predictor-model' }
   return { agent }
 }
 const wildcardMatch = (input, pattern) => {
@@ -79,7 +77,6 @@ const allowList = (config, name) => {
     'horizon',
     'fission',
     'review',
-    'chronicle',
     'fetch',
     'deliver',
     'skill',
@@ -92,8 +89,8 @@ const allowList = (config, name) => {
 }
 const HOST_UTILITY_ALLOW = ['skill']
 const COGNITIVE_UTILITY_ALLOW = ['assume']
-const hostUtilityAllowFor = (role) => (role === 'Blogger' ? [] : HOST_UTILITY_ALLOW)
-const cognitiveUtilityAllowFor = (role) => (role === 'Blogger' ? [] : COGNITIVE_UTILITY_ALLOW)
+const hostUtilityAllowFor = (_role) => HOST_UTILITY_ALLOW
+const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 const ROLE_ALLOW = {
   Manager: ['fork', 'resume', 'join', 'horizon', 'deliver', 'review', 'todowrite-for-manager'],
   Orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
@@ -103,7 +100,6 @@ const ROLE_ALLOW = {
     'horizon',
     'todowrite-for-devops',
   ],
-  Blogger: ['chronicle'],
 }
 
 test('WHAT[capability-enforcement-011] AGENT_002_missing_agent_is_projected_on_configure', () => {
@@ -160,11 +156,9 @@ const NAMES = [
   'orchestrator',
   'engineer',
   'devops',
-  'blogger',
   'plan',
   'advisor',
   'bookkeeper',
-  'predictor',
 ]
 function fullConfig() {
   return { agent: Object.fromEntries(NAMES.map((name) => [name, {}])) }
@@ -173,7 +167,7 @@ function fullConfig() {
 test('WHAT[capability-enforcement-011] MACFG_validate_accepts_empty_agent_map_and_projects_full_catalog', () => {
   const empty = okOf(validate({}))
   assert.equal(empty.ok, true, empty.ok ? '' : empty.error)
-  assert.equal(empty.bindingNames.length, 7)
+  assert.equal(empty.bindingNames.length, 6)
   const blankMap = okOf(validate({ agent: {} }))
   assert.equal(blankMap.ok, true, blankMap.ok ? '' : blankMap.error)
 })
@@ -185,7 +179,7 @@ test('WHAT[capability-enforcement-011] MACFG_validate_accepts_missing_equal_and_
 
   const result = okOf(validate(cfg))
   assert.equal(result.ok, true, result.ok ? '' : result.error)
-  assert.equal(result.bindingNames.length, 7, 'bookkeeper and predictor have no active Role binding')
+  assert.equal(result.bindingNames.length, 6, 'bookkeeper has no active Role binding')
 })
 test('WHAT[capability-enforcement-011] MACFG_applyOwnedFields_writes_owned_keys_and_never_touches_model', () => {
   const cfg = fullConfig()
@@ -207,14 +201,9 @@ test('WHAT[capability-enforcement-011] MACFG_applyOwnedFields_skips_null_config_
   assert.equal(rejected.ok, false)
 
   const cfg = fullConfig()
-  delete cfg.agent.blogger
+  delete cfg.agent.plan
   const result = configure(cfg)
   assert.equal(result.ok, true, result.ok ? '' : result.error)
-  const projected = cfg.agent.blogger
-  assert.equal(projected.mode, 'primary')
-  assert.equal(projected.hidden, true)
-  assert.equal(projected.permission['*'], 'deny')
-  assert.equal('model' in projected, false, 'projection never invents a model binding')
 })
 test('WHAT[capability-enforcement-011] MACFG_applyOwnedFields_honors_chat_max_retries_env', () => {
   const cfg = fullConfig()
@@ -234,14 +223,13 @@ test('WHAT[capability-enforcement-011] MACFG_configureFromHostConfig_projects_mi
   const cfg = {}
   const result = configure(cfg)
   assert.equal(result.ok, true, result.ok ? '' : result.error)
-  assert.equal(result.bindingNames.length, 7)
+  assert.equal(result.bindingNames.length, 6)
   for (const name of NAMES) {
     const entry = cfg.agent[name]
     assert.ok(entry.mode !== undefined, `${name} must be projected`)
     assert.ok(entry.permission !== undefined, `${name} must receive owned permission`)
     assert.equal('model' in entry, false, `${name} must not receive a model binding`)
   }
-  assert.equal(cfg.agent.blogger.hidden, true)
   assert.equal(cfg.agent.bookkeeper.hidden, true)
   assert.equal(cfg.compaction.auto, false)
 })
@@ -254,11 +242,11 @@ const { withPlugin } = await import("../../verification-system/tests/support/plu
 const TOOL_NAMES = [
   'fork', 'resume', 'commission', 'join', 'horizon', 'fission',
   'bash-honeypot', 'assume',
-  'review', 'chronicle', 'fetch', 'deliver',
+  'review', 'fetch', 'deliver',
   'todowrite-for-engineer', 'todowrite-for-devops', 'todowrite-for-manager', 'todowrite-for-orchestrator',
 ]
 
-const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops', 'blogger']
+const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops']
 
 const COGNITIVE_TOOLS = []
 
@@ -270,7 +258,6 @@ const ALLOWED = {
     'join', 'horizon', 'todowrite-for-devops',
     'assume', ...COGNITIVE_TOOLS,
   ],
-  blogger: ['chronicle'],
 }
 
 const fullConfig = () => ({

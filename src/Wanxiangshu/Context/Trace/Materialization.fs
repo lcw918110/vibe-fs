@@ -12,9 +12,6 @@ open Wanxiangshu.Host
 /// Durable XTrace -> canonical X semantic projection.
 ///
 /// Request-local provider presentation is intentionally absent from this owner.
-/// Blogger coverage and prefix proof both consume this projection, so a later
-/// transform may rewrite/inject presentation without changing what historical X
-/// the durable trace proves actually happened.
 [<RequireQualifiedAccess>]
 module XTraceMaterialization =
 
@@ -165,16 +162,6 @@ module XTraceMaterialization =
             return resolved |> Result.map (WanxiangliTrace.materializeItemsInRange range)
         }
 
-    let materializeWorkRecordRange
-        (journal: AgentJournal)
-        (range: XTraceRange)
-        (xTrace: XTraceProjectionState)
-        : Task<Result<XTraceItem list, string>> =
-        task {
-            let! resolved = materializeRange journal range xTrace
-            return resolved |> Result.map XTrace.forWorkRecord
-        }
-
     let renderRange
         (journal: AgentJournal)
         (range: XTraceRange)
@@ -182,15 +169,5 @@ module XTraceMaterialization =
         : Task<Result<string, string>> =
         task {
             let! resolved = materializeRange journal range xTrace
-            return resolved |> Result.map XTrace.render
-        }
-
-    let renderWorkRecordRange
-        (journal: AgentJournal)
-        (range: XTraceRange)
-        (xTrace: XTraceProjectionState)
-        : Task<Result<string, string>> =
-        task {
-            let! resolved = materializeWorkRecordRange journal range xTrace
             return resolved |> Result.map XTrace.render
         }

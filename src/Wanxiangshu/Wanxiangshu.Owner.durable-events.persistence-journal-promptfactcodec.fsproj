@@ -25,9 +25,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.participant-identity.foundation-roles.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.provider-attempt-recovery.participant-provider-attempt-fallback-facts.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.work.mission-work-core.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.requirement-grounding.host-fact.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.requirement-grounding.requirement-grounding-projection.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.requirement-grounding.requirement-grounding-model.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.durable-composition.host-fact.fsproj"/>
     <Compile Include="Persistence/Journal/PromptFactCodec.fsi"/>
     <Compile Include="Persistence/Journal/PromptFactCodec.fs"/>
     <Compile Include="Persistence/Journal/FactCodec.fsi"/>

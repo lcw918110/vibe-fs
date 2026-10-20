@@ -1,1 +1,0 @@
-Constructive advice drawn from this transition's lesson: what to do differently next time, stated concretely.

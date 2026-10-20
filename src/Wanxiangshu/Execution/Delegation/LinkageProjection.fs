@@ -61,7 +61,7 @@ type HandleRecord =
         Work: HandleWorkId option
     }
 
-type HandleWorkRecord =
+type HandleWork =
     { Work: HandleWorkId
       LogicalRunId: LogicalRunId
       Lifecycle: HandleLifecycle
@@ -86,7 +86,7 @@ type AgentLinkageProjection =
         Handles: Map<HandleId, HandleRecord>
         /// Monotonic counter: next CreationOrder assigned on HandleLinked.
         NextCreationOrder: int
-        Works: Map<HandleWorkId, HandleWorkRecord>
+        Works: Map<HandleWorkId, HandleWork>
         LegacyWorkHandles: Set<HandleId>
     }
 
@@ -333,7 +333,7 @@ module HandleProjection =
                 accepted.SessionId = binding.ChildSessionId
                 && accepted.IdentitySeed = profile.IdentitySeed
                 && accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
-                                         PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
+                    PromptAuthority.RootAuthorityKind.AgentOwnerRoot)
 
         let exactOwner =
             PromptAuthority.identitySeedOwner profile.IdentitySeed
@@ -456,13 +456,13 @@ module HandleProjection =
                 | Abandoned _ -> Error ConsumptionMismatch)
             current
 
-    let private workView (binding: HandleRecord) (work: HandleWorkRecord) =
+    let private workView (binding: HandleRecord) (work: HandleWork) =
         { binding with
             Work = Some work.Work
             Lifecycle = work.Lifecycle
             LastCompletion = work.LastCompletion }
 
-    let workRecords (current: AgentLinkageProjection) =
+    let workBindings (current: AgentLinkageProjection) =
         current.Works
         |> Map.toList
         |> List.choose (fun (_, work) ->
@@ -474,7 +474,7 @@ module HandleProjection =
             if Set.contains binding.Handle current.LegacyWorkHandles then
                 []
             else
-                workRecords current
+                workBindings current
                 |> List.filter (fun record -> record.Handle = binding.Handle)
 
         match works |> List.tryFind (fun record -> record.Lifecycle = Active) with
@@ -623,7 +623,7 @@ module HandleProjection =
     /// EXEC-004: what `join` may consume as completion cells. Abandoned is not
     /// a completion cell — see `reportableAbandoned` for EXEC-009 batch items.
     let private deliveryRecords (current: AgentLinkageProjection) =
-        (current.Handles |> Map.toList |> List.map snd) @ workRecords current
+        (current.Handles |> Map.toList |> List.map snd) @ workBindings current
 
     let joinable (current: AgentLinkageProjection) =
         deliveryRecords current
@@ -675,17 +675,6 @@ module HandleProjection =
                 Some(summary current record)
             else
                 None)
-
-    /// Fork-child main is sealed for Blogger once joinable, abandoned, or retired.
-    /// Human root (no handle) is never sealed by this rule.
-    let lifecycleSealsBlogger (lifecycle: HandleLifecycle) : bool =
-        match lifecycle with
-        | CompletedAwaitingJoin _
-        | Abandoned _
-        | Retired -> true
-        | Active -> false
-
-    let recordSealsBlogger (record: HandleRecord) : bool = lifecycleSealsBlogger record.Lifecycle
 
     /// Every child session this parent has ever linked.
     ///

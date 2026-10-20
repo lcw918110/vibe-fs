@@ -46,7 +46,7 @@ module ChildRecovery =
     /// Completion blob v2 finality (schemaVersion=2). No aborted.
     type CompletedPayload =
         { RunId: string
-          WorkRecord: string
+          View: string
           ChildSessionId: string
           AuthorityRoot: string
           ProviderRun: string

@@ -3,10 +3,10 @@ import test from 'node:test'
 
 import { plan } from '../../../dist/Execution/Delegation/Advisor/Surface.js'
 
-// advisor-[002]: the view is the caller's own context, rendered with the repository's existing
-// blogger input vocabulary (`BloggerToml`/`SyntheticToml`): the authored `# ` comment header, one
-// blank line, then one `[[new_work_to_record]]` table per record. The declaration says how far the
-// view may reach (`prefixUntil`, exclusive) and which anchors arrive as summaries (`thenRemove`).
+// advisor-[002]: the view is the caller's own context, rendered by SyntheticToml: the authored
+// `# ` comment header, one blank line, then one `[[new_work_to_record]]` table per record.
+// The declaration says how far the view may reach (`prefixUntil`, exclusive) and which anchors
+// arrive as summaries (`thenRemove`).
 const message = (anchor, text) => ({ anchor, text })
 
 const request = (messages, { prefixUntil, thenRemove = [] } = {}) => ({
@@ -23,7 +23,7 @@ const viewBody = (prompt) => {
 
 const tableCount = (prompt) => (viewBody(prompt).match(/\[\[new_work_to_record\]\]/g) ?? []).length
 
-test('WHAT[advisor-002] the view prompt keeps the prefix under PrefixUntil in the blogger shape', () => {
+test('WHAT[advisor-002] the view prompt keeps the prefix under PrefixUntil in the advisor TOML shape', () => {
   const planned = plan(
     'en',
     [],

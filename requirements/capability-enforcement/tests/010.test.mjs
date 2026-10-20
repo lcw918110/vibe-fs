@@ -13,7 +13,6 @@ const ROLES = [
   'Orchestrator',
   'Engineer',
   'DevOps',
-  'Blogger',
 ]
 const agentName = (role) => `${role.toLowerCase()}`
 const buildConfig = () => {
@@ -24,7 +23,6 @@ const buildConfig = () => {
     }
   }
   agent.bookkeeper = { model: 'bookkeeper-model' }
-  agent.predictor = { model: 'predictor-model' }
   return { agent }
 }
 const wildcardMatch = (input, pattern) => {
@@ -79,7 +77,6 @@ const allowList = (config, name) => {
     'horizon',
     'fission',
     'review',
-    'chronicle',
     'fetch',
     'deliver',
     'skill',
@@ -92,8 +89,8 @@ const allowList = (config, name) => {
 }
 const HOST_UTILITY_ALLOW = ['skill']
 const COGNITIVE_UTILITY_ALLOW = ['assume']
-const hostUtilityAllowFor = (role) => (role === 'Blogger' ? [] : HOST_UTILITY_ALLOW)
-const cognitiveUtilityAllowFor = (role) => (role === 'Blogger' ? [] : COGNITIVE_UTILITY_ALLOW)
+const hostUtilityAllowFor = (_role) => HOST_UTILITY_ALLOW
+const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 const ROLE_ALLOW = {
   Manager: ['fork', 'resume', 'join', 'horizon', 'deliver', 'review', 'todowrite-for-manager'],
   Orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
@@ -103,7 +100,6 @@ const ROLE_ALLOW = {
     'horizon',
     'todowrite-for-devops',
   ],
-  Blogger: ['chronicle'],
 }
 
 test('WHAT[capability-enforcement-010] AGENT_002_gate_accepts_distinct_models_and_writes_owned_fields', () => {
@@ -229,9 +225,7 @@ const NAMES = [
   'orchestrator',
   'engineer',
   'devops',
-  'blogger',
   'bookkeeper',
-  'predictor',
 ]
 function fullConfig() {
   return { agent: Object.fromEntries(NAMES.map((name) => [name, {}])) }
@@ -309,19 +303,19 @@ const { acceptAuthorityRoot, grantWorkOwned, withExecutablePlugin, withPlugin } 
 const TOOL_NAMES = [
   'fork', 'resume', 'commission', 'join', 'horizon', 'fission',
   'bash-honeypot', 'assume',
-  'review', 'chronicle', 'fetch', 'deliver',
+  'review', 'fetch', 'deliver',
   'todowrite-for-engineer', 'todowrite-for-devops', 'todowrite-for-manager', 'todowrite-for-orchestrator',
 ]
 const PLUGIN_TOOL_NAMES = [
   'ask', 'devops', 'todowrite-for-plan',
   'fork', 'resume', 'commission',
   'join', 'horizon', 'fission', 'review', 'deliver',
-  'bash-honeypot', 'assume', 'chronicle',
-  'todowrite-for-engineer', 'todowrite-for-devops', 'todowrite-for-manager', 'todowrite-for-orchestrator', 'todowrite-for-predictor',
+  'bash-honeypot', 'assume',
+  'todowrite-for-engineer', 'todowrite-for-devops', 'todowrite-for-manager', 'todowrite-for-orchestrator',
 ]
 const HOST_OWNED_TOOL_NAMES = ['skill',
 ]
-const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops', 'blogger']
+const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops']
 const COGNITIVE_TOOLS = []
 const ALLOWED = {
   orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator', 'assume', ...COGNITIVE_TOOLS],
@@ -331,7 +325,6 @@ const ALLOWED = {
     'join', 'horizon', 'todowrite-for-devops',
     'assume', ...COGNITIVE_TOOLS,
   ],
-  blogger: ['chronicle'],
 }
 const withSession = (messages, sessionID = 'ses-capability-manager') =>
   messages.map((message, index) => ({
@@ -351,9 +344,8 @@ const fullConfig = () => ({
 
 integrationTest('WHAT[capability-enforcement-010] MANAGER_plugin_registers_only_plugin_owned_capability_tools', async () => {
   await withPlugin(async (hooks) => {
-    // todowrite-for-predictor 属于插件注册面：WHAT[005] 要求副本面在 deny 全部工具后精准放行它。
-    // 它经 ToolRegistry.fs:267 的 predictorJsSpec () 与其它 js-* 同源注册；注册存在
-    // 只是导出面，其准入为 PrivateAttachment 且仅副本会话放行，不等于能力扩大。
+    assert.equal(hooks.tool.chronicle, undefined, 'chronicle is not a registered tool')
+    assert.equal(hooks.tool['todowrite-for-predictor'], undefined, 'todowrite-for-predictor is not a registered tool')
     assert.equal(new Set(PLUGIN_TOOL_NAMES).size, PLUGIN_TOOL_NAMES.length, 'shared tools have one registration')
     assert.deepEqual(Object.keys(hooks.tool).sort(), [...PLUGIN_TOOL_NAMES].sort())
     for (const toolName of PLUGIN_TOOL_NAMES) {
@@ -372,7 +364,6 @@ integrationTest('WHAT[capability-enforcement-010] MANAGER_host_schemas_are_prese
       fork: ['calling', 'name', 'charge', 'keywords', 'attach', 'expected_tool_calls'],
       resume: ['name', 'charge', 'keywords', 'attach', 'expected_tool_calls'],
       commission: ['calling', 'name', 'charge', 'expected_tool_calls'],
-      chronicle: ['charge', 'occurrence', 'settlement', 'consequence', 'tipName', 'opinion', 'advice', 'evidence'],
       'bash-honeypot': [],
       assume: ['assumption'],
     }

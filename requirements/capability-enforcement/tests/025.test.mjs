@@ -442,8 +442,8 @@ test('WHAT[capability-enforcement-025] an admitted call reads the file and befor
       return originalExecute(...callArgs)
     }
     const revisionOf = () => revisionSurface.revision(runtime.journal)
-    const lifecycleStore = () => workspaceEventStoreSurface.acquire(journalSurface.JournalSurface_initializeStateRoot(directory))
-    const reviewOf = () => lifecycleSurface.workView(lifecycleStore(), sessionID).reviewed
+    const lifecycleStore = async () => workspaceEventStoreSurface.acquire(await journalSurface.JournalSurface_initializeStateRoot(directory))
+    const reviewOf = async () => lifecycleSurface.workView(await lifecycleStore(), sessionID).reviewed
 
     // Positive control: before review acceptance the same program drives the
     // full call chain (before → execute → after). The executed result carries
@@ -473,13 +473,13 @@ test('WHAT[capability-enforcement-025] an admitted call reads the file and befor
     // accepting the assessment records a durable Reviewed fact, so it must
     // be observable here — otherwise "unchanged" in the denial scenario
     // would be vacuous.
-    assert.equal(reviewOf(), '', 'observation check: no review is recorded before acceptance')
+    assert.equal(await reviewOf(), '', 'observation check: no review is recorded before acceptance')
     await injectAcceptedAssessment(runtime, sessionID)
-    assert.equal(reviewOf(), 'Stayed', 'observation check: accepting the assessment records the Reviewed fact')
+    assert.equal(await reviewOf(), 'Stayed', 'observation check: accepting the assessment records the Reviewed fact')
     const deniedOutput = { args: { program, contract: 'do-not-use-except-for-review' } }
     const argsSnapshot = JSON.stringify(deniedOutput.args)
     const executionsBeforeDenial = executions
-    const reviewBeforeDenial = reviewOf()
+    const reviewBeforeDenial = await reviewOf()
     const revisionBeforeDenial = revisionOf()
 
     await assert.rejects(
@@ -494,11 +494,11 @@ test('WHAT[capability-enforcement-025] an admitted call reads the file and befor
 
     assert.equal(executions, executionsBeforeDenial, 'the rejecting before hook does not call the wrapped tool body')
     assert.equal(JSON.stringify(deniedOutput.args), argsSnapshot, 'denial does not mutate the caller arguments')
-    assert.equal(reviewOf(), reviewBeforeDenial, 'the rejecting before hook leaves the observed lifecycle review unchanged')
+    assert.equal(await reviewOf(), reviewBeforeDenial, 'the rejecting before hook leaves the observed lifecycle review unchanged')
     assert.equal(revisionOf(), revisionBeforeDenial, 'the rejecting before hook leaves the observed journal revision unchanged')
   })
 })
 
-test.todo('WHAT[capability-enforcement-025] denial performs zero physical reads and write attempts through the production invocation (GAP-075: investigation 2026-10-03 — the production chain ToolRegistry → JsToolSpec → ToolWorkflow keeps read snapshots internal; the only wired observation port is RequirementGrounding.programObservation, which fires solely for paths that have grounding materials in the workspace, so a generic physical-read observer does not exist. Needed: a read-path observation port on JsToolSpec/ToolWorkflow (or an equivalent production entry) that the test fixture can subscribe to; the execute counter and journal revision in the passing test above remain the closest available proxies)')
+test.todo('WHAT[capability-enforcement-025] denial performs zero physical reads and write attempts through the production invocation (GAP-075: investigation 2026-10-03 — the production chain ToolRegistry → JsToolSpec → ToolWorkflow keeps read snapshots internal, and the production ToolRegistry wiring passes no file-access observer, so a generic physical-read observer does not exist. Needed: a read-path observation port on JsToolSpec/ToolWorkflow (or an equivalent production entry) that the test fixture can subscribe to; the execute counter and journal revision in the passing test above remain the closest available proxies)')
 
 test.todo('WHAT[capability-enforcement-025] an in-flight admitted read finishes across review acceptance (GAP-075: requires a controlled causal barrier driving real overlap; the sequential fixture cannot prove concurrency)')

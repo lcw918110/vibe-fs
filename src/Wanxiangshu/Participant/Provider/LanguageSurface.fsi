@@ -35,9 +35,3 @@ module ProviderLanguageSurface =
     /// Exercise the real host transform for a public role's owned system
     /// segment. Role is a stable label, not an F# union value.
     val transformRoleSystem: sessionId: string -> roleLabel: string -> system: string array -> Task<obj>
-
-    /// Exercise the real host transform for a replica session of a public role.
-    val transformReplicaSystem: sessionId: string -> roleLabel: string -> system: string array -> Task<obj>
-
-    /// Localized replica execution constraint text for the given language.
-    val replicaConstraintFor: language: string -> string

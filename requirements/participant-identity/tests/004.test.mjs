@@ -4,7 +4,6 @@ import * as Attempt from '../../../dist/Context/Companion/CompressionSurface.js'
 import * as ProviderFailure from '../../../dist/Participant/Provider/Attempt/Fallback/ProviderFailureSurface.js'
 import * as Authority from '../../../dist/Interaction/Authority/Surface.js'
 import * as Runtime from '../../../dist/Interaction/Authority/RuntimeSurface.js'
-import * as Strength from '../../../dist/Strength/Surface.js'
 import * as Persona from '../../../dist/Participant/Persona/Surface.js'
 
 const hash = (value) => `H(${value})`
@@ -90,23 +89,6 @@ test('WHAT[participant-identity-004] terminal dispatch preserves the exact Ident
   assert.deepEqual(projection.acceptedDispatches[0].identitySeed, profile.identitySeed)
 })
 
-test('WHAT[participant-identity-004] Strength replica inherits owner Persona and version with the same participant', () => {
-  const owner = rootProfile('engineer', 'ses_identity_strength_owner')
-  const replica = inheritedSeed('engineer', owner)
-
-  assert.equal(replica.participantIdentity.participant, owner.participantIdentity.participant)
-  assert.equal(replica.participantIdentity.role, owner.participantIdentity.role)
-  assert.equal(
-    attemptPlan('engineer', 'work-main').participantIdentity.participant,
-    replica.participantIdentity.participant,
-  )
-  assert.deepEqual(personaVersion(replica.participantIdentity), personaVersion(owner.participantIdentity))
-  assert.equal(Strength.systemPromptIdForRole(replica.participantIdentity.role), 'engineer')
-  assert.deepEqual(
-    new Set(Strength.readonlyCapabilities(replica.participantIdentity.role, 'strength-replica')),
-    new Set(['Read', 'Glob', 'Grep']),
-  )
-})
 
 test('WHAT[participant-identity-004] inherited Engineer seed retains owner Persona version and logical run', () => {
   const owner = rootProfile('engineer', 'ses_identity_fission_owner')

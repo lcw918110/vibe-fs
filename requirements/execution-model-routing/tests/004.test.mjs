@@ -23,12 +23,12 @@ test('WHAT[execution-model-routing-004] an ineligible head does not block a late
   let freeEnabled = false
   const runtime = routing.createRuntime((role) => {
     if (role === 'devops') return target('provider/trigger')
-    if (role === 'blogger' && freeEnabled) return target('provider/free')
+    if (role === 'manager' && freeEnabled) return target('provider/free')
     return null
   })
 
   const blocked = await begin(runtime, 'blocked-session', 'physical-blocked', 'engineer', 'blocked-owner')
-  const free = await begin(runtime, 'free-session', 'physical-free', 'blogger', 'free-owner')
+  const free = await begin(runtime, 'free-session', 'physical-free', 'manager', 'free-owner')
   assert.equal(blocked.kind, 'Queued')
   assert.equal(free.kind, 'Queued')
 

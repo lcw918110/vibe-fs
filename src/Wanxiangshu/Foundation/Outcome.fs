@@ -24,10 +24,11 @@ type AgentRunResult =
         Directory: string option
         /// Terminal output for this run (HOST-005 / COMPANION-003): formal text
         /// plus host-visible reasoning. Excludes tool raw streams. Becomes the
-        /// LWR Final output segment; not a parallel session-wide A channel.
+        /// XTrace's terminal segment for that run; not also a parallel
+        /// session-wide text.
         TerminalText: string
         /// This turn's formal assistant text only, without reasoning. Used for
-        /// blogger terminal-validity checks (COMPANION-005).
+        /// interaction-repair terminal-validity checks (COMPANION-005).
         TurnFormalText: string
     }
 

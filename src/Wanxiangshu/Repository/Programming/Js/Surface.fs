@@ -80,26 +80,6 @@ module JsToolGenerator =
                     |> List.map (fun fragment -> fragment.MemberName, fragment.RuntimeBindingKey)
                     |> Map.ofList }
 
-    /// Dedicated readonly projection for the StrengthReplica JS surface (JS-PREDICTOR).
-    /// Role is not a public office Role; capabilities are exactly {Read, Glob}
-    /// (grep retired in favour of walk + whereAll, [057]).
-    let generatePredictor (prose: JsCanonicalDescription.Prose) : JsSurface =
-        let roleName = "predictor"
-        let jsCapabilities = set [ JsCapability.Read; JsCapability.Glob ]
-        let members = membersFor jsCapabilities
-
-        { ToolName = toolNameFor roleName
-          RoleName = roleName
-          Capabilities = jsCapabilities
-          Members = members
-          Description = renderDescription prose roleName jsCapabilities
-          BaseClassSource = renderBaseClass prose jsCapabilities
-          Examples = renderExamples prose roleName jsCapabilities
-          RuntimeBindings =
-            members
-            |> List.map (fun fragment -> fragment.MemberName, fragment.RuntimeBindingKey)
-            |> Map.ofList }
-
     /// Generated-name gate: a js-* tool call is accepted iff its name is the
     /// surface this profile generates; any other name fails closed (JS-001).
     let isGeneratedToolName (roleName: string) (capabilities: Set<ToolPermission>) (toolName: string) : bool =

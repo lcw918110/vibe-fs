@@ -248,7 +248,7 @@ async function runWatchdogRejectsBackgroundNoise() {
   const script =
     `import { Watchdog } from '${watchdogUrl}';\n` +
     `const w = new Watchdog({ timeoutMs: 150, label: 'gate-background' });\n` +
-    `setInterval(() => w.advance({ reason: 'blogger', lane: 'blogger', blocking: false }), 30);\n`;
+    `setInterval(() => w.advance({ reason: 'background', lane: 'background', blocking: false }), 30);\n`;
   const r = await runWatchdogChild(script);
   assertEq(r.code, 1, 'background-only activity must not renew watchdog');
   assertTrue(r.stderr.includes('gate-background'), 'diagnostic must identify the stalled target');
@@ -339,7 +339,7 @@ async function runDiagnosticDumpIsComplete() {
   const backgroundOnly =
     `import { Watchdog } from '${watchdogUrl}';\n` +
     `const w = new Watchdog({ timeoutMs: 150, label: 'gate-diagnostic' });\n` +
-    `const iv = setInterval(() => w.advance({ reason: 'blogger-projection', lane: 'blogger', blocking: false }), 20);\n` +
+    `const iv = setInterval(() => w.advance({ reason: 'background-projection', lane: 'background', blocking: false }), 20);\n` +
     `iv;\n`;
   const r1 = await runWatchdogChild(backgroundOnly);
   assertEq(r1.code, 1, `background-only run must still fire: ${r1.stderr}`);

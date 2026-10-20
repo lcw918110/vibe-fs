@@ -35,8 +35,8 @@ test('WHAT[capability-enforcement-025] J01_manager_generated_surface_strictly_re
   assert.equal(surface.toolName, 'todowrite-for-manager')
   assert.deepEqual(
     surface.capabilities.sort(),
-    ['Advisor', 'Fork', 'Glob', 'Horizon', 'Join', 'Read'],
-    'Manager capabilities must be {Read, Glob} plus the delegation primitives {Fork, Join, Horizon, Advisor}',
+    ['Advisor', 'Fork', 'Glob', 'Grep', 'Horizon', 'Join', 'Read'],
+    'Manager capabilities must be {Read, Glob, Grep} plus the delegation primitives {Fork, Join, Horizon, Advisor}',
   )
 
   // 四层同构第 1 层：生成的 JsProgram 基类中不声明任何写方法
@@ -68,6 +68,7 @@ test('WHAT[capability-enforcement-025] J02_manager_create_api_omits_mutation_met
     // 已授予只读成员正常暴露
     assert.equal(typeof binding.js.cat, 'function', 'cat must be constructed')
     assert.equal(typeof binding.js.ls, 'function', 'ls must be constructed')
+    assert.equal(typeof binding.js.rg, 'function', 'rg must be constructed')
     assert.equal(typeof binding.js.stat, 'function', 'stat must be constructed')
     assert.equal(typeof binding.js.whereAll, 'function', 'whereAll must be constructed')
     assert.equal(typeof binding.js.where, 'function', 'where must be constructed')
@@ -83,13 +84,14 @@ test('WHAT[capability-enforcement-025] J02_manager_create_api_omits_mutation_met
     assert.equal(binding.js.read, undefined)
     assert.equal(binding.js.glob, undefined)
     assert.equal(binding.js.grep, undefined)
+    assert.equal('rg' in binding.js, true, 'Grep projects rg')
     assert.equal('edit' in binding.js, false, 'edit property must not exist')
     assert.equal('write' in binding.js, false, 'write property must not exist')
     assert.equal(binding.js.edit, undefined)
     assert.equal(binding.js.write, undefined)
     assert.deepEqual(
       Object.keys(binding.js).sort(),
-      ['advisor', 'cat', 'fork', 'horizon', 'join', 'ls', 'stat', 'where', 'whereAll'],
+      ['advisor', 'cat', 'fork', 'horizon', 'join', 'ls', 'rg', 'stat', 'where', 'whereAll'],
     )
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -179,14 +181,6 @@ test('WHAT[capability-enforcement-025] J06_internal_leaf_and_replica_admission_n
   assert.equal(rolePredicate('todowrite-for-engineer', 'manager'), false, 'Manager must deny todowrite-for-engineer')
   assert.equal(rolePredicate('todowrite-for-devops', 'manager'), false, 'Manager must deny todowrite-for-devops')
   assert.equal(generateRole('bookkeeper', 'en'), null, 'Bookkeeper generates no public surface')
-
-  // StrengthReplica 投机只读通道不包含 todowrite-for-manager
-  const replicaTools = capabilityToolNames('manager', 'strength-replica')
-  assert.equal(
-    replicaTools.includes('todowrite-for-manager'),
-    false,
-    'StrengthReplica must not include todowrite-for-manager',
-  )
 })
 
 test('WHAT[capability-enforcement-025] J07_string_literals_and_paths_with_quotes_treated_as_pure_data', async () => {

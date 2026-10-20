@@ -27,7 +27,7 @@ test('WHAT[repository-programming-021] JS_SURFACE_GATE_allows_permission_matrix_
   const hits = scanEntries([
     {
       file: 'src/Wanxiangshu/OpenCode/Tools/StaticTools.fs',
-      text: 'let knownToolNames = ["todowrite-for-engineer"; "todowrite-for-devops"; "todowrite-for-bookkeeper"; "todowrite-for-manager"; "todowrite-for-orchestrator"; "todowrite-for-blogger"]\n',
+      text: 'let knownToolNames = ["todowrite-for-engineer"; "todowrite-for-devops"; "todowrite-for-bookkeeper"; "todowrite-for-manager"; "todowrite-for-orchestrator"]\n',
     },
   ])
   assert.deepEqual(hits, [])

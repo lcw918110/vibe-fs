@@ -1,5 +1,7 @@
 namespace Wanxiangshu.OpenCode
 
+open System.Threading.Tasks
+
 module EventsSurface =
     val create: unit -> obj
     val notify: port: obj -> sessionId: string -> kind: string -> providerRun: string -> text: string -> bool
@@ -14,5 +16,5 @@ module EventsSurface =
     val notifyCompleted:
         port: obj -> sessionId: string -> terminalText: string -> formalText: string -> roleLabel: string -> bool
 
-    val acquireSharedForWorkspace: workspace: string -> obj
-    val releaseSharedForWorkspace: workspace: string -> port: obj -> unit
+    val acquireSharedForWorkspace: workspace: string -> Task<obj>
+    val releaseSharedForWorkspace: workspace: string -> port: obj -> Task<unit>

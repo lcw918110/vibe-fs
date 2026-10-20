@@ -3,7 +3,6 @@ namespace Wanxiangshu.Composition.Durable
 open System.Threading.Tasks
 open Wanxiangshu.Foundation.Identity
 
-open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Outcome
@@ -34,7 +33,6 @@ module ManagedChatProviderLifecycle =
         acceptedEvidence: AcceptedChatExecutionEvidence ->
         providerRun: ProviderRunIdentity ->
         requestKind: ProviderRequestKind ->
-        projectionChoice: XProjectionChoice ->
             Task<Result<ManagedChatProviderStartedWitness, ManagedChatProviderLifecycleError>>
 
     val terminal:

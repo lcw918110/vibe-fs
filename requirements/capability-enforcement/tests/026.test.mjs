@@ -20,7 +20,7 @@ const closeoutDispatchDenied = /closing out|收口/i
 const dispatchHandedOver = /carries this charge now|现已接下这项托付/i
 
 // 派工门读插件正在读的同一份工作区事件库，与 fixture 的 lifecycleStore 同源。
-const storeOf = (directory) => workspaceEvents.acquire(journalSurface.JournalSurface_initializeStateRoot(directory))
+const storeOf = async (directory) => workspaceEvents.acquire(await journalSurface.JournalSurface_initializeStateRoot(directory))
 
 test('WHAT[capability-enforcement-026] D01_resume_fixed_devops_rejected_before_review_accepted', async () => {
   await withExecutablePlugin(async (hooks, directory, createdIds, runtime) => {
@@ -216,7 +216,7 @@ test('WHAT[capability-enforcement-026] D09_confirmed_tenure_refuses_new_devops_d
     await openIncumbency(runtime, sessionID)
     await injectAcceptedAssessment(runtime, sessionID) // Stayed
 
-    const store = storeOf(directory)
+    const store = await storeOf(directory)
     const confirmed = await lifecycle.seedDeliver(store, sessionID, 'run-d09', 'call-d09-first', 2n)
     assert.equal(confirmed.ok, true, confirmed.error)
     const view = lifecycle.workView(store, sessionID)

@@ -108,7 +108,7 @@ module JsSandbox =
         + baseClassSource
         + "\n"
         + "const js = api.js;\n"
-        + "if (typeof JsRunnable === 'function') { js.Runnable = JsRunnable; }\n"
+        + "if (typeof JsCallable === 'function') { js.Callable = JsCallable; }\n"
         + modelSource
         + "\n"
         + "const __wrap = (target) => new Proxy(target, {\n"
@@ -143,7 +143,7 @@ module JsSandbox =
         + "    return JSON.stringify({ __jsAbandoned: true });\n"
         + "  }\n"
         + "  if (__e && __e.__jsDelivered) {\n"
-        + "    return JSON.stringify({ __jsDelivered: true, value: __e.__jsDelivered.value });\n"
+        + "    return JSON.stringify({ __jsDelivered: true, value: __e.__jsDelivered.value, view: __e.__jsDelivered.view });\n"
         + "  }\n"
         + "  return JSON.stringify({ __jsProgramFailed: true, message: String((__e && __e.message) || __e) });\n"
         + "}\n"
@@ -339,7 +339,7 @@ module JsSandbox =
     let sourceWithExecutionMarker (baseClassSource: string) (modelSource: string) (stack: string) : string =
         let lines = modelSource.Split('\n')
         // Wrapper lines: 1 = "(async () => {", then the base class, then the
-        // `const js = api.js;` prelude and the optional JsRunnable bind.
+        // `const js = api.js;` prelude and the optional JsCallable bind.
         let modelStartLine = baseClassSource.Split('\n').Length + 4
         let modelEndLine = modelStartLine + lines.Length - 1
         let currentLine = locateSuspendedLine modelStartLine modelEndLine stack
