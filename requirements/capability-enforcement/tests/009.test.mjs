@@ -168,9 +168,10 @@ test('WHAT[capability-enforcement-009] TOOLSPEC_review_and_finality_tools_have_o
   assert.equal(rolePredicate('review', 'manager'), true)
   assert.equal(rolePredicate('review', 'engineer'), false)
 
-  // deliver: Manager only
-  assert.equal(rolePredicate('deliver', 'manager'), true)
+  // deliver: retired as a lifecycle tool; review is the only lifecycle entry (work-053)
+  assert.equal(rolePredicate('deliver', 'manager'), false)
   assert.equal(rolePredicate('deliver', 'engineer'), false)
+  assert.equal(rolePredicate('review', 'plan'), true)
 })
 test('WHAT[capability-enforcement-009] TOOLSPEC_unknown_tools_and_host_natives_fail_closed', () => {
   assert.equal(rolePredicate('nonexistent-tool', 'engineer'), false)

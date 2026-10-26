@@ -1621,47 +1621,6 @@ type ToolRuntimeScope
                   "stop", box stop ]
         )
 
-    member private this.SubmitInitialManagerQuestion
-        (ctx: HostToolContext, question: string)
-        : Task<Result<bool, string>> =
-        task {
-            let sid = SessionId.create ctx.SessionId
-
-            let prior =
-                journal
-                |> Option.exists (fun durable -> UserQuestionJournal.hasAskedExact durable sid question)
-
-            if prior then
-                return Ok(this.IsWaitingForUser ctx.SessionId)
-            else
-                let! accepted = this.AskUserAs(ctx, question, Role.Manager)
-                return accepted |> Result.map (fun () -> true)
-        }
-
-    member this.TryAskForInitialEmptyManagerReview
-        (ctx: HostToolContext, findingsEmpty: bool)
-        : Task<Result<bool, string>> =
-        task {
-            let question = "请明确本次工作的具体目标、范围与验收标准。我会根据你的答复继续本任 Manager 工作。"
-            let! work = this.LifecycleWorkFor ctx.SessionId
-
-            let initialActive =
-                work
-                |> Option.exists (fun current ->
-                    current.ActiveId.IsSome
-                    && not current.Delivered
-                    && current.RoundCount = 0
-                    && current.Stage = "执行"
-                    && current.Wait = "AwaitReview")
-
-            let mustAsk = findingsEmpty && this.IsRole(ctx, Role.Manager) && initialActive
-
-            if mustAsk then
-                return! this.SubmitInitialManagerQuestion(ctx, question)
-            else
-                return Ok false
-        }
-
     member private _.PruneFailedQuestionInterrupt
         (key: SessionId * ProviderRunIdentity * ToolCallId, stopped: Result<unit, string>)
         =

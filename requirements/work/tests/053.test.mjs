@@ -28,6 +28,23 @@ test('WHAT[work-053] lifecycle deliver is absent from the catalog, the permissio
   assert.match(reviewZh, /义务台账/)
 })
 
+test('WHAT[work-053] loaded Plan and Manager prose names review, not deliver, as the lifecycle entry', () => {
+  const paths = [
+    'role/plan', 'role/manager', 'planning/s1', 'planning/s2', 'planning/s3',
+    'runtime/manager-work', 'runtime/manager-finish', 'work/plan-continue', 'work/manager-continue',
+    'tool/js-plan', 'tool/js-program/base-class-review', 'tool/resume/dispatch-closed',
+  ]
+  for (const path of paths) {
+    for (const locale of ['en', 'zh-CN']) {
+      const text = read('resources/provider/' + path + '/' + locale + '.md')
+      assert.doesNotMatch(text, /\bdeliver\b|post-S3|eligib|晋级资格|交付资格|交付授权/, path + '/' + locale)
+    }
+  }
+  for (const locale of ['en', 'zh-CN']) {
+    assert.match(read('resources/provider/role/plan/' + locale + '.md'), /`note`/)
+  }
+})
+
 test('WHAT[work-053] one review relays and another closes cleanup through the work entry', () => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-review-053-'))
   const workId = 'manager-session'

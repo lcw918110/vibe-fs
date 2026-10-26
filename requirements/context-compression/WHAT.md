@@ -217,7 +217,7 @@ OMP **已真实实现并在本地 OMP SDK + SSE 假 Provider 验证**原生旧�
 
 第一次成功 `resetScope` 建立第一个显式重锚，不要求 `askPreviousScope`；第二次及以后才有前任真实工作 Scope 与首问义务。pending 通过单独强 steer 呈现，不硬阻断普通工具。工具结果无旧预算倒计时后缀。
 
-证明：`wanxiangli/src/pair-hint/tests/014.test.mjs`、`wanxiangli/src/scope-progress/tests/001.test.mjs` 以及双宿主 `context-compression-050` 实体重锚 canary。
+证明：`wanxiangli/src/pair-hint/tests/014.test.mjs`、`wanxiangli/src/scope-progress/tests/001.test.mjs` 以及双宿主 `context-compression-050` 实体重锚 canary。 OMP 的原生 `todowrite` 现已注册 essential 工具，`turn_start`／`turn_end` 实际回合归属中同一轮取最小估计，非递减触发隔离的 A/B/C/D 问询，专席 B/D 不传工具目录，物理 agent steer 经真实 `message_start` 确认后才持久完成。`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `scope-progress-016` 和 `017` 在 Node/Bun 验证同回合聚合、零预算、完整自动 Advisor 与原生 shutdown/cold restart；此内部每回合运行 ID 是 SDK turn 边界的 best-effort 事实，不假装所有供应商都有可回放 responseId。
 
 ## [051] 冷恢复没有进度证据时建立首次计费估计，而不是编造旧预算
 

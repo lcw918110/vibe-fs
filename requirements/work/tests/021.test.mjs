@@ -92,7 +92,7 @@ test('WHAT[work-021] non-Plan role has no devops member and call fails closed', 
     await acceptAuthorityRoot(runtime, engineerSession, 'engineer', 'user-engineer-root')
     const engineer = String(
       await hooks.tool['todowrite-for-engineer'].execute(
-        { program: 'class Js extends JsProgram { async run() { return await this.devops("find the flaky test"); } }', name: 'engineer-devops', intent: 'Verify the Engineer role refuses DevOps delegation without dispatching a child.' },
+        { program: 'class Js extends JsProgram { async run() { return await this.devops("find the flaky test"); } }', name: 'engineer-devops', intent: 'Verify the Engineer role refuses DevOps delegation without dispatching a child.', remainingScopeTurnsEstimate: 3 },
         { sessionID: engineerSession, agent: 'engineer' },
       ),
     )

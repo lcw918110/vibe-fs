@@ -498,6 +498,8 @@ module DurableWorkHost =
             PendingDigest: string option
             PendingPath: string option
             RoundCount: int
+            /// Manager launches recorded on a Plan in 「待执行」.
+            Launches: int
             RetiredRuns: string list
             DevOpsId: string option
             DevOpsTarget: string option
@@ -549,6 +551,11 @@ module DurableWorkHost =
     let closesAuthority (work: InspectedWork) =
         work.Delivered || work.Stage = "已完成"
 
+    /// A Plan stays in 「待执行」 forever. Once it has launched a Manager, a
+    /// natural stop is not unfinished planning; a new launch needs a new review.
+    let owesNoContinuation (work: InspectedWork) =
+        closesAuthority work || (work.Stage = "待执行" && work.Launches > 0)
+
     /// The retirement id of a completed work with no active tenure.
     let completedClosureId (work: InspectedWork) =
         if work.ActiveId.IsSome || not (closesAuthority work) then
@@ -586,6 +593,7 @@ module DurableWorkHost =
           PendingDigest = None
           PendingPath = None
           RoundCount = rounds.Length
+          Launches = (asArray snapshot?launches).Length
           RetiredRuns = []
           DevOpsId = optionalText (textOf snapshot?devopsId)
           DevOpsTarget = optionalText (textOf snapshot?devopsTarget)

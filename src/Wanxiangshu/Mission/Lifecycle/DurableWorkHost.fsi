@@ -80,6 +80,7 @@ module DurableWorkHost =
           PendingDigest: string option
           PendingPath: string option
           RoundCount: int
+          Launches: int
           RetiredRuns: string list
           DevOpsId: string option
           DevOpsTarget: string option
@@ -96,6 +97,9 @@ module DurableWorkHost =
 
     /// A completed work closes its authority run. The milestone 「已完成」 and Delivered are the same fact.
     val closesAuthority: work: InspectedWork -> bool
+
+    /// No continuation is owed: the work is complete, or a Plan in 「待执行」 has launched a Manager.
+    val owesNoContinuation: work: InspectedWork -> bool
 
     /// The retirement id that closes a completed work, when that work has no active tenure.
     val completedClosureId: work: InspectedWork -> string option

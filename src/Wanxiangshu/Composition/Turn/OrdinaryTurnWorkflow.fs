@@ -63,7 +63,7 @@ module OrdinaryTurnWorkflow =
                 return
                     workOpt
                     |> Option.exists (fun work ->
-                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority work
+                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.owesNoContinuation work
                         || List.contains (ProviderRunIdentity.value turn.ProviderRun) work.RetiredRuns)
         }
 

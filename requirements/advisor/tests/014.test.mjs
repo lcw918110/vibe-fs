@@ -64,3 +64,20 @@ test('WHAT[advisor-014] real OpenCode todowrite restores its charged estimate an
     } finally { scopeProgress.clear(session) }
   })
 })
+
+test('WHAT[advisor-014] malformed program admission does not charge progress or start Advisor', async () => {
+  await withExecutablePlugin(async (hooks, _workspace, created, runtime) => {
+    const session = 'ses-invalid-progress-014'
+    await acceptAuthorityRoot(runtime, session, 'devops')
+    try {
+      const refused = await hooks.tool['todowrite-for-devops'].execute({
+        ...args('invalid-name', 0), name: ' ',
+      }, { sessionID: session, agent: 'devops', callID: 'invalid-call', messageID: 'invalid-run' })
+      assert.doesNotMatch(String(refused), /# ok/)
+      const results = scopeProgress.settlePending(session, '0')
+      assert.equal(results.some(item => item.result.charged), false)
+      assert.equal(scopeProgress.status(session).resetDue, false)
+      assert.deepEqual(created, [])
+    } finally { scopeProgress.clear(session) }
+  })
+})

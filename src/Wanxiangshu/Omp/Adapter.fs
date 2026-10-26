@@ -79,6 +79,9 @@ module Adapter =
     [<Import("mkdirSync", "node:fs")>]
     let private mkdirSync (directory: string) (options: obj) : unit = jsNative
 
+    [<Emit("((p, ms) => { let timer; return Promise.race([p, new Promise(resolve => { timer = setTimeout(() => resolve(null), ms); })]).finally(() => clearTimeout(timer)); })($0, $1)")>]
+    let private observedOrTimeout (_waiting: Task<obj>) (_ms: int) : Task<obj> = jsNative
+
     [<Emit("$0 == null")>]
     let private isNullOrUndefined (x: obj) : bool = jsNative
 
@@ -332,6 +335,10 @@ module Adapter =
 
     let private latestProviderLeases =
         System.Collections.Generic.Dictionary<string, LatestProviderLease>()
+
+    let private activeProgressRuns = System.Collections.Generic.Dictionary<string, string>()
+    let private pendingAdvisorSteers =
+        System.Collections.Generic.Dictionary<string, string * string * System.Threading.Tasks.TaskCompletionSource<obj>>()
 
     let private pendingPreviousSteers =
         System.Collections.Generic.Dictionary<string, string * PrefixEpochId>()
@@ -2193,8 +2200,10 @@ module Adapter =
         let isSideOnly =
             stringOf (fieldValue last "attribution") = "agent"
             && stringOf (fieldValue last "steering") <> "true"
+        let progressUnknown = not (isNull progress?ok) && not (unbox<bool> progress?ok)
         if not (unbox<bool> plan?active) || isSideOnly then scoped
         elif not (isNull plan?strong) then ompScopeSteer scoped (stringOf plan?strong) true
+        elif progressUnknown then scoped
         elif not (isNull progress?resetDue) && unbox<bool> progress?resetDue then
             ompScopeSteer scoped "你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。" true
         elif isNull progress?known || not (unbox<bool> progress?known) then
@@ -2802,6 +2811,239 @@ module Adapter =
                 launchArchivedScopeTurn pi journal ctx (ctxSessionId ctx) questions receipt archive source
             | None -> false)
 
+
+        // OMP has an authoritative tool-call id and a local turn_start/turn_end
+        // boundary. A randomly minted per-turn witness is never claimed to be
+        // the provider's external responseId; its accepted reports are kept in
+        // the same SQLite journal as OpenCode for best-effort crash recovery.
+
+        let progressJournal (_sid: string) : obj =
+            let directory = joinPath stateRoot "wanxiangshu"
+            mkdirSync directory (createObj [ "recursive" ==> true ])
+            let dbPath = joinPath directory "advisor-process.sqlite"
+            let loader = createRequire moduleUrl
+            let sqlite = call1 loader (box (if runningOnBun () then "bun:sqlite" else "node:sqlite"))
+            let connection =
+                if runningOnBun () then createNew sqlite?Database dbPath
+                else createNew sqlite?DatabaseSync dbPath
+            try createNew sqliteJournalConstructor connection
+            with _ ->
+                connection?close() |> ignore
+                reraise ()
+
+        let durableCall (action: obj -> obj) : obj =
+            try
+                let journal = progressJournal ""
+                try action journal
+                finally journal?close() |> ignore
+            with ex ->
+                createObj [ "ok" ==> false; "reason" ==> ("OMP durable Scope operation unknown: " + ex.Message) ]
+
+        let scopeEpoch (sid: string) : string =
+            journalOpt
+            |> Option.bind (fun journal ->
+                AgentProjection.tryFind (SessionId.create sid) (AgentJournal.snapshot journal).AgentProjections)
+            |> Option.bind (fun session -> session.PrefixEpoch)
+            |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+            |> Option.defaultValue "0"
+
+        let bindProgress (sid: string) =
+            if not (String.IsNullOrWhiteSpace sid) then
+                scopeProgress?bindSessionJournal(sid, Func<string, obj>(progressJournal)) |> ignore
+                scopeProgress?ensureEpoch(sid, scopeEpoch sid) |> ignore
+
+        let advisorPorts =
+            let current = Func<string, string>(scopeEpoch)
+            let language = Func<string, string>(fun sid ->
+                ProviderLanguage.label (ProviderLanguageBinding.forSessionText sid))
+            let claim = Func<string, string, string, string, Task<obj>>(fun sid epoch report issue ->
+                Task.FromResult(durableCall (fun journal ->
+                    emitJsExpr (advisorClaim, journal, sid, epoch, report, issue) "$0($1,$2,$3,$4,$5)")))
+            let finished = Func<string, string, string array, string, Task<obj>>(fun sid epoch reports outcome ->
+                Task.FromResult(durableCall (fun journal ->
+                    emitJsExpr (advisorFinish, journal, sid, epoch, reports, outcome) "$0($1,$2,$3,$4,$5)")))
+            let stageBegin = Func<string, string, string, int, string, string array, Task<obj>>(fun sid epoch processId phase question reports ->
+                Task.FromResult(durableCall (fun journal ->
+                    emitJsExpr (advisorStageBegin, journal, sid, epoch, processId, phase, question, reports) "$0($1,$2,$3,$4,$5,$6,$7)")))
+            let stageConfirm = Func<string, string, string, int, string, Task<obj>>(fun sid epoch processId phase prose ->
+                Task.FromResult(durableCall (fun journal ->
+                    emitJsExpr (advisorStageConfirm, journal, sid, epoch, processId, phase, prose) "$0($1,$2,$3,$4,$5,$6)")))
+            let pending = Func<string, string, Task<obj>>(fun sid epoch ->
+                Task.FromResult(durableCall (fun journal ->
+                    emitJsExpr (advisorPending, journal, sid, epoch) "$0($1,$2,$3)")))
+            let answer text = createObj [ "Ok" ==> true; "Prose" ==> text; "Reason" ==> "" ]
+            let refuse text = createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> text ]
+            let worker = Func<string, string, Task<obj>>(fun sid question ->
+                task {
+                    match sessionContexts.TryGetValue sid with
+                    | false, _ -> return refuse "OMP source Session has no active Provider context"
+                    | true, ctx ->
+                        let! result = runEphemeralConsultation ctx question
+                                        ("Please respond in ordinary prose without tool calls: " + question)
+                                        ("scope-worker:" + sid + ":" + Guid.NewGuid().ToString("N"))
+                        return match result with | Ok prose -> answer prose | Error reason -> refuse reason
+                })
+            let seat = Func<string, string, Task<obj>>(fun sid question ->
+                task {
+                    match sessionContexts.TryGetValue sid with
+                    | false, _ -> return refuse "Dedicated Advisor has no active parent model context"
+                    | true, ctx ->
+                        // Preserve the Advisor's earlier confirmed discussions
+                        // after a restart. These are the seat's own Stage 2/4 facts,
+                        // never the temporary worker's unseen tool process.
+                        let history = durableCall (fun journal ->
+                            let frames: string array = unbox (journal?read("advisor-process:" + sid))
+                            let questions = System.Collections.Generic.Dictionary<string, string>()
+                            for serialized in frames do
+                                let value = parseJson serialized
+                                let kind = stringOf (fieldValue value "kind")
+                                let phase = optionalInt (fieldValue value "phase") |> Option.defaultValue 0
+                                if (phase = 2 || phase = 4) && kind = "StageBegan" then
+                                    let key = stringOf (fieldValue value "process") + ":" + string phase
+                                    questions[key] <- stringOf (fieldValue value "question")
+                            let prior =
+                                frames
+                                |> Array.choose (fun serialized ->
+                                    let value = parseJson serialized
+                                    let kind = stringOf (fieldValue value "kind")
+                                    let phase = optionalInt (fieldValue value "phase") |> Option.defaultValue 0
+                                    if (phase = 2 || phase = 4) && kind = "StageAnswered" then
+                                        let key = stringOf (fieldValue value "process") + ":" + string phase
+                                        match questions.TryGetValue key with
+                                        | true, question ->
+                                            Some("Previously you were asked:\n" + question
+                                                 + "\nYou answered:\n" + stringOf (fieldValue value "prose"))
+                                        | _ -> None
+                                    else None)
+                                |> Array.rev
+                                |> Array.truncate 12
+                                |> Array.rev
+                            createObj [ "ok" ==> true; "exchanges" ==> prior ])
+                        let previous =
+                            if isNull (fieldValue history "exchanges") then ""
+                            else
+                                let exchanges = unbox<string array> history?exchanges
+                                if exchanges.Length = 0 then ""
+                                else "Earlier exchanges from our continuing discussion:\n\n"
+                                     + String.concat "\n\n" (exchanges |> Array.toList) + "\n\n"
+                        let prompt = previous + question
+                        // The side-channel request is isolated from the working
+                        // Session. SDK disables tool execution for ephemeral turns.
+                        let options =
+                            createObj [ "promptText" ==> prompt
+                                        "conversationKey" ==> ("dedicated-advisor:" + sid)
+                                        "tools" ==> false ]
+                        let target =
+                            if hasMethod ctx "runEphemeralTurn" then ctx
+                            else fieldValue ctx "session"
+                        let! raw =
+                            if hasMethod target "runEphemeralTurn" then invokeEphemeralTurn target options
+                            else Task.FromResult(Error "dedicated Advisor SDK side turn is unavailable")
+                        return
+                            match raw with
+                            | Error reason -> refuse reason
+                            | Ok result ->
+                                let prose = stringOf (fieldValue result "replyText")
+                                let called = messageHasToolCall (fieldValue result "assistantMessage")
+                                if called || String.IsNullOrWhiteSpace prose then
+                                    refuse "dedicated Advisor did not provide tool-free prose"
+                                else answer prose
+                })
+            let steer = Func<string, string, string, string, Task<obj>>(fun sid epoch processId prose ->
+                task {
+                    if scopeEpoch sid <> epoch then return refuse "Advisor source Scope has advanced"
+                    else
+                        let key = "r-" + processId.Replace("advisor:", "")
+                        let tcs = System.Threading.Tasks.TaskCompletionSource<obj>()
+                        pendingAdvisorSteers[key] <- (sid, epoch, tcs)
+                        let text = prose + "\n[receipt:" + key + "]"
+                        let options = createObj [ "deliverAs" ==> "steer"; "attribution" ==> "agent" ]
+                        try
+                            let! _ = awaitObj (call2 (fieldValue pi "sendUserMessage") (box text) options)
+                            let! confirmed = observedOrTimeout tcs.Task 30000
+                            if isNull confirmed then
+                                pendingAdvisorSteers.Remove key |> ignore
+                                return refuse "Advisor steer has no confirmed physical acceptance"
+                            else return confirmed
+                        with ex ->
+                            pendingAdvisorSteers.Remove key |> ignore
+                            return refuse ("Advisor steer physical delivery unknown: " + ex.Message)
+                })
+            createObj [ "CurrentEpoch" ==> current; "LanguageFor" ==> language
+                        "Claim" ==> claim; "Finish" ==> finished
+                        "BeginStage" ==> stageBegin; "ConfirmStage" ==> stageConfirm
+                        "Pending" ==> pending; "AskWorker" ==> worker
+                        "AskSeat" ==> seat; "SendSteer" ==> steer ]
+        let advisorQueue: obj = emitJsExpr createAdvisorQueue "$0()"
+        let advisorFlow: obj = emitJsExpr (createAdvisorFlow, advisorQueue, advisorPorts) "$0($1,$2)"
+        let reportAdvisor (sid: string) (epoch: string) (item: obj) =
+            let receipt = fieldValue item "result"
+            if not (isNull receipt) && isTrue (fieldValue receipt "advisor") then
+                let runId = stringOf (fieldValue item "providerRunId")
+                let key = epoch + ":" + runId
+                let questionPath =
+                    match stringOf (fieldValue receipt "trigger") with
+                    | "ResetDue" -> "host/advisor-question/reset-due"
+                    | "Equal" -> "host/advisor-question/equal"
+                    | _ -> "host/advisor-question/increase"
+                let question = ProviderProse.render (ProviderLanguageBinding.forSessionText sid) questionPath Map.empty
+                let launched: Task<obj> = unbox (advisorFlow?trigger(sid, epoch, key, question))
+                launched |> ignore
+
+        let settleProgress (sid: string) =
+            bindProgress sid
+            let epoch = scopeEpoch sid
+            let items: obj array = unbox (scopeProgress?settlePending(sid, epoch))
+            items |> Array.iter (reportAdvisor sid epoch)
+
+        let registerScopeProgressTool () =
+            let estimateProse =
+                ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) "tool/js-program/arg-estimate" Map.empty
+            let schema =
+                createObj [ "type" ==> "object"
+                            "properties" ==> createObj [
+                                "remainingScopeTurnsEstimate" ==> createObj [
+                                    "type" ==> "integer"; "minimum" ==> 0
+                                    "description" ==> estimateProse ]]
+                            "required" ==> [| "remainingScopeTurnsEstimate" |]
+                            "additionalProperties" ==> false ]
+            let definition = createObj [
+                "name" ==> "todowrite"
+                "label" ==> "Scope Progress"
+                "loadMode" ==> "essential"
+                "concurrency" ==> "exclusive"
+                "approval" ==> "read"
+                "description" ==> estimateProse
+                "parameters" ==> schema
+                "execute" ==> Func<obj, obj, obj, obj, obj, obj>(fun callId arguments _signal _onUpdate ctx ->
+                    task {
+                        let sid = ctxSessionId ctx
+                        let value = optionalInt (fieldValue arguments "remainingScopeTurnsEstimate")
+                        let cid = stringOf callId
+                        if String.IsNullOrWhiteSpace sid || String.IsNullOrWhiteSpace cid || value.IsNone
+                           || value.Value < 0 then
+                            return ompScopeRefused "todowrite requires the real call identity and nonnegative remainingScopeTurnsEstimate"
+                        else
+                            bindProgress sid
+                            let run =
+                                match activeProgressRuns.TryGetValue sid with
+                                | true, observed -> observed
+                                | _ -> "detached:" + cid
+                            let receipt: obj = scopeProgress?record(sid, scopeEpoch sid, run, cid, value.Value)
+                            if isNull receipt?ok || not (unbox<bool> receipt?ok) then
+                                return ompScopeRefused ("todowrite durable record refused: " + stringOf receipt?reason)
+                            else
+                                let text = "Scope estimate accepted: " + string value.Value
+                                return createObj [
+                                    "content" ==> [| createObj [ "type" ==> "text"; "text" ==> text ] |]
+                                    "details" ==> createObj [ "estimate" ==> value.Value
+                                                              "minimum" ==> receipt?minimum
+                                                              "providerRun" ==> run ]]
+                    } |> unbox<obj>) ]
+            registerTool pi definition
+
+        registerScopeProgressTool ()
+
         let bindHeaderParent (sid: string) (ctx: obj) =
             let sm = sessionManagerOf ctx
             let header = if isNull sm then null else callMethod sm "getHeader" null
@@ -2852,6 +3094,8 @@ module Adapter =
         registerEvent pi "before_provider_request" (fun (event: obj) (ctx: obj) ->
             task {
                 let sid = ctxSessionId ctx
+                sessionContexts[sid] <- ctx
+                bindProgress sid
                 let isManaged = liveChildren.ContainsKey sid
                 let payload = fieldValue event "payload"
                 let observedModel = fieldValue ctx "model"
@@ -2899,6 +3143,23 @@ module Adapter =
                 && stringOf (fieldValue message "attribution") = "agent"
 
             let text = if agentSource then extractMessageContent message else ""
+
+            if agentSource then
+                let accepted =
+                    pendingAdvisorSteers
+                    |> Seq.filter (fun pair ->
+                        let owner, _, _ = pair.Value
+                        owner = sid && text.Contains("[receipt:" + pair.Key + "]"))
+                    |> Seq.toArray
+                for pair in accepted do
+                    let _, epoch, answer = pair.Value
+                    let ok = scopeEpoch sid = epoch
+                    let receipt = if ok then
+                                      createObj [ "Ok" ==> true; "Prose" ==> ""; "Reason" ==> "" ]
+                                  else
+                                      createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> "Advisor source Scope advanced before delivery" ]
+                    pendingAdvisorSteers.Remove pair.Key |> ignore
+                    answer.SetResult receipt
 
             let candidate =
                 pendingPreviousSteers
@@ -3084,6 +3345,12 @@ module Adapter =
         registerEvent pi "turn_start" (fun (_event: obj) (ctx: obj) ->
             task {
                 let sid = ctxSessionId ctx
+                sessionContexts[sid] <- ctx
+                bindProgress sid
+                settleProgress sid
+                let recovered: Task<obj> = unbox (advisorFlow?resume(sid, scopeEpoch sid))
+                recovered |> ignore
+                activeProgressRuns[sid] <- Guid.NewGuid().ToString("N")
                 Surface.onTurnStart sid
 
                 do!
@@ -3097,6 +3364,9 @@ module Adapter =
 
         registerEvent pi "turn_end" (fun (event: obj) (ctx: obj) ->
             task {
+                let sid = ctxSessionId ctx
+                settleProgress sid
+                activeProgressRuns.Remove sid |> ignore
                 match decodeTerminal (fieldValue event "message") with
                 | None -> return jsUndefined
                 | Some terminal ->
@@ -3277,8 +3547,15 @@ module Adapter =
 
                 latestProviderLeases.Clear()
                 pendingPreviousSteers.Clear()
+                activeProgressRuns.Clear()
+                for kv in pendingAdvisorSteers do
+                    let _, _, completion = kv.Value
+                    completion.SetResult (createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> "OMP Session ended before physical Advisor steer acceptance" ])
+                pendingAdvisorSteers.Clear()
 
                 for sid in sessionContexts.Keys do
+                    scopeProgress?unbindSessionJournal(sid) |> ignore
+                    scopeProgress?clear(sid) |> ignore
                     outboundViewStore?clearSession (sid) |> ignore
 
                 sessionContexts.Clear()

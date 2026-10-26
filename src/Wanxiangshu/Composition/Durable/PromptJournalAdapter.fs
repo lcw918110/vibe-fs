@@ -110,17 +110,6 @@ module UserQuestionJournal =
         authority journal sessionId
         |> Option.bind (fun state -> Map.tryFind callId state.UserQuestions)
 
-    let hasAskedExact journal sessionId (questionText: string) =
-        authority journal sessionId
-        |> Option.exists (fun state ->
-            state.ActiveLogicalRun
-            |> Option.exists (fun active ->
-                state.UserQuestions
-                |> Map.exists (fun _ question ->
-                    question.Request.LogicalRunId = active.LogicalRunId
-                    && question.Request.AuthorityRootUserMessageId = active.AuthorityRootUserMessageId
-                    && question.Request.Question = questionText)))
-
     let private pendingQuestion journal sessionId =
         authority journal sessionId
         |> Option.bind (fun state ->

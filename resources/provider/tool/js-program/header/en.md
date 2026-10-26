@@ -1,8 +1,8 @@
-Submit exactly three required string arguments: `name`, `program`, and `intent`. Choose a new, non-blank name in this session. `intent` must be non-empty. Define `class Js extends JsProgram` with `async run()`.
+Submit exactly four required arguments: `name`, `program`, and `intent` are strings; `remainingScopeTurnsEstimate` is a nonnegative integer. Choose a new, non-blank name in this session. `intent` must be non-empty. Define `class Js extends JsProgram` with `async run()`. The estimate is a top-level tool argument, not a program variable. Do not add explanatory fields.
 
 At admission, `UTF8Bytes(intent) × 50ms` sets one deadline for the entire request. All operations and all targets resumed by this request share its remaining time. Use `call(command)` and `unpark(name, value?)`; program code cannot create or renew a budget.
 
-Use a new named program to control an existing one. At expiry the controller and its active targets pause; resuming the controller alone does not resume its targets again. The same physical tool call replays its original receipt; a new call with an occupied name fails with NAME_TAKEN. Ordinary return does not deliver business work.
+Use a new named program to control an existing one. At expiry the controller and its active targets pause; resuming the controller alone does not resume its targets again. The same physical tool call replays its original receipt; a new call with an occupied name fails with NAME_TAKEN. Ordinary return does not complete business work.
 
 WARNING: You may be about to turn a bounded filesystem task into a self-inflicted repair job.
 

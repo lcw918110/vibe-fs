@@ -84,7 +84,6 @@ type ToolRuntimeScope =
 
     /// Host effect ports for one review. Ask, prompt, manager session, draft, and stop.
     member ReviewPorts: ctx: HostToolContext -> obj
-    member TryAskForInitialEmptyManagerReview: ctx: HostToolContext * findingsEmpty: bool -> Task<Result<bool, string>>
 
     member InterruptForUserQuestion:
         sessionId: SessionId * providerRun: ProviderRunIdentity * callId: ToolCallId -> Task<Result<unit, string>>

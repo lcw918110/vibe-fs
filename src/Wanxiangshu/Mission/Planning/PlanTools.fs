@@ -205,8 +205,7 @@ module PlanTools =
             let command =
                 Wanxiangshu.Mission.Lifecycle.DurableWorkHost.command
                     "BindDevOps"
-                    [ "incumbencyId", box incumbencyId
-                      "trigger", box "Ask"
+                    [ "trigger", box "Ask"
                       "devopsId", box (PlanWorkOpen.deriveDevOpsId workId)
                       "target", null ]
 

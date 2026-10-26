@@ -1467,8 +1467,10 @@ module PluginTransforms =
         unbox<obj array> plan?hints |> Array.iter (applyNeutralHint staged)
         let selected = unbox<obj array> plan?slots |> Array.map (applyNeutralSlot staged)
         let progress: obj = scopeProgress?status(sessionId)
+        let progressUnknown = not (isNull progress?ok) && not (unbox<bool> progress?ok)
         if not (unbox<bool> plan?active) then selected
         elif not (isNull plan?strong) then openCodeScopeSteer selected (scopeText plan?strong) true
+        elif progressUnknown then selected
         elif not (isNull progress?resetDue) && unbox<bool> progress?resetDue then
             openCodeScopeSteer selected "你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。" true
         elif isNull progress?known || not (unbox<bool> progress?known) then

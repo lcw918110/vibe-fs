@@ -477,15 +477,14 @@ module PluginHooks =
 
 
 
-            // work-031: resolve the stage-method semantic path for the
-            // session's active plan incumbency. Non-plan sessions, missing
-            // stores and delivered works resolve None and append nothing, so
-            // the non-plan system prompt path stays byte-identical.
+            // work-031: the live stage is the plan milestone. The planning/sN
+            // directories are resource paths. A tenure with no active id, and
+            // any other milestone, appends nothing.
             let stagePathFor (stage: string) (activeId: string option) : string option =
                 match stage, activeId with
-                | "S1", Some _ -> Some "planning/s1"
-                | "S2", Some _ -> Some "planning/s2"
-                | "S3", Some _ -> Some "planning/s3"
+                | "事实与取舍", Some _ -> Some "planning/s1"
+                | "理解与路径", Some _ -> Some "planning/s2"
+                | "流程与伪代码", Some _ -> Some "planning/s3"
                 | _ -> None
 
             let planStageFor (sessionId: SessionId) : Task<(string * string) option> =
@@ -1171,18 +1170,12 @@ module PluginHooks =
                 registeredHook HookKey.ChatMessage (curriedHook (box chatMessageWithNegotiationPolicy))
 
             let advisorIssue (sessionId: string) (receipt: obj) =
-                let old = receipt?previous
-                let next = string receipt?estimate
-                let english = ProviderLanguage.label (ProviderLanguageBinding.forSessionText sessionId) = "en"
-                if not (isNull old) && string old = "0" then
-                    if english then "You previously reported zero remaining rounds but have not reset the scope. What work remains, and what is blocking you?"
-                    else "接下来的工作还有哪些未完成？遇到了什么阻碍？请说明目前的情况。"
-                elif not (isNull old) && string old = next then
-                    if english then "What has kept the work from progressing as expected? What difficulties remain?"
-                    else "工作进展受到了什么阻碍？哪些困难还没有解决？"
-                else
-                    if english then "What new information or additional work changed your estimate? What is difficult now?"
-                    else "最近有什么新发现或额外工作？请说明目前的难点。"
+                let question =
+                    match string receipt?trigger with
+                    | "ResetDue" -> "host/advisor-question/reset-due"
+                    | "Equal" -> "host/advisor-question/equal"
+                    | _ -> "host/advisor-question/increase"
+                ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) question Map.empty
 
             let observeAdvisorTask (sessionId: string) (started: Task<obj>) =
                 task {

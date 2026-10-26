@@ -19,7 +19,10 @@ const withStore = async (body) => {
 }
 
 const openWork = async (store, commonDir, workId) => {
-  const opened = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, commonDir, workId, 0n)
+  const opened = await surface.PlanningSurface.executeReview(
+    commonDir, workId, 'provider-open', `open-${workId}`,
+    [{ key: 'investigate', value: 'establish the requested repository facts' }], null,
+  )
   assert.equal(opened.ok, true, opened.error)
 }
 
@@ -46,6 +49,9 @@ test('WHAT[work-028] devops delegates the intent to the bound DevOps and returns
     const after = life.inspected(commonDir, 'work-ask-1')
     assert.ok(after.DevOpsId, 'devops delegation must bind a fixed DevOps')
     assert.match(after.DevOpsId, /^devops-/, 'bound DevOps must have fixed devops identity')
+    const again = await surface.PlanningSurface.executeAsk(commonDir, 'work-ask-1', 'Check the follow-up fact', delegate)
+    assert.equal(again.ok, true, again.error)
+    assert.equal(life.inspected(commonDir, 'work-ask-1').DevOpsId, after.DevOpsId)
     const resEmpty = await surface.PlanningSurface.executeAsk(commonDir, 'work-ask-1', '   ', delegate)
     assert.equal(resEmpty.ok, false)
     assert.match(resEmpty.error, /cannot be empty/i)
@@ -55,11 +61,13 @@ test('WHAT[work-028] devops delegates the intent to the bound DevOps and returns
 test('WHAT[work-028] a second devops investigation is rejected while one delegation is pending', async () => {
   await withStore(async (store, _root, commonDir) => {
     await openWork(store, commonDir, 'work-ask-2')
-    const pendingDelegate = () => new Promise(() => {})
+    let finish
+    const pendingDelegate = () => new Promise(resolve => { finish = resolve })
     const first = surface.PlanningSurface.executeAsk(commonDir, 'work-ask-2', 'First investigation', pendingDelegate)
     const second = await surface.PlanningSurface.executeAsk(commonDir, 'work-ask-2', 'Second investigation', pendingDelegate)
     assert.equal(second.ok, false)
     assert.match(second.error, /pending|already/i)
-    first.catch(() => {})
+    finish('Investigation completed.')
+    assert.equal((await first).ok, true)
   })
 })

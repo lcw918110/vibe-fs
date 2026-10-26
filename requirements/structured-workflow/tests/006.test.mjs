@@ -4,9 +4,10 @@ import * as tr from '../../../dist/OpenCode/Tools/ToolRegistrySurface.js'
 
 
 
-test('WHAT[structured-workflow-006] deliver admission gate requires OfficeRole and admits Manager while rejecting others', () => {
-  assert.equal(tr.admissionAuthority('deliver'), 'office')
-  assert.equal(tr.rolePredicate('deliver', 'Manager'), true)
+test('WHAT[structured-workflow-006] the lifecycle finality gate is review: office-admitted for Manager, while retired deliver admits no role', () => {
+  assert.equal(tr.admissionAuthority('review'), 'office')
+  assert.equal(tr.rolePredicate('review', 'Manager'), true)
+  assert.equal(tr.rolePredicate('deliver', 'Manager'), false)
   assert.equal(tr.rolePredicate('deliver', 'Coder'), false)
   assert.equal(tr.rolePredicate('deliver', 'Orchestrator'), false)
   assert.equal(tr.rolePredicate('deliver', 'Inspector'), false)

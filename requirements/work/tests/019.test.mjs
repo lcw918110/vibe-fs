@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { realpathSync } from 'node:fs'
+import { realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 import { acceptAuthorityRoot, injectAcceptedAssessment, openIncumbency, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
@@ -37,6 +37,28 @@ const runManagerProgram = async (hooks, sessionID, body) =>
       { sessionID, agent: 'manager' },
     ),
   )
+
+test('WHAT[work-019] a fresh Manager can inspect before its first review and that review opens work synchronously', async () => {
+  await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
+    const sessionID = 'ses-fresh-manager-019'
+    await acceptAuthorityRoot(runtime, sessionID, 'manager')
+    writeFileSync(join(directory, 'bootstrap.txt'), 'bootstrap-proof')
+    const inspect = await runManagerProgram(hooks, sessionID,
+      'return await this.reviewOnly.cat("bootstrap.txt");')
+    assert.match(inspect, /bootstrap-proof/)
+    assert.doesNotMatch(inspect, /REVIEW_ONLY/)
+
+    const reviewed = String(await hooks.tool.review.execute(
+      { findings: [{ key: 'repair', value: 'repair the observed regression' }] },
+      bound(sessionID, 'fresh-review'),
+    ))
+    assert.match(reviewed, /Reviewed/)
+    assert.equal(lifecycle.inspected(await journalSurface.JournalSurface_initializeStateRoot(directory), sessionID).Reviewed, true)
+    const closed = await runManagerProgram(hooks, sessionID,
+      'return await this.reviewOnly.cat("bootstrap.txt");')
+    assert.match(closed, /REVIEW_ONLY/)
+  })
+})
 
 
 

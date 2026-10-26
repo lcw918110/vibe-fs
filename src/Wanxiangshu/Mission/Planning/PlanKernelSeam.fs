@@ -42,7 +42,7 @@ module PlanKernelSeam =
     let isReviewFinished (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
         match inspected gitCommonDir workId with
         | None -> false
-        | Some work -> activeOf work incumbencyId && work.Wait <> "AwaitOperatorAnswer" && work.Wait <> ""
+        | Some work -> activeOf work incumbencyId && work.Reviewed
 
     let isEligible (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
         match inspected gitCommonDir workId with

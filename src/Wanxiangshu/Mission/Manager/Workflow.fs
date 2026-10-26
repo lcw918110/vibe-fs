@@ -53,23 +53,21 @@ module ManagerWorkflow =
             return string ordinal
         }
 
-    /// True when this provider run already produced one of the work's
-    /// retirements: the run is retired and its later observations are stale.
+    /// True when the work is already complete. A completed Manager owes no
+    /// continuation; only a new operator message reopens it through Work.
     let private isRetiredObservation
         (directory: string option)
         (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
+        (_providerRun: ProviderRunIdentity)
         =
         task {
             let! workOpt = lifecycleWork directory (SessionId.value sessionId)
 
-            return
-                workOpt
-                |> Option.exists (fun work -> List.contains (ProviderRunIdentity.value providerRun) work.RetiredRuns)
+            return workOpt |> Option.exists Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority
         }
 
-    // Algorithm H reads the opening sequence plus tenure, review state, and obligations.
-    // S1–S3 do not enter the S4 resource match. Certificates are not an input.
+    // Algorithm H reads the Manager milestone plus tenure, review state, and obligations.
+    // Only 执行 and 收尾 enter the resource match. Certificates are not an input.
     let private resourceForCurrentAction (directory: string option) (sessionId: SessionId) =
         task {
             let! workOpt = lifecycleWork directory (SessionId.value sessionId)
@@ -77,7 +75,7 @@ module ManagerWorkflow =
             return
                 match workOpt with
                 | None -> None
-                | Some work when work.Sequence <> [ "S4" ] -> None
+                | Some work when work.Stage <> "执行" && work.Stage <> "收尾" -> None
                 | Some work when work.ActiveId.IsNone -> None
                 | Some work when not work.Reviewed -> Some assessPath
                 | Some _ -> Some workPath

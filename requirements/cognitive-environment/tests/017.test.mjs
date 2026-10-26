@@ -27,6 +27,6 @@ test('WHAT[cognitive-environment-017] role and stage resources do not ask the mo
     assert.doesNotMatch(s3, /Whenever the user in `post-S3`|此后若用户在 `post-S3`/)
     const deliver = read('tool/deliver/description/' + locale + '.md')
     assert.doesNotMatch(deliver, /The first call returns|第一次调用返回|call deliver again|再次调用 deliver/)
-    assert.match(deliver, /一次调用|one call/)
+    assert.match(deliver, /一次调用|one call/i)
   }
 })

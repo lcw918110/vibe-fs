@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
@@ -101,6 +101,32 @@ test('WHAT[work-024] an unreviewed tenure may read the draft but cannot write it
     )
     assert.match(String(read), /# ok/)
     assert.match(String(read), /hasReviewOnly = false/)
+  })
+})
+
+test('WHAT[work-024] real Plan writes remain locked before a substantive review and lock again after relay', async () => {
+  await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
+    const sessionID = 'ses-write-fence-024'
+    await acceptAuthorityRoot(runtime, sessionID, 'plan')
+    const path = join(directory, 'draft.md')
+    writeFileSync(path, 'original')
+    let sequence = 0
+    const invoke = async (body) => {
+      const id = `write-fence-${++sequence}`
+      return String(await hooks.tool['todowrite-for-plan'].execute({
+        name: id, intent: 'Check the draft write permission at the actual operation.',
+        program: `class Js extends JsProgram { async run() { ${body} } }`,
+        remainingScopeTurnsEstimate: 3,
+      }, { sessionID, agent: 'plan', callID: id, messageID: `run-${id}` }))
+    }
+    const write = () => invoke(`const result = await this.write(${JSON.stringify(path)}, "changed"); return result ?? {written:true};`)
+    assert.match(await write(), /DRAFT_WRITE_LOCKED/)
+    assert.equal(readFileSync(path, 'utf8'), 'original')
+    await invoke('return await this.review([{key:"draft",value:"finish draft"}]);')
+    assert.doesNotMatch(await write(), /DRAFT_WRITE_LOCKED/)
+    assert.equal(readFileSync(path, 'utf8'), 'changed')
+    await invoke('return await this.review([{key:"draft",value:null}]);')
+    assert.match(await write(), /DRAFT_WRITE_LOCKED/)
   })
 })
 

@@ -131,6 +131,32 @@ test('WHAT[work-027] a missing lifecycle projection is not evidence that the Man
   }, { session: 'manager-missing-projection-fixture' })
 })
 
+test('WHAT[work-027] a completed Manager natural stop owes no continuation nudge', async () => {
+  const lifecycle = await import('../../../dist/Mission/Lifecycle/Surface.js')
+  const journalSurface = await import('../../../dist/Persistence/Journal/Surface.js')
+  const surface = lifecycle.LifecycleSurface ?? lifecycle
+  await withReview(async ({ runtime, session, directory }) => {
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    const review = (id, updates) =>
+      surface.submitReview(commonDir, session, id, 'Manager', 'run-' + id, 'call-' + id, updates, [], '')
+    assert.equal((await review('clear', [{ key: 'target-gap', value: null }])).kind, 'Relayed')
+    assert.equal((await review('advance', [])).kind, 'Advanced')
+    assert.equal((await review('close', [])).kind, 'Completed')
+    const sent = []
+    const gate = quiescence.create()
+    quiescence.beginAttempt(gate, session)
+    await managerWorkflow.observeIdle({
+      SubscribeTerminal: () => ({ Dispose() {} }),
+      SendPrompt: async (_session, text) => {
+        sent.push(text)
+        return dispatch.admittedWithPhysicalMessage('completed-manager-nudge')
+      },
+    }, runtime.journal, gate, quiescence.observeIdle(gate, session),
+    session, 'user-root', 'user-root', 'completed-manager-stop', directory)
+    assert.deepEqual(sent, [], 'a completed Manager must not be told its task is unfinished')
+  }, { session: 'manager-completed-natural-stop' })
+})
+
 test('WHAT[work-027] Engineer/DevOps natural stop completes cleanly without requiring a child delivery member', async () => {
   const nonPlanExecutors = ['engineer', 'devops']
 
@@ -178,7 +204,12 @@ test('WHAT[work-027] Engineer/DevOps natural stop completes cleanly without requ
 
       const program = 'class Js extends JsProgram { async run() { return 1; } }'
       const executed = await hooks.tool[`todowrite-for-${name}`].execute(
-        { name: `program-${run}`, program, intent: 'Observe this program result without treating it as a business delivery.' },
+        {
+          name: `program-${run}`,
+          program,
+          intent: 'Observe this program result without treating it as a business delivery.',
+          remainingScopeTurnsEstimate: 3,
+        },
         { sessionID: session, agent: name, callID: `call-${session}`, messageID: run },
       )
       assert.match(String(executed), /# ok/)

@@ -44,16 +44,20 @@ module ProviderSystemTransform =
         (stagePath: string)
         (draftPath: string)
         =
+        // The six candidates carry this session's draft path. An empty map
+        // leaves {{draft_path}} and the render fails closed, so a later
+        // milestone could not recognize the line it wrote.
+        let substitutions = Map.ofList [ "draft_path", draftPath ]
+
         let expected =
             [ for path in planStagePaths do
                   for stageLang in [ ProviderLanguage.English; ProviderLanguage.SimplifiedChinese ] do
-                      canonical (planStageGuidanceFor stageLang path Map.empty) ]
+                      canonical (planStageGuidanceFor stageLang path substitutions) ]
 
         let isStageLine (text: string) =
             expected |> List.contains (canonical text)
 
-        let nextGuidance =
-            planStageGuidanceFor lang stagePath (Map.ofList [ "draft_path", draftPath ])
+        let nextGuidance = planStageGuidanceFor lang stagePath substitutions
 
         let hasStageLine = currentSystem |> Array.exists isStageLine
 

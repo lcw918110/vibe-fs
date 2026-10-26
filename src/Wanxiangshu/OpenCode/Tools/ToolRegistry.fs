@@ -592,21 +592,25 @@ module ToolRegistry =
             |> Option.map (fun surface ->
                 let reviewAllowed (ctx: HostToolContext) : Task<bool> =
                     task {
-                        let! facts = runtime.ManagerCapabilityFactsFor ctx.SessionId
+                        let! work = runtime.LifecycleWorkFor ctx.SessionId
                         let! frozen = runtime.IsRetirementFrozen ctx.SessionId
 
                         return
-                            facts.HasActiveIncumbency
-                            && not facts.HasAssessment
-                            && facts.CleanupBlockerDigest.IsNone
+                            (work
+                             |> Option.forall (fun current ->
+                                 current.ActiveId.IsSome
+                                 && not current.Reviewed
+                                 && current.BlockerDigest.IsNone))
                             && not frozen
                     }
 
-                // Source writes stay available except while a question is unanswered.
-                // Review no longer locks a promotion eligibility. The check is the
-                // same predicate the DevOps member uses.
+                // 每次写入重新读取当前任期，不让已保存的成员越过接力边界。
                 let planWriteCheck (ctx: HostToolContext) : bool =
                     planSourceWriteAllowed (runtime.IsWaitingForUser ctx.SessionId)
+                    && (cachedGitCommonDir
+                        |> Option.bind (fun root ->
+                            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected root ctx.SessionId)
+                        |> Option.exists (fun work -> work.ActiveId.IsSome && work.Reviewed))
 
                 let spec =
                     let createSpec =
@@ -855,6 +859,7 @@ module ToolRegistry =
         let baseSpecs =
             [ yield negotiateSpec
               yield previousScopeSpec
+              yield Wanxiangshu.Mission.Work.OpenCode.ReviewShell.spec factory runtime
               yield JoinTool.spec runtime
 
               let horizonContext: HorizonTool.HorizonRuntimeContext =

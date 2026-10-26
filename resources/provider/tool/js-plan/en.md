@@ -4,5 +4,5 @@ This surface has no glob, no grep, and no access to repository files. For reposi
 
 The draft is read-only until this tenure's first review is finished. Before that, writing the draft is refused; after the first review, writing unlocks and stays unlocked for the rest of the tenure. A relayed successor tenure starts read-only again until its own first review.
 
-Inside a program, `await this.ask(question)` asks the user and pauses: the tool call returns a parked payload and the attempt is interrupted; when the user replies, resume with `{ unpark: { handle, value } }` and the await yields the injected value. Only the S1 stage may ask; other stages refuse with `ASK_REFUSED`.
-Within a planning tenure, the lifecycle host tool `deliver` may promote to the next stage and return the new stage's method without ending the attempt — the plan continues in this tenure.
+Inside a program, `await this.ask(question)` asks the user and pauses: the tool call returns a parked payload and the attempt is interrupted; when the user replies, resume with `{ unpark: { handle, value } }` and the await yields the injected value. Without a question or an available user channel the call refuses with `ASK_REFUSED`.
+Within a planning tenure, a successor's first `this.review` with an empty ledger advances to the next milestone and returns the new milestone's method without ending the attempt — the plan continues in this tenure.

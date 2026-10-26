@@ -238,6 +238,7 @@ module ToolExecuteGate =
         elif
             role = Role.Manager
             && spec.Name <> "todowrite-for-manager"
+            && spec.Name <> "review"
             && spec.Name <> "resetScope"
             && spec.Name <> "negotiate"
         then

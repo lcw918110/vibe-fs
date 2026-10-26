@@ -202,11 +202,11 @@ test('WHAT[capability-enforcement-025] final incumbent may still delegate Engine
 test('WHAT[capability-enforcement-025] P18_final_incumbent_notice_text_present_in_both_languages', () => {
   const zh = readFileSync(new URL('../../../resources/provider/runtime/manager-finish/zh-CN.md', import.meta.url), 'utf8')
   const en = readFileSync(new URL('../../../resources/provider/runtime/manager-finish/en.md', import.meta.url), 'utf8')
-  assert.match(zh, /终局交付资格/)
-  assert.match(zh, /findings 为空集/)
+  assert.match(zh, /「收尾」/)
+  assert.match(zh, /清空义务账的 `this.review` 结案/)
   assert.match(zh, /派出 Engineer 和通过固定 DevOps 收尾/)
-  assert.match(en, /eligible to complete/)
-  assert.match(en, /empty findings/)
+  assert.match(en, /reached close-out/)
+  assert.match(en, /leaves the ledger empty/)
   assert.match(en, /may continue delegating/)
 })
 

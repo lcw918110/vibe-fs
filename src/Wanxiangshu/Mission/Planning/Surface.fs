@@ -338,7 +338,7 @@ module PlanningSurface =
 
     let isReviewFinished (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
         match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected gitCommonDir workId with
-        | Some work when work.ActiveId = Some incumbencyId -> true
+        | Some work when work.ActiveId = Some incumbencyId -> work.Reviewed
         | _ -> false
 
     let PlanningSurface: obj =
