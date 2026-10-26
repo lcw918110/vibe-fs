@@ -17,6 +17,7 @@ open Wanxiangshu.Context.Scope
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Context.Companion
 open Wanxiangshu.Context.Prefix
+open Wanxiangshu.Mission.Work.OpenCode
 
 /// Host-neutral adapter over the omp (oh-my-pi) extension API.
 ///
@@ -2760,6 +2761,7 @@ module Adapter =
         (hooks: ProductHooks)
         (emit: HostSignal -> Task<unit>)
         (journalOpt: AgentJournal option)
+        (stateRoot: string)
         : (HostSignal -> Task<unit>) =
 
         registerResetScopeTool pi journalOpt
@@ -2938,7 +2940,8 @@ module Adapter =
                 let sid = ctxSessionId ctx
                 sessionContexts.[sid] <- ctx
                 let rawList = fieldValue event "messages"
-                let scoped = ompScopeRequest sid rawList
+                let visible = RelayNarrativeTransform.visibleMessages stateRoot sid rawList
+                let scoped = ompScopeRequest sid visible
 
                 let! finalResult =
                     match hooks.Turn with
@@ -3161,7 +3164,7 @@ module Adapter =
         : Task<unit> =
         task {
             let! journalOpt = acquireOmpJournal stateRoot
-            let signal = registerProductHooks pi hooks emit journalOpt
+            let signal = registerProductHooks pi hooks emit journalOpt stateRoot
 
             do!
                 signal (

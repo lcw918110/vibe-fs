@@ -3,10 +3,7 @@ namespace Wanxiangshu.Mission.Planning
 open System.Threading.Tasks
 
 module PlanWorkOpen =
-    /// root is the plan root directory (<state-root>/wanxiangshu in
-    /// production); sessionId is the plan session id, which becomes the workId.
-    /// observedHead is the XTrace head observed at opening; without it the
-    /// entry refuses with zero writes.
+    /// sessionId 是工作身份。第一次 review 开立工作。本入口不写日志。
     val ensurePlanWorkOpened:
         gitCommonDir: string ->
         root: string ->

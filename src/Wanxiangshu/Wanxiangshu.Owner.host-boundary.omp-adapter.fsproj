@@ -19,6 +19,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.prefix-stability.mission-obligation-todo-prefixepoch.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.host-boundary.opencode-host-workspaceeventstore.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.provider-language.participant-provider-language.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.work.mission-work-narrative-transform.fsproj"/>
     <Compile Include="Omp/Adapter.fsi"/>
     <Compile Include="Omp/Adapter.fs"/>
   </ItemGroup>

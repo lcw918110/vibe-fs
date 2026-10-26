@@ -31,10 +31,7 @@ module PlanTools =
     /// content, its digest, and the resolved path. Empty or missing is an error.
     val readAndValidatePlan: root: string -> workId: string -> Result<string * string * string, string>
 
-    /// work-025 / work-026: an authorized delivery first creates a
-    /// parentless execution container, durably binds its SessionId to the
-    /// DeliveryRequested operation, then sends the first prompt. Prompt
-    /// acceptance settles Delivered; unknown acceptance remains pending.
+    /// 已退出。review 是唯一生命周期入口。调用零写并返回错误。
     val executeDeliver:
         gitCommonDir: string ->
         root: string ->
@@ -73,8 +70,7 @@ module PlanTools =
         retirementCursor: int64 ->
             Task<Result<DeliverResult, string>>
 
-    /// Reconcile a bound execution after restart from an exact Host-observed
-    /// first user prompt. No external effect is issued by this function.
+    /// 已退出。恢复不得结算旧交付。调用零写并返回错误。
     val reconcileBoundExecution:
         gitCommonDir: string ->
         workId: string ->

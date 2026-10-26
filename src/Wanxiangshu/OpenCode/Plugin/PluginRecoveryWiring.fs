@@ -134,31 +134,13 @@ module PluginRecoveryWiring =
         task {
             let! observed = snapshots.GetMessages(SessionId.create execSessionId)
 
-            let settled =
-                observed
-                |> Result.mapError (fun reason -> "observation-failed", reason)
-                |> Result.bind (fun messages ->
-                    firstUserPrompt messages
-                    |> Option.map Ok
-                    |> Option.defaultValue (Error("pending", "bound session has no observed user prompt")))
-                |> Result.bind (fun prompt ->
-                    Wanxiangshu.Mission.Planning.PlanTools.reconcileBoundExecution
-                        gitCommonDir
-                        workId
-                        execSessionId
-                        prompt
-                        (retirementBlockers workId)
-                    |> Result.mapError (fun reason -> "refused", reason))
-
-            match settled with
-            | Ok _ ->
-                Wanxiangshu.Foundation.Diagnostic.emit
-                    "plan-delivery-recovery-settled"
-                    [ "work_id", workId; "exec_session_id", execSessionId ]
-            | Error(kind, reason) ->
-                Wanxiangshu.Foundation.Diagnostic.emit
-                    ("plan-delivery-recovery-" + kind)
-                    [ "work_id", workId; "exec_session_id", execSessionId; "reason", reason ]
+            ignore observed
+            ignore retirementBlockers
+            Wanxiangshu.Foundation.Diagnostic.emit
+                "plan-delivery-recovery-retired"
+                [ "work_id", workId
+                  "exec_session_id", execSessionId
+                  "reason", "review is the only lifecycle entry" ]
         }
 
     let private observeAvailableDelivery gitCommonDir workId execSessionId snapshots retirementBlockers : Task =
@@ -179,23 +161,16 @@ module PluginRecoveryWiring =
         snapshots
         retirementBlockers
         : Task =
-        task {
-            match
-                Wanxiangshu.Mission.Planning.PlanTools.bindObservedExecutionSession
-                    gitCommonDir
-                    workId
-                    operationId
-                    execSessionId
-            with
-            | Error reason ->
-                Wanxiangshu.Foundation.Diagnostic.emit
-                    "plan-delivery-recovery-bind-refused"
-                    [ "work_id", workId
-                      "operation_id", operationId
-                      "exec_session_id", execSessionId
-                      "reason", reason ]
-            | Ok() -> do! observeAvailableDelivery gitCommonDir workId execSessionId snapshots retirementBlockers
-        }
+        ignore gitCommonDir
+        ignore snapshots
+        ignore retirementBlockers
+        Wanxiangshu.Foundation.Diagnostic.emit
+            "plan-delivery-recovery-retired"
+            [ "work_id", workId
+              "operation_id", operationId
+              "exec_session_id", execSessionId
+              "reason", "review is the only lifecycle entry" ]
+        Task.FromResult(()) :> Task
 
     let private discoverUnboundDelivery
         (gitCommonDir: string)
@@ -332,48 +307,61 @@ module PluginRecoveryWiring =
         | Some journal -> SessionBindingRecovery.install journal
         | None -> ()
 
-        scope.AttachDurabilityActivation(fun () ->
-            scope.RunBackground(fun () ->
+        let recovery () =
+            scope.RunBackgroundTracked(fun () ->
                 task {
-                    // crash-reconciliation-020: the child work the previous process
-                    // left behind can no longer be delivered, so it is voided
-                    // (Abandoned(Voided)) — the obligation stays visible until
-                    // join reports the void once and retires it.
-                    match boot.Journal with
-                    | Some journal -> do! ChildWorkRecovery.settleOrphanedChildRuns journal
-                    | None -> ()
-
-                    // provider-attempt-recovery-024: the abandoned stale requests
-                    let! recoveryWorks =
+                        // crash-reconciliation-020: the child work the previous process
+                        // left behind can no longer be delivered, so it is voided
+                        // (Abandoned(Voided)) — the obligation stays visible until
+                        // join reports the void once and retires it.
                         match boot.Journal with
-                        | Some journal -> inspectRecoveryWorks journal boot.WorkspaceDirectory
-                        | None -> Task.FromResult [||]
+                        | Some journal -> do! ChildWorkRecovery.settleOrphanedChildRuns journal
+                        | None -> ()
 
-                    match boot.Journal with
-                    | Some journal ->
-                        do!
-                            reconcilePendingDeliveries
-                                recoveryWorks
-                                boot.WorkspaceDirectory
-                                snapshotPort
-                                discoveryPort
-                                retirementBlockers
-                    | None -> ()
+                        // provider-attempt-recovery-024: the abandoned stale requests
+                        let! recoveryWorks =
+                            match boot.Journal with
+                            | Some journal -> inspectRecoveryWorks journal boot.WorkspaceDirectory
+                            | None -> Task.FromResult [||]
 
-                    do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded)
+                        match boot.Journal with
+                        | Some journal ->
+                            do!
+                                reconcilePendingDeliveries
+                                    recoveryWorks
+                                    boot.WorkspaceDirectory
+                                    snapshotPort
+                                    discoveryPort
+                                    retirementBlockers
+                        | None -> ()
 
-                    do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.CapacityProjectionReplayed)
+                        do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded)
 
-                    // execution-model-routing-019: reseed each road's fixed DevOps
-                    // model target from the durable road projection. Restart dropped
-                    // the process-local binding; without this the first Normal
-                    // admission would take the target from the current scheduler
-                    // preference and silently overwrite the road's fixed one.
-                    match boot.Journal with
-                    | Some journal -> seedBoundDevOpsModelTargets journal recoveryWorks
-                    | None -> ()
+                        do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.CapacityProjectionReplayed)
 
-                    // crash-reconciliation-018: the load-phase normalization above owes
-                    // one restart status guidance to the next real user instruction.
-                    scope.MarkRestartGuidancePending()
-                }))
+                        // execution-model-routing-019: reseed each road's fixed DevOps
+                        // model target from the durable road projection. Restart dropped
+                        // the process-local binding; without this the first Normal
+                        // admission would take the target from the current scheduler
+                        // preference and silently overwrite the road's fixed one.
+                        match boot.Journal with
+                        | Some journal -> seedBoundDevOpsModelTargets journal recoveryWorks
+                        | None -> ()
+
+                        // crash-reconciliation-018: the load-phase normalization above owes
+                        // one restart status guidance to the next real user instruction.
+                        scope.MarkRestartGuidancePending()
+                    })
+
+        // crash-reconciliation-020: the same recovery must be observable by the
+        // next handoff's identity judgment, which can happen before (or without)
+        // the scope activator firing. The journal carries the barrier so both
+        // dispatch and admission can trigger and await the very same work.
+        match boot.Journal with
+        | Some durable -> durable.EnqueueRecovery recovery
+        | None -> ()
+
+        scope.AttachDurabilityActivation(fun () ->
+            match boot.Journal with
+            | Some durable -> scope.TrackDurabilityActivation(durable.RunOrAwaitRecovery())
+            | None -> scope.TrackDurabilityActivation(recovery ()))

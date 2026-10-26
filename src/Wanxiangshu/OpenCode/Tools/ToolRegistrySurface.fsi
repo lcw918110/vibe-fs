@@ -4,6 +4,12 @@ namespace Wanxiangshu.OpenCode
 /// role predicate; callers provide labels and receive only a boolean decision.
 module ToolRegistrySurface =
 
+    /// The predicate ToolRegistry installs on Plan source writes.
+    val planSourceWriteAllowed: waitingForUser: bool -> bool
+
+    /// The predicate ToolRegistry installs on the DevOps member.
+    val devopsDispatchAllowed: waitingForUser: bool -> bool
+
     /// Unknown role and unknown tool both fail closed.
     val rolePredicate: toolName: string -> roleLabel: string -> bool
 

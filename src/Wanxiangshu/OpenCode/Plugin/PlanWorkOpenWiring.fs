@@ -21,7 +21,6 @@ module PlanWorkOpenWiring =
             | Ok() -> ()
             | Error err ->
                 Wanxiangshu.Foundation.Diagnostic.emit "plan-work-open-failed" [ "work_id", sid; "error", err ]
-                invalidOp ("Plan lifecycle opening failed: " + err)
         }
 
     let private queryWorktreeRoot (workspace: string) : Task<string> =

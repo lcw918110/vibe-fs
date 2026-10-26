@@ -25,6 +25,12 @@ type ToolRegistration =
 
 module ToolRegistry =
 
+    /// False while a question is waiting for the user, including an empty-ledger ask.
+    val planSourceWriteAllowed: waitingForUser: bool -> bool
+
+    /// False while a question is waiting for the user.
+    val devopsDispatchAllowed: waitingForUser: bool -> bool
+
     val create:
         toolModule: obj ->
         sessionPort: ISessionHostPort ->

@@ -3,7 +3,7 @@ import test from 'node:test'
 import * as ToolSurface from '../../../dist/OpenCode/Tools/ToolSurface.js'
 
 test('WHAT[work-030] StaticTools explicitly registers all three plan tools and excludes handoff/delegation verbs', () => {
-  const planTools = ['todowrite-for-plan', 'review', 'deliver']
+  const planTools = ['todowrite-for-plan', 'review']
 
   // ToolSurface exports toolSpecNames as an array of all recognized tool names
   const names = ToolSurface.toolSpecNames()
@@ -23,6 +23,7 @@ test('WHAT[work-030] StaticTools explicitly registers all three plan tools and e
 
   // The host devops tool is retired: it is no longer a registered tool.
   assert.ok(!names.includes('devops'))
+  assert.ok(!names.includes('deliver'), 'lifecycle deliver is not a registered tool')
 
   // Admission is by exact registered name: the plan tools are the only
   // plan-admitted entries beyond the shared base permissions.

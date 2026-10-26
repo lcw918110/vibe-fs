@@ -673,12 +673,12 @@ type ToolRuntimeScope
             return
                 work
                 |> Option.map (fun work ->
-                    match work.ActiveId, work.Reviewed with
-                    | None, _ -> defaultEmptyManagerFacts
-                    | Some _, reviewed ->
+                    match work.ActiveId with
+                    | None -> defaultEmptyManagerFacts
+                    | Some _ ->
                         { HasActiveIncumbency = true
-                          HasAssessment = reviewed
-                          IsFinalIncumbent = work.ReviewOutcome = Some "Promoted"
+                          HasAssessment = false
+                          IsFinalIncumbent = work.Stage = "收尾"
                           CleanupBlockerDigest = work.BlockerDigest })
                 |> Option.defaultValue defaultEmptyManagerFacts
         }
@@ -1282,6 +1282,12 @@ type ToolRuntimeScope
     member _.SendNegotiationSteer(recipient: string, answer: string, receipt: string) =
         sendNegotiationSteer recipient answer receipt
 
+    member _.SendAdvisorSteer(recipient: string, answer: string, processId: string, isCurrent: unit -> bool) =
+        if not (isCurrent ()) then
+            Task.FromResult(Error "stale Advisor answer: source Scope is no longer current")
+        else
+            sendConsultationSteer recipient answer processId (fun _ _ -> isCurrent ())
+
     member _.AttachPreviousScopeTransport(ask: string -> obj -> string -> Task<Result<string, string>>) =
         askArchivedScope <- Some ask
 
@@ -1428,18 +1434,12 @@ type ToolRuntimeScope
                 not (
                     work
                     |> Option.exists (fun current ->
-                        current.Stage = "S1"
-                        || (current.Sequence = [ "S4" ]
-                            && current.Stage = "S4"
-                            && current.ActiveId.IsSome
-                            && not current.Reviewed
-                            && current.RoundCount = 0
-                            && (activeProfileFor sid
-                                |> Option.exists (fun profile -> profile.CanonicalRole = Role.Manager))))
+                        current.Wait = "AwaitReview"
+                        || current.Wait = "AwaitOperatorAnswer"
+                        || current.Wait = "ConfirmEffect")
                 )
             then
-                return
-                    Error "ask is allowed only in the S1 planning stage (except S4 first-tenure Manager empty review)"
+                return Error "ask is allowed only while the work waits for review, an answer, or effect confirmation"
             elif not (questionRequests.Add sid) then
                 return Error "a question is already being sent for this session"
             else
@@ -1499,6 +1499,117 @@ type ToolRuntimeScope
     member this.AskUser(ctx: HostToolContext, question: string) : Task<Result<unit, string>> =
         this.AskUserAs(ctx, question, Role.Plan)
 
+    /// PromptAuthority first, then the physical park. The stage name is not a gate.
+    member this.ParkReviewQuestion(ctx: HostToolContext, question: string) : Task<Result<unit, string>> =
+        task {
+            let sid = SessionId.create ctx.SessionId
+
+            match
+                journal,
+                activeProfileFor sid,
+                ctx.ProviderRunId,
+                ctx.ToolCallId,
+                currentPhysicalUserMessage ctx.SessionId,
+                questionNotifier
+            with
+            | Some durable, Some profile, Some run, Some call, Some physical, Some notify when
+                not (String.IsNullOrWhiteSpace question)
+                ->
+                let request: UserQuestionAskedPayload =
+                    { SessionId = sid
+                      LogicalRunId = profile.LogicalRunId
+                      AuthorityRootUserMessageId = profile.AuthorityRootUserMessageId
+                      PhysicalUserMessageId = PhysicalUserMessageId.create physical
+                      ProviderRunId = run
+                      ToolCallId = call
+                      Question = question }
+
+                match! UserQuestionJournal.request durable request with
+                | Error reason -> return Error reason
+                | Ok () -> return! notify question
+            | _ -> return Error "review ask requires authority, call evidence, and a question notifier"
+        }
+
+    /// Effect ports for one review call. Each host capability runs once, after the domain commit.
+    member this.ReviewPorts(ctx: HostToolContext) : obj =
+        let promptOptions (agent: string option) : SessionPromptOptions =
+            { Model = None
+              Agent = agent
+              Directory = None
+              Metadata = None
+              Tools = None
+              DetachedListener = None }
+
+        let admitted (outcome: Outcome.SendOutcome) =
+            match outcome with
+            | Outcome.SendOutcome.AdmittedWithReceipt _
+            | Outcome.SendOutcome.AdmittedWithPhysicalMessage _ -> true
+            | _ -> false
+
+        let park (request: obj) =
+            task {
+                let! parked = this.ParkReviewQuestion(ctx, string request?text)
+
+                match parked with
+                | Ok () -> return createObj [ "ok", box true ]
+                | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
+            }
+
+        let send (request: obj) =
+            task {
+                let! outcome =
+                    sessions.SendPrompt(SessionId.create ctx.SessionId, string request?text, promptOptions None)
+
+                if admitted outcome then
+                    return createObj [ "ok", box true ]
+                else
+                    return createObj [ "ok", box false; "reason", box "prompt was not admitted" ]
+            }
+
+        let openSession (request: obj) =
+            task {
+                let options: ChildSessionOptions =
+                    { Title = Some(string request?digest)
+                      Agent = Some "manager"
+                      Directory = None }
+
+                match! sessions.CreateChildSession(SessionId.create ctx.SessionId, options) with
+                | Ok sessionId ->
+                    return createObj [ "ok", box true; "sessionId", box (SessionId.value sessionId) ]
+                | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
+            }
+
+        let draft (request: obj) =
+            task {
+                let! outcome =
+                    sessions.SendPrompt(
+                        SessionId.create(string request?sessionId),
+                        string request?digest,
+                        promptOptions (Some "manager")
+                    )
+
+                if admitted outcome then
+                    return createObj [ "ok", box true ]
+                else
+                    return createObj [ "ok", box false; "reason", box "draft was not admitted" ]
+            }
+
+        let stop (_request: obj) =
+            task {
+                match! sessions.InterruptAttempt(SessionId.create ctx.SessionId) with
+                | Ok () -> return createObj [ "ok", box true ]
+                | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
+            }
+
+        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.reviewEffects (
+            createObj
+                [ "park", box park
+                  "send", box send
+                  "open", box openSession
+                  "draft", box draft
+                  "stop", box stop ]
+        )
+
     member private this.SubmitInitialManagerQuestion
         (ctx: HostToolContext, question: string)
         : Task<Result<bool, string>> =
@@ -1526,10 +1637,11 @@ type ToolRuntimeScope
             let initialActive =
                 work
                 |> Option.exists (fun current ->
-                    current.Sequence = [ "S4" ]
-                    && current.ActiveId.IsSome
-                    && not current.Reviewed
-                    && current.RoundCount = 0)
+                    current.ActiveId.IsSome
+                    && not current.Delivered
+                    && current.RoundCount = 0
+                    && current.Stage = "执行"
+                    && current.Wait = "AwaitReview")
 
             let mustAsk = findingsEmpty && this.IsRole(ctx, Role.Manager) && initialActive
 

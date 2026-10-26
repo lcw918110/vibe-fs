@@ -11,6 +11,18 @@ module LifecycleSurface =
     val execute:
         gitCommonDir: string -> workId: string -> requestId: string -> command: obj -> DurableWorkHost.HostReceipt
 
+    val submitReview:
+        gitCommonDir: string ->
+        workId: string ->
+        requestId: string ->
+        office: string ->
+        providerRunId: string ->
+        toolCallId: string ->
+        updates: obj ->
+        blockers: obj ->
+        digest: string ->
+            obj
+
     val inspect: gitCommonDir: string -> workId: string -> obj
     val inspected: gitCommonDir: string -> workId: string -> DurableWorkHost.InspectedWork option
     val encodeOpening: kind: string -> workId: string -> root: string -> head: int64 -> string

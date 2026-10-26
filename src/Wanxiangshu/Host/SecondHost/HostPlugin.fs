@@ -271,18 +271,15 @@ module HostPlugin =
             | _ -> return! awaitChildReply clock timer ports childSession
         }
 
-    /// The child session's own durable work, derived from its session id so
-    /// it is deterministic.
+    /// 子会话的材料交还不依赖生命周期 Open。第一次 review 才开立工作。
     let private openChildWork (stateRoot: string) (root: string) (childWorkId: string) : Result<unit, string> =
-        DurableWorkHost.ensureOpened
-            stateRoot
-            childWorkId
-            (childWorkId + ":open:0")
-            root
-            (DurableWorkHost.planSequence ())
-            childWorkId
-            0.0
-        |> Result.map ignore
+        ignore stateRoot
+        ignore root
+
+        if String.IsNullOrWhiteSpace childWorkId then
+            Error "child work id cannot be empty"
+        else
+            Ok()
 
     /// The durable work of the host's own root session. The activation scope
     /// is opened against the SAME work id, so the scope and the work are one
@@ -295,25 +292,16 @@ module HostPlugin =
     let private activationScopeId (ports: HostPorts) : string =
         "host-activation:" + ports.Paths.ProjectId
 
-    /// Open the host's activation work. The work is a durable fact in the
-    /// machine state directory.
+    /// 激活不写生命周期 Open。材料交还与归属范围仍在后面单独建立。
     let private openActivationWork (stateRoot: string) (workId: string) (root: string) : Result<unit, HostError> =
-        // A session-root opening is not an execution tenure, so the plan
-        // sequence is the right one.
-        let opened =
-            DurableWorkHost.ensureOpened
-                stateRoot
-                workId
-                (workId + ":open:0")
-                root
-                (DurableWorkHost.planSequence ())
-                workId
-                0.0
-
-        match opened with
-        | Error reason ->
-            Error(HostError.Transport("the second host activation failed to open its durable work: " + reason))
-        | Ok _ -> Ok()
+        if
+            String.IsNullOrWhiteSpace stateRoot
+            || String.IsNullOrWhiteSpace workId
+            || String.IsNullOrWhiteSpace root
+        then
+            Error(HostError.Transport "the second host activation failed: the machine state directory is missing")
+        else
+            Ok()
 
     /// Open the ownership scope that owns this host's activation work. The
     /// scope is a durable fact in the ownership registry, not an in-memory
@@ -353,20 +341,10 @@ module HostPlugin =
                 )
             )
 
-    /// Whether the session's durable work is really open in the journal.
-    /// The evidence is read back from the machine state directory, not an
-    /// in-memory flag: a call whose session has no durable work is not
-    /// admitted.
+    /// 材料交还不要求生命周期已经 Open。会话身份非空即可投递。
     let private ownsActivationWork (stateRoot: string) (sessionId: string) : bool =
-        let inspected =
-            if String.IsNullOrWhiteSpace sessionId then
-                None
-            else
-                DurableWorkHost.inspected stateRoot (workIdOf sessionId)
-
-        match inspected with
-        | Some work -> work.Opened
-        | None -> false
+        ignore stateRoot
+        not (String.IsNullOrWhiteSpace sessionId)
 
     /// Open the durable work of a session the host announces. Every session
     /// that talks to this product gets its own durable work, so the tool

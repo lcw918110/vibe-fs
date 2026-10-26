@@ -1,8 +1,5 @@
 namespace Wanxiangshu.Mission.Work.OpenCode
 
-open Wanxiangshu.Host
-open Wanxiangshu.OpenCode
-
 module DeliverTool =
     val description: unit -> string
 
@@ -15,5 +12,3 @@ module DeliverTool =
         providerRunId: string ->
         toolCallId: string ->
             Result<string, string> option
-
-    val spec: factory: HostToolFactory -> scope: ToolRuntimeScope -> ToolSpec

@@ -109,6 +109,18 @@ module DurableWorkHost =
     [<Emit("Array.isArray($0) ? $0 : []")>]
     let private asArray (_value: obj) : obj array = jsNative
 
+    [<Emit("$0 != null && (typeof $0 === 'object' || typeof $0 === 'function') && typeof $0.then === 'function'")>]
+    let private isThenable (_value: obj) : bool = jsNative
+
+    [<Emit("$0.then($1)")>]
+    let private continueWith (_promise: obj) (_step: obj -> obj) : obj = jsNative
+
+    [<Emit("$0.then($1, $2)")>]
+    let private continueEither (_promise: obj) (_ok: obj -> obj) (_err: obj -> obj) : obj = jsNative
+
+    let private settle (produced: obj) (step: obj -> obj) : obj =
+        if isThenable produced then continueWith produced step else step produced
+
     /// Sibling of `.Herdchestra/wanxiangshu/events/`, not inside it. The library takes a
     /// connection, not a path; this file is the host-owned journal for new work.
     let journalPath (stateRoot: string) : string =
@@ -262,6 +274,168 @@ module DurableWorkHost =
             let durable = work?execute (requestId, command)
             observe requestId durable)
 
+    /// A review with no live session reports the effect unknown. It does not
+    /// pretend the user was parked, the prompt was sent, or a manager was opened.
+    let private honestEffects () : obj =
+        let ask (_effect: obj) = "Unknown"
+        let dispatch (_effect: obj) = "Unknown"
+        let stop (_effect: obj) = "Unknown"
+
+        let createSession (_effect: obj) =
+            createObj
+                [ "status", box "NotStarted"
+                  "reason", box "no manager session is bound to this review" ]
+
+        let sendDraft (_effect: obj) = "Unknown"
+
+        createObj
+            [ "ask", box ask
+              "dispatch", box dispatch
+              "stop", box stop
+              "createSession", box createSession
+              "sendDraft", box sendDraft ]
+
+    let private succeeded (result: obj) = isRecord result && unbox<bool> result?ok
+
+    /// The review coordinator calls these ports only after the domain commit.
+    /// park, send, draft and stop receive one request object and return
+    /// `{ ok: true }` or `{ ok: false, reason }`, or a promise of that object.
+    /// open returns `{ ok: true, sessionId }` or `{ ok: false, reason }`.
+    let reviewEffects (ports: obj) : obj =
+        let ask (effect: obj) =
+            settle (ports?park (createObj [ "text", effect?text ])) (fun result ->
+                if succeeded result then "Parked" else "Unknown")
+
+        let dispatch (effect: obj) =
+            settle (ports?send (createObj [ "text", effect?text ])) (fun result ->
+                if succeeded result then "Sent" else "Unknown")
+
+        let createSession (effect: obj) =
+            settle (ports?``open`` (createObj [ "digest", effect?digest ])) (fun result ->
+                if succeeded result && isString result?sessionId && not (String.IsNullOrEmpty(unbox<string> result?sessionId)) then
+                    createObj
+                        [ "status", box "SessionCreated"
+                          "execSessionId", result?sessionId ]
+                else
+                    let reason =
+                        if isString result?reason && not (String.IsNullOrEmpty(unbox<string> result?reason)) then
+                            unbox<string> result?reason
+                        else
+                            "manager session was not created"
+
+                    createObj [ "status", box "NotStarted"; "reason", box reason ])
+
+        let sendDraft (effect: obj) =
+            settle
+                (ports?draft (
+                    createObj
+                        [ "sessionId", effect?execSessionId
+                          "digest", effect?digest ]
+                ))
+                (fun result -> if succeeded result then "Admitted" else "Unknown")
+
+        let stop (effect: obj) =
+            settle (ports?stop (createObj [ "incumbencyId", effect?incumbencyId ])) (fun result ->
+                if succeeded result then "Requested" else "Unknown")
+
+        createObj
+            [ "ask", box ask
+              "dispatch", box dispatch
+              "stop", box stop
+              "createSession", box createSession
+              "sendDraft", box sendDraft ]
+
+    /// The journal stays open until a thenable effect chain has confirmed.
+    /// Closing in a synchronous finally would drop the confirmation append.
+    let private executeWithEffects
+        (gitCommonDir: string)
+        (workId: string)
+        (requestId: string)
+        (command: obj)
+        (effects: obj)
+        : obj =
+        let path = journalPath gitCommonDir
+        ensureDir (parentOf path)
+
+        let run () =
+            let connection = openDatabase path
+            let opened: obj = createNew SqliteJournal connection
+
+            let close () =
+                closeJournal (Some opened) connection
+
+            try
+                let durableWork: obj = createNew DurableWork (workId, opened, effects)
+                let produced: obj = durableWork?execute (requestId, command)
+
+                if isThenable produced then
+                    continueEither
+                        produced
+                        (fun value ->
+                            close ()
+                            value)
+                        (fun error ->
+                            close ()
+                            failwith (if isNull error then "review effect failed" else string error))
+                else
+                    close ()
+                    produced
+            with error ->
+                close ()
+                raise error
+
+        retryBusy run
+
+    /// The only lifecycle command the host sends. Office, call identity, and the
+    /// obligation updates are the caller's; Work decides relay, advance, and close.
+    let submitReview
+        (gitCommonDir: string)
+        (workId: string)
+        (requestId: string)
+        (office: string)
+        (providerRunId: string)
+        (toolCallId: string)
+        (updates: obj)
+        (blockers: obj)
+        (digest: string)
+        (effects: obj)
+        : obj =
+        let fields =
+            [ "office", box office
+              "providerRunId", box providerRunId
+              "toolCallId", box toolCallId
+              "updates", if isNull updates then box ([||]: obj array) else updates ]
+
+        let withBlockers =
+            if isNull blockers then
+                fields
+            else
+                ("blockers", blockers) :: fields
+
+        let withDigest =
+            if String.IsNullOrEmpty digest then
+                withBlockers
+            else
+                ("digest", box digest) :: withBlockers
+
+        let ports = if isNull effects then honestEffects () else effects
+
+        let present (durable: obj) =
+            let receipt = observe requestId durable
+
+            createObj
+                [ "requestId", box receipt.RequestId
+                  "status", box receipt.Status
+                  "kind", box receipt.Kind
+                  "reason", box receipt.Reason
+                  "revision", box receipt.Revision
+                  "milestone", box (resultText receipt "milestone")
+                  "wait", box (resultText receipt "wait")
+                  "incumbencyId", box (resultText receipt "incumbencyId") ]
+
+        let raw = executeWithEffects gitCommonDir workId requestId (command "Review" withDigest) ports
+        if isThenable raw then continueWith raw present else present raw
+
     let inspect (gitCommonDir: string) (workId: string) : obj =
         useWork gitCommonDir workId (fun work -> work?inspect ())
 
@@ -302,6 +476,9 @@ module DurableWorkHost =
             Opened: bool
             Sequence: string list
             Stage: string
+            /// The work snapshot's wait: AwaitReview, AwaitOperatorAnswer,
+            /// AwaitEmptyReview, AwaitOperatorMessage, or ConfirmEffect.
+            Wait: string
             ActiveId: string option
             OpeningStage: string option
             Reviewed: bool
@@ -329,121 +506,14 @@ module DurableWorkHost =
             Retirements: HostRetirement list
             ProjectionCut: HostRunFence option
             Advances: HostAdvance list
+            BarrierToolCallId: string option
+            SuccessorTenureId: string option
         }
 
     let private optionalText (value: string) : string option = if value = "" then None else Some value
 
     let private activeIdOf (active: obj) : string option =
         if isNull active then None else Some(textOf active?id)
-
-    let private reviewOutcomeOf (active: obj) : string option =
-        if isNull active then
-            None
-        else
-            let seen = textOf active?reviewOutcome
-            if seen = "" then None else Some seen
-
-    let private openingStageOf (active: obj) : string option =
-        if isNull active then
-            None
-        else
-            let seen = textOf active?openingStage
-            if seen = "" then None else Some seen
-
-    let private openingCursorOf (active: obj) : float option =
-        if isNull active || isNull active?openingCursor then
-            None
-        else
-            Some(unbox<float> active?openingCursor)
-
-    let private pendingText (pending: obj) (name: string) : string option =
-        if isNull pending then
-            None
-        else
-            optionalText (textOf pending?(name))
-
-    let private sequenceOf (snapshot: obj) : string list =
-        if isNull snapshot?sequence then
-            []
-        else
-            unbox<obj array> snapshot?sequence |> Array.toList |> List.map textOf
-
-    let private historyEventsOf (work: obj) : obj array =
-        unbox<obj array> (work?history ())
-        |> Array.collect (fun frame -> unbox<obj array> frame?events)
-
-    let private eventsOfType (name: string) (events: obj array) : obj array =
-        events |> Array.filter (fun event -> textOf event?``type`` = name)
-
-    let private hostRunFenceOf (event: obj) : HostRunFence =
-        let cut = nested event "projectionCut"
-        let source = if isRecord cut then cut else event
-
-        { ProviderRunId = textOf source?providerRunId
-          ToolCallId = textOf source?toolCallId }
-
-    let private hostRetirementOf (event: obj) : HostRetirement =
-        let cut = nested event "projectionCut"
-
-        { RetirementId = textOf event?retirementId
-          IncumbencyId = textOf event?incumbencyId
-          Outcome = textOf event?outcome
-          Expected = textOf event?expectedAdvance
-          Fence = hostRunFenceOf event
-          ProjectionCut = isRecord cut }
-
-    let private hostAdvanceOf (event: obj) : HostAdvance =
-        { IncumbencyId = textOf event?incumbencyId
-          Expected = textOf event?expected
-          Next = textOf event?next }
-
-    let private cutRunOf (event: obj) : string option =
-        let cut = nested event "projectionCut"
-        let run = if isRecord cut then textOf cut?providerRunId else ""
-        if run = "" then None else Some run
-
-    let private retiredRunOf (event: obj) : string option =
-        let run = textOf event?providerRunId
-        if run <> "" then Some run else cutRunOf event
-
-    let private rangeOfLastRound (last: obj) : (float * float) option =
-        let retirement = last?retirementCursor
-
-        if isNull retirement then
-            None
-        else
-            Some(unbox<float> last?openingCursor, unbox<float> retirement)
-
-    let private predecessorRangeOf (activeId: string option) (rounds: obj array) : (float * float) option =
-        match activeId, rounds with
-        | None, _
-        | Some _, [||] -> None
-        | Some _, _ -> rangeOfLastRound rounds.[rounds.Length - 1]
-
-    let private blockerDigestOf (activeId: string option) (events: obj array) : string option =
-        match activeId with
-        | None -> None
-        | Some id ->
-            events
-            |> Array.choose (fun event ->
-                let blocked =
-                    textOf event?``type`` = "RetirementBlocked" && textOf event?incumbencyId = id
-
-                if blocked then Some(textOf event?blockerDigest) else None)
-            |> Array.choose (fun digest -> if digest = "" then None else Some digest)
-            |> Array.tryLast
-
-    let private projectionCutOf (retirements: obj array) : HostRunFence option =
-        retirements
-        |> Array.filter (fun event -> isRecord (nested event "projectionCut"))
-        |> Array.tryLast
-        |> Option.map hostRunFenceOf
-
-    let private lastRetirementCursorOf (rounds: obj array) : float option =
-        match rounds with
-        | [||] -> None
-        | _ when isNull (rounds.[rounds.Length - 1]?retirementCursor) -> None
-        | _ -> Some(unbox<float> (rounds.[rounds.Length - 1]?retirementCursor))
 
     let private obligationsOf (active: obj) : obj array =
         if isNull active || isNull active?obligations then
@@ -455,49 +525,45 @@ module DurableWorkHost =
                     {| key = textOf entry?key
                        value = textOf entry?value |})
 
-    let private projectedWork (snapshot: obj) (work: obj) : InspectedWork =
+    /// Current work snapshot. Milestone and the active tenure are the authority.
+    /// The old S-sequence, eligibility flag, and delivery authorization are absent.
+    let private projectCurrent (snapshot: obj) : InspectedWork =
         let active: obj = snapshot?active
-        let pending: obj = snapshot?pendingDelivery
-        let activeId = activeIdOf active
-        let outcome = reviewOutcomeOf active
-        let rounds = unbox<obj array> snapshot?rounds
-        let history = historyEventsOf work
-        let retirements = eventsOfType "IncumbencyRetired" history
+        let rounds = asArray snapshot?rounds
+        let completed = not (isNull snapshot?completed) && unbox<bool> snapshot?completed
+        let barrier: obj = snapshot?barrier
 
         { Opened = true
-          Sequence = sequenceOf snapshot
-          Stage = textOf snapshot?stage
-          ActiveId = activeId
-          OpeningStage = openingStageOf active
-          Reviewed = outcome.IsSome
-          ReviewOutcome = outcome
+          Sequence = []
+          Stage = textOf snapshot?milestone
+          Wait = textOf snapshot?wait
+          ActiveId = activeIdOf active
+          OpeningStage = None
+          Reviewed = false
+          ReviewOutcome = None
           Obligations = obligationsOf active
-          OpeningCursor = openingCursorOf active
-          PredecessorRange = predecessorRangeOf activeId rounds
-          LastRetirementCursor = lastRetirementCursorOf rounds
-          DeliveryAuthorized = unbox<bool> snapshot?deliveryAuthorized
-          Delivered = isNull active && unbox<bool> snapshot?opened
-          PendingDelivery = not (isNull pending)
-          PendingOperationId = pendingText pending "operationId"
-          PendingExecSessionId = pendingText pending "execSessionId"
-          PendingDigest = pendingText pending "digest"
-          PendingPath = pendingText pending "path"
+          OpeningCursor = None
+          PredecessorRange = None
+          LastRetirementCursor = None
+          DeliveryAuthorized = false
+          Delivered = completed
+          PendingDelivery = false
+          PendingOperationId = None
+          PendingExecSessionId = None
+          PendingDigest = None
+          PendingPath = None
           RoundCount = rounds.Length
-          RetiredRuns = retirements |> Array.choose retiredRunOf |> Array.toList
+          RetiredRuns = []
           DevOpsId = optionalText (textOf snapshot?devopsId)
-          DevOpsTarget =
-            eventsOfType "DevOpsBound" history
-            |> Array.tryLast
-            |> Option.bind (fun event -> optionalText (textOf event?target))
-          Authority = textOf snapshot?authority
-          BlockerDigest = blockerDigestOf activeId history
-          Root = optionalText (textOf snapshot?root)
-          Retirements = retirements |> Array.map hostRetirementOf |> Array.toList
-          ProjectionCut = projectionCutOf retirements
-          Advances =
-            eventsOfType "AdvanceCommitted" history
-            |> Array.map hostAdvanceOf
-            |> Array.toList }
+          DevOpsTarget = optionalText (textOf snapshot?devopsTarget)
+          Authority = ""
+          BlockerDigest = None
+          Root = None
+          Retirements = []
+          ProjectionCut = None
+          Advances = []
+          BarrierToolCallId = if isNull barrier then None else optionalText (textOf barrier?toolCallId)
+          SuccessorTenureId = if isNull barrier then None else optionalText (textOf barrier?successorTenureId) }
 
     let private inspectedFromJournal (journal: obj) (workId: string) : InspectedWork option =
         // 同一份已校验记录只折叠一次，快照与历史属于同一修订。
@@ -505,10 +571,10 @@ module DurableWorkHost =
         let work: obj = createNew Work (workId, records)
         let snapshot: obj = work?inspect ()
 
-        if unbox<bool> snapshot?opened then
-            Some(projectedWork snapshot work)
-        else
+        if String.IsNullOrEmpty(textOf snapshot?office) then
             None
+        else
+            Some(projectCurrent snapshot)
 
     let inspected (gitCommonDir: string) (workId: string) : InspectedWork option =
         // An empty id names no work; it never reaches the journal as a query.
@@ -540,12 +606,6 @@ module DurableWorkHost =
                 |> Array.map (fun workId -> workId, safeInspectFromJournal journal workId))
             |> Option.defaultValue (workIds |> Array.map (fun workId -> workId, Ok None))
 
-    let private openingFailure (receipt: HostReceipt) =
-        if receipt.Reason = "" then
-            receipt.Status
-        else
-            receipt.Reason
-
     let private expectedSequence (value: obj) =
         asArray value |> Array.toList |> List.map text
 
@@ -574,27 +634,16 @@ module DurableWorkHost =
         let readExisting () =
             inspected gitCommonDir workId |> Option.map (matchingOpening root sequence)
 
-        let openMissing () =
-            let issued =
-                command
-                    "Open"
-                    [ "root", box root
-                      "sequence", sequence
-                      "ownerId", box ownerId
-                      "openingCursor", box openingCursor ]
-
-            let receipt = execute gitCommonDir workId requestId issued
-
-            match receipt.Status with
-            | "Committed"
-            | "Replayed"
-            | "Conflict"
-            | "Unknown" -> readExisting () |> Option.defaultValue (Error(openingFailure receipt))
-            | _ -> Error(openingFailure receipt)
+        // 第一次 review 开立工作。这里不发 Open，也不把缺席翻译成 review。
+        let missing () =
+            ignore requestId
+            ignore ownerId
+            ignore openingCursor
+            Error "the first review opens the work"
 
         match readExisting () with
         | Some result -> result
-        | None -> openMissing ()
+        | None -> missing ()
 
     let recover (gitCommonDir: string) (workId: string) : obj =
         useWork gitCommonDir workId (fun work -> work?recover ())

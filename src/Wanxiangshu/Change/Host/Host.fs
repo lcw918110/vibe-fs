@@ -52,43 +52,11 @@ module DurableLoopSignal =
             )
         | None, None -> None
 
-/// change-integration-005/013: the same Work's next tenure after a delivered
-/// manager life.
-///
-/// A delivered tenure has no successor record of its own, so the work's
-/// continuation is the pair `Reopened` + `IncumbencyOpened`: the one lifecycle
-/// fact pair that leaves `Delivered` and opens a fresh, read-only, unreviewed
-/// tenure of the same Work. Change records the machine conflict (or the rebase
-/// that invalidated the old qualification) outside the gate and then hands the
-/// same Work over; the physical Manager session, the worktree and the Work stay
-/// exactly as they were (change-integration-009).
-///
-/// The hand-off is not a retirement attempt: the delivered retirement already
-/// settled the live-resource obligation (work-009) with an empty blocker set,
-/// and nothing can have started a resource since — the delivered attempt was
-/// interrupted and its logical run closed. An open tenure means the hand-off
-/// already happened, so a repeated read never opens a second one.
+/// 变更接手只读已有任期。已完成的工作不在这里重开。
 [<RequireQualifiedAccess>]
 module DeliveredTenureHandOff =
-    /// The continuation one committed retirement owes its work.
-    ///
-    /// A Relayed retirement already opened the successor tenure it hands to. A
-    /// Delivered retirement has no successor record of its own, so the work's
-    /// continuation is the pair `Reopened` + `IncumbencyOpened`: the one lifecycle
-    /// fact pair that leaves `Delivered` and opens a fresh, read-only, unreviewed
-    /// tenure of the same Work. Change records the machine conflict (or the rebase
-    /// that invalidated the old qualification) outside the gate and then hands the
-    /// same Work over; the physical Manager session, the worktree and the Work stay
-    /// exactly as they were (change-integration-009).
-    ///
-    /// The hand-off is not a retirement attempt, so its blocker set is the durable
-    /// fact the delivered retirement already settled (work-009): that retirement
-    /// was written with no live resource, its attempt was interrupted and its
-    /// logical run closed, and nothing else can have started a resource since. An
-    /// open tenure means the hand-off already happened, so a repeated read never
-    /// opens a second one. A missing observed cursor fails closed: an invented
-    /// cursor would let the successor tenure inherit the predecessor's
-    /// interactions.
+    /// 已完成的工作不在这里重开。接力若已有活动任期，沿用该任期；否则拒绝。
+    /// 重开只来自新的操作员消息。
     let continuation
         (gitCommonDir: string)
         (workId: string)
@@ -97,48 +65,15 @@ module DeliveredTenureHandOff =
         (observedCursor: int64 option)
         (requestId: string)
         : Result<IncumbencyId, string> =
-        let openTenure () =
-            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected gitCommonDir workId
-            |> Option.bind (fun seen -> seen.ActiveId)
-
-        let reopenDelivered (cursor: float) =
-            let command =
-                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.command
-                    "Reopen"
-                    [ "retirementId", box retirement.RetirementId
-                      "ownerId", box workId
-                      "openingCursor", box cursor
-                      "blockers", box ([||]: string array) ]
-
-            let receipt =
-                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.execute gitCommonDir workId requestId command
-
-            // A concurrent hand-off may have committed the same rotation
-            // (Conflict/Unknown), so only a reread that proves the open tenure
-            // settles the decision.
-            let written () =
-                openTenure () |> Option.map (fun activeId -> Ok(IncumbencyId.create activeId))
-
-            let refusal () =
-                if receipt.Status = "Committed" || receipt.Status = "Replayed" then
-                    Error "hand-off committed without an open tenure"
-                else
-                    Error(
-                        "manager loop hand-off failed: "
-                        + (if receipt.Reason = "" then
-                               receipt.Status
-                           else
-                               receipt.Reason)
-                    )
-
-            written () |> Option.defaultWith refusal
+        ignore gitCommonDir
+        ignore workId
+        ignore requestId
 
         match retirement.Outcome, work.ActiveId, observedCursor with
         | "Relayed", Some activeId, _ -> Ok(IncumbencyId.create activeId)
         | "Relayed", None, _ -> Error "relay continuation has no successor incumbency"
         | "Delivered", Some activeId, _ -> Ok(IncumbencyId.create activeId)
-        | "Delivered", None, None -> Error "manager loop hand-off has no observed head cursor"
-        | "Delivered", None, Some cursor -> reopenDelivered (float cursor)
+        | "Delivered", None, _ -> Error "a completed work reopens only from a new operator message"
         | _ -> Error(sprintf "retirement %s is neither a relay nor a delivery continuation" retirement.RetirementId)
 
 /// Host wiring for one Change manager session. One physical Manager session can host many
@@ -597,21 +532,13 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         (expected: string)
         (next: string)
         : Result<string, string> =
-        match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir workId with
-        | None -> Error "lifecycle work is missing"
-        | Some seen when String.IsNullOrEmpty seen.Authority -> Error "expected advance is missing"
-        | Some _seen ->
-            let requestId = incumbent + ":" + expected + ":" + next
-
-            let command =
-                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.command
-                    "Advance"
-                    [ "incumbencyId", box incumbent; "expected", box expected; "next", box next ]
-
-            let receipt =
-                Wanxiangshu.Mission.Lifecycle.DurableWorkHost.execute commonDir workId requestId command
-
-            advanceReceiptOutcome directory receipt
+        ignore directory
+        ignore commonDir
+        ignore workId
+        ignore incumbent
+        ignore expected
+        ignore next
+        Error "milestones advance only through review"
 
     let commitAuthorityAdvance
         (record: ManagerJobProjection)

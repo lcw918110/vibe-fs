@@ -1,16 +1,36 @@
-export const RESULT_NAMES = ['Relayed', 'Delivered']
-export const REVIEW_OUTCOMES = ['Promoted', 'Stayed']
+export const RESULT_NAMES = [
+  'Asked',
+  'Reviewed',
+  'Relayed',
+  'Advanced',
+  'Launched',
+  'Completed',
+  'Reopened',
+  'Blocked',
+  'Ignored',
+]
+export const REVIEW_OUTCOMES = RESULT_NAMES
 export const EVENTS = [
   'WorkOpened',
-  'DevOpsBound',
   'IncumbencyOpened',
-  'IncumbencyRetired',
+  'QuestionRequested',
+  'OperatorAnswered',
   'Reviewed',
-  'Reopened',
-  'AdvanceCommitted',
-  'RetirementBlocked',
+  'IncumbencyRetired',
+  'ContextBarrier',
+  'PromptObliged',
+  'MilestoneAdvanced',
+  'DeliveryRequested',
+  'DeliverySessionBound',
+  'DeliveryAdmitted',
+  'DeliveryRejected',
+  'EffectConfirmed',
+  'StopObliged',
+  'DevOpsBound',
 ]
-export const END_TOOL = 'deliver'
+export const END_TOOL = 'review'
+
+const LEGACY_STAGE_OUTCOMES = ['Promoted', 'Stayed']
 
 export function confirmationCount(sequence) {
   if (sequence.join(',') === 'S1,S2,S3') return 1
@@ -43,7 +63,7 @@ export function openWork(input) {
 
 export function review(view, outcome) {
   if (!view.active || view.reviewed) return { ok: false, written: [] }
-  if (!REVIEW_OUTCOMES.includes(outcome)) return { ok: false, written: [] }
+  if (!LEGACY_STAGE_OUTCOMES.includes(outcome)) return { ok: false, written: [] }
   const sequence = view.sequence
   const index = sequence.indexOf(view.projection)
   const hasNext = index >= 0 && index < sequence.length - 1

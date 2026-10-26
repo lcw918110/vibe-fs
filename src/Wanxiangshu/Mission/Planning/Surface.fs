@@ -114,50 +114,6 @@ module PlanningSurface =
         else
             None
 
-    let private createExecutionOfJs (execution: obj) : string -> string -> Task<Result<string, string>> =
-        fun (operationId: string) (agent: string) ->
-            task {
-                try
-                    let! sessionId =
-                        unbox<Task<string>> (emitJsExpr (execution, operationId, agent) "$0.create($1, $2)")
-
-                    if String.IsNullOrWhiteSpace sessionId then
-                        return Error "Execution session creation returned no session identity"
-                    else
-                        return Ok sessionId
-                with ex ->
-                    return Error(sprintf "Execution session creation outcome is unknown: %s" ex.Message)
-            }
-
-    let private promptExecutionOfJs (execution: obj) : string -> string -> string -> Task<DeliverySpawnOutcome> =
-        fun (execSessionId: string) (agent: string) (prompt: string) ->
-            task {
-                try
-                    let! raw =
-                        unbox<Task<obj>> (emitJsExpr (execution, execSessionId, agent, prompt) "$0.prompt($1, $2, $3)")
-
-                    let kind = if isNull raw then "" else string raw?kind
-
-                    match kind with
-                    | "Started" -> return DeliverySpawnOutcome.Started execSessionId
-                    | "NotStarted" -> return DeliverySpawnOutcome.NotStarted(string raw?reason)
-                    | "Unknown" -> return DeliverySpawnOutcome.Unknown(string raw?reason)
-                    | _ -> return DeliverySpawnOutcome.Unknown "Execution prompt returned an unknown outcome"
-                with ex ->
-                    return DeliverySpawnOutcome.Unknown ex.Message
-            }
-
-    let private discardExecutionOfJs (execution: obj) : string -> Task<Result<unit, string>> =
-        fun (execSessionId: string) ->
-            task {
-                try
-                    do! unbox<Task<unit>> (emitJsExpr (execution, execSessionId) "$0.discard($1)")
-
-                    return Ok()
-                with ex ->
-                    return Error ex.Message
-            }
-
     let ensurePlanWorkOpened (gitCommonDir: string) (root: string) (sessionId: string) (observedHead: obj) : Task<obj> =
         task {
             let head = extractInt64Opt observedHead
@@ -167,45 +123,19 @@ module PlanningSurface =
             | Error err -> return box {| ok = false; error = err |}
         }
 
-    let private retirementBlockersOfJs (observation: obj) () =
-        let value = emitJsExpr observation "typeof $0 === 'function' ? $0() : $0"
-
-        if not (emitJsExpr value "typeof $0 === 'boolean'") then
-            invalidOp "Expected a boolean retirement resource observation"
-
-        if unbox<bool> value then
-            [| "retirement-blocked" |]
-        else
-            [||]
-
-    let private deliverReceiptOfJs (outcome: Result<DeliverResult, string>) : obj =
-        match outcome with
-        | Ok res ->
-            box
-                {| ok = true
-                   relayed = res.Relayed
-                   delivered = res.Delivered
-                   retiredIncumbencyId = res.RetiredIncumbencyId
-                   retirementOutcome = res.RetirementOutcome
-                   digest = res.Digest
-                   path = res.Path
-                   execSessionId = res.ExecSessionId
-                   nextIncumbencyId = res.NextIncumbencyId
-                   message = res.Message
-                   error = null |}
-        | Error err ->
-            box
-                {| ok = false
-                   relayed = false
-                   delivered = false
-                   retiredIncumbencyId = null
-                   retirementOutcome = null
-                   digest = null
-                   path = null
-                   execSessionId = null
-                   nextIncumbencyId = null
-                   message = null
-                   error = err |}
+    let private refusedDeliver () : obj =
+        box
+            {| ok = false
+               relayed = false
+               delivered = false
+               retiredIncumbencyId = null
+               retirementOutcome = null
+               digest = null
+               path = null
+               execSessionId = null
+               nextIncumbencyId = null
+               message = null
+               error = "lifecycle deliver is retired; review is the only entry" |}
 
     let executeDeliver
         (gitCommonDir: string)
@@ -218,37 +148,17 @@ module PlanningSurface =
         (execution: obj)
         (retirementCursor: obj)
         : Task<obj> =
-        let createSession = createExecutionOfJs execution
-        let promptSession = promptExecutionOfJs execution
-        let discardSession = discardExecutionOfJs execution
+        ignore gitCommonDir
+        ignore root
+        ignore workId
+        ignore incumbencyId
+        ignore providerRunId
+        ignore toolCallId
+        ignore hasBlocker
+        ignore execution
+        ignore retirementCursor
+        Task.FromResult(refusedDeliver ())
 
-        task {
-            let! outcome =
-                match extractInt64Opt retirementCursor with
-                | None -> Task.FromResult(Error "Plan retirement cursor evidence is required")
-                | Some cursor ->
-                    if String.IsNullOrWhiteSpace gitCommonDir then
-                        Task.FromResult(Error "git common directory is missing")
-                    else
-                        PlanTools.executeDeliver
-                            gitCommonDir
-                            root
-                            workId
-                            incumbencyId
-                            providerRunId
-                            toolCallId
-                            (retirementBlockersOfJs hasBlocker)
-                            createSession
-                            promptSession
-                            discardSession
-                            cursor
-
-            return deliverReceiptOfJs outcome
-        }
-
-    /// The post-S3 delivery entry of an S1-S3 work. A call whose fence already
-    /// owns a recorded retirement replays that recorded outcome with zero
-    /// writes instead of opening another tenure.
     let startPostS3Execution
         (gitCommonDir: string)
         (root: string)
@@ -259,45 +169,32 @@ module PlanningSurface =
         (execution: obj)
         (retirementCursor: obj)
         : Task<obj> =
-        let createSession = createExecutionOfJs execution
-        let promptSession = promptExecutionOfJs execution
-        let discardSession = discardExecutionOfJs execution
+        ignore gitCommonDir
+        ignore root
+        ignore workId
+        ignore providerRunId
+        ignore toolCallId
+        ignore hasBlocker
+        ignore execution
+        ignore retirementCursor
+        Task.FromResult(refusedDeliver ())
 
-        task {
-            let! outcome =
-                match extractInt64Opt retirementCursor with
-                | None -> Task.FromResult(Error "Plan retirement cursor evidence is required")
-                | Some cursor ->
-                    if String.IsNullOrWhiteSpace gitCommonDir then
-                        Task.FromResult(Error "git common directory is missing")
-                    else
-                        PlanTools.startPostS3Execution
-                            gitCommonDir
-                            root
-                            workId
-                            providerRunId
-                            toolCallId
-                            (retirementBlockersOfJs hasBlocker)
-                            createSession
-                            promptSession
-                            discardSession
-                            cursor
-
-            return deliverReceiptOfJs outcome
-        }
-
-    let reconcileBoundExecution gitCommonDir workId execSessionId observedPrompt blockers : obj =
-        match PlanTools.reconcileBoundExecution gitCommonDir workId execSessionId observedPrompt blockers with
-        | Ok result ->
-            box
-                {| ok = true
-                   delivered = result.Delivered
-                   error = null |}
-        | Error reason ->
-            box
-                {| ok = false
-                   delivered = false
-                   error = reason |}
+    let reconcileBoundExecution
+        (gitCommonDir: string)
+        (workId: string)
+        (execSessionId: string)
+        (observedPrompt: string)
+        (blockers: string array)
+        : obj =
+        ignore gitCommonDir
+        ignore workId
+        ignore execSessionId
+        ignore observedPrompt
+        ignore blockers
+        box
+            {| ok = false
+               delivered = false
+               error = "lifecycle deliver is retired; review is the only entry" |}
 
     // The delegate argument arrives as a plain JavaScript function
     // (intent) => Promise<view>; call it through JS interop so currying
@@ -339,8 +236,6 @@ module PlanningSurface =
         }
 
 
-    let reviewTargetFor (stage: string) : string = ReviewPlanBackend.reviewTargetFor stage
-
     let private parseFindings (findingsVal: obj) : Result<(string * string option) list, string> =
         if isNull findingsVal then
             Error "findings must be an array of {key, value} pairs"
@@ -380,16 +275,6 @@ module PlanningSurface =
         else
             Error "findings must be an array of {key, value} pairs"
 
-    let private gapsToJs (gaps: (string * string) list) : obj array =
-        gaps
-        |> List.map (fun (key, value) -> box {| key = key; value = value |})
-        |> Array.ofList
-
-    let private renderReviewOutcome (outcome: PlanReviewOutcome) : string =
-        match outcome with
-        | PlanReviewOutcome.Promoted -> "Promoted"
-        | PlanReviewOutcome.Stayed -> "Stayed"
-
     let executeReview
         (gitCommonDir: string)
         (workId: string)
@@ -408,7 +293,7 @@ module PlanningSurface =
                            outcome = null
                            gaps = null
                            error = err |}
-            | Ok gaps ->
+            | Ok _gaps ->
                 if String.IsNullOrWhiteSpace gitCommonDir then
                     return
                         box
@@ -417,27 +302,34 @@ module PlanningSurface =
                                gaps = null
                                error = "git common directory is missing" |}
                 else
-                    match! ReviewPlanBackend.executeReview gitCommonDir workId incumbencyId requestId gaps with
-                    | Error err ->
-                        return
-                            box
-                                {| ok = false
-                                   outcome = null
-                                   gaps = null
-                                   error = PlanReviewError.render err |}
-                    | Ok review ->
-                        return
-                            box
-                                {| ok = true
-                                   outcome = renderReviewOutcome review.Outcome
-                                   target = review.Target
-                                   gaps = gapsToJs review.Gaps
-                                   firstReview = review.FirstReview
-                                   error = Unchecked.defaultof<string> |}
+                    let reply =
+                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.submitReview
+                            gitCommonDir
+                            workId
+                            requestId
+                            "Plan"
+                            incumbencyId
+                            requestId
+                            findings
+                            null
+                            ""
+                            null
+
+                    let status = string reply?status
+                    let accepted = status = "Committed" || status = "Replayed" || status = "Observed"
+
+                    return
+                        box
+                            {| ok = accepted
+                               kind = reply?kind
+                               milestone = reply?milestone
+                               error = if accepted then null else reply?reason |}
         }
 
     let isReviewFinished (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
-        ReviewPlanBackend.isReviewFinished gitCommonDir workId incumbencyId
+        match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected gitCommonDir workId with
+        | Some work when work.ActiveId = Some incumbencyId -> true
+        | _ -> false
 
     let PlanningSurface: obj =
         box
@@ -452,5 +344,4 @@ module PlanningSurface =
                reconcileBoundExecution = reconcileBoundExecution
                executeAsk = executeAsk
                executeReview = executeReview
-               reviewTargetFor = reviewTargetFor
                isReviewFinished = isReviewFinished |}

@@ -1,1 +1,1 @@
-Settle the current work incumbency. The system uses committed eligibility, the obligation ledger, actual resource completion and the current stage to perform this handoff, promotion or delivery. When eligible and unblocked, one call to deliver performs this settlement; there is no second confirmation call. An unresolved resource or obligation causes an explicit refusal with its blockers. A tool receipt alone is not proof of final completion.
+One call to review records the obligation ledger and settles the current milestone. This note is not a separate lifecycle tool.

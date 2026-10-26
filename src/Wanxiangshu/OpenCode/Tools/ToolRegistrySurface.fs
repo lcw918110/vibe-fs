@@ -16,6 +16,12 @@ open Wanxiangshu.Participant.Provider.Attempt
 module ToolRegistrySurface =
 
     /// Unknown role and unknown tool both fail closed.
+    let planSourceWriteAllowed (waitingForUser: bool) =
+        ToolRegistry.planSourceWriteAllowed waitingForUser
+
+    let devopsDispatchAllowed (waitingForUser: bool) =
+        ToolRegistry.devopsDispatchAllowed waitingForUser
+
     let rolePredicate (toolName: string) (roleLabel: string) : bool =
         match Roles.tryParseRole roleLabel with
         | None -> false

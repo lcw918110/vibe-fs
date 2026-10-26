@@ -36,12 +36,15 @@ module PlanKernelSeam =
     let obligationsEmpty (gitCommonDir: string) (workId: string) : bool =
         Array.isEmpty (activeObligations gitCommonDir workId)
 
+    let private waiting (work: DurableWorkHost.InspectedWork) =
+        work.Wait = "AwaitReview" || work.Wait = "AwaitEmptyReview" || work.Wait = "ConfirmEffect"
+
     let isReviewFinished (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
         match inspected gitCommonDir workId with
         | None -> false
-        | Some work -> activeOf work incumbencyId && work.Reviewed
+        | Some work -> activeOf work incumbencyId && work.Wait <> "AwaitOperatorAnswer" && work.Wait <> ""
 
     let isEligible (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
         match inspected gitCommonDir workId with
         | None -> false
-        | Some work -> activeOf work incumbencyId && work.ReviewOutcome = Some "Promoted"
+        | Some work -> activeOf work incumbencyId && waiting work

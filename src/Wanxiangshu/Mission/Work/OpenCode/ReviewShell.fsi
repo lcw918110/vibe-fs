@@ -3,11 +3,6 @@ namespace Wanxiangshu.Mission.Work.OpenCode
 open Wanxiangshu.Host
 open Wanxiangshu.OpenCode
 
-/// work-038: the shared `review` shell. Owns the one ToolSpec
-/// (name, description, findings schema, admission) and dispatches by caller
-/// role: Plan goes to the plan backend (ReviewPlanBackend), every other
-/// admitted caller goes to the Manager backend (ReviewBackendManager). The
-/// shell renders the plan backend's result; the Manager backend keeps its own
-/// result rendering so its byte behavior is unchanged.
+/// The one `review` tool. Plan and Manager send the same Review command into Work.
 module ReviewShell =
     val spec: factory: HostToolFactory -> scope: ToolRuntimeScope -> ToolSpec

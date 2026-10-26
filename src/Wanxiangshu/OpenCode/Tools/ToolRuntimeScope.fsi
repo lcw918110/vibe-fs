@@ -72,11 +72,18 @@ type ToolRuntimeScope =
 
     member Negotiate: recipient: string * questions: string -> string
     member SendNegotiationSteer: recipient: string * answer: string * receipt: string -> Task<Result<unit, string>>
+    member SendAdvisorSteer: recipient: string * answer: string * processId: string * isCurrent: (unit -> bool) -> Task<Result<unit, string>>
     member AttachQuestionNotifier: notify: (string -> Task<Result<unit, string>>) -> unit
     member IsWaitingForUser: sessionId: string -> bool
     /// LC-017: the pending question's exact fence for a waiting session.
     member WaitingQuestionFenceFor: sessionId: string -> (ProviderRunIdentity * ToolCallId) option
     member AskUser: ctx: HostToolContext * question: string -> Task<Result<unit, string>>
+
+    /// Records the question with PromptAuthority, then parks it for the user.
+    member ParkReviewQuestion: ctx: HostToolContext * question: string -> Task<Result<unit, string>>
+
+    /// Host effect ports for one review. Ask, prompt, manager session, draft, and stop.
+    member ReviewPorts: ctx: HostToolContext -> obj
     member TryAskForInitialEmptyManagerReview: ctx: HostToolContext * findingsEmpty: bool -> Task<Result<bool, string>>
 
     member InterruptForUserQuestion:

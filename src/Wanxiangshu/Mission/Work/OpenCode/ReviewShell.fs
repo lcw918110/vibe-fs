@@ -2,24 +2,20 @@ namespace Wanxiangshu.Mission.Work.OpenCode
 
 open System
 open System.Threading.Tasks
+open Fable.Core.JsInterop
 open Wanxiangshu.Host
-open Wanxiangshu.Host.Ports
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Mission.Work
 open Wanxiangshu.Mission.Work.Review
 open Wanxiangshu.Mission.Lifecycle
 open Wanxiangshu.Persistence.Journal
-open Wanxiangshu.Mission.Planning
 open Wanxiangshu.OpenCode
 open Wanxiangshu.Participant.Provider
+open Wanxiangshu.Repository.Programming.Js
 
-/// work-038: the shared `review` shell. Owns the one ToolSpec
-/// (name, description, findings schema) and dispatches by caller
-/// role: Plan goes to the plan backend (ReviewPlanBackend), every other
-/// admitted caller goes to the Manager backend (ReviewBackendManager). The
-/// shell renders the plan backend's result; the Manager backend keeps its own
-/// result rendering so its byte behavior is unchanged.
+/// The one `review` tool. Plan and Manager both send the same Review command
+/// into Work. The shell does not choose retirement, relay, advance, or close.
 module ReviewShell =
 
     [<RequireQualifiedAccess>]
@@ -30,100 +26,89 @@ module ReviewShell =
         [<Literal>]
         let FindingsArgument = "tool/review/findings-argument"
 
-        [<Literal>]
-        let PlanPromoted = "tool/review/plan-promoted"
-
-        [<Literal>]
-        let PlanStayed = "tool/review/plan-stayed"
-
     let private providerText (path: string) substitutions =
         ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) path substitutions
 
-    let private planRejected path =
+    let private rejected reason =
         ToolResultText.tomlObjectWithInstructions
-            [ providerText path Map.empty ]
+            [ reason ]
             [ "recorded", ToolResultText.TBool false ]
 
-    let private rejectionPath (error: PlanReviewError) =
-        match error with
-        | PlanReviewError.NoActiveIncumbency
-        | PlanReviewError.IncumbencyMismatch _ -> ReviewBackendManager.Path.BindingUnavailable
-        | PlanReviewError.RecordFailed _ -> ReviewBackendManager.Path.RecordFailed
+    let private accepted (reply: obj) =
+        let kind = string reply?kind
+        let milestone = string reply?milestone
+        let wait = string reply?wait
 
-    let private gapLine gap =
-        let (key, value) = gap
-        sprintf "- key: %s | value: %s" key value
+        ToolResultText.tomlObjectWithInstructions
+            [ sprintf "kind = %s\nmilestone = %s\nwait = %s" kind milestone wait ]
+            [ "recorded", ToolResultText.TBool true
+              "kind", ToolResultText.TString kind ]
 
-    let private planAccepted (review: PlanReviewResult) =
-        // work-038: review grants promotion eligibility only, never the stage
-        // advance itself. Deliver performs the promotion and returns the next
-        // stage method; review echoes the remaining obligations verbatim.
-        let instructions =
-            if review.Outcome = PlanReviewOutcome.Promoted then
-                [ providerText Path.PlanPromoted Map.empty ]
-            else
-                [ providerText Path.PlanStayed Map.empty ] @ (review.Gaps |> List.map gapLine)
-
-        ToolResultText.tomlObjectWithInstructions instructions [ "recorded", ToolResultText.TBool true ]
-
-    let private renderPlanReview (result: Result<PlanReviewResult, PlanReviewError>) : string =
-        match result with
-        | Error error -> planRejected (rejectionPath error)
-        | Ok review -> planAccepted review
-
-    // Same findings schema and three-question semantics as the Manager
-    // backend (work-038 shared shell).
-    let private parseFindings (args: HostToolArguments) : Result<ReviewFindings, string> =
-        match Model.tryParse args.Raw with
-        | Error _ -> Error ReviewBackendManager.Path.InvalidFindings
-        | Ok findings -> Ok findings
-
-    let private activeIncumbencyId (activeId: string option) : Result<string, string> =
-        match activeId with
-        | Some id -> Ok id
-        | None -> Error ReviewBackendManager.Path.BindingUnavailable
-
-    let private resolveActiveIncumbency (gitCommonDir: string) (workId: string) : Result<string, string> =
-        DurableWorkHost.inspected gitCommonDir workId
-        |> Option.bind (fun work -> work.ActiveId)
-        |> activeIncumbencyId
-
-    let private gapsOf (findings: ReviewFindings) : (string * string option) list =
+    let private updatesOf (findings: ReviewFindings) : obj =
         ReviewFindings.values findings
-        |> List.map (fun finding -> (finding.Key, finding.Value))
+        |> List.map (fun finding ->
+            let value: obj =
+                match finding.Value with
+                | Some text -> box text
+                | None -> null
 
-    let private reviewRequestIdOf (incumbencyId: string) (context: HostToolContext) : string =
+            createObj [ "key", box finding.Key; "value", value ])
+        |> Array.ofList
+        |> box
+
+    let private digestOf (raw: obj) =
+        if isNull raw then
+            ""
+        else
+            let note: obj = raw?note
+            if isNull note then "" else string note
+
+    let private blockersOf (sessionId: string) : obj =
+        JsPrograms.deliveryBlockersWithChoicesForSession sessionId
+        |> List.map fst
+        |> Array.ofList
+        |> box
+
+    let private officeOf (scope: ToolRuntimeScope) (context: HostToolContext) =
+        if scope.IsRole(context, Role.Plan) then
+            Ok "Plan"
+        elif scope.IsRole(context, Role.Manager) then
+            Ok "Manager"
+        else
+            Error "review is admitted only for Plan and Manager"
+
+    let private fenceOf (context: HostToolContext) =
         match context.ProviderRunId, context.ToolCallId with
-        | Some run, Some call -> ProviderRunIdentity.value run + ":" + ToolCallId.value call
-        | _ -> incumbencyId + ":review"
+        | Some run, Some call -> Ok(ProviderRunIdentity.value run, ToolCallId.value call)
+        | _ -> Error "review requires the calling provider run and tool call"
 
-    // One preparation chain: findings and the durable active incumbency resolve
-    // to the exact review invocation. The old workspace EventStore is not a
-    // lifecycle prerequisite.
-    let private preparePlanReview
+    /// Findings are the obligation updates. Work applies them and decides the wait.
+    let private run
         (gitCommonDir: string)
+        (scope: ToolRuntimeScope)
         (args: HostToolArguments)
         (context: HostToolContext)
-        : Result<string * (string * string option) list * string, string> =
+        : obj =
         if String.IsNullOrWhiteSpace gitCommonDir then
-            Error "git common directory is missing"
+            createObj [ "status", box "Conflict"; "kind", box ""; "reason", box "git common directory is missing" ]
         else
-            parseFindings args
-            |> Result.bind (fun findings ->
-                resolveActiveIncumbency gitCommonDir context.SessionId
-                |> Result.map (fun incumbencyId ->
-                    (incumbencyId, gapsOf findings, reviewRequestIdOf incumbencyId context)))
-
-    let private executePlan (gitCommonDir: string) (args: HostToolArguments) (context: HostToolContext) : Task<string> =
-        task {
-            // work-038 binding: workId is the caller's session.
-            match preparePlanReview gitCommonDir args context with
-            | Error path -> return planRejected path
-            | Ok(incumbencyId, gaps, requestId) ->
-                let! result = ReviewPlanBackend.executeReview gitCommonDir context.SessionId incumbencyId requestId gaps
-
-                return renderPlanReview result
-        }
+            match Model.tryParse args.Raw, officeOf scope context, fenceOf context with
+            | Error reason, _, _
+            | _, Error reason, _
+            | _, _, Error reason ->
+                createObj [ "status", box "Conflict"; "kind", box ""; "reason", box reason ]
+            | Ok findings, Ok office, Ok(providerRunId, toolCallId) ->
+                DurableWorkHost.submitReview
+                    gitCommonDir
+                    context.SessionId
+                    (providerRunId + ":" + toolCallId)
+                    office
+                    providerRunId
+                    toolCallId
+                    (updatesOf findings)
+                    (blockersOf context.SessionId)
+                    (digestOf args.Raw)
+                    (scope.ReviewPorts context)
 
     let spec (factory: HostToolFactory) (scope: ToolRuntimeScope) : ToolSpec =
         let findingSchema =
@@ -139,18 +124,25 @@ module ReviewShell =
 
         let dispatch args context : Task<string> =
             task {
-                let (Ports.WorkspacePath _ws) =
-                    Ports.WorkspacePath(scope.WorkspaceDirectory |> Option.defaultValue ".")
-
                 let! gitCommonDir =
                     match scope.WorkspaceDirectory with
                     | Some ws -> RuntimePath.stateRoot ws
                     | None -> Task.FromResult ""
 
-                if scope.IsRole(context, Role.Plan) then
-                    return! executePlan gitCommonDir args context
+                let produced = run gitCommonDir scope args context
+
+                let! reply =
+                    if produced <> null && emitJsExpr produced "typeof $0.then === 'function'" then
+                        unbox<Task<obj>> produced
+                    else
+                        Task.FromResult produced
+
+                let status = string reply?status
+
+                if status = "Committed" || status = "Replayed" || status = "Observed" then
+                    return accepted reply
                 else
-                    return! ReviewBackendManager.execute scope args context
+                    return rejected (string reply?reason)
             }
 
         { Name = "review"

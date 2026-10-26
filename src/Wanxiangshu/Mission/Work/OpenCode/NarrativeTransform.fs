@@ -57,6 +57,15 @@ module RelayNarrativeTransform =
 
     let private projection = createProjection ()
 
+    [<AllowNullLiteral>]
+    type private TenureRule =
+        abstract tenure: messages: obj * barrier: obj -> obj
+
+    [<Import("Projection", "wanxiangli/projection")>]
+    let private createTenure: unit -> TenureRule = jsNative
+
+    let private tenureRule = createTenure ()
+
     /// The library request. The neutral core decided which message ids, cuts and
     /// accepted roots the rule sees; this only adds the pass-through role.
     let private libraryRequest (roles: obj list) (request: RelayRetirementRequest) : obj =
@@ -145,6 +154,124 @@ module RelayNarrativeTransform =
             | None -> return RelayProjection.disposition lifecycle
         }
 
+    let private stringField (value: obj) (name: string) =
+        let raw = readField value name
+
+        if isNull raw || not (emitJsExpr raw "typeof $0 === 'string'") then
+            None
+        else
+            let text = unbox<string> raw
+            if String.IsNullOrEmpty text then None else Some text
+
+    let private roleText message =
+        let raw = messageRole message
+        if isNull raw then "" else string raw
+
+    let private contentParts (message: obj) =
+        let content = readField message "content"
+
+        if isNull content || not (emitJsExpr content "Array.isArray($0)") then
+            []
+        else
+            unbox<obj array> content |> Array.toList
+
+    let private explicitCall (part: obj) =
+        match stringField part "type" |> Option.map (fun kind -> kind.ToLowerInvariant()) with
+        | Some ("toolcall" | "tool-call" | "tool_call") ->
+            stringField part "id" |> Option.orElse (stringField part "callId")
+        | _ -> None
+
+    let private tenureMessage (message: obj) =
+        let parts = ProviderWireDecode.rawPartsOf message @ contentParts message
+        let decoded = parts |> List.choose ProviderWireDecode.decodePart
+
+        let call =
+            decoded
+            |> List.tryPick (function
+                | WireToolCall(id, _, _) -> Some(ToolCallId.value id)
+                | _ -> None)
+            |> Option.orElse (parts |> List.tryPick explicitCall)
+
+        let answered =
+            decoded
+            |> List.tryPick (function
+                | WireToolResult(id, _) -> Some(ToolCallId.value id)
+                | _ -> None)
+            |> Option.orElse (
+                match roleText message with
+                | "toolResult"
+                | "tool" -> stringField message "toolCallId"
+                | _ -> None)
+
+        let tenureId = stringField message "tenureId"
+        let identified = ProviderWireDecode.hostMessageId message
+
+        createObj
+            [ "id", (match identified with Some id -> box id | None -> null)
+              "role", box (roleText message)
+              "synthetic", box (emitJsExpr message " $0.synthetic === true")
+              "semantic", box true
+              "cursor", null
+              "toolCallId", (match call with Some id -> box id | None -> null)
+              "resultFor", (match answered with Some id -> box id | None -> null)
+              "tenureId", (match tenureId with Some id -> box id | None -> null) ]
+
+    /// Keep the successor's own messages after the committed review barrier.
+    /// Returns None when this work has no barrier for the active tenure, so the
+    /// caller leaves the request array alone. The returned messages are the
+    /// original objects.
+    let cutVisible
+        (messages: obj array)
+        (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option)
+        : obj array option =
+        match work with
+        | None -> None
+        | Some inspected ->
+            match inspected.BarrierToolCallId, inspected.SuccessorTenureId, inspected.ActiveId with
+            | Some callId, Some successor, Some active when active = successor ->
+                let neutral = messages |> Array.map tenureMessage
+                let barrier =
+                    createObj [ "toolCallId", box callId; "successorTenureId", box successor ]
+
+                let kept = unbox<obj array> (tenureRule.tenure (box neutral, barrier))
+                let indexes = kept |> Array.map (fun item -> int (unbox<float> item))
+                let span = [| 0 .. messages.Length - 1 |]
+
+                if indexes.Length = span.Length && Array.forall2 (fun index value -> index = value) indexes span then
+                    None
+                else
+                    Some(indexes |> Array.map (fun index -> messages.[index]))
+            | _ -> None
+
+    /// Read the committed barrier and return the messages the model may see.
+    /// The caller's array is not modified. No barrier for the active tenure
+    /// returns the same reference. An unreadable journal leaves the array as it is.
+    let visibleMessages (stateRoot: string) (sessionId: string) (messages: obj) : obj =
+        if
+            String.IsNullOrWhiteSpace stateRoot
+            || String.IsNullOrWhiteSpace sessionId
+            || isNull messages
+            || not (emitJsExpr messages "Array.isArray($0)")
+        then
+            messages
+        else
+            try
+                match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected stateRoot sessionId with
+                | None -> messages
+                | Some work ->
+                    match cutVisible (unbox<obj array> messages) (Some work) with
+                    | None -> messages
+                    | Some kept -> box kept
+            with _ ->
+                messages
+
+    let private cutRequest (outObj: obj) work =
+        let messages = ProviderWireDecode.messagesFromTransformOutput outObj |> Array.ofList
+
+        match cutVisible messages work with
+        | None -> ()
+        | Some kept -> HostMessageProjection.replaceMessagesInPlace outObj (Array.toList kept)
+
     let apply
         (journal: AgentJournal option)
         (acceptedRequest: bool)
@@ -159,7 +286,17 @@ module RelayNarrativeTransform =
             // re-encode it.
             match journal, sessionId, lifecycle with
             | Some durable, Some value, Some work when not (String.IsNullOrWhiteSpace value) ->
-                return! project durable interruptAttempt (SessionId.create value) acceptedRequest (Some work) outObj
+                let! disposition =
+                    project durable interruptAttempt (SessionId.create value) acceptedRequest (Some work) outObj
+
+                match disposition with
+                | RelayProjectionDisposition.RetiredAttemptStopped -> ()
+                | _ -> cutRequest outObj (Some work)
+
+                return disposition
+            | _, _, Some work ->
+                cutRequest outObj (Some work)
+                return RelayProjectionDisposition.Unchanged
             | _ -> return RelayProjectionDisposition.Unchanged
         }
 

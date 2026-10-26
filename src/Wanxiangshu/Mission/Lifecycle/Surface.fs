@@ -27,6 +27,29 @@ module LifecycleSurface =
     let execute (gitCommonDir: string) (workId: string) (requestId: string) (command: obj) =
         DurableWorkHost.execute gitCommonDir workId requestId command
 
+    let submitReview
+        (gitCommonDir: string)
+        (workId: string)
+        (requestId: string)
+        (office: string)
+        (providerRunId: string)
+        (toolCallId: string)
+        (updates: obj)
+        (blockers: obj)
+        (digest: string)
+        =
+        DurableWorkHost.submitReview
+            gitCommonDir
+            workId
+            requestId
+            office
+            providerRunId
+            toolCallId
+            updates
+            blockers
+            digest
+            null
+
     let inspect (gitCommonDir: string) (workId: string) =
         DurableWorkHost.inspect gitCommonDir workId
 
@@ -241,20 +264,9 @@ module LifecycleSurface =
             shape true error.Message "" "" "" false "" false ""
 
     let encodeOpening (kind: string) (workId: string) (root: string) (head: int64) =
-        match cursorOf head with
-        | None -> "REFUSE cursor out of range"
-        | Some cursor ->
-            let seen =
-                attempt workId [||] ("open:" + workId) (openCommand root kind cursor "owner")
+        sprintf "REFUSE the first review opens the work (%s %s %s %s)" kind workId root (string head)
 
-            let decision = string seen?decision
-
-            if decision = "Write" then
-                string seen?bytes
-            else
-                "REFUSE " + string seen?detail
-
-    let readProbe (text: string) =
+    let private readProbeRecords (text: string) =
         let records = recordsOf text
         let workId = workIdOf records
 
@@ -309,86 +321,36 @@ module LifecycleSurface =
                    activeId = ""
                    requestIds = "" |}
 
-    let reviewProbe (text: string) (incumbencyId: string) (outcome: string) =
-        match outcome with
-        | "Promoted"
-        | "Stayed"
-        | "Cleared" ->
-            let records = recordsOf text
-
-            attempt
-                (workIdOf records)
-                records
-                ("review:" + incumbencyId + ":" + outcome)
-                (reviewCommand incumbencyId outcome "reviewer")
-        | _ ->
+    let readProbe (text: string) =
+        if isNull text || text.StartsWith("REFUSE") || not (text.Contains "{") then
             box
-                {| decision = "Refuse"
-                   detail = "review outcome rejected"
+                {| ok = false
+                   next = ""
+                   opened = false
+                   stage = ""
+                   sequence = ""
                    names = ""
-                   bytes = ""
+                   revision = 0.
                    authorized = false
-                   authority = "" |}
+                   reason = if isNull text then "refused" else text
+                   activeId = ""
+                   requestIds = "" |}
+        else
+            readProbeRecords text
+
+    let reviewProbe (text: string) (incumbencyId: string) (outcome: string) =
+        box
+            {| decision = "Refuse"
+               detail = "review is the only lifecycle entry; " + outcome + " is not a command"
+               names = ""
+               bytes = ""
+               authorized = false
+               authority = "" |}
 
     let finalPromotionProbe (text: string) =
-        let records = recordsOf text
-        let workId = workIdOf records
-
-        try
-            useJournal workId records (fun work ->
-                // DSL-MUTABLE: algorithm-scratch — probe loop bound for successive promotions
-                let mutable steps = 0
-                // DSL-MUTABLE: algorithm-scratch — probe accumulator for the delivery flag
-                let mutable authorized = false
-                // DSL-MUTABLE: algorithm-scratch — probe accumulator for the projected stage
-                let mutable stage = ""
-
-                while steps < 4 && not authorized do
-                    steps <- steps + 1
-                    let snapshot: obj = work?inspect ()
-                    let active: obj = snapshot?active
-
-                    if isNull active then
-                        authorized <- unbox<bool> snapshot?deliveryAuthorized
-                        stage <- if isNull snapshot?stage then "" else string snapshot?stage
-                        steps <- 4
-                    else
-                        let id = string active?id
-
-                        let reviewed: obj =
-                            work?execute ("promote:" + string steps + ":" + id, reviewCommand id "Promoted" "reviewer")
-
-                        ignore reviewed
-                        let after: obj = work?inspect ()
-                        authorized <- unbox<bool> after?deliveryAuthorized
-                        stage <- if isNull after?stage then "" else string after?stage
-
-                        if not authorized && not (isNull after?active) then
-                            let cursor = unbox<float> after?active?openingCursor + float steps
-
-                            let delivered: obj =
-                                work?execute (
-                                    "promote-deliver:" + string steps,
-                                    deliverCommand
-                                        (string after?active?id)
-                                        "run-final"
-                                        ("call-" + string steps)
-                                        cursor
-                                        None
-                                )
-
-                            ignore delivered
-                            let followed: obj = work?inspect ()
-                            authorized <- unbox<bool> followed?deliveryAuthorized
-                            stage <- if isNull followed?stage then "" else string followed?stage
-
-                box
-                    {| authorized = authorized
-                       detail = stage |})
-        with error ->
-            box
-                {| authorized = false
-                   detail = error.Message |}
+        box
+            {| authorized = false
+               detail = "review is the only lifecycle entry" |}
 
     let private supplied (draft: obj) =
         emitJsExpr draft "$0 != null && $0 !== undefined"
@@ -508,16 +470,13 @@ module LifecycleSurface =
                        authority = string observed?authority |}
 
     let deliverProbe (text: string) (providerRunId: string) (toolCallId: string) (head: int64) (draft: obj) =
-        match cursorOf head with
-        | None ->
-            box
-                {| decision = "Refuse"
-                   detail = "cursor out of range"
-                   names = ""
-                   bytes = ""
-                   authorized = false
-                   authority = "" |}
-        | Some cursor -> deliverAt text providerRunId toolCallId cursor draft
+        box
+            {| decision = "Refuse"
+               detail = "lifecycle deliver is retired; review is the only entry"
+               names = ""
+               bytes = ""
+               authorized = false
+               authority = "" |}
 
     let replayProbe (text: string) (providerRunId: string) (toolCallId: string) (head: int64) =
         deliverProbe text providerRunId toolCallId head null
@@ -554,39 +513,13 @@ module LifecycleSurface =
                     None))
 
     let reopenProbe (text: string) (incumbencyId: string) =
-        let records = recordsOf text
-        let workId = workIdOf records
-
-        let retirementId =
-            retirementIdOf text incumbencyId |> Option.defaultValue incumbencyId
-
-        let cursor =
-            try
-                useJournal workId records (fun work ->
-                    let snapshot: obj = work?inspect ()
-
-                    let rounds: obj array =
-                        if isNull snapshot?rounds then
-                            [||]
-                        else
-                            unbox snapshot?rounds
-
-                    if rounds.Length = 0 then
-                        0.
-                    else
-                        unbox<float> rounds.[rounds.Length - 1]?retirementCursor)
-            with _ ->
-                0.
-
-        let reopen =
-            command
-                "Reopen"
-                [ "retirementId", box retirementId
-                  "ownerId", box "owner"
-                  "openingCursor", box cursor
-                  "blockers", box ([||]: string array) ]
-
-        attempt workId records ("reopen:" + retirementId) reopen
+        box
+            {| decision = "Refuse"
+               detail = "a completed work reopens only from a new operator message"
+               names = ""
+               bytes = ""
+               authorized = false
+               authority = "" |}
 
     let commitProbe (name: string) =
         match name with
@@ -769,23 +702,19 @@ module LifecycleSurface =
         }
 
     let private seedOpenWith
-        (store: obj)
-        (kind: string)
-        (workId: string)
-        (root: string)
-        (head: int64)
-        (ownerId: string)
+        (_store: obj)
+        (_kind: string)
+        (_workId: string)
+        (_root: string)
+        (_head: int64)
+        (_ownerId: string)
         : Task<obj> =
-        task {
-            match cursorOf head with
-            | None ->
-                return
-                    box
-                        {| ok = false
-                           opened = false
-                           error = "cursor out of range" |}
-            | Some cursor -> return! seedOpenAt store kind workId root cursor ownerId
-        }
+        Task.FromResult(
+            box
+                {| ok = false
+                   opened = false
+                   error = "the first review opens the work" |}
+        )
 
     let seedOpen (store: obj) (kind: string) (workId: string) (root: string) (head: int64) : Task<obj> =
         seedOpenWith store kind workId root head "owner"
@@ -800,113 +729,13 @@ module LifecycleSurface =
         : Task<obj> =
         seedOpenWith store kind workId root head ownerId
 
-    let private seedReviewWith (store: obj) (workId: string) (outcome: string) (reviewerId: string) : Task<obj> =
-        task {
-            match stampedDir store, outcome with
-            | Some dir, ("Promoted" | "Stayed" | "Cleared") ->
-                try
-                    match DurableWorkHost.inspected dir workId with
-                    | None ->
-                        return
-                            box
-                                {| ok = false
-                                   reviewed = false
-                                   error = "lifecycle work is missing" |}
-                    | Some work ->
-                        match work.ActiveId with
-                        | None ->
-                            return
-                                box
-                                    {| ok = false
-                                       reviewed = false
-                                       error = "no active incumbency" |}
-                        | Some incumbencyId ->
-                            let receipt =
-                                DurableWorkHost.execute
-                                    dir
-                                    workId
-                                    ("review:" + incumbencyId + ":" + outcome)
-                                    (reviewCommand incumbencyId outcome reviewerId)
-
-                            if receipt.Status = "Committed" || receipt.Status = "Replayed" then
-                                return
-                                    box
-                                        {| ok = true
-                                           reviewed = true
-                                           error = "" |}
-                            else
-                                return
-                                    box
-                                        {| ok = false
-                                           reviewed = false
-                                           error =
-                                            if receipt.Reason = "" then
-                                                receipt.Status
-                                            else
-                                                receipt.Reason |}
-                with error ->
-                    return
-                        box
-                            {| ok = false
-                               reviewed = false
-                               error = error.Message |}
-            | _, _ ->
-                match outcome with
-                | "Promoted"
-                | "Stayed" ->
-                    if (recall workId).Length = 0 then
-                        return
-                            box
-                                {| ok = false
-                                   reviewed = false
-                                   error = "lifecycle work is missing" |}
-                    else
-                        let incumbencyId =
-                            try
-                                useJournal workId (recall workId) (fun work ->
-                                    let snapshot: obj = work?inspect ()
-
-                                    if isNull snapshot?active then
-                                        ""
-                                    else
-                                        string snapshot?active?id)
-                            with error ->
-                                error.Message
-
-                        if incumbencyId.Length = 0 then
-                            return
-                                box
-                                    {| ok = false
-                                       reviewed = false
-                                       error = "no active incumbency" |}
-                        else
-                            match
-                                runSeed
-                                    workId
-                                    ("review:" + incumbencyId + ":" + outcome)
-                                    (reviewCommand incumbencyId outcome reviewerId)
-                            with
-                            | Ok(result, wrote) ->
-                                let status = string result?status
-
-                                return
-                                    box
-                                        {| ok = status = "Committed" || status = "Replayed"
-                                           reviewed = wrote
-                                           error = "" |}
-                            | Error reason ->
-                                return
-                                    box
-                                        {| ok = false
-                                           reviewed = false
-                                           error = reason |}
-                | _ ->
-                    return
-                        box
-                            {| ok = false
-                               reviewed = false
-                               error = "review outcome rejected" |}
-        }
+    let private seedReviewWith (_store: obj) (_workId: string) (outcome: string) (_reviewerId: string) : Task<obj> =
+        Task.FromResult(
+            box
+                {| ok = false
+                   reviewed = false
+                   error = "review is the only lifecycle entry; " + outcome + " is not a command" |}
+        )
 
     let seedReview (store: obj) (workId: string) (outcome: string) : Task<obj> =
         seedReviewWith store workId outcome "reviewer"

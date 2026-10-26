@@ -69,7 +69,6 @@ module StaticTools =
           "bash-honeypot"
           "review"
           "fetch"
-          "deliver"
           "todowrite-for-engineer"
           "todowrite-for-manager"
           "todowrite-for-orchestrator"
@@ -90,13 +89,11 @@ module StaticTools =
         knownToolNames
         |> List.map (fun name ->
             name,
-            (name = "negotiate"
-             || (name = "askPreviousScope"
-                 && (role = Role.Advisor || Set.contains ToolPermission.ResetScope allowed))
-             || (name = "resetScope" && role = Role.Advisor)
+            (role <> Role.Advisor && (name = "negotiate"
+             || (name = "askPreviousScope" && Set.contains ToolPermission.ResetScope allowed)
              || OfficeCapability.admitsUtility role name
              || (permissionOfToolName role name
-                 |> Option.exists (fun permission -> Set.contains permission allowed))))
+                 |> Option.exists (fun permission -> Set.contains permission allowed)))))
         |> Map.ofList
         |> AblationGate.filterToolPermissionMap registry
 
@@ -128,11 +125,10 @@ module StaticTools =
         // Orchestrator's Fork duty runs on the programming surface, and its
         // host verb is `commission` (no office permission of its own).
         | true, "fork", Role.Orchestrator -> "deny"
+        | true, _, Role.Advisor -> "deny"
         | true, "negotiate", _ -> "allow"
-        | true, "askPreviousScope", Role.Advisor -> "allow"
         | true, "askPreviousScope", role when OfficeCapability.isAllowed role ToolPermission.ResetScope -> "allow"
         | true, "askPreviousScope", _ -> "deny"
-        | true, "resetScope", Role.Advisor -> "allow"
         | true, "commission", Role.Orchestrator -> "allow"
         | true, name, role when List.contains name OfficeCapability.utilityToolNames -> utilityPermission role name
         | true, "todowrite-for-bookkeeper", _ -> "deny"
@@ -209,5 +205,5 @@ module StaticTools =
 
     let planAgentConfig (prompt: string option) : obj = primaryAgent Role.Plan prompt
 
-    /// The advisor has only the non-authorizing negotiation protocol tool.
+    /// The dedicated Advisor has no tools. Its consultation uses Host-managed prompts.
     let advisorAgentConfig (prompt: string) : obj = hiddenAgent Role.Advisor prompt

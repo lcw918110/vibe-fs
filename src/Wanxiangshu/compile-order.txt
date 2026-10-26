@@ -755,8 +755,6 @@ OpenCode/Codec/ProjectionMessageEdit.fsi
 OpenCode/Codec/ProjectionMessageEdit.fs
 Mission/Planning/PlanTools.fsi
 Mission/Planning/PlanTools.fs
-Mission/Planning/ReviewPlanBackend.fsi
-Mission/Planning/ReviewPlanBackend.fs
 Mission/Planning/Surface.fsi
 Mission/Planning/Surface.fs
 Participant/Provider/Projection/Surface.fsi
