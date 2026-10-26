@@ -7,6 +7,12 @@ open Fable.Core.JsInterop
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation.Identity
 
+type JsDelegationHost =
+    { Delegate: string -> obj -> Task<obj>
+      Fission: obj -> Task<obj>
+      Horizon: unit -> Task<obj>
+      Review: obj -> obj -> Task<obj> }
+
 /// JS-010/JS-016: the api object injected into the sandbox — the only
 /// authority a model program sees. Every member returns a JSON-compatible
 /// object; failures carry `{ ok: false, code, reason }` with stable codes

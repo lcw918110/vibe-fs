@@ -50,6 +50,9 @@ module ToolRegistry =
     [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
     let private deliveryAttemptLedger: obj = jsNative
 
+    [<Import("activeTurnBridge", "wanxiangli/program")>]
+    let private activeTurnBridge: obj = jsNative
+
     /// An unanswered question refuses source writes. The ledger being empty does not admit them.
     let planSourceWriteAllowed (waitingForUser: bool) = not waitingForUser
 
@@ -824,10 +827,12 @@ module ToolRegistry =
                                             ctx
                                   Review = fun findings note -> reviewMember runtime ctx findings note }
 
-                            JsDelegationBridge.install ctx.SessionId host
-
-                            JsDelegationBridge.installAsk ctx.SessionId (fun question ->
-                                runtime.AskUser(ctx, question))
+                            let leaseToken =
+                                activeTurnBridge?acquire(
+                                    ctx.SessionId,
+                                    box host,
+                                    box (fun question -> runtime.AskUser(ctx, question))
+                                )
 
                             task {
                                 do! ensureStateRoot workspaceDirectory
@@ -839,7 +844,7 @@ module ToolRegistry =
 
                                     return outcome
                                 finally
-                                    JsDelegationBridge.clear ctx.SessionId
+                                    activeTurnBridge?release(ctx.SessionId, leaseToken) |> ignore
                             } })
 
         let generatedJsSpecs () =

@@ -185,6 +185,9 @@ type JsReviewGates =
 
 /// The host binds business capabilities and settles their audit effects.
 module JsToolWorkflow =
+    [<Import("activeTurnBridge", "wanxiangli/program")>]
+    let private activeTurnBridge: obj = jsNative
+
     type FileAccessObservation = JsExplicitFileRead list -> string list -> Task<unit>
 
     [<RequireQualifiedAccess>]
@@ -454,6 +457,75 @@ module JsToolWorkflow =
             // DSL-MUTABLE: resource — 保存本次结算失败，供回执映射保留原始原因。
             let mutable settlementFailure: JsFailure option = None
 
+            // Dynamic proxy: resolve host and ask at actual member invocation time
+            // preventing stale closures across park/unpark turns and enforcing active lease gates!
+            let dynamicHost: JsDelegationHost =
+                { Delegate =
+                    fun name payload ->
+                        match activeTurnBridge?resolveHost sessionId with
+                        | null ->
+                            task {
+                                return
+                                    box
+                                        {| ok = false
+                                           code = "DELEGATION_UNAVAILABLE"
+                                           reason = "delegation channel is unavailable outside an active tool turn" |}
+                            }
+                        | hostObj ->
+                            let target = unbox<JsDelegationHost> hostObj
+                            target.Delegate name payload
+                  Fission =
+                    fun payload ->
+                        match activeTurnBridge?resolveHost sessionId with
+                        | null ->
+                            task {
+                                return
+                                    box
+                                        {| ok = false
+                                           code = "DELEGATION_UNAVAILABLE"
+                                           reason = "fission channel is unavailable outside an active tool turn" |}
+                            }
+                        | hostObj ->
+                            let target = unbox<JsDelegationHost> hostObj
+                            target.Fission payload
+                  Horizon =
+                    fun () ->
+                        match activeTurnBridge?resolveHost sessionId with
+                        | null ->
+                            task {
+                                return
+                                    box
+                                        {| ok = false
+                                           code = "DELEGATION_UNAVAILABLE"
+                                           reason = "horizon channel is unavailable outside an active tool turn" |}
+                            }
+                        | hostObj ->
+                            let target = unbox<JsDelegationHost> hostObj
+                            target.Horizon ()
+                  Review =
+                    fun findings note ->
+                        match activeTurnBridge?resolveHost sessionId with
+                        | null ->
+                            task {
+                                return
+                                    box
+                                        {| ok = false
+                                           code = "DELEGATION_UNAVAILABLE"
+                                           reason = "review channel is unavailable outside an active tool turn" |}
+                            }
+                        | hostObj ->
+                            let target = unbox<JsDelegationHost> hostObj
+                            target.Review findings note }
+
+            let dynamicAsk: (string -> Task<Result<unit, string>>) =
+                fun question ->
+                    match activeTurnBridge?resolveAsk sessionId with
+                    | null ->
+                        Task.FromResult(Error "ask channel is unavailable outside an active tool turn")
+                    | askObj ->
+                        let askFn = unbox<string -> Task<Result<unit, string>>> askObj
+                        askFn question
+
             let api =
                 JsToolsBindings.createApi
                     capabilities
@@ -461,8 +533,8 @@ module JsToolWorkflow =
                     staging
                     reads
                     ledger
-                    (JsDelegationBridge.hostFor sessionId)
-                    (JsDelegationBridge.askFor sessionId)
+                    (Some dynamicHost)
+                    (Some dynamicAsk)
                 |> applyReviewGates reviewGates
 
             let settle (receipt: obj) : Task<obj> =

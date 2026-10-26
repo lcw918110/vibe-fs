@@ -641,8 +641,6 @@ Repository/Programming/Js/DeliveredValues.fsi
 Repository/Programming/Js/DeliveredValues.fs
 Repository/Programming/Js/Programs.fsi
 Repository/Programming/Js/Programs.fs
-Repository/Programming/Js/DelegationBridge.fsi
-Repository/Programming/Js/DelegationBridge.fs
 Process/PtyTypes.fsi
 Process/PtyTypes.fs
 Process/PtySession.fsi

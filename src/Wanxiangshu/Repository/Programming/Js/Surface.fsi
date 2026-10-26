@@ -27,23 +27,3 @@ module JsToolGenerator =
 
     val isGeneratedToolName: roleName: string -> capabilities: Set<ToolPermission> -> toolName: string -> bool
     val memberBinding: roleName: string -> capabilities: Set<ToolPermission> -> memberName: string -> string option
-
-type JsTransactionContext =
-    new: unit -> JsTransactionContext
-    member RecordGrepScan: paths: string seq -> unit
-    member recordGrepScan: paths: string array -> unit
-    member RecordExplicitRead: path: string -> unit
-    member recordExplicitRead: path: string -> unit
-    member StageWrite: path: string * content: string -> unit
-    member stageWrite: path: string * content: string -> unit
-    member Abort: unit -> unit
-    member abort: unit -> unit
-    member Commit: unit -> unit
-    member commit: unit -> unit
-    member GetReadSnapshots: unit -> string array
-    member getReadSnapshots: unit -> string array
-    member GetSubstantiveAccess: unit -> string array
-    member getSubstantiveAccess: unit -> string array
-
-module JsSurfaceExports =
-    val createTransactionContext: unit -> JsTransactionContext

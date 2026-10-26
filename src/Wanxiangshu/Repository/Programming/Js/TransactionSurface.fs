@@ -363,29 +363,4 @@ module JsTransactionSurface =
 
     let createLifecyclePersistence (store: obj) : obj = lifecyclePersistenceOf store |> box
 
-    let createTransactionContext () : obj =
-        let readSnapshots = System.Collections.Generic.HashSet<string>()
-        let explicitReads = System.Collections.Generic.HashSet<string>()
-        let stagedWrites = System.Collections.Generic.Dictionary<string, string>()
-        // DSL-MUTABLE: cancellation — transaction aborted flag
-        let mutable isAborted = false
-        // DSL-MUTABLE: single-flight — transaction committed flag
-        let mutable isCommitted = false
 
-        box
-            {| recordGrepScan =
-                fun (paths: string array) ->
-                    for p in paths do
-                        readSnapshots.Add p |> ignore
-               recordExplicitRead =
-                fun (path: string) ->
-                    readSnapshots.Add path |> ignore
-                    explicitReads.Add path |> ignore
-               stageWrite = fun (path: string) (content: string) -> stagedWrites.[path] <- content
-               abort = fun () -> isAborted <- true
-               commit =
-                fun () ->
-                    if not isAborted then
-                        isCommitted <- true
-               getReadSnapshots = fun () -> readSnapshots |> Seq.toArray
-               getSubstantiveAccess = fun () -> explicitReads |> Seq.toArray |}

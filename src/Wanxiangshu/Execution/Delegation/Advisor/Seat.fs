@@ -75,47 +75,25 @@ module AdvisorSeat =
         { ChildId: SessionId
           PriorRun: ProviderRunIdentity option }
 
-    /// DSL-MUTABLE: resource — child session id → provider run of the Completed the most
-    /// recent consult on that child settled on. Process-live; the seat registry below has
-    /// the same lifetime.
-    let private settledRuns = Dictionary<string, ProviderRunIdentity>()
+    module private AdvisorLibrary =
+        [<Import("advisorSeatRegistry", "wanxiangli/advisor")>]
+        let advisorSeatRegistry: obj = jsNative
 
+        [<Import("settledRunLedger", "wanxiangli/advisor")>]
+        let settledRunLedger: obj = jsNative
+
+    open AdvisorLibrary
+
+    /// 已结算运行单调账本：代理至 wanxiangli/advisor 的 settledRunLedger
     let private recordSettled (childId: SessionId) (providerRun: ProviderRunIdentity) : unit =
-        lock settledRuns (fun () -> settledRuns.[SessionId.value childId] <- providerRun)
+        settledRunLedger?recordSettled (SessionId.value childId, ProviderRunIdentity.value providerRun)
 
     let private priorRun (childId: SessionId) : ProviderRunIdentity option =
-        lock settledRuns (fun () ->
-            match settledRuns.TryGetValue(SessionId.value childId) with
-            | true, run -> Some run
-            | false, _ -> None)
-
-    /// DSL-MUTABLE: single-flight — memoized advisor child create task for one caller session.
-    /// DSL-MUTABLE: resource — create-failure latch, cleared by the next consult.
-    type private Seat =
-        { CallerId: SessionId
-          Gate: obj
-          mutable ChildTask: Task<Result<SessionId, string>> option
-          mutable CreateFailed: bool }
-
-    /// DSL-MUTABLE: resource — process-live seats by caller session id; a restart empties it.
-    let private seats = Dictionary<string, Seat>()
-    let private registryGate = obj ()
-
-    let private createSeat (callerSessionId: string) : Seat =
-        let seat =
-            { CallerId = SessionId.create callerSessionId
-              Gate = obj ()
-              ChildTask = None
-              CreateFailed = false }
-
-        seats.[callerSessionId] <- seat
-        seat
-
-    let private seatFor (callerSessionId: string) : Seat =
-        lock registryGate (fun () ->
-            match seats.TryGetValue callerSessionId with
-            | true, seat -> seat
-            | false, _ -> createSeat callerSessionId)
+        let found: string = settledRunLedger?priorRun (SessionId.value childId)
+        if String.IsNullOrEmpty found then
+            None
+        else
+            Some(ProviderRunIdentity.create found)
 
     let private createNewAdvisorChild (deps: AdvisorSeatDeps) (callerId: SessionId) (options: ChildSessionOptions) =
         task {
@@ -146,33 +124,25 @@ module AdvisorSeat =
             | Ok children -> return! adoptAdvisorChild deps callerId options children
         }
 
-    let private startSeatChild (deps: AdvisorSeatDeps) (seat: Seat) : Task<Result<SessionId, string>> =
+    /// 席位单飞创建与失败锁存：代理至 wanxiangli/advisor 的 advisorSeatRegistry
+    let private ensureSeatChild (deps: AdvisorSeatDeps) (callerSessionId: string) : Task<Result<SessionId, string>> =
         task {
-            let! created = createAdvisorChild deps seat.CallerId
+            let startChild () =
+                task {
+                    let! created = createAdvisorChild deps (SessionId.create callerSessionId)
+                    return
+                        match created with
+                        | Ok childId -> Ok(SessionId.value childId)
+                        | Error reason -> Error reason
+                }
 
-            if Result.isError created then
-                seat.CreateFailed <- true
+            let! res = advisorSeatRegistry?ensureSeatChild (callerSessionId, startChild)
 
-            return created
+            return
+                match res with
+                | Ok childStr -> Ok(SessionId.create childStr)
+                | Error reason -> Error reason
         }
-
-    let private resetCreateFailure (seat: Seat) : unit =
-        if seat.CreateFailed then
-            seat.ChildTask <- None
-            seat.CreateFailed <- false
-
-    let private ensureSeatChild (deps: AdvisorSeatDeps) (seat: Seat) : Task<Result<SessionId, string>> =
-        lock seat.Gate (fun () ->
-            // A failed create must never become a permanent poisoned single-flight:
-            // the next consult re-observes the Host and tries again.
-            resetCreateFailure seat
-
-            match seat.ChildTask with
-            | Some pending -> pending
-            | None ->
-                let pending = startSeatChild deps seat
-                seat.ChildTask <- Some pending
-                pending)
 
     /// The prompt a physical user message carries: the dispatcher's key stamped in the Host
     /// snapshot first, the journal's accepted physical landing as its fallback.
@@ -248,7 +218,9 @@ module AdvisorSeat =
     /// advisor-[030]: a Completed of the run an earlier consult already settled on — a
     /// sticky replay or a duplicate delivery — is never this consult's terminal.
     let private isStaleRun (fence: ConsultFence) (result: AgentRunResult) : bool =
-        fence.PriorRun |> Option.exists (fun prior -> prior = result.ProviderRun)
+        let isStale: bool =
+            settledRunLedger?isStale (SessionId.value fence.ChildId, ProviderRunIdentity.value result.ProviderRun)
+        isStale || (fence.PriorRun |> Option.exists (fun prior -> prior = result.ProviderRun))
 
     /// F39-02: close the advisor child's logical run once this consult is over.
     ///
@@ -479,7 +451,7 @@ module AdvisorSeat =
         (intent: string)
         : Task<Result<string, string>> =
         task {
-            let! created = ensureSeatChild deps (seatFor callerSessionId)
+            let! created = ensureSeatChild deps callerSessionId
 
             match created with
             | Error reason -> return Error reason
@@ -522,7 +494,11 @@ module AdvisorSeat =
         attempt (fun () -> consultCore deps callerSessionId intent)
 
     let clear (callerSessionId: string) : unit =
-        lock registryGate (fun () -> seats.Remove callerSessionId |> ignore)
+        let maybeChildId: string option = advisorSeatRegistry?clear callerSessionId
+        match maybeChildId with
+        | Some childId -> settledRunLedger?retire childId
+        | None -> ()
 
     let clearAll () : unit =
-        lock registryGate (fun () -> seats.Clear())
+        advisorSeatRegistry?clearAll ()
+        settledRunLedger?clearAll ()

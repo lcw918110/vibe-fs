@@ -14,6 +14,8 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation.Outcome
 open Wanxiangshu.Participant.Persona
+open Fable.Core
+open Fable.Core.JsInterop
 
 [<RequireQualifiedAccess>]
 module ManagedSessionTermination =
@@ -71,6 +73,10 @@ module ManagedSessionTermination =
                 return combineEffects cancelOutcome abortOutcome
             }
 
+module private FamilyTreeInterop =
+    [<Import("SessionFamilyTree", "wanxiangli/ownership")>]
+    let sessionFamilyTreeClass: obj = jsNative
+
 type InjectedSessionPort
     (
         underlyingPort: IOpenCodePort option,
@@ -79,210 +85,72 @@ type InjectedSessionPort
         ?isLifecycleTerminated: SessionId -> bool,
         ?isUserQuestionWaiting: SessionId -> bool
     ) =
-    // DSL-MUTABLE: resource — parent-to-child session set map
-    let parentChildMap = Dictionary<SessionId, HashSet<SessionId>>()
-    // DSL-MUTABLE: resource — child-to-parent session map
-    let childParents = Dictionary<SessionId, SessionId>()
-    let lockObj = obj ()
-    let restoredParent = defaultArg familyParent (fun _ -> None)
-
-    // DSL-MUTABLE: resource — confirmed physical roots in Host
-    let knownRoots = HashSet<SessionId>()
-
-    let findRestoredRoot (sessionId: SessionId) =
-        let visited = HashSet<SessionId>()
-
-        let nextRestoredStep current =
-            match restoredParent current with
-            | Some parentId when parentId <> current -> Some parentId
-            | _ -> None
-
-        let rec loop current =
-            if not (visited.Add current) then
-                current
-            else
-                nextRestoredStep current |> Option.map loop |> Option.defaultValue current
-
-        loop sessionId
-
-    let knownOrDeclaredRoot (sessionId: SessionId) =
-        match knownRoots.Contains sessionId with
-        | true -> Some sessionId
-        | false -> None
-
-    let tryFindKnownRoot (sessionId: SessionId) =
-        lock lockObj (fun () ->
-            match childParents.TryGetValue sessionId with
-            | true, rootId -> Some rootId
-            | false, _ -> knownOrDeclaredRoot sessionId)
-
-    let ensureParentChildBucket (rootId: SessionId) =
-        match parentChildMap.ContainsKey rootId with
-        | true -> ()
-        | false -> parentChildMap.[rootId] <- HashSet<SessionId>()
-
-    let recordOneAncestor (discoveredRoot: SessionId) (s: SessionId) =
-        match s <> discoveredRoot with
-        | false -> ()
-        | true ->
-            childParents.[s] <- discoveredRoot
-            ensureParentChildBucket discoveredRoot
-            parentChildMap.[discoveredRoot].Add s |> ignore
-
-    let recordAncestryChain (discoveredRoot: SessionId) (ancestors: SessionId list) =
-        lock lockObj (fun () ->
-            knownRoots.Add discoveredRoot |> ignore
-            ancestors |> List.iter (recordOneAncestor discoveredRoot))
-
-    let stepParentQuery (port: IOpenCodePort) (current: SessionId) = port.GetSessionParent current
-
-    let continueAncestryWalk
-        (current: SessionId)
-        (walkNext: SessionId -> Task<Result<SessionId, string>>)
-        (parentOpt: SessionId option)
-        =
-        match parentOpt with
-        | None -> Task.FromResult(Ok current)
-        | Some parentId -> walkNext parentId
-
-    let queryAndWalkParent
-        (port: IOpenCodePort)
-        (walkAncestry: SessionId -> Task<Result<SessionId, string>>)
-        (current: SessionId)
-        =
-        taskResult {
-            let! parentOpt = stepParentQuery port current
-            return! continueAncestryWalk current walkAncestry parentOpt
-        }
-
-    let rec continueWalkUnvisited
-        (port: IOpenCodePort)
-        (visited: HashSet<SessionId>)
-        (ancestors: ResizeArray<SessionId>)
-        (current: SessionId)
-        (isCycle: bool)
-        : Task<Result<SessionId, string>> =
-        match isCycle with
-        | true -> Task.FromResult(Error(sprintf "Session ancestry cycle detected at %s" (SessionId.value current)))
-        | false ->
-            ancestors.Add current
-            let nextKnown = tryFindKnownRoot current
-            walkAncestryStep port visited ancestors nextKnown current
-
-    and walkAncestryWithKnown
-        (port: IOpenCodePort)
-        (visited: HashSet<SessionId>)
-        (ancestors: ResizeArray<SessionId>)
-        (knownRootOpt: SessionId option)
-        (current: SessionId)
-        : Task<Result<SessionId, string>> =
-        match knownRootOpt with
-        | Some known -> Task.FromResult(Ok known)
-        | None ->
-            let isCycle = not (visited.Add current)
-            continueWalkUnvisited port visited ancestors current isCycle
-
-    and walkAncestryStep
-        (port: IOpenCodePort)
-        (visited: HashSet<SessionId>)
-        (ancestors: ResizeArray<SessionId>)
-        (knownOpt: SessionId option)
-        (current: SessionId)
-        : Task<Result<SessionId, string>> =
-        match knownOpt with
-        | Some known -> Task.FromResult(Ok known)
-        | None ->
-            let nextStep = walkAncestryWithKnown port visited ancestors None
-            queryAndWalkParent port nextStep current
-
-    let executeFamilyRootDiscovery (port: IOpenCodePort) (targetId: SessionId) : Task<Result<SessionId, string>> =
-        taskResult {
-            let visited = HashSet<SessionId>()
-            let ancestors = ResizeArray<SessionId>()
-            let! root = walkAncestryWithKnown port visited ancestors None targetId
-            recordAncestryChain root (ancestors |> Seq.toList)
-            return root
-        }
+    let familyTree: obj =
+        let parentLookup (sid: string) =
+            match familyParent with
+            | Some fp -> fp (SessionId.create sid) |> Option.map SessionId.value
+            | None -> None
+        createNew FamilyTreeInterop.sessionFamilyTreeClass (box parentLookup)
 
     let resolveFamilyRoot (port: IOpenCodePort) (targetId: SessionId) : Task<Result<SessionId, string>> =
-        match tryFindKnownRoot targetId with
-        | Some known -> Task.FromResult(Ok known)
-        | None -> executeFamilyRootDiscovery port targetId
+        task {
+            let stepQuery (curr: string) =
+                task {
+                    let! parentRes = port.GetSessionParent (SessionId.create curr)
+                    match parentRes with
+                    | Ok parentOpt ->
+                        return box {| ok = true; parent = parentOpt |> Option.map SessionId.value; error = null |}
+                    | Error err ->
+                        return box {| ok = false; parent = None; error = err |}
+                }
+
+            let! resObj = familyTree?resolveFamilyRoot(SessionId.value targetId, stepQuery)
+            if resObj?ok = true then
+                let rootStr: string = resObj?root
+                return Ok (SessionId.create rootStr)
+            else
+                let errStr: string = resObj?error
+                return Error errStr
+        }
 
     let familyRoot (sessionId: SessionId) =
-        match tryFindKnownRoot sessionId with
-        | Some rootId -> rootId
-        | None -> findRestoredRoot sessionId
+        let rStr: string = familyTree?familyRootOf(SessionId.value sessionId)
+        SessionId.create rStr
 
     let managedChild (sessionId: SessionId) =
-        lock lockObj (fun () -> childParents.ContainsKey sessionId)
-        || restoredParent sessionId |> Option.isSome
+        familyTree?isManagedChild(SessionId.value sessionId) : bool
 
     let registerChild (parentId: SessionId) (childId: SessionId) =
-        lock lockObj (fun () ->
-            let rootId =
-                match childParents.TryGetValue parentId with
-                | true, value -> value
-                | false, _ -> parentId
-
-            match childParents.TryGetValue childId with
-            | true, previousRoot when previousRoot <> rootId && parentChildMap.ContainsKey previousRoot ->
-                parentChildMap.[previousRoot].Remove childId |> ignore
-            | _ -> ()
-
-            if not (parentChildMap.ContainsKey rootId) then
-                parentChildMap.[rootId] <- HashSet<SessionId>()
-
-            parentChildMap.[rootId].Add childId |> ignore
-            childParents.[childId] <- rootId
-            knownRoots.Add rootId |> ignore)
-
-    let forgetChildParents (children: SessionId list) =
-        for childId in children do
-            childParents.Remove childId |> ignore
-
-    let getAndRemoveChildren (parentId: SessionId) =
-        lock lockObj (fun () ->
-            if parentChildMap.ContainsKey parentId then
-                let children = parentChildMap.[parentId] |> Seq.toList
-                parentChildMap.Remove parentId |> ignore
-                forgetChildParents children
-                children
-            else
-                [])
-
-    let detachFromRoot (rootId: SessionId) (childId: SessionId) =
-        if parentChildMap.ContainsKey rootId then
-            parentChildMap.[rootId].Remove childId |> ignore
-
-    let pruneEmptyRoot (rootId: SessionId) =
-        if parentChildMap.ContainsKey rootId && parentChildMap.[rootId].Count = 0 then
-            parentChildMap.Remove rootId |> ignore
+        familyTree?registerChild(SessionId.value parentId, SessionId.value childId) |> ignore
 
     let detachChild (childId: SessionId) =
-        lock lockObj (fun () ->
-            match childParents.TryGetValue childId with
-            | true, rootId ->
-                childParents.Remove childId |> ignore
-                detachFromRoot rootId childId
-                pruneEmptyRoot rootId
-            | false, _ -> ())
+        familyTree?detachChild(SessionId.value childId) |> ignore
 
-    let abortOneChild (childId: SessionId) =
+    let isAbortOk (res: Result<unit, string>) =
+        match res with
+        | Ok () -> true
+        | Error _ -> false
+
+    let abortOneChild (childId: SessionId) : Task<bool> =
         task {
             match underlyingPort with
             | Some port ->
-                let! _ = port.AbortSession childId
-                ()
-            | None -> ()
+                let! res = port.AbortSession childId
+                return isAbortOk res
+            | None -> return false
         }
 
     let abortChildren (parentId: SessionId) =
         task {
-            let children = getAndRemoveChildren parentId
+            let parentKey = SessionId.value parentId
+            let childrenArray: string array = familyTree?childrenToAbort(parentKey)
 
-            for childId in children do
-                do! abortOneChild childId
+            for childKey in childrenArray do
+                let childId = SessionId.create childKey
+                let! isAborted = abortOneChild childId
+                familyTree?settleAbortOne(parentKey, childKey, isAborted) |> ignore
+
+            familyTree?endAbort(parentKey) |> ignore
         }
 
     let routeSendOptions (_sessionId: SessionId) (opts: SessionPromptOptions) =

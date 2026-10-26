@@ -11,6 +11,9 @@ open Wanxiangshu.Foundation.Identity
 /// union remain opaque; observations cross as plain result objects.
 [<RequireQualifiedAccess>]
 module JsRuntimeSurface =
+    [<Import("activeTurnBridge", "wanxiangli/program")>]
+    let private activeTurnBridge: obj = jsNative
+
 
     type private JsBindingsHandle
         (api: obj, staging: ResizeArray<JsStagedMutation>, reads: ResizeArray<JsExplicitFileRead>) =
@@ -69,8 +72,7 @@ module JsRuntimeSurface =
         (fission: obj)
         (horizon: obj)
         : unit =
-        JsDelegationBridge.install
-            sessionId
+        let host: JsDelegationHost =
             { Delegate = fun name payload -> unbox<Task<obj>> (emitJsExpr (delegation, name, payload) "$0($1,$2)")
               Fission = fun payload -> unbox<Task<obj>> (emitJsExpr (fission, payload) "$0($1)")
               Horizon = fun () -> unbox<Task<obj>> (emitJsExpr horizon "$0()")
@@ -86,8 +88,10 @@ module JsRuntimeSurface =
                                    code = "DELEGATION_UNAVAILABLE"
                                    reason = "review is not wired in this runtime surface" |}
                     } }
+        activeTurnBridge?acquire(sessionId, box host, null) |> ignore
 
-    let clearDelegationHost (sessionId: string) : unit = JsDelegationBridge.clear sessionId
+    let clearDelegationHost (sessionId: string) : unit =
+        activeTurnBridge?clearSession sessionId
 
 
     /// Test hook: record a carry array for presentation.

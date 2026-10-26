@@ -2,6 +2,13 @@ namespace Wanxiangshu.Repository.Programming.Js
 
 open System.Threading.Tasks
 
+/// Process-live delegation seam for the programming surface.
+type JsDelegationHost =
+    { Delegate: string -> obj -> Task<obj>
+      Fission: obj -> Task<obj>
+      Horizon: unit -> Task<obj>
+      Review: obj -> obj -> Task<obj> } // (findings, note)
+
 module JsToolsBindings =
     val createLedger: persistence: IJsTransactionPersistence option -> JsAsIsLedger
     val makeReviewMember: host: JsDelegationHost option -> (string * obj)

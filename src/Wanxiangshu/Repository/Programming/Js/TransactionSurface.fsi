@@ -48,4 +48,3 @@ module JsTransactionSurface =
 
     val createLifecyclePersistence: store: obj -> obj
 
-    val createTransactionContext: unit -> obj

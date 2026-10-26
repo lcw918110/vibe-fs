@@ -29,7 +29,7 @@
     <Compile Include="Repository/Programming/Js/DeliveredValues.fs"/>
     <Compile Include="Repository/Programming/Js/Programs.fsi"/>
     <Compile Include="Repository/Programming/Js/Programs.fs"/>
-    <Compile Include="Repository/Programming/Js/DelegationBridge.fsi"/>
-    <Compile Include="Repository/Programming/Js/DelegationBridge.fs"/>
+
+
   </ItemGroup>
 </Project>

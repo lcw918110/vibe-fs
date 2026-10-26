@@ -1416,7 +1416,8 @@ module PluginHooks =
                         advisorProcessQueue?clear(SessionId.value sessionId) |> ignore
                         calibration?clearSession(SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
-                        outboundViewStore?clearSession (SessionId.value sessionId) |> ignore)
+                        outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
+                        AdvisorSeat.clear (SessionId.value sessionId))
 
             let observeEvent raw =
                 task {
@@ -1432,6 +1433,7 @@ module PluginHooks =
             let dispose =
                 let disposeAll () =
                     task {
+                        AdvisorSeat.clearAll ()
                         do! product.Dispose()
                         do! scope.DisposeAsync()
                     }
