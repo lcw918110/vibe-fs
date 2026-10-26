@@ -284,6 +284,26 @@ module HostSignalBootstrap =
                             ChatExecutionRecoveryLifecycleEvent.ExactAssistantTerminal(evidence, disposition)
                         )
 
+                    // An exact completed assistant is a physical end-of-turn
+                    // witness; the coarse session.idle event may be lost.
+                    // Superseded attempts and running tools remain fenced by the
+                    // existing quiescence gate. Failures cannot mint this permit.
+                    let completed = disposition = ChatExecutionTerminalDisposition.Completed
+
+                    let key =
+                        { SessionId = observation.SessionId
+                          PhysicalUserMessageId = observation.PhysicalUserMessageId }
+
+                    let permit =
+                        if completed then
+                            scope.Sessions.Quiescence.CaptureCurrentAttempt observation.SessionId
+                            |> tryObserveCurrentIdle key
+                        else
+                            None
+
+                    permit
+                    |> Option.iter (fun current -> reconciler.SignalIdle(observation.SessionId, current))
+
                     reconciler.NotifyProjectionChanged(observation.SessionId, observation.PhysicalUserMessageId)
 
                     FissionHost.observePhysicalExecutionEnd

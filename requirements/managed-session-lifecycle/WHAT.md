@@ -151,3 +151,13 @@ child run 已在 journal 中证实的 Terminal 事实必须总能转化为一次
 - PERSIST 形态：Source 结算为 PERSIST 失败而 durable work 仍 Active 时，join 经 pending Source 浮现该失败，不挂等 journal revision 前进；未知 durable commit 不放行新工作，durable work 保持 Active，不得伪装成成功或按完成释放。
 - 禁止后果：不得以交付视图读取失败为由跳过结算或吞掉完成事实；不得让 join 无界等待；不得把未知 durable commit 当作已交付完成。
 - 失败后果：结算故障必须落为显式可 join 的失败事实并保留原始证据，供恢复与取证；不得用空视图、静默或成功文字代替停止保证。
+
+## [029] 已确认的子代理自然停机，不依赖第二个 session.idle 才能完成父 Join
+
+Engineer/DevOps 的自然停止必须使父 join 取得一次真正可消费的完成事实。宿主确切观察到相同物理请求的 assistant message.updated（完成时间、合法 stop/length/content-filter 结尾）以及有 ProviderStarted 证据且 durable 提交成功的 ChatExecution.Terminal(Completed) 后，可以使用现有带代际和在途工具检查的 SessionQuiescenceGate permit 唤醒 Reconcile；不得额外要求另一个可能丢失的粗粒度 session.idle 才结算子任务。后续 session.idle 应幂等。
+
+此规则只处理已证实的精确当前 Completed。旧物理 parent、superseded run、Cancelled/Failed、未完成的工具、没有匹配 ProviderStarted 的伪消息均不得产生完成证明。终态归属与持久写入仍由已有 Host/Fork owner 验证，不能按时间或进程存活猜测完成。
+
+真实事故（2026-10-25 UTC）：21:25 父 Manager resume(backport-runtime) 后 join；该子 Engineer 21:28:28 将 ChatExecution.Terminal(Completed) 写入 event sourcing 且有非空终态正文，但父 HandleWorkCompleted 从未追加，Join 停留在 external:child-completion。不能对磁盘日志直接补造 completion。
+
+先红后绿的物理证明：tests/029.test.mjs 从真实 fork 到新 assistant message.updated 的自然 stop，故意不发送 session.idle：旧实现得到 JOIN-HUNG，精确终态唤醒修复后得到父 join 的真实报告与 Retired 墓碑。不同 physical parentID 的伪 Completed 不结算。host-boundary/tests/005.test.mjs 与 tests/028.test.mjs 进一步保护身份/失败与未知持久化结果不被伪成功。

@@ -49,3 +49,5 @@
 e1合并的统一gen77正式510文件运行中，本包全部active断言通过，含009旧A重试保新B、013冷重放、018受权held abort、025实际journal/PTY端口隔离；完整36文件integration亦0 fail。具体汇总、TODO及未证OS边界见[同步记录](../../../proposals/archive/2026-10-03/Upstream同步-e1e7dd3f1-2026-10-03.md)。不得以端口隔离证明真实TERM/KILL。
 
 先使用仓库正式构建，然后通过 verification-system/tests/run.mjs 的 TESTS_MJS_FILES 指定本目录条款测试。需要跨插件的用例启用 WXS_TIER_INTEGRATION=1。TODO、未完成文件及静默监督中止均不构成完整验收；局部直接运行仅用于定位问题。
+
+- 029.test.mjs：真实 Fork→Engineer 非空 stop→父 Join 复现 session.idle 缺失下的终态 lost-wake；修复前红 JOIN-HUNG、修复后绿色，外来 physical parent 无法冒充当前 Terminal；相邻 005/028 保持身份、故障边界。并不代表已热替换运行中 OpenCode 进程。
