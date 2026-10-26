@@ -222,38 +222,13 @@ module PluginHostWiring =
                     }
                 | None -> Task.FromResult None
 
-            // Continue keeps the authority run alive while its former physical
-            // attempt must still be interrupted. A new root after Accepted is different.
+            // A completed work closes its authority run even while that run's
+            // root is still present. The milestone 「已完成」 is the fact.
             let isLifecycleTerminated (sessionId: SessionId) =
-                let sessionOpt =
-                    boot.Journal
-                    |> Option.bind (fun durable ->
-                        let snapshot = AgentJournal.snapshot durable
-                        AgentProjection.tryFind sessionId snapshot.AgentProjections)
-
-                let activeRoot =
-                    sessionOpt
-                    |> Option.bind (fun s -> s.PromptAuthority)
-                    |> Option.bind (fun pa -> pa.ActiveLogicalRun)
-                    |> Option.map (fun profile -> AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
-
-                let workOpt =
-                    commonDirOpt
-                    |> Option.bind (fun commonDir ->
-                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value sessionId))
-
-                // Delivered or a pending DeliveryRequested (post-S3) closes
-                // the planning conversation: the final retirement left no
-                // active tenure to continue, and a committed DeliveryRequested
-                // is the durable fact that the plan itself is finished. A
-                // missing list is not an empty list, so an open work is never
-                // terminated here.
-                match workOpt with
-                | Some work when work.Sequence = [ "S1"; "S2"; "S3" ] && (work.Delivered || work.PendingDelivery) ->
-                    true
-                | Some work when work.Sequence = [ "S4" ] -> work.Delivered
-                | Some work -> work.Delivered && activeRoot.IsNone
-                | None -> false
+                commonDirOpt
+                |> Option.bind (fun commonDir ->
+                    Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value sessionId))
+                |> Option.exists Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority
 
             let isUserQuestionWaiting sessionId =
                 boot.Journal

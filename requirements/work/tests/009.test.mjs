@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { deliverOnce } from './support/contract.mjs'
+import { Work } from 'wanxiangli/work'
 import { withReview, scores } from './support/plugin.mjs'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import * as scopeMod from '../../../dist/OpenCode/Tools/ToolRuntimeScopeSurface.js'
@@ -14,11 +14,30 @@ const verifyOwnership =
   scopeMod.verifyOwnershipRetirementContract ||
   (scopeMod.ToolRuntimeScopeSurface && scopeMod.ToolRuntimeScopeSurface.verifyOwnershipRetirementContract)
 
-test('WHAT[work-009] a live owned resource blocks deliver without retiring', () => {
-  const blocked = deliverOnce({ sequence: ['S1', 'S2', 'S3'], blockers: ['pty'], deliveryAuthorized: false, head: 1, projection: 'S1', incumbencyId: 'i' })
-  assert.equal(blocked.written[0].type, 'RetirementBlocked')
-  assert.equal(blocked.written.some((event) => event.type === 'IncumbencyRetired'), false)
-  assert.equal(blocked.finished, false)
+test('WHAT[work-009] a live owned resource blocks completion without retiring', () => {
+  const work = new Work('work-009', undefined)
+  const step = (id, updates, blockers) =>
+    work.execute(id, {
+      type: 'Review',
+      office: 'Manager',
+      providerRunId: 'run',
+      toolCallId: id,
+      updates,
+      ...(blockers ? { blockers } : {}),
+    })
+  step('r1', [{ key: 'job', value: 'do' }])
+  const relayed = step('r2', [{ key: 'job', value: null }])
+  assert.equal(relayed.result.kind, 'Relayed')
+  work.execute('confirm-relay', { type: 'Confirm', effectId: relayed.result.effect.id, outcome: 'Sent' })
+  const advanced = step('r3', [])
+  assert.equal(advanced.result.milestone, '收尾')
+  work.execute('confirm-advance', { type: 'Confirm', effectId: advanced.result.effect.id, outcome: 'Sent' })
+  const before = work.records().length
+  const blocked = step('r4', [], ['pty'])
+  assert.equal(blocked.status, 'Observed')
+  assert.equal(blocked.result.kind, 'Blocked')
+  assert.equal(work.records().length, before)
+  assert.equal(work.history().flatMap((frame) => frame.events).some((event) => event.type === 'IncumbencyRetired' && event.outcome === 'Completed'), false)
 })
 
 test('WHAT[work-009] deliver reports the live blocker instead of reporting an end', async () => {
@@ -30,28 +49,53 @@ test('WHAT[work-009] deliver reports the live blocker instead of reporting an en
         program:
           'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Ada", charge: "implement" }, []); } }',
         name: 'fork-ada',
-          planB: 'Wait for the manager fork receipt before checking the live delivery blocker.'
-        },
+        intent: 'Wait for the manager fork receipt before checking the live delivery blocker.',
+        remainingScopeTurnsEstimate: 3,
+      },
       { sessionID: session, agent: 'manager' },
     )
     assert.match(String(forked), /ok = true/)
     assert.match(String(forked), /name = "Ada"/)
     assert.match(String(forked), /outcome = "created"/)
-    // Single delivery: when blockers are active, deliver immediately reports
-    // the blocker set without an intermediate confirmation step.
-    const blocked = await hooks.tool.deliver.execute(
-      {},
-      { sessionID: session, callID: 'deliver-call', messageID: 'run-retire', agent: 'manager' },
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(runtime.directory)
+    const relayed = await life.submitReview(
+      commonDir,
+      session,
+      'relay-1',
+      'Manager',
+      'run-relay',
+      'call-relay',
+      [{ key: 'target-gap', value: null }],
+      null,
+      '',
     )
-    // Algorithm E8: the blocker is durable and the call reports an unfinished
-    // tenure with exactly what to close, so the runner may deliver again.
-    assert.match(blocked, /finished = false/)
-    assert.match(blocked, /Close or join exactly those resources/)
-    assert.doesNotMatch(blocked, /Finished\. Do not continue work\./)
-    const after = life.inspected(await journalSurface.JournalSurface_initializeStateRoot(runtime.directory), session)
-    assert.equal(Array.from(after.Retirements ?? []).length, 0)
+    assert.equal(relayed.kind, 'Relayed', relayed.reason)
+    const advanced = await life.submitReview(
+      commonDir,
+      session,
+      'advance-1',
+      'Manager',
+      'run-advance',
+      'call-advance',
+      [],
+      null,
+      '',
+    )
+    assert.equal(advanced.kind, 'Advanced', advanced.reason)
+    assert.equal(advanced.milestone, '收尾')
+    const before = life.inspected(commonDir, session)
+    const beforeRetirements = Array.from(before.Retirements ?? [])
+    // 收尾的空 review 遇到仍在运行的 fork，记为 Blocked，不写退休。
+    const blocked = await execute([], { call: 'close-call', run: 'close-run' })
+    assert.match(String(blocked), /Blocked/)
+    assert.doesNotMatch(String(blocked), /Finished\. Do not continue work\./)
+    const after = life.inspected(commonDir, session)
+    const retirements = Array.from(after.Retirements ?? [])
+    assert.equal(retirements.length, beforeRetirements.length)
+    assert.equal(retirements.some((item) => item.Outcome === 'Completed' || item.Outcome === 'Delivered'), false)
     assert.equal(after.Delivered, false)
-    assert.notEqual(after.BlockerDigest ?? '', '')
+    assert.equal(after.Stage, '收尾')
+    assert.ok(after.ActiveId)
   }, { session: 'blocked-second-deliver' })
 })
 

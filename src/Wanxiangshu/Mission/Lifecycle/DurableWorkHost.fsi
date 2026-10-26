@@ -94,6 +94,12 @@ module DurableWorkHost =
 
     val inspected: gitCommonDir: string -> workId: string -> InspectedWork option
 
+    /// A completed work closes its authority run. The milestone 「已完成」 and Delivered are the same fact.
+    val closesAuthority: work: InspectedWork -> bool
+
+    /// The retirement id that closes a completed work, when that work has no active tenure.
+    val completedClosureId: work: InspectedWork -> string option
+
     val inspectedMany:
         gitCommonDir: string -> workIds: string array -> (string * Result<InspectedWork option, string>) array
 

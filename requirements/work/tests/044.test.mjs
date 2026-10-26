@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { deliverOnce, relayHandover } from './support/contract.mjs'
+import { Work } from 'wanxiangli/work'
+import { relayHandover } from './support/contract.mjs'
 import * as scopeMod from '../../../dist/OpenCode/Tools/ToolRuntimeScopeSurface.js'
 import { withAdmittedChildren } from '../../managed-session-lifecycle/tests/support/admitted-child-work.mjs'
 
@@ -9,8 +10,14 @@ const evaluateBlockers =
   (scopeMod.ToolRuntimeScopeSurface && scopeMod.ToolRuntimeScopeSurface.evaluateRetirementBlockers)
 
 test('WHAT[work-044] Relayed keeps the fixed DevOps and its received work for the successor', () => {
-  const relayed = deliverOnce({ sequence: ['S1', 'S2', 'S3'], blockers: [], deliveryAuthorized: false, head: 7, projection: 'S1', incumbencyId: 'i' })
-  const handover = relayHandover(relayed, { devopsId: 'd', received: ['job-1'] })
+  const work = new Work('work-044')
+  work.execute('r1', { type: 'Review', office: 'Plan', providerRunId: 'run', toolCallId: 'r1', updates: [{ key: 'gap', value: 'fix' }] })
+  const bound = work.execute('bind', { type: 'BindDevOps', trigger: 'Ask', devopsId: 'd', target: 'model-a' })
+  assert.equal(bound.result.kind, 'DevOpsBound')
+  const relayed = work.execute('r2', { type: 'Review', office: 'Plan', providerRunId: 'run', toolCallId: 'r2', updates: [{ key: 'gap', value: null }] })
+  assert.equal(relayed.result.kind, 'Relayed')
+  assert.equal(work.inspect().devopsId, 'd')
+  const handover = relayHandover(relayed.result, { devopsId: 'd', received: ['job-1'] })
   assert.equal(handover.ok, true)
   assert.equal(handover.orphaned, false)
   assert.deepEqual(handover.kept, ['job-1'])

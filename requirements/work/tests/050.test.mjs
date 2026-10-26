@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { withExecutablePlugin, acceptAuthorityRoot, openIncumbency } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import { withExecutablePlugin, acceptAuthorityRoot } from '../../verification-system/tests/support/plugin-fixture.mjs'
 import { userQuestionObservation } from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 
 const lifecycleSurface = await import('../../../dist/Mission/Lifecycle/Surface.js')
@@ -39,8 +39,22 @@ const withPlanSession = async (body, session = `jsask-${Math.random().toString(3
   await withExecutablePlugin(async (hooks, directory, created, runtime) => {
     await acceptAuthorityRoot(runtime, session, 'plan', 'user-root')
     await humanInput(hooks, runtime, session, 'user-root', 'Deliver the requested behavior.')
-    await openIncumbency(runtime, session, `inc-${session}`, 'S1')
-    await body({ hooks, directory, runtime, session, created })
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    const surface = lifecycleSurface.LifecycleSurface ?? lifecycleSurface
+    const opened = await surface.submitReview(
+      commonDir,
+      session,
+      'open-review',
+      'Plan',
+      'run-open',
+      'call-open',
+      [{ key: 'need', value: 'a plan' }],
+      null,
+      '',
+    )
+    assert.equal(opened.kind, 'Reviewed', opened.reason)
+    assert.equal(opened.milestone, '事实与取舍')
+    await body({ hooks, directory, runtime, session, created, commonDir, surface, opened })
   })
 }
 
@@ -50,15 +64,16 @@ const nameOf = (doc) => {
   return match[1]
 }
 
-test('WHAT[work-050] this.ask in an S1 plan program records the question and parks the program', async () => {
+test('WHAT[work-050] this.ask records the question and parks the program', async () => {
   await withPlanSession(async ({ hooks, runtime, session }) => {
     const notices = []
     runtime.client.tui = { showToast: async ({ body }) => { notices.push(body); return {} } }
 
     const parked = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    const answer = await this.ask('Which deployment environment should this target?');\n    return { answer };`), name: 'ask-deploy',
-          planB: 'Record the question and retain the paused program until the real user reply arrives.'
-        },
+        intent: 'Record the question and retain the paused program until the real user reply arrives.',
+        remainingScopeTurnsEstimate: 3,
+      },
       context(session),
     )
 
@@ -70,7 +85,7 @@ test('WHAT[work-050] this.ask in an S1 plan program records the question and par
     // 等待门禁要求真实用户输入先到达；此后 unpark 注入的值即 await 的值。
     await humanInput(hooks, runtime, session, 'user-reply', 'staging')
     const resumed = await hooks.tool['todowrite-for-plan'].execute(
-      { name: 'resume-question', planB: 'Resume the original question with the real user reply under this new request window.', program: program('return await this.unpark(' + JSON.stringify(nameOf(parked)) + ', "staging");') },
+      { name: 'resume-question', intent: 'Resume the original question with the real user reply under this new request window.', remainingScopeTurnsEstimate: 3, program: program('return await this.unpark(' + JSON.stringify(nameOf(parked)) + ', "staging");') },
       context(session, 'plan-call-reply', 'plan-run-reply'),
     )
     assert.match(resumed, /# ok/)
@@ -78,27 +93,45 @@ test('WHAT[work-050] this.ask in an S1 plan program records the question and par
   })
 })
 
-test('WHAT[work-050] this.ask outside S1 is refused with ASK_REFUSED', async () => {
-  await withPlanSession(async ({ hooks, runtime, session }) => {
-    const store = workspaceEventStoreSurface.acquire(await journalSurface.JournalSurface_initializeStateRoot(runtime.directory))
-    const reviewed = await lifecycleSurface.seedReviewAs(store, session, 'Promoted', 'reviewer')
-    assert.equal(reviewed.reviewed, true, 'the S1 tenure gains promotion eligibility')
-    const advanced = await lifecycleSurface.seedDeliver(store, session, 'run-promote', 'call-promote', 1n)
-    assert.equal(advanced.ok, true, advanced.error)
-    assert.equal(advanced.decision, 'Promoted', 'deliver performs the S1 -> S2 promotion')
-    runtime.client.tui = { showToast: async () => ({}) }
+test('WHAT[work-050] ask still parks after a review, and deliver is not a promotion', async () => {
+  await withPlanSession(async ({ hooks, runtime, session, directory }) => {
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    const surface = lifecycleSurface.LifecycleSurface ?? lifecycleSurface
+    const recorded = await surface.submitReview(
+      commonDir,
+      session,
+      'r1',
+      'Plan',
+      'run',
+      'call-review',
+      [{ key: 'need', value: 'a plan' }],
+      null,
+      '',
+    )
+    assert.equal(recorded.kind, 'Reviewed', recorded.reason)
+    assert.equal(recorded.milestone, '事实与取舍')
 
+    const store = workspaceEventStoreSurface.acquire(commonDir)
+    const advanced = await surface.seedDeliver(store, session, 'run-promote', 'call-promote', 1n)
+    assert.equal(advanced.ok, false, advanced.error)
+    assert.notEqual(advanced.decision, 'Promoted')
+    assert.match(String(advanced.error), /review is the only/)
+
+    runtime.client.tui = { showToast: async () => ({}) }
     const output = await hooks.tool['todowrite-for-plan'].execute(
-      { program: program(`    await this.ask('Out of stage?');\n    return { unreachable: true };`), name: 'ask-s2',
-          planB: 'Record the question and retain the paused program until the real user reply arrives.'
-        },
-      context(session, 'plan-call-s2', 'plan-run-s2'),
+      { program: program(`    await this.ask('Which fact is still missing?');\n    return { unreachable: true };`), name: 'ask-after-review',
+        intent: 'Record the question and retain the paused program until the real user reply arrives.',
+        remainingScopeTurnsEstimate: 3,
+      },
+      context(session, 'plan-call-after', 'plan-run-after'),
     )
 
-    assert.match(output, /# failed/)
-    assert.match(output, /ASK_REFUSED/)
-    assert.match(output, /only in the S1 planning stage/)
-    assert.equal(userQuestionObservation(runtime.journal, session).length, 0, 'no question is recorded outside S1')
+    assert.match(String(output), /# parked/)
+    assert.doesNotMatch(String(output), /ASK_REFUSED/)
+    assert.equal(userQuestionObservation(runtime.journal, session).length, 1, 'the question is recorded after review')
+    const view = surface.inspected(commonDir, session)
+    assert.equal(view.Stage, '事实与取舍')
+    assert.equal(view.Delivered, false)
   })
 })
 
@@ -107,14 +140,15 @@ test('WHAT[work-050] a pending question blocks every new plan call until the use
     runtime.client.tui = { showToast: async () => ({}) }
     const parked = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    await this.ask('Still waiting?');\n    return { done: true };`), name: 'ask-wait',
-          planB: 'Record the question and retain the paused program until the real user reply arrives.'
-        },
+        intent: 'Record the question and retain the paused program until the real user reply arrives.',
+        remainingScopeTurnsEstimate: 3,
+      },
       context(session),
     )
     assert.match(parked, /# parked/)
 
     const blocked = await hooks.tool['todowrite-for-plan'].execute(
-      { name: 'abandon-question', planB: 'Request cleanup only if the pending-question gate admits this operation.', program: program('return await this.abandon(' + JSON.stringify(nameOf(parked)) + ');') },
+      { name: 'abandon-question', intent: 'Request cleanup only if the pending-question gate admits this operation.', remainingScopeTurnsEstimate: 3, program: program('return await this.abandon(' + JSON.stringify(nameOf(parked)) + ');') },
       context(session, 'plan-call-abandon', 'plan-run-abandon'),
     )
     assert.match(String(blocked), /等待|waiting|不能/)

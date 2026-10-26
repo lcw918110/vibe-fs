@@ -1,17 +1,33 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { projectSuccessor } from './support/contract.mjs'
+import { Projection } from 'wanxiangli/projection'
 
-test('WHAT[work-045] projection keeps physical history and does not narrate the workspace', () => {
+const projection = Projection()
+const barrier = { toolCallId: 'review-1', successorTenureId: 'next' }
+const message = (id, role, extra = {}) => ({
+  id,
+  role,
+  synthetic: false,
+  semantic: true,
+  cursor: null,
+  toolCallId: null,
+  resultFor: null,
+  tenureId: null,
+  ...extra,
+})
+
+test('WHAT[work-045] the barrier keeps successor history and does not narrate the workspace', () => {
   const messages = [
-    { role: 'user', firstSeen: 1, text: 'the request' },
-    { role: 'assistant', firstSeen: 2, text: 'predecessor summary of the workspace' },
-    { role: 'assistant', firstSeen: 9, text: 'current observation' },
+    message('request', 'user', { tenureId: 'old' }),
+    message('summary', 'assistant', { tenureId: 'old' }),
+    message('call', 'assistant', { toolCallId: 'review-1', tenureId: 'old' }),
+    message('result', 'tool', { resultFor: 'review-1', tenureId: 'old' }),
+    message('current', 'assistant', { tenureId: 'next' }),
   ]
-  const projected = projectSuccessor(messages, 4, false)
-  assert.equal(projected.ok, true)
-  assert.equal(projected.projected.some((message) => message.text === 'predecessor summary of the workspace'), true)
-  assert.equal(projected.projected.some((message) => message.text === 'the request'), true)
-  assert.equal(projected.projected.some((message) => message.text === 'current observation'), true)
-  assert.equal(projected.projected.some((message) => String(message.text).includes('workspace narrative')), false)
+  const before = JSON.stringify(messages)
+  const kept = projection.tenure(messages, barrier)
+  assert.deepEqual(Array.from(kept), [4])
+  assert.equal(messages[kept[0]].id, 'current')
+  assert.equal(JSON.stringify(messages), before)
+  assert.equal(kept.some((index) => messages[index].id === 'request' || messages[index].id === 'summary'), false)
 })

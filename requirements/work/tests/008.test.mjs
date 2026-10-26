@@ -1,24 +1,35 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { projectSuccessor } from './support/contract.mjs'
+import { Projection } from 'wanxiangli/projection'
 
-test('WHAT[work-008] a successor retains prior assistant and tool history and never injects a synthetic predecessor record', () => {
-  const messages = [
-    { role: 'user', firstSeen: 1 },
-    { role: 'assistant', firstSeen: 2 },
-    { role: 'tool', firstSeen: 3 },
-    { role: 'assistant', firstSeen: 9 },
-  ]
-  const successor = projectSuccessor(messages, 4, false)
-  assert.equal(successor.ok, true)
-  assert.equal(successor.projected.filter((message) => message.role === 'synthetic_predecessor').length, 0)
-  assert.equal(successor.projected.some((message) => message.role === 'assistant' && message.firstSeen <= 4), true)
-  assert.equal(successor.projected.some((message) => message.role === 'tool'), true)
-  assert.equal(successor.retainedPriorAssistant, true)
-  const first = projectSuccessor(messages, 0, true)
-  assert.equal(first.projected.some((message) => message.role === 'synthetic_predecessor'), false)
+const projection = Projection()
+const barrier = { toolCallId: 'review-1', successorTenureId: 'next' }
+const message = (id, role, extra = {}) => ({
+  id,
+  role,
+  synthetic: false,
+  semantic: true,
+  cursor: null,
+  toolCallId: null,
+  resultFor: null,
+  tenureId: null,
+  ...extra,
 })
 
-// The fail-closed stable-identity rule belongs to the tenure assembly that
-// actually materializes a request. WHAT[work-034] owns that boundary; the
-// Manager relay no longer assembles or strips, so it has nothing to refuse.
+test('WHAT[work-008] the successor view hides the triggering review and everything before it', () => {
+  const messages = [
+    message('u-old', 'user', { tenureId: 'old' }),
+    message('a-old', 'assistant', { tenureId: 'old' }),
+    message('t-old', 'tool', { tenureId: 'old' }),
+    message('call', 'assistant', { toolCallId: 'review-1', tenureId: 'old' }),
+    message('result', 'tool', { resultFor: 'review-1', tenureId: 'old' }),
+    message('a-new', 'assistant', { tenureId: 'next' }),
+  ]
+  const before = JSON.stringify(messages)
+  const kept = projection.tenure(messages, barrier)
+  assert.deepEqual(Array.from(kept), [5])
+  assert.equal(JSON.stringify(messages), before)
+  assert.equal(kept.some((index) => messages[index].role === 'user'), false)
+  assert.equal(kept.some((index) => messages[index].toolCallId === 'review-1' || messages[index].resultFor === 'review-1'), false)
+  assert.equal(messages.some((row) => row.role === 'synthetic_predecessor'), false)
+})

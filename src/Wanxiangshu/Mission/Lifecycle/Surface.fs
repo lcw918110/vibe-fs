@@ -82,10 +82,7 @@ module LifecycleSurface =
         createObj (("type", box kind) :: fields)
 
     let private sequenceOf (kind: string) =
-        if kind = "S4" || kind = "spawn" then
-            box [| "S4" |]
-        else
-            box [| "S1"; "S2"; "S3" |]
+        invalidOp ("lifecycle sequence is retired; review is the only entry (" + kind + ")")
 
     let private recordsOf (text: string) =
         text.Split('\n') |> Array.filter (fun line -> line.Length > 0)
@@ -145,17 +142,24 @@ module LifecycleSurface =
         (head: float)
         (draft: (string * string) option)
         =
-        let fields =
-            [ "incumbencyId", box incumbencyId
-              "providerRunId", box providerRunId
-              "toolCallId", box toolCallId
-              "cursor", box head
-              "blockers", box ([||]: string array)
-              "nextOwnerId", box "owner" ]
+        let draftText =
+            match draft with
+            | None -> ""
+            | Some(digest, path) -> digest + " " + path
 
-        match draft with
-        | None -> command "Deliver" fields
-        | Some(digest, path) -> command "Deliver" (fields @ [ "draft", box {| digest = digest; path = path |} ])
+        invalidOp (
+            "lifecycle deliver is retired; review is the only entry ("
+            + incumbencyId
+            + " "
+            + providerRunId
+            + " "
+            + toolCallId
+            + " "
+            + string head
+            + " "
+            + draftText
+            + ")"
+        )
 
     let private lastOf (records: string array) =
         if records.Length = 0 then
@@ -267,10 +271,10 @@ module LifecycleSurface =
         sprintf "REFUSE the first review opens the work (%s %s %s %s)" kind workId root (string head)
 
     let private readProbeRecords (text: string) =
-        let records = recordsOf text
-        let workId = workIdOf records
-
         try
+            let records = recordsOf text
+            let workId = workIdOf records
+
             useJournal workId records (fun work ->
                 let snapshot: obj = work?inspect ()
                 let recovery: obj = work?recover ()
@@ -749,16 +753,13 @@ module LifecycleSurface =
         | "Delivered" -> "delivered"
         | _ -> kind
 
-    /// interaction-authority-018: the exact S4 retirement that completed a
-    /// Manager life. Only that delivered retirement closes the matching
-    /// HumanRoot/Manager authority run.
+    /// interaction-authority-018: a completed manager life closes its authority
+    /// run. The milestone 「已完成」 and Delivered are that fact. The closure id
+    /// is the Completed retirement, not an S4 sequence.
     let private completedManagerDelivery (dir: string) (workId: string) =
         match DurableWorkHost.inspected dir workId with
-        | Some work when work.Sequence = [ "S4" ] && work.ActiveId.IsNone && work.Delivered ->
-            work.Retirements
-            |> List.tryFind (fun retirement -> retirement.Outcome = "Delivered")
-            |> Option.map (fun retirement -> retirement.RetirementId)
-        | _ -> None
+        | Some work -> DurableWorkHost.completedClosureId work
+        | None -> None
 
     let private seedDeliverAt
         (store: obj)

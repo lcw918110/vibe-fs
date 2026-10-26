@@ -1,4 +1,7 @@
-import { withExecutablePlugin, acceptAuthorityRoot, openIncumbency } from '../../../verification-system/tests/support/plugin-fixture.mjs'
+import { withExecutablePlugin, acceptAuthorityRoot } from '../../../verification-system/tests/support/plugin-fixture.mjs'
+
+const lifecycleSurface = await import('../../../../dist/Mission/Lifecycle/Surface.js')
+const journalSurface = await import('../../../../dist/Persistence/Journal/Surface.js')
 
 process.env.WANXIANGSHU_PROVIDER_LANGUAGE = 'en'
 
@@ -15,16 +18,36 @@ export const findings = (grade, key = 'target-gap') => {
 export const scores = findings
 // ModelRouting is a process singleton: a test that supersedes a physical
 // message keeps it superseded for later tests, so isolated callers pass their own session.
-export const withReview = async (body, {ownerId, session = 'review-manager'} = {}) => withExecutablePlugin(async (hooks, directory, created, runtime) => {
+export const withReview = async (body, { session = 'review-manager' } = {}) => withExecutablePlugin(async (hooks, directory, created, runtime) => {
   runtime.client.tui = runtime.client.tui ?? { showToast: async () => ({}) }
   await acceptAuthorityRoot(runtime, session, 'manager', 'user-root')
   await hooks['chat.message']({sessionID: session, messageID: `user-kickoff-${directory}`, agent: 'manager'}, {
     message: {id: `user-kickoff-${directory}`, role: 'user', agent: 'manager', model: {providerID: 'provider', modelID: 'manager-model'}},
     parts: [{type: 'text', text: 'Initial request before clarification.'}],
   })
-  await openIncumbency(runtime, session, `inc-${session}`, 'S4', ownerId)
+  const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+  const surface = lifecycleSurface.LifecycleSurface ?? lifecycleSurface
+  const opened = await surface.submitReview(
+    commonDir,
+    session,
+    'open-review',
+    'Manager',
+    'run-open',
+    'call-open',
+    [{ key: 'target-gap', value: 'open' }],
+    null,
+    '',
+  )
+  if (opened.kind !== 'Reviewed') {
+    throw new Error(`manager review did not open: ${opened.kind ?? ''} ${opened.reason ?? ''}`)
+  }
   await hooks.tool['todowrite-for-manager'].execute(
-    { name: 'kickoff-empty-review', program: 'class Js extends JsProgram { async run() { return await this.review([]); } }', planB: 'Wait for the initial ask receipt.' },
+    {
+      name: 'kickoff-kept-review',
+      program: 'class Js extends JsProgram { async run() { return await this.review([{ key: "target-gap", value: "open" }]); } }',
+      intent: 'Keep the opened obligation and wait for this review to settle.',
+      remainingScopeTurnsEstimate: 3,
+    },
     { sessionID: session, callID: 'kickoff-call', messageID: 'kickoff-run', agent: 'manager' },
   )
   await hooks['chat.message']({sessionID: session, messageID: 'user-root', agent: 'manager'}, {
@@ -55,7 +78,7 @@ export const withReview = async (body, {ownerId, session = 'review-manager'} = {
       }
     }`
     const result = await hooks.tool['todowrite-for-manager'].execute(
-      { name: 'review-' + call, program, planB: 'Wait for this review to settle and preserve its original result.' },
+      { name: 'review-' + call, program, intent: 'Wait for this review to settle and preserve its original result.', remainingScopeTurnsEstimate: 3 },
       { sessionID: session, callID: call, messageID: run, agent: 'manager' },
     )
     // The review run is finished once its tool returns. A later provider request

@@ -63,7 +63,7 @@ module OrdinaryTurnWorkflow =
                 return
                     workOpt
                     |> Option.exists (fun work ->
-                        (work.Delivered || (work.PendingDelivery && work.Sequence = [ "S1"; "S2"; "S3" ]))
+                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority work
                         || List.contains (ProviderRunIdentity.value turn.ProviderRun) work.RetiredRuns)
         }
 

@@ -431,7 +431,8 @@ module DurableWorkHost =
                   "revision", box receipt.Revision
                   "milestone", box (resultText receipt "milestone")
                   "wait", box (resultText receipt "wait")
-                  "incumbencyId", box (resultText receipt "incumbencyId") ]
+                  "incumbencyId", box (resultText receipt "incumbencyId")
+                  "blockers", nested receipt.Result "blockers" ]
 
         let raw = executeWithEffects gitCommonDir workId requestId (command "Review" withDigest) ports
         if isThenable raw then continueWith raw present else present raw
@@ -525,6 +526,38 @@ module DurableWorkHost =
                     {| key = textOf entry?key
                        value = textOf entry?value |})
 
+    let private retirementsOf (snapshot: obj) : HostRetirement list =
+        asArray snapshot?rounds
+        |> Array.choose (fun round ->
+            let retirementId = textOf round?retirementId
+
+            if retirementId = "" then
+                None
+            else
+                Some
+                    { RetirementId = retirementId
+                      IncumbencyId = textOf round?incumbencyId
+                      Outcome = textOf round?outcome
+                      Expected = textOf round?milestone
+                      Fence =
+                        { ProviderRunId = ""
+                          ToolCallId = "" }
+                      ProjectionCut = false })
+        |> List.ofArray
+
+    /// A completed work closes its authority run. An open milestone does not.
+    let closesAuthority (work: InspectedWork) =
+        work.Delivered || work.Stage = "已完成"
+
+    /// The retirement id of a completed work with no active tenure.
+    let completedClosureId (work: InspectedWork) =
+        if work.ActiveId.IsSome || not (closesAuthority work) then
+            None
+        else
+            work.Retirements
+            |> List.tryFind (fun retirement -> retirement.Outcome = "Completed" || retirement.Outcome = "Delivered")
+            |> Option.map (fun retirement -> retirement.RetirementId)
+
     /// Current work snapshot. Milestone and the active tenure are the authority.
     /// The old S-sequence, eligibility flag, and delivery authorization are absent.
     let private projectCurrent (snapshot: obj) : InspectedWork =
@@ -559,7 +592,7 @@ module DurableWorkHost =
           Authority = ""
           BlockerDigest = None
           Root = None
-          Retirements = []
+          Retirements = retirementsOf snapshot
           ProjectionCut = None
           Advances = []
           BarrierToolCallId = if isNull barrier then None else optionalText (textOf barrier?toolCallId)

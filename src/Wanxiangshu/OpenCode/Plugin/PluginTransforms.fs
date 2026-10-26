@@ -661,8 +661,13 @@ module PluginTransforms =
                       HasSemanticParts = not (List.isEmpty message.Parts)
                       Raw = raw }))
 
-        let isPlanSequence (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
-            work.Sequence = [ "S1"; "S2"; "S3" ]
+        let isPlanMilestone (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
+            match work.Stage with
+            | "事实与取舍"
+            | "理解与路径"
+            | "流程与伪代码"
+            | "待执行" -> true
+            | _ -> false
 
         let tenureForActive
             (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork)
@@ -677,16 +682,15 @@ module PluginTransforms =
               OpeningCursor = work.OpeningCursor |> Option.defaultValue 0. |> int64
               IsFreshHandover = not (PrefixEpochProjection.isTenureReanchored incumbentId epoch) }
 
-        // S1/S2/S3 and post-S3 no longer strip assistant/tool history. Context
-        // retention belongs to the view declaration. Reanchor still advances the
-        // prefix epoch; it does not remove messages.
-        let tenureForPostS3
+        // Plan milestones keep the committed barrier as the visibility cut.
+        // Reanchor still advances the prefix epoch; it does not remove messages.
+        let tenureForCompleted
             (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork)
             (sid: string)
             : Wanxiangshu.Mission.Planning.ActiveTenureInfo =
             { WorkId = sid
-              IncumbencyId = "post-s3"
-              Stage = "S3"
+              IncumbencyId = work.ActiveId |> Option.defaultValue ""
+              Stage = "已完成"
               OpeningCursor = work.LastRetirementCursor |> Option.defaultValue -1. |> int64 |> (+) 1L
               IsFreshHandover = false }
 
@@ -733,10 +737,10 @@ module PluginTransforms =
         let applyResolvedTenure (sid: string) (outObj: obj) =
             task {
                 match! tryReadLifecycleWork sid with
-                | Some work when isPlanSequence work && work.ActiveId.IsSome ->
+                | Some work when isPlanMilestone work && work.ActiveId.IsSome ->
                     return! isolatePlanTenure (tenureForActive work (currentEpochOf sid) sid) sid outObj
-                | Some work when isPlanSequence work && work.Delivered ->
-                    return! isolatePlanTenure (tenureForPostS3 work sid) sid outObj
+                | Some work when isPlanMilestone work && work.Delivered ->
+                    return! isolatePlanTenure (tenureForCompleted work sid) sid outObj
                 | _ -> return ()
             }
 

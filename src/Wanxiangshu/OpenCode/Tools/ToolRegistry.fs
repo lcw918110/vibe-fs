@@ -103,6 +103,16 @@ module ToolRegistry =
                 let runId = ProviderRunIdentity.value providerRun
                 let callId = ToolCallId.value toolCallId
 
+                let parked =
+                    JsPrograms.deliveryBlockersWithChoicesForSession ctx.SessionId
+                    |> List.map fst
+
+                let blockers =
+                    parked @ runtime.RetirementBlockersFor ctx.SessionId
+                    |> List.distinct
+                    |> List.toArray
+                    |> box
+
                 let produced =
                     Wanxiangshu.Mission.Lifecycle.DurableWorkHost.submitReview
                         gitCommonDir
@@ -112,10 +122,7 @@ module ToolRegistry =
                         runId
                         callId
                         findings
-                        (JsPrograms.deliveryBlockersWithChoicesForSession ctx.SessionId
-                         |> List.map fst
-                         |> Array.ofList
-                         |> box)
+                        blockers
                         ""
                         (runtime.ReviewPorts ctx)
 
@@ -137,7 +144,8 @@ module ToolRegistry =
                               "kind", reply?kind
                               "milestone", reply?milestone
                               "wait", reply?wait
-                              "incumbencyId", reply?incumbencyId ]
+                              "incumbencyId", reply?incumbencyId
+                              "blockers", reply?blockers ]
                 else
                     return createObj [ "ok", box false; "reason", reply?reason ]
             | _ ->
