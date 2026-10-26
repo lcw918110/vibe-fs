@@ -14,12 +14,22 @@ module PlanningSurface =
         unbox<int64> value
 
     let assembleTenureMessages (messages: obj) (tenureObj: obj) (messageCursors: obj) : obj =
+        let optionalText (name: string) =
+            let item = tenureObj?(name)
+
+            if isNull item || jsTypeof item <> "string" || String.IsNullOrEmpty(unbox<string> item) then
+                None
+            else
+                Some(unbox<string> item)
+
         let tenure =
             { WorkId = unbox<string> tenureObj?workId
               IncumbencyId = unbox<string> tenureObj?incumbencyId
               Stage = unbox<string> tenureObj?stage
               OpeningCursor = sequenceOfJs tenureObj?openingCursor
-              IsFreshHandover = unbox<bool> tenureObj?isFreshHandover }
+              IsFreshHandover = unbox<bool> tenureObj?isFreshHandover
+              BarrierToolCallId = optionalText "barrierToolCallId"
+              SuccessorTenureId = optionalText "successorTenureId" }
 
         let cursors =
             emitJsExpr messageCursors "Object.entries($0)"

@@ -48,6 +48,12 @@ type AgentJournal =
     member Writer: IJournalWriter
     member RefreshCurrent: unit -> Result<unit, string>
 
+    /// crash-reconciliation-020: register one restart-recovery body; the first
+    /// RunOrAwaitRecovery caller starts it, all callers await the same work.
+    member EnqueueRecovery: start: (unit -> Task) -> unit
+
+    member RunOrAwaitRecovery: unit -> Task
+
 module AgentJournal =
     val createFromProjection: writer: IJournalWriter -> projection: ProjectionSet -> Result<AgentJournal, FoldRejection>
 

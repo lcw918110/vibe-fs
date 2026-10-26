@@ -157,7 +157,7 @@ function createOmpTestEnvironment() {
 
 const SEP = '\0\uFEFF'
 const USER_REMINDER =
-  '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]'
+  '当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中提交 remainingScopeTurnsEstimate。'
 
 const contentText = (content) =>
   typeof content === 'string' ? content : (content ?? []).map((block) => block.text ?? '').join('')
@@ -187,16 +187,14 @@ test('WHAT[context-compression-034] resetScope registration carries the new prot
   assert.ok(def, 'resetScope must be registered')
   assert.equal(
     def.description,
-    'Execution barrier and context garbage collector. Preserves operator messages and the complete historical call/result pairs for resetScope, assume, negotiate, askPreviousScope, and advisor across later resets. Other old-scope working context is removed from subsequent model requests. Requires a KPI completion level; the Host scales the proposed new scope turnBudget using that tier.',
+    'End the current Scope; preserve operator and assistant prose/reasoning plus critical consultation tool call/results, remove ordinary old tool process, and report outstanding work. Arguments: experience and objective.',
   )
   assert.equal(
     def.parameters.properties.newScopeObjective.description,
     'The objective for the new scope. The scope must form a self-contained state closed-loop (状态闭环).',
   )
-  assert.equal(
-    def.parameters.properties.newScopeTurnBudget.description,
-    'Estimated number of LLM turns needed for the new scope (1 LLM request = 1 turn).',
-  )
+  assert.equal(def.parameters.properties.newScopeTurnBudget,undefined)
+  assert.equal(def.parameters.properties.kpiCompletion,undefined)
   assert.equal(
     def.parameters.properties.oldScopeVerboseVerbatimExperience.description,
     'Write out your experience and findings from the closing scope, verbosely: everything between the previous resetScope call (or session start) and this call. Any exact text needed in the next scope (such as function signatures, error stack traces, or exact line numbers) MUST be copied VERBATIM here. Null or omitted if there is no prior work.',
@@ -276,8 +274,8 @@ test('WHAT[context-compression-034] before first reset OMP adds one fresh agent 
   assert.ok(next && next.messages)
   const resetResult = next.messages.find(m => m.toolCallId === 'reset-1')
   const readResult = next.messages.find(m => m.toolCallId === 'read-2')
-  assert.equal(resetResult.content, 'Scope reset. Objective: edit' + SEP + '[Remaining turnBudget: 4]')
-  assert.equal(readResult.content, 'later output' + SEP + '[Remaining turnBudget: 4]')
+  assert.equal(resetResult.content, 'Scope reset. Objective: edit')
+  assert.equal(readResult.content, 'later output')
   assert.equal(nextRaw.at(-1).content, 'later output', 'raw tool output remains unsuffixed')
   assert.equal(await hook({ toolName: 'read', toolCallId: 'read-2', content: 'later output' }, sessionCtx), undefined)
 
@@ -357,9 +355,9 @@ test('WHAT[context-compression-033] resetScope tool registration on OMP pi and e
   assert.equal(resetScopeDef.concurrency, 'exclusive', 'resetScope concurrency must be exclusive')
   assert.ok(resetScopeDef.parameters.properties.oldScopeVerboseVerbatimExperience, 'has oldScopeVerboseVerbatimExperience')
   assert.ok(resetScopeDef.parameters.properties.newScopeObjective, 'has newScopeObjective')
-  assert.ok(resetScopeDef.parameters.properties.newScopeTurnBudget, 'has newScopeTurnBudget')
-  assert.deepEqual(resetScopeDef.parameters.required, ['newScopeObjective', 'newScopeTurnBudget', 'kpiCompletion'])
-  assert.deepEqual(resetScopeDef.parameters.properties.kpiCompletion.enum, ['not_started', 'far_below', 'partially_met', 'met', 'exceeded', 'not_applicable'])
+  assert.equal(resetScopeDef.parameters.properties.newScopeTurnBudget,undefined)
+  assert.equal(resetScopeDef.parameters.properties.kpiCompletion,undefined)
+  assert.deepEqual(resetScopeDef.parameters.required,['newScopeObjective'])
 
   const catalog = env.getObservedCatalog()
   assert.ok(catalog, 'Agents catalog port was bound')
@@ -483,30 +481,32 @@ test('WHAT[context-compression-033] OMP context handler preserves raw messages, 
 
   // Messages before reset (call_read_1 and its result) must be purged;
   // reset call/result and post-barrier edit call/result survive; cold missing budget adds a separate strong steer
-  assert.equal(kept.length, 6, 'pre-barrier tools must be purged, active scope and reset call kept')
+  assert.equal(kept.length, 7, 'old assistant prose survives while ordinary tool calls/results are purged')
 
   assert.equal(kept[0].role, 'user')
   assert.equal(kept[0].attribution, 'user')
   assert.equal(kept[0].timestamp, 1000)
 
   assert.equal(kept[1].role, 'assistant')
-  assert.equal(kept[1].content[0].id, 'call_reset_1')
+  assert.equal(kept[1].content[0].text, 'reading...', 'old assistant prose must be retained')
+  assert.equal(kept[2].role, 'assistant')
+  assert.equal(kept[2].content[0].id, 'call_reset_1')
 
-  assert.equal(kept[2].role, 'toolResult')
-  assert.equal(kept[2].toolCallId, 'call_reset_1')
-  assert.equal(kept[2].timestamp, 1040)
+  assert.equal(kept[3].role, 'toolResult')
+  assert.equal(kept[3].toolCallId, 'call_reset_1')
+  assert.equal(kept[3].timestamp, 1040)
 
-  assert.equal(kept[3].role, 'assistant')
-  assert.equal(kept[3].content[1].id, 'call_edit_1')
+  assert.equal(kept[4].role, 'assistant')
+  assert.equal(kept[4].content[1].id, 'call_edit_1')
 
-  assert.equal(kept[4].role, 'toolResult')
-  assert.equal(kept[4].toolCallId, 'call_edit_1')
-  assert.equal(kept[4].timestamp, 1060)
-  assert.equal(kept[4].content, 'edit success', 'unknown cold budget may not forge a zero-budget suffix')
-  assert.equal(kept[5].role, 'user')
-  assert.equal(kept[5].attribution, 'agent')
-  assert.equal(kept[5].strong, true)
-  assert.match(contentText(kept[5].content),/resetScope/,'missing budget demands a strong reset steer')
+  assert.equal(kept[5].role, 'toolResult')
+  assert.equal(kept[5].toolCallId, 'call_edit_1')
+  assert.equal(kept[5].timestamp, 1060)
+  assert.equal(kept[5].content, 'edit success', 'no retired budget suffix may be added')
+  assert.equal(kept[6].role, 'user')
+  assert.equal(kept[6].attribution, 'agent')
+  assert.equal(kept[6].strong, true)
+  assert.match(contentText(kept[6].content),/remainingScopeTurnsEstimate/,'first charged report belongs to ScopeProgress')
   assert.equal(rawOmpMessages.at(-1).content, 'edit success', 'persisted result is not edited')
 
   clearSessionState(sid)
@@ -636,7 +636,7 @@ test('WHAT[prefix-stability-016] OMP context hook preserves the old reset result
   const first = await context({ messages: original }, ctx)
   assert.ok(first?.messages)
   const originalSuffix = first.messages.find(x => x.toolCallId === 'r-016').content
-  assert.equal(originalSuffix, 'Scope reset.' + SEP + '[Remaining turnBudget: 6]')
+  assert.equal(originalSuffix, 'Scope reset.')
   onTurnStart(sid)
 
   const later = [
@@ -649,7 +649,7 @@ test('WHAT[prefix-stability-016] OMP context hook preserves the old reset result
   assert.equal(next.messages.find(x => x.toolCallId === 'r-016').content, originalSuffix,
     'an earlier tool result is part of the immutable provider prefix')
   assert.equal(next.messages.find(x => x.toolCallId === 'read-016').content,
-    'data' + SEP + '[Remaining turnBudget: 5]')
+    'data')
   assert.equal(later[2].content, 'Scope reset.', 'actual tool history is not mutated')
 });
 
@@ -972,7 +972,9 @@ test('WHAT[context-compression-049] OMP real native provider hook freezes old ca
         assert.equal(native.messages[1].content,'Old original observation: precise sentinel 314159')
         assert.deepEqual(native.tools,rawOld.tools,'the exact old tool catalog is retained')
         assert.equal(native.tool_choice,'auto')
-        assert.match(native.messages.at(-1).content,/wanxiangshu-prior:/)
+        assert.doesNotMatch(native.messages.at(-1).content,/wanxiangshu-prior:/,'the internal marker must never be shown to the model')
+        assert.match(native.messages.at(-1).content,/What precise evidence/)
+        assert.equal(native.messages.some(x=>JSON.stringify(x).includes('PRIVATE_CURRENT_SCOPE_112358')),false,'only previous Scope messages may be projected')
         assert.equal(native.messages.some(x=>x.content==='NEW_WRONG_HISTORY'),false)
         return {replyText:'Historical observation 314159 rejects the new parser.',
           assistantMessage:{role:'assistant',content:[{type:'text',text:'Historical observation 314159 rejects the new parser.'}]}}
@@ -990,6 +992,19 @@ test('WHAT[context-compression-049] OMP real native provider hook freezes old ca
        kpiCompletion:'met',oldScopeVerboseVerbatimExperience:'Old sentinel 314159'},null,null,liveCtx)
     assert.equal(first.details?.archived,true,JSON.stringify(first))
     assert.equal(isPreviousScopePending(sid),false,'first ever reset has no mandatory predecessor consultation')
+    const staleReset = await reset.execute('without-new-provider-evidence-049',
+      {newScopeObjective:'this must not use the old sealed request',newScopeTurnBudget:7,kpiCompletion:'met'},
+      null,null,liveCtx)
+    assert.equal(staleReset.details?.archived,false,
+      'a second reset cannot reuse a preceding epoch provider snapshot after it was consumed')
+
+    const newScopeProvider={...structuredClone(rawOld),messages:[
+      ...structuredClone(rawOld.messages),
+      {role:'assistant',content:[{type:'toolCall',id:'reset-old-049',name:'resetScope',args:{newScopeObjective:'validate new parser'}}]},
+      {role:'user',content:'PRIVATE_CURRENT_SCOPE_112358'},
+    ]}
+    await providerHook()({payload:newScopeProvider},liveCtx)
+
     const [accepted, parallelDuplicate] = await Promise.all([
       ask.execute('prior-049',
         {questions:'What precise evidence rejected the new parser?'},null,null,liveCtx),
@@ -1008,11 +1023,6 @@ test('WHAT[context-compression-049] OMP real native provider hook freezes old ca
       {questions:'What precise evidence rejected the new parser?'},null,null,liveCtx)
     assert.match(replay.content[0].text,/already accepted/)
     assert.equal(sideRuns,1,'replayed durable receipt cannot cause a second model call')
-    const staleReset = await reset.execute('without-new-provider-evidence-049',
-      {newScopeObjective:'this must not use the old sealed request',newScopeTurnBudget:7,kpiCompletion:'met'},
-      null,null,liveCtx)
-    assert.equal(staleReset.details?.archived,false,
-      'a second reset cannot reuse a preceding epoch provider snapshot after it was consumed')
     liveCtx.runEphemeralTurn = async opts => {
       sideRuns++
       const wrong = {...liveCtx,model:{provider:'some-other-provider',id:'old-model'}}
@@ -1068,6 +1078,15 @@ test('WHAT[context-compression-049] OMP real native provider hook freezes old ca
     releaseOldAnswer()
     await new Promise(resolve=>setTimeout(resolve,25))
     assert.equal(steers.length,1,'a late answer from a retired target epoch must not be delivered')
+
+    // A third consultation requires an actual NEW provider transform after the
+    // second reset, not a stale copy silently retained by the old epoch.
+    const afterSecondReset = { ...structuredClone(currentProvider), messages: [
+      ...structuredClone(currentProvider.messages),
+      {role:'assistant',content:[{type:'toolCall',id:'new-epoch-reset-049',name:'resetScope',args:{newScopeObjective:'start the next real epoch'}}]},
+      {role:'user',content:'THIRD_SCOPE_PRIVATE_049'},
+    ]}
+    await providerHook()({payload:afterSecondReset},liveCtx)
 
     let releaseAfterShutdown
     liveCtx.runEphemeralTurn = async opts => {
@@ -1151,7 +1170,7 @@ test('WHAT[context-compression-043] OMP resetScope refusal on missing snapshot, 
 
     const premature = await reset.execute(
       'call-omp-unarchived-043',
-      { newScopeObjective: 'unarchived objective', newScopeTurnBudget: 5, kpiCompletion: 'met' },
+      { newScopeObjective: 'unarchived objective' },
       null,
       null,
       liveCtx,
@@ -1213,8 +1232,6 @@ test('WHAT[context-compression-043] OMP resetScope refusal on missing snapshot, 
       'call-omp-archive-success-043',
       {
         newScopeObjective: 'first verified omp scope',
-        newScopeTurnBudget: 8,
-        kpiCompletion: 'met',
         oldScopeVerboseVerbatimExperience: 'Old experience verbatim sentinel 043',
       },
       null,
@@ -1225,12 +1242,12 @@ test('WHAT[context-compression-043] OMP resetScope refusal on missing snapshot, 
     assert.ok(committed && committed.details)
     assert.equal(committed.details.archived, true, 'resetScope must report archived: true on success')
     assert.equal(committed.details.objective, 'first verified omp scope')
-    assert.equal(committed.details.turnBudget, 8)
+    assert.equal(committed.details.turnBudget, undefined, 'resetScope no longer reports a turnBudget')
     assert.match(committed.content[0].text, /Scope reset. Objective: first verified omp scope/)
 
     // Memory invariants: updated
     assert.equal(isScopeInitialized(sid), true, 'memory scope must be initialized')
-    assert.equal(turnBudget(sid), 8, 'budget must be 8')
+    assert.equal(turnBudget(sid), 0, 'retired countdown is no longer initialized by resetScope')
 
     // Single-drain invariant: sealed snapshot must have been discarded from store
     assert.equal(
@@ -1269,7 +1286,7 @@ test('WHAT[context-compression-043] OMP resetScope refusal on missing snapshot, 
     // -------------------------------------------------------------------------
     const secondWithoutObservation = await reset.execute(
       'call-omp-second-premature-043',
-      { newScopeObjective: 'second premature', newScopeTurnBudget: 4, kpiCompletion: 'met' },
+      { newScopeObjective: 'second premature' },
       null,
       null,
       liveCtx,
@@ -1282,14 +1299,14 @@ test('WHAT[context-compression-043] OMP resetScope refusal on missing snapshot, 
       secondWithoutObservation.content[0].text,
       /resetScope refused: the preceding real provider request has no complete archived system\/messages\/model observation/,
     )
-    assert.equal(turnBudget(sid), 8, 'budget remains 8; refusal does not overwrite memory')
+    assert.equal(turnBudget(sid), 0, 'refusal cannot manufacture a retired budget')
 
     // -------------------------------------------------------------------------
     // 6. 按真实契约区分幂等重放 (相同 callID 重放返回成功，不推进 epoch)
     // -------------------------------------------------------------------------
     const replay = await reset.execute(
       'call-omp-archive-success-043',
-      { newScopeObjective: 'first verified omp scope', newScopeTurnBudget: 8, kpiCompletion: 'met' },
+      { newScopeObjective: 'first verified omp scope' },
       null,
       null,
       liveCtx,

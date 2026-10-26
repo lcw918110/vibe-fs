@@ -32,7 +32,7 @@ const LIFECYCLE_MEMBERS = ['park', 'unpark', 'abandon']
 // capability 成员的 canonical 序（WHAT[repository-programming-002]）。
 const CANONICAL_MEMBERS = [
   'write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'call', 'signal', 'send',
-  'fork', 'resume', 'commission', 'devops', 'fission', 'horizon', 'advisor', 'ask', 'review',
+  'fork', 'resume', 'commission', 'devops', 'fission', 'horizon',  'ask', 'review',
 ]
 
 test('WHAT[repository-programming-043] rm and mv ship paired bilingual resources with identical placeholder sets and no unreplaced residue', () => {

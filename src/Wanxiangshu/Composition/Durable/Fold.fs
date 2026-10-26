@@ -22,7 +22,6 @@ module Fold =
     let private reject = FoldRejection.reject
 
     let foldAgentFact (projection: AgentProjectionSet) (fact: AgentFact) : Result<AgentProjectionSet, FoldRejection> =
-        // DSL-003: one dispatch per bounded-context family; each family folds
         // through its own branch so no fold depends on the whole catalogue.
         match fact with
         | AgentFact.Prompt prompt -> PromptAuthorityProjectionBridge.fold projection prompt

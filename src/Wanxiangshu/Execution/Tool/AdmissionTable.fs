@@ -27,7 +27,6 @@ module ToolAdmissionTable =
           "horizon", ToolAdmissions.horizon
           "fission", ToolAdmissions.fission
           "review", ToolAdmissions.review
-          "deliver", ToolAdmissions.deliver
           "bash-honeypot", ToolAdmissions.bashHoneypot
           "assume", ToolAdmissions.assume
           "resetScope", ToolAdmissions.resetScope

@@ -19,27 +19,30 @@ const consumer = `
   try {
     const workId = 'runtime-work'
     const opened = host.execute(directory, workId, 'open', {
-      type: 'Open',
-      root: '/repo',
-      sequence: ['S1', 'S2', 'S3'],
-      ownerId: 'owner',
-      openingCursor: 0,
+      type: 'Review',
+      office: 'Plan',
+      providerRunId: 'run',
+      toolCallId: 'open',
+      updates: [{ key: 'need', value: 'scope' }],
     })
     assert.equal(opened.Status, 'Committed')
-    assert.equal(opened.Kind, 'Opened')
+    assert.equal(opened.Kind, 'Reviewed')
     const first = host.inspected(directory, workId)
     assert.equal(first.Opened, true)
+    assert.equal(first.Stage, '事实与取舍')
     assert.equal(first.ActiveId, opened.Result.incumbencyId)
+    assert.equal(first.Reviewed, true)
     const second = host.inspected(directory, workId)
     assert.deepEqual(second, first)
     const ephemeral = host.useEphemeralWork('probe', [], work => work.execute('open', {
-      type: 'Open',
-      root: '/probe',
-      sequence: ['S4'],
-      ownerId: 'owner',
-      openingCursor: 0,
+      type: 'Review',
+      office: 'Manager',
+      providerRunId: 'run',
+      toolCallId: 'open',
+      updates: [],
     }))
     assert.equal(ephemeral.status, 'Committed')
+    assert.equal(ephemeral.result.kind, 'Asked')
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { Work } from 'wanxiangli/work'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 
 const surface = lifecycle.LifecycleSurface ?? lifecycle
@@ -10,29 +11,18 @@ const surface = lifecycle.LifecycleSurface ?? lifecycle
 const review = (root, workId, id, updates) =>
   surface.submitReview(root, workId, id, 'Plan', 'run-' + id, 'call-' + id, updates, null, '')
 
-test('WHAT[work-023] opening, deliver, and stage probes refuse without a parse crash', () => {
-  const opened = surface.encodeOpening('plan', 'work-1', '/root', 0n)
-  assert.match(opened, /^REFUSE /)
-  const probe = surface.readProbe(opened)
-  assert.equal(probe.ok, false)
-  assert.equal(probe.opened, false)
-  assert.equal(probe.next, '')
-  assert.doesNotMatch(String(probe.reason), /SyntaxError/)
-
-  const reviewed = surface.reviewProbe(opened, 'inc', 'Promoted')
-  assert.equal(reviewed.decision, 'Refuse')
-  assert.match(reviewed.detail, /review is the only lifecycle entry/)
-  assert.equal(reviewed.bytes, '')
-
-  const delivered = surface.deliverProbe(opened, 'run-1', 'call-1', 10n, null)
-  assert.equal(delivered.decision, 'Refuse')
-  assert.match(delivered.detail, /review is the only entry/)
-  assert.equal(delivered.bytes, '')
-
-  const reopened = surface.reopenProbe(opened, 'inc')
-  assert.equal(reopened.decision, 'Refuse')
-  assert.match(reopened.detail, /operator message/)
-  assert.equal(surface.finalPromotionProbe(opened).authorized, false)
+test('WHAT[work-023] Open, Deliver, and Advance write nothing', () => {
+  const work = new Work('work-23')
+  for (const command of [
+    { type: 'Open', root: '/root', sequence: ['S1', 'S2', 'S3'], ownerId: 'work-23', openingCursor: 0 },
+    { type: 'Deliver', incumbencyId: 'inc', providerRunId: 'run-1', toolCallId: 'call-1' },
+    { type: 'Advance', incumbencyId: 'inc', expected: 'a', next: 'b' },
+  ]) {
+    const before = work.records()
+    assert.throws(() => work.execute(command.type, command), /Unknown work command/)
+    assert.deepEqual(work.records(), before)
+  }
+  assert.throws(() => new Work('legacy', ['{"type":"Open","sequence":["S1"]}\n']))
 })
 
 test('WHAT[work-023] review records, relays, and advances by the ledger', () => {
@@ -60,13 +50,8 @@ test('WHAT[work-023] review records, relays, and advances by the ledger', () => 
   }
 })
 
-test('WHAT[work-023] a refused probe is not parsed as a document', () => {
-  const refused = surface.readProbe('REFUSE the first review opens the work')
-  assert.equal(refused.ok, false)
-  assert.equal(refused.stage, '')
-  assert.equal(refused.sequence, '')
-  const blank = surface.readProbe('')
-  assert.equal(blank.ok, false)
-  const missing = surface.readProbe(null)
-  assert.equal(missing.ok, false)
+test('WHAT[work-023] a legacy line is not a work record', () => {
+  assert.throws(() => new Work('refused', ['REFUSE the first review opens the work']))
+  assert.throws(() => new Work('blank', ['']))
+  assert.throws(() => new Work('missing', [null]))
 })

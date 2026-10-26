@@ -352,7 +352,7 @@ test('WHAT[managed-session-lifecycle-022] original child and owner deletion arch
           programAttempted = true
           const output = await hooks.tool['todowrite-for-bookkeeper'].execute({ program,
           name: 'bookkeeper-program',
-          planB: 'Wait for the bookkeeper operation and preserve pending work at expiry.'
+          intent: 'Wait for the bookkeeper operation and preserve pending work at expiry.'
         }, {
             sessionID: child, agent: 'bookkeeper', messageID: bookkeeperAssistant.info.id,
             callID: 'd0g-bookkeeper-program',

@@ -11,16 +11,14 @@ const nextReanchor = (observed, reanchored) => {
   return policy.nextReanchor(observed, (runId) => handled.has(runId))
 }
 
-test('WHAT[context-compression-002] HOST_006_prevention_layer_names_every_setting_that_must_be_off', () => {
+test('WHAT[context-compression-002] compaction auto and autocontinue stay enabled while prune remains off', () => {
   // The whole set is asserted, not each item's presence. A missing entry is a path by
   // which the Host can still rewrite context on its own, and dropping one turns no
   // test red unless the set itself is the assertion.
   assert.deepEqual(settings.map((setting) => setting.path), ['compaction.auto', 'compaction.prune', 'compaction.autocontinue'])
 
-  for (const setting of settings) {
-    assert.equal(setting.required, false, `${setting.path} must be required off`)
-    assert.ok(setting.reason.length > 0, `${setting.path} must state why it matters`)
-  }
+  assert.deepEqual(settings.map((setting) => setting.required), [true, false, true])
+  for (const setting of settings) assert.ok(setting.reason.length > 0, `${setting.path} must state its physical effect`)
 })
 test('WHAT[context-compression-002] COMPANION_009_prune_is_listed_and_says_why_containment_cannot_save_it', () => {
   // `prune` was not in the frozen clause; X0 found it while reading the Host source.
@@ -31,11 +29,8 @@ test('WHAT[context-compression-002] COMPANION_009_prune_is_listed_and_says_why_c
   assert.equal(prune.clause, 'COMPANION-009')
   assert.match(prune.reason, /cannot be reanchored/)
 })
-test('WHAT[context-compression-002] HOST_006_autocontinue_is_answered_false_rather_than_left_to_the_default', () => {
-  // `auto = false` already makes the replay branch unreachable, so this is belt and
-  // braces. Answering explicitly matters because the hook is the only vetoable
-  // synthetic-turn injection point; staying silent relies on an upstream default.
-  assert.equal(policy.autoContinueEnabled(), false)
+test('WHAT[context-compression-002] compaction auto-continue explicitly allows the Host continuation', () => {
+  assert.equal(policy.autoContinueEnabled(), true)
 })
 test('WHAT[context-compression-002] HOST_006_a_setting_that_cannot_be_written_fails_startup_with_its_reason', () => {
   const verdict = policy.judgeFirstTurnWithUnavailable('compaction.auto', 'ses_x', 0)
@@ -53,19 +48,9 @@ test('WHAT[context-compression-002] HOST_006_startup_probe_passes_when_settings_
 
   assert.equal(verdict.kind, 'Satisfied')
 })
-test('WHAT[context-compression-002] HOST_006_a_compaction_on_the_first_turn_means_a_second_implementation', () => {
-  // A first turn is necessarily far below any threshold, so an automatic compaction
-  // there cannot be legitimate.
+test('WHAT[context-compression-002] a system compaction observation no longer refuses startup', () => {
   const verdict = policy.judgeFirstTurn('ses_probe', 1)
-
-  assert.equal(verdict.kind, 'CompactedDespiteSettings')
-  assert.match(verdict.message, /ses_probe/)
-  assert.match(verdict.message, /first turn/)
-
-  // Why refuse startup when containment exists: an unpreventable automatic compaction
-  // grinds the mechanism into uselessness — reanchoring every few rounds means probe
-  // coverage never accumulates, while everything looks normal from outside.
-  assert.match(verdict.message, /no visible symptom/)
+  assert.equal(verdict.kind, 'Satisfied')
 })
 test('WHAT[context-compression-002] HOST_006_the_setting_check_takes_precedence_over_the_turn_observation', () => {
   // When both fail, report the unavailable setting: that is the root cause, and the

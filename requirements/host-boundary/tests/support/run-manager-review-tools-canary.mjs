@@ -42,7 +42,7 @@ const CONTROL_TOOLS = ['todowrite-for-engineer', 'todowrite-for-devops'];
 const CONTRACT_TOKEN = 'do-not-use-except-for-review';
 const CANCEL_ARGUMENTS = {
   name: 'cancel-review',
-  planB: '等待评审程序，取消时保留真实终态。',
+  intent: '等待评审程序，取消时保留真实终态。',
   program: 'class Js extends JsProgram { async run() { await new Promise(() => {}); return null; } }',
   contract: CONTRACT_TOKEN,
 };
@@ -209,7 +209,7 @@ const provider = await startHttpServer(async (request, response) => {
         name: 'todowrite-for-manager',
         argsStr: JSON.stringify({
           name: 'read-review-sample',
-          planB: '等待读取结果，保留评审工具真实回执。',
+          intent: '等待读取结果，保留评审工具真实回执。',
           program: "class Js extends JsProgram { async run() { return await this.reviewOnly.cat('fixture-sample.txt'); } }",
           contract: CONTRACT_TOKEN,
         }),
@@ -239,7 +239,7 @@ const provider = await startHttpServer(async (request, response) => {
         name: 'todowrite-for-manager',
         argsStr: JSON.stringify({
           name: 'missing-review-file',
-          planB: '等待读取失败回执，不把拒绝改写为成功。',
+          intent: '等待读取失败回执，不把拒绝改写为成功。',
           program: "class Js extends JsProgram { async run() { return await this.reviewOnly.cat('nonexistent-missing-file.txt'); } }",
           contract: CONTRACT_TOKEN,
         }),
@@ -279,7 +279,7 @@ const provider = await startHttpServer(async (request, response) => {
         name: 'todowrite-for-manager',
         argsStr: JSON.stringify({
           name: 'executor-rejection',
-          planB: '保留执行器拒绝事实并观察宿主处理。',
+          intent: '保留执行器拒绝事实并观察宿主处理。',
           program: `class Js extends JsProgram { async run() { return '${EXECUTOR_THROW_SENTINEL}'; } }`,
           contract: CONTRACT_TOKEN,
         }),

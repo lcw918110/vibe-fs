@@ -151,7 +151,7 @@ test('WHAT[repository-programming-041] park, unpark and abandon through the wire
     let nextName = 0
     const WAIT = 'Wait for the named audit operation and preserve real lifecycle receipts.'
     const call = (args) =>
-      execute(workspace, 'Coder', 'en', 'durable-park-041', { name: 'audit-' + (++nextName), planB: WAIT, ...args }, 2000, Date.now() + 60_000, 1 << 20, store)
+      execute(workspace, 'Coder', 'en', 'durable-park-041', { name: 'audit-' + (++nextName), intent: WAIT, ...args }, 2000, Date.now() + 60_000, 1 << 20, store)
 
     const parked = await call({ program })
     assert.equal(caseName(parked), 'Parked')

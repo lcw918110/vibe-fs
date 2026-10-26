@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
-import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
+import { DatabaseSync } from 'node:sqlite'
+import { SqliteJournal } from 'wanxiangli/eventstore'
+import { DurableWork } from 'wanxiangli/durable-work'
+import { Work } from 'wanxiangli/work'
 
-const surface = lifecycle.LifecycleSurface ?? lifecycle
-
-const opening = () => surface.encodeOpening('plan', 'work-1', '/repo', 7n)
-
-const linesOf = (text) => text.split('\n').filter((line) => line.length > 0)
-const eventsOf = (text) => linesOf(text).flatMap((line) => JSON.parse(line).events ?? [])
-
-function canonical(value) {
+const canonical = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   if (value !== null && typeof value === 'object') {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`
@@ -17,86 +16,60 @@ function canonical(value) {
   return JSON.stringify(value)
 }
 
-const refused = (read) => {
-  assert.equal(read.ok, false)
-  assert.equal(read.opened, false)
-  assert.equal(read.names, '')
-  assert.equal(read.sequence, '')
-  assert.equal(read.activeId, '')
-  assert.equal(read.authorized, false)
-  assert.equal(read.next, '')
-}
+const review = (work, id, updates) =>
+  work.execute(id, {
+    type: 'Review',
+    office: 'Plan',
+    providerRunId: 'run',
+    toolCallId: id,
+    updates,
+  })
 
-test('WHAT[work-015] 只见 Relayed 不见后任被公开读取拒绝，不恢复成已开立的工作', () => {
-  const plan = opening()
-  const relayed = surface.deliverProbe(plan, 'run-p', 'call-p', 9n)
-  const frame = JSON.parse(linesOf(relayed.bytes)[0])
-  assert.equal(frame.events[0].type, 'IncumbencyRetired')
-  assert.equal(frame.events[0].outcome, 'Relayed')
-  assert.equal(frame.events[1].type, 'IncumbencyOpened')
+test('WHAT[work-015] a relay missing its successor is not restored as an open work', () => {
+  const work = new Work('work-15')
+  review(work, 'r1', [{ key: 'need', value: 'scope' }])
+  const relayed = review(work, 'r2', [{ key: 'need', value: null }])
+  assert.equal(relayed.result.kind, 'Relayed')
+  const frame = JSON.parse(work.records().at(-1))
+  assert.deepEqual(frame.events.map((event) => event.type), ['IncumbencyRetired', 'ContextBarrier', 'IncumbencyOpened', 'PromptObliged'])
   const unpaired = canonical({ ...frame, events: [frame.events[0]] })
-  const read = surface.readProbe(`${plan}${unpaired}\n`)
-  refused(read)
-  assert.match(read.reason, /Relay is missing its successor|atomic event pair is incomplete/)
+  assert.throws(() => new Work('work-15', [work.records()[0], unpaired]), /Illegal lifecycle transaction/)
+  const restored = new Work('work-15', work.records())
+  assert.equal(restored.inspect().active.origin, 'Successor')
+  assert.equal(restored.inspect().wait, restored.recover().wait)
 })
 
-test('WHAT[work-015] 残行不能被折成已开立', () => {
-  const opened = surface.encodeOpening('plan', 'work-truncated-line', '/repo', 7n)
-  const prefix = surface.readProbe(opened)
-  assert.equal(prefix.ok, true)
-  assert.equal(prefix.next, 'Review')
-  assert.equal(prefix.activeId.length > 0, true)
-
-  const truncated = `${opened}{"event_type":"IncumbencyOpened"`
-  assert.equal(truncated.endsWith('\n'), false)
-  const read = surface.readProbe(truncated)
-  refused(read)
-  assert.notEqual(read.reason, '')
-
-  const decoded = surface.decodeDocument(truncated)
-  assert.equal(decoded.ok, false)
-  assert.equal(decoded.names, '')
+test('WHAT[work-015] a truncated record is not an opening and a canonical record needs no trailing newline', () => {
+  const work = new Work('work-truncated')
+  review(work, 'r1', [])
+  const body = work.records()[0]
+  assert.equal(body.endsWith('\n'), false)
+  assert.equal(new Work('work-truncated', [body]).history()[0].events.some((event) => event.type === 'WorkOpened'), true)
+  assert.throws(() => new Work('work-truncated', [`${body}\n`]), /canonical/)
+  assert.throws(() => new Work('work-truncated', [`${body.slice(0, 12)}`]))
+  assert.throws(() => new Work('work-truncated', ['{"event_type":"IncumbencyOpened"']))
 })
 
-test('WHAT[work-015] 没写与结果未知用公开 journal 状态，旧名字不是通过条件', () => {
-  assert.equal(surface.commitProbe('NotWritten'), 'NotWritten')
-  assert.equal(surface.commitProbe('Unknown'), 'Unknown')
-  assert.notEqual(surface.commitProbe('NotWritten'), 'Committed')
-  assert.notEqual(surface.commitProbe('Unknown'), 'Committed')
-  assert.notEqual(surface.commitProbe('AppendNotAttempted'), 'NotWritten')
-  assert.notEqual(surface.commitProbe('CommitUnknown'), 'Unknown')
-})
-
-test('WHAT[work-015] 成对的 Relayed 与后任恢复为 Review；缺后任则拒绝且不另造身份', () => {
-  const plan = surface.encodeOpening('plan', 'work-unpaired-relay', '/repo', 7n)
-  const relayed = surface.deliverProbe(plan, 'run-unpaired', 'call-unpaired', 9n)
-  assert.equal(relayed.decision, 'Write')
-  assert.equal(relayed.detail, 'Relayed')
-  assert.equal(relayed.names.includes('IncumbencyRetired'), true)
-  assert.equal(relayed.names.includes('IncumbencyOpened'), true)
-
-  const frame = JSON.parse(linesOf(relayed.bytes)[0])
-  const retirement = frame.events[0]
-  assert.equal(retirement.type, 'IncumbencyRetired')
-  assert.equal(retirement.outcome, 'Relayed')
-  const successor = frame.events[1]
-  assert.equal(successor.type, 'IncumbencyOpened')
-
-  const paired = surface.readProbe(`${plan}${relayed.bytes}`)
-  assert.equal(paired.ok, true)
-  assert.equal(paired.next, 'Review')
-  assert.equal(paired.opened, true)
-  assert.notEqual(paired.activeId, '')
-  assert.notEqual(paired.activeId, eventsOf(plan).find((event) => event.type === 'IncumbencyOpened').incumbencyId)
-
-  const unpaired = canonical({ ...frame, events: [retirement] })
-  const read = surface.readProbe(`${plan}${unpaired}\n`)
-  refused(read)
-  assert.match(read.reason, /Relay is missing its successor|atomic event pair is incomplete/)
-})
-
-test('WHAT[work-015] 完整记录仅缺结尾换行，公开 journal 没有对应的拒绝名', () => {
-  const bytes = opening().replace(/\n$/, '')
-  assert.equal(bytes.endsWith('\n'), false)
-  assert.equal(JSON.parse(bytes).events.some((event) => event.type === 'WorkOpened'), true)
+test('WHAT[work-015] durable acknowledgement uses Committed, Replayed, Conflict, and NotWritten', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'wxs-work-015-'))
+  const database = new DatabaseSync(join(directory, 'work.sqlite'))
+  const journal = new SqliteJournal(database)
+  try {
+    const durable = new DurableWork('work-15', journal)
+    const command = { type: 'Review', office: 'Plan', providerRunId: 'run', toolCallId: 'c1', updates: [] }
+    const committed = durable.execute('r1', command)
+    assert.equal(committed.status, 'Committed')
+    assert.equal(durable.execute('r1', command).status, 'Replayed')
+    const conflict = durable.execute('r1', { ...command, updates: [{ key: 'gap', value: 'fix' }] })
+    assert.equal(conflict.status, 'Conflict')
+    const body = journal.read('work-15')[0]
+    const stale = journal.append('work-15', 0, 'r-stale', body)
+    assert.ok(stale.status === 'Conflict' || stale.status === 'NotWritten', stale.status)
+    assert.notEqual(stale.status, 'AppendNotAttempted')
+    assert.notEqual(stale.status, 'CommitUnknown')
+    assert.throws(() => new Work('work-15').execute('old', { type: 'AppendNotAttempted' }), /Unknown work command/)
+  } finally {
+    journal.close()
+    rmSync(directory, { recursive: true, force: true })
+  }
 })

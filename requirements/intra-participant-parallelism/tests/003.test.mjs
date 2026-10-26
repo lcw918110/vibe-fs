@@ -57,7 +57,7 @@ test('WHAT[intra-participant-parallelism-003] actual Host-created Fission lanes 
         program:
           'class Js extends JsProgram { async run() { return await this.fork({ name: "Ada", charge: "investigate seven items" }, []); } }',
           name: 'fork-ada',
-          planB: 'Wait for the delegated engineer receipt before starting its lanes.'
+          intent: 'Wait for the delegated engineer receipt before starting its lanes.'
         },
       { sessionID: managerSession, agent: 'manager' },
     )

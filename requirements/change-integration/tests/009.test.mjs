@@ -160,11 +160,9 @@ test('WHAT[change-integration-009] WORKTREE_CMD_identity_of_is_manager_slash_job
 }
 
 {
-// The durable loop signal Change derives for one Manager road. The acquisition
-// program blocks on it, so a signal that cannot change would spin the program:
-// `Deliver` commits a Relay together with its successor incumbency in one record,
-// and the hand-off's single physical prompt belongs to ManagerWorkflow's loop gate,
-// not to a second reading of the same retirement.
+// The durable loop signal Change derives for one Manager road. An active tenure
+// holds no signal. Completion with no active tenure holds Candidate. A relay
+// leaves its successor active, so the signal stays None.
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
 const { mkdtempSync, rmSync } = await import("node:fs");
@@ -174,67 +172,73 @@ const { join } = await import("node:path");
 const hostSurface = await import('../../../dist/Change/Host/Surface.js')
 const journalSurface = await import('../../../dist/Persistence/Journal/Surface.js')
 const lifecycle = await import('../../../dist/Mission/Lifecycle/Surface.js')
-const workspaceSurface = await import('../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js')
+const surface = lifecycle.LifecycleSurface ?? lifecycle
 
 const withRoad = async (body) => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-loop-signal-'))
   const stateRoot = await journalSurface.JournalSurface_initializeStateRoot(root)
-  const store = workspaceSurface.acquire(stateRoot)
   try {
-    await body({ root, stateRoot, store, signalFor: async (workId) => hostSurface.loopSignalOf(root, workId) })
+    await body({ root, stateRoot, signalFor: async (workId) => hostSurface.loopSignalOf(root, workId) })
   } finally {
-    workspaceSurface.release(stateRoot)
     rmSync(root, { recursive: true, force: true })
   }
 }
 
-// A relayed retirement: the reviewed-but-not-promoted work hands the road to the
-// successor incumbency it opened in the same record.
-const relayedRoad = async (store, workId, root) => {
-  const opened = await lifecycle.seedOpen(store, 'S4', workId, root, 0n)
-  assert.equal(opened.ok, true, opened.error)
-  const reviewed = await lifecycle.seedReview(store, workId, 'Stayed')
-  assert.equal(reviewed.ok, true, reviewed.error)
-  // Clearing obligations so the Stayed review relays to a successor tenure on deliver
-  await lifecycle.seedReview(store, workId, 'Cleared')
-  const relay = await lifecycle.seedDeliver(store, workId, 'run-1', 'call-1', 1n)
-  assert.equal(relay.ok, true, relay.error)
+const review = (stateRoot, workId, requestId, updates) => {
+  const receipt = surface.submitReview(stateRoot, workId, requestId, 'Manager', 'run-1', requestId, updates, [], '')
+  assert.equal(receipt.status, 'Committed', receipt.reason)
+  return receipt
+}
+
+// A nonempty review then clearing that key relays. The successor stays active,
+// so the loop signal stays None.
+const relayedRoad = (stateRoot, workId) => {
+  const reviewed = review(stateRoot, workId, 'review', [{ key: 'job', value: 'do' }])
+  assert.equal(reviewed.kind, 'Reviewed', reviewed.reason)
+  assert.equal(reviewed.milestone, '执行')
+  const relay = review(stateRoot, workId, 'clear', [{ key: 'job', value: null }])
+  assert.equal(relay.kind, 'Relayed', relay.reason)
+}
+
+const completedRoad = (stateRoot, workId) => {
+  relayedRoad(stateRoot, workId)
+  const advanced = review(stateRoot, workId, 'advance', [])
+  assert.equal(advanced.kind, 'Advanced', advanced.reason)
+  assert.equal(advanced.milestone, '收尾')
+  const completed = review(stateRoot, workId, 'close', [])
+  assert.equal(completed.kind, 'Completed', completed.reason)
+  assert.equal(completed.milestone, '已完成')
 }
 
 test('WHAT[change-integration-009] a relayed retirement whose successor already walks holds no fresh loop signal', async () => {
-  await withRoad(async ({ root, stateRoot, store, signalFor }) => {
+  await withRoad(async ({ stateRoot, signalFor }) => {
     const workId = 'ses-loop-relayed'
-    await relayedRoad(store, workId, root)
+    relayedRoad(stateRoot, workId)
 
-    const view = lifecycle.inspected(stateRoot, workId)
-    assert.equal(typeof view.ActiveId, 'string', 'the relay opened its successor incumbency')
+    const view = surface.inspected(stateRoot, workId)
+    assert.equal(typeof view.ActiveId, 'string', 'the relay left its successor incumbency active')
     assert.notEqual(view.ActiveId.length, 0, 'the successor incumbency has an identity')
     assert.equal(view.Reviewed, false, 'the successor tenure is not reviewed yet')
-    assert.equal(view.Delivered, false, 'a relay is not a delivered tenure')
+    assert.equal(view.Delivered, false, 'a relay is not a completed tenure')
+    assert.equal(Array.from(view.Retirements ?? []).at(-1).Outcome, 'Relayed')
 
-    // Reporting the consumed hand-off again would drive the program through
-    // AwaitLoopSignal -> ContinueLoop without ever blocking. The road must wait on
-    // durable change instead: the successor's own retirement is the next occasion.
+    // The successor is already walking, so this retirement is not a fresh signal.
     assert.equal((await signalFor(workId)).kind, 'None')
     assert.equal((await signalFor(workId)).detail, '')
   })
 })
 
-test('WHAT[change-integration-009] a delivered tenure with no successor holds the publication candidate signal once', async () => {
-  await withRoad(async ({ root, stateRoot, store, signalFor }) => {
+test('WHAT[change-integration-009] a completed tenure with no successor holds the publication candidate signal once', async () => {
+  await withRoad(async ({ stateRoot, signalFor }) => {
     const workId = 'ses-loop-delivered'
-    const opened = await lifecycle.seedOpen(store, 'S4', workId, root, 0n)
-    assert.equal(opened.ok, true, opened.error)
-    const reviewed = await lifecycle.seedReview(store, workId, 'Promoted')
-    assert.equal(reviewed.ok, true, reviewed.error)
-    // Single delivery: Promoted tenure completes in one deliver call. Its
-    // trailing logical-run closure needs a booted shared journal runtime, which
-    // this probe deliberately does not own, so the durable work state is the evidence.
-    await lifecycle.seedDeliver(store, workId, 'run-1', 'call-1', 1n)
+    completedRoad(stateRoot, workId)
 
-    const view = lifecycle.inspected(stateRoot, workId)
-    assert.equal(view.Delivered, true, 'the promoted tenure delivered')
-    assert.equal(view.ActiveId ?? null, null, 'a final delivery leaves no open tenure')
+    const view = surface.inspected(stateRoot, workId)
+    assert.equal(view.Delivered, true, 'the completed tenure is delivered')
+    assert.equal(view.ActiveId ?? null, null, 'completion leaves no open tenure')
+    const retirement = Array.from(view.Retirements ?? []).at(-1)
+    assert.equal(retirement.Outcome, 'Completed')
+    assert.notEqual(retirement.Outcome, 'Delivered')
 
     const delivered = await signalFor(workId)
     assert.equal(delivered.kind, 'Candidate')
@@ -242,13 +246,18 @@ test('WHAT[change-integration-009] a delivered tenure with no successor holds th
   })
 })
 
-test('WHAT[change-integration-009] no durable work and an unretired tenure both hold no loop signal', async () => {
-  await withRoad(async ({ root, store, signalFor }) => {
+test('WHAT[change-integration-009] no durable work and an open tenure both hold no loop signal', async () => {
+  await withRoad(async ({ stateRoot, signalFor }) => {
     assert.equal((await signalFor('ses-loop-absent')).kind, 'NoWork')
 
     const workId = 'ses-loop-open'
-    const opened = await lifecycle.seedOpen(store, 'S4', workId, root, 0n)
-    assert.equal(opened.ok, true, opened.error)
+    const opened = review(stateRoot, workId, 'review', [{ key: 'job', value: 'do' }])
+    assert.equal(opened.kind, 'Reviewed', opened.reason)
+    assert.equal(opened.milestone, '执行')
+    const view = surface.inspected(stateRoot, workId)
+    assert.equal(typeof view.ActiveId, 'string')
+    assert.notEqual(view.ActiveId.length, 0)
+    assert.equal(view.Delivered, false)
     assert.equal((await signalFor(workId)).kind, 'None')
   })
 })

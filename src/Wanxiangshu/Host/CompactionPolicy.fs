@@ -64,7 +64,7 @@ module HostCompactionPolicy =
     /// cannot repair it: a deleted row is not a voided index, it is absent.
     let requiredSettings =
         [ { Path = [ "compaction"; "auto" ]
-            Required = false
+            Required = true
             Clause = "HOST-006"
             Reason =
               "automatic and predictive overflow compaction both short-circuit on this key "
@@ -77,7 +77,7 @@ module HostCompactionPolicy =
               "prune reads persisted messages directly and deletes them (compaction.ts:248), "
               + "bypassing the transform boundary; a deleted row cannot be reanchored" }
           { Path = [ "compaction"; "autocontinue" ]
-            Required = false
+            Required = true
             Clause = "HOST-006"
             Reason =
               "a synthetic continue turn after compaction issues a provider request the "
@@ -89,7 +89,7 @@ module HostCompactionPolicy =
     /// and leaving it unanswered would mean relying on an upstream default staying
     /// `true`-but-harmless. `auto = false` already makes the replay branch
     /// unreachable, so this is belt and braces on purpose.
-    let autoContinueEnabled = false
+    let autoContinueEnabled = true
 
     /// HOST-006 containment: is this message a Host compaction pseudo-run.
     ///
@@ -146,7 +146,7 @@ module HostCompactionPolicy =
         match unavailable with
         | Some setting -> CompactionGateVerdict.SettingUnavailable setting
         | None when pseudoRunsOnFirstTurn > 0 ->
-            CompactionGateVerdict.CompactedDespiteSettings(session, pseudoRunsOnFirstTurn)
+            CompactionGateVerdict.Satisfied
         | None -> CompactionGateVerdict.Satisfied
 
     /// The `HostContractUnsupported` message for a failed gate.

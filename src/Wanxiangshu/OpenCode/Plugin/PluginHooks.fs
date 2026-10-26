@@ -13,6 +13,7 @@ open Wanxiangshu.Context.Companion
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Context.Scope
 open Wanxiangshu.Execution.Delegation.Fork
+open Wanxiangshu.Execution.Delegation.Advisor
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session.Recovery
@@ -70,6 +71,51 @@ open Wanxiangshu.OpenCode.Host
 open PluginHostInterop
 
 module PluginHooks =
+
+    [<Import("AdvisorFlow", "wanxiangli/scope-progress")>]
+    let private createAdvisorFlow: obj = jsNative
+
+    [<Import("advisorClaim", "wanxiangli/scope-progress")>]
+    let private advisorClaim: obj = jsNative
+
+    [<Import("advisorFinish", "wanxiangli/scope-progress")>]
+    let private advisorFinish: obj = jsNative
+
+    [<Import("advisorStageBegin", "wanxiangli/scope-progress")>]
+    let private advisorStageBegin: obj = jsNative
+
+    [<Import("advisorStageConfirm", "wanxiangli/scope-progress")>]
+    let private advisorStageConfirm: obj = jsNative
+
+    [<Import("advisorPending", "wanxiangli/scope-progress")>]
+    let private advisorPending: obj = jsNative
+
+    [<Import("SqliteJournal", "wanxiangli/eventstore")>]
+    let private advisorJournalConstructor: obj = jsNative
+
+    [<Import("createRequire", "node:module")>]
+    let private createRequire (url: string) : obj = jsNative
+
+    [<Emit("import.meta.url")>]
+    let private moduleUrl: string = jsNative
+
+    [<Emit("typeof globalThis.Bun !== 'undefined'")>]
+    let private runningOnBun () : bool = jsNative
+
+    [<Emit("$0($1)")>]
+    let private requireModule (_require: obj) (_name: string) : obj = jsNative
+
+    [<Import("join", "node:path")>]
+    let private joinPath (left: string) (right: string) : string = jsNative
+
+    [<Import("mkdirSync", "node:fs")>]
+    let private mkdirSync (directory: string) (options: obj) : unit = jsNative
+
+    [<Import("scopeProgress", "wanxiangli/scope-progress")>]
+    let private scopeProgress: obj = jsNative
+
+    [<Import("advisorProcessQueue", "wanxiangli/scope-progress")>]
+    let private advisorProcessQueue: obj = jsNative
 
     [<Import("outboundViewStore", "wanxiangli/pair-hint")>]
     let private outboundViewStore: obj = jsNative
@@ -136,15 +182,9 @@ module PluginHooks =
         |> Array.map (fun part -> if isNull part?text then "" else string part?text)
         |> String.concat "\n"
 
-    let private negotiationPromptText (questions: string) =
-        "<btw>Ephemeral clarification on a delegate's current assignment. Answer the questions from this conversation context. Do not call ANY tools. Do not ask follow-up questions. Reply in plain text immediately.\nQuestions:\n"
-        + questions
-        + "\n</btw>"
+    let private negotiationPromptText (questions: string) = questions
 
-    let private previousScopePromptText (questions: string) =
-        "<btw>Ephemeral consultation with the immediately preceding Scope, using its archived provider request. Answer only using what this archived context showed. Do not use ANY tools, do not ask follow-up questions. If unknown, say so. Reply in plain text immediately.\nQuestions:\n"
-        + questions
-        + "\n</btw>"
+    let private previousScopePromptText (questions: string) = questions
 
     [<RequireQualifiedAccess>]
     type private TemporaryAnswer =
@@ -153,16 +193,28 @@ module PluginHooks =
         | Failed of string
 
     let private classifyTemporaryAnswer (text: string) (blocked: bool) =
-        if blocked || String.IsNullOrWhiteSpace text then
-            TemporaryAnswer.Retry
-        else
-            TemporaryAnswer.Replied text
+        if blocked then TemporaryAnswer.Retry
+        elif String.IsNullOrWhiteSpace text then
+            TemporaryAnswer.Failed "temporary consultation completed without assistant prose"
+        else TemporaryAnswer.Replied text
 
+    // An SDK error without an observed tool-call veto is a transport/admission
+    // failure, never an incomplete reply. An independently observed tool veto
+    // can still use its bounded clarification retry.
     let private classifyTemporaryFailure (ex: exn) (blocked: bool) =
-        if blocked then
-            TemporaryAnswer.Retry
-        else
-            TemporaryAnswer.Failed ex.Message
+        if blocked then TemporaryAnswer.Retry
+        else TemporaryAnswer.Failed ex.Message
+
+    let private temporarySdkError (result: obj) =
+        let body = negotiationResponse result
+        let raw =
+            if not (isNull result) && not (isNull result?error) then result?error
+            elif not (isNull body) && not (isNull body?error) then body?error
+            elif not (isNull body) && not (isNull body?info) then body?info?error
+            else null
+        if isNull raw then None
+        elif isNull raw?message then Some(string raw)
+        else Some(string raw?message)
 
     let private temporaryPromptPayload (tempId: string) (agentName: string) (model: obj) (prose: string) =
         let parts = box [| createObj [ "type", box "text"; "text", box prose ] |]
@@ -184,15 +236,19 @@ module PluginHooks =
 
         negotiationSessionPayload tempId request
 
+    let private classifySdkTemporaryAnswer (result: obj) (blocked: bool) =
+        match temporarySdkError result with
+        | Some reason -> TemporaryAnswer.Failed reason
+        | None -> classifyTemporaryAnswer (negotiationResultText result) blocked
+
     let private tryTemporaryAnswer (session: obj) (tempId: string) (payload: obj) : Task<TemporaryAnswer> =
         task {
             let before = PluginTransforms.negotiationToolViolationCount tempId
 
             try
                 let! result = negotiationSdk session "prompt" payload
-                let text = negotiationResultText result
                 let blocked = PluginTransforms.negotiationToolViolationCount tempId > before
-                return classifyTemporaryAnswer text blocked
+                return classifySdkTemporaryAnswer result blocked
             with ex ->
                 let blocked = PluginTransforms.negotiationToolViolationCount tempId > before
                 return classifyTemporaryFailure ex blocked
@@ -206,7 +262,7 @@ module PluginHooks =
         (firstPrompt: string)
         : Task<Result<string, string>> =
         let retryText =
-            "The preceding ephemeral response attempted a forbidden tool or lacked a plain-text answer. Do NOT use any tools; answer the questions from your existing context immediately."
+            "刚才的回答不完整。请直接用文字回答这个问题。"
 
         let rec run attempt prose =
             if not (PluginTransforms.negotiationIsTemporary tempId) then
@@ -265,7 +321,7 @@ module PluginHooks =
     [<RequireQualifiedAccess>]
     type private ConsultationOrigin =
         | Delegator of string
-        | Frozen of obj
+        | Previous of string * obj
 
     let private runLinkedTemporary
         (session: obj)
@@ -280,9 +336,9 @@ module PluginHooks =
                 | ConsultationOrigin.Delegator delegator ->
                     PluginTransforms.negotiationStartTemporary tempId delegator,
                     PluginTransforms.negotiationModelFor delegator
-                | ConsultationOrigin.Frozen snapshot ->
-                    PluginTransforms.consultationStartFrozen tempId snapshot,
-                    (if isNull snapshot then null else snapshot?model)
+                | ConsultationOrigin.Previous (source, metadata) ->
+                    PluginTransforms.consultationStartPrevious tempId source metadata,
+                    (if isNull metadata then null else metadata?model)
 
             let questionRun =
                 match linked with
@@ -351,7 +407,7 @@ module PluginHooks =
         | Some role ->
             createAndRunTemporary
                 session
-                (ConsultationOrigin.Frozen snapshot)
+                (ConsultationOrigin.Previous(recipient, snapshot))
                 recipient
                 (ManagedAgent.nameOf role)
                 (previousScopePromptText questions)
@@ -373,6 +429,41 @@ module PluginHooks =
             let snapshotOpt = host.SnapshotOpt
             let eventPort = host.EventPort
             let chatParams = ChatParamsHook.createWith journal
+
+            let mutable progressJournalFactory: obj option = None
+
+            // The JS todowrite port is synchronous. Resolve the physical store once
+            // at plugin activation, then open a fresh transactional journal per call.
+            // Progress and Advisor use different streams in the same SQLite database.
+            match workspaceDirectory with
+            | Some workspace ->
+                let! root = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+                let directory = joinPath root "wanxiangshu"
+                mkdirSync directory (createObj [ "recursive" ==> true ])
+                let target = joinPath directory "advisor-process.sqlite"
+                let makeJournal = Func<string, obj>(fun _session ->
+                    let loader = createRequire moduleUrl
+                    let sqlite = requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
+                    let connection =
+                        if runningOnBun () then createNew sqlite?Database target
+                        else createNew sqlite?DatabaseSync target
+                    try createNew advisorJournalConstructor connection
+                    with _ ->
+                        connection?close() |> ignore
+                        reraise ())
+                progressJournalFactory <- Some(box makeJournal)
+                scopeProgress?configureJournal(makeJournal) |> ignore
+            | None ->
+                let unavailable = Func<string, obj>(fun _ -> failwith "ScopeProgress requires a verified durable workspace")
+                scopeProgress?configureJournal(unavailable) |> ignore
+
+            let bindProgressJournal (sessionId: string) =
+                match progressJournalFactory with
+                | Some factory when not (String.IsNullOrWhiteSpace sessionId) ->
+                    scopeProgress?bindSessionJournal(sessionId, factory) |> ignore
+                | None when not (String.IsNullOrWhiteSpace sessionId) ->
+                    scopeProgress?unbindSessionJournal(sessionId) |> ignore
+                | _ -> ()
 
             let roleFor (sessionId: SessionId) =
                 journal
@@ -617,6 +708,126 @@ module PluginHooks =
                         let! registration = guardedClientConfiguration ()
                         return Some registration
                     }
+
+            let scopeEpochForAdvisor (sessionId: string) =
+                let durableEpoch =
+                    journal
+                    |> Option.bind (fun durable ->
+                        AgentProjection.tryFind (SessionId.create sessionId) (AgentJournal.snapshot durable).AgentProjections)
+                    |> Option.bind (fun session -> session.PrefixEpoch)
+                    |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+                match durableEpoch with
+                | Some verified -> verified
+                | None ->
+                    let state: obj = scopeProgress?status(sessionId)
+                    if not (isNull state?epoch) then string state?epoch
+                    else
+                        let originalSessionIsKnown =
+                            journal
+                            |> Option.bind (fun durable ->
+                                AgentProjection.tryFind (SessionId.create sessionId) (AgentJournal.snapshot durable).AgentProjections)
+                            |> Option.isSome
+                        if originalSessionIsKnown then
+                            let recovered: obj = scopeProgress?recordedEpoch(sessionId, "0")
+                            if isNull recovered then "" else string recovered
+                        else ""
+
+            let createManagedAdvisor (registered: ToolRegistration) : obj =
+                let runtime = registered.Runtime
+                let proseResult (answer: Result<string, string>) =
+                    match answer with
+                    | Ok prose -> createObj [ "Ok" ==> true; "Prose" ==> prose; "Reason" ==> "" ]
+                    | Error reason -> createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> reason ]
+                let steerResult (answer: Result<unit, string>) =
+                    match answer with
+                    | Ok () -> createObj [ "Ok" ==> true; "Prose" ==> ""; "Reason" ==> "" ]
+                    | Error reason -> createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> reason ]
+                let workerRequest (session: string) (question: string) =
+                    negotiateBtw client roleFor session session question
+                let askWorker = Func<string, string, Task<obj>>(fun session question ->
+                    task {
+                        let! answered = workerRequest session question
+                        return proseResult answered
+                    })
+                let askSeat = Func<string, string, Task<obj>>(fun session prompt ->
+                    let deps: AdvisorSeatDeps =
+                        { Sessions = runtime.Sessions
+                          Snapshot = runtime.Snapshot
+                          Journal = runtime.Journal
+                          Directory = runtime.WorkspaceDirectory
+                          Participant = ManagedAgent.nameOf Role.Advisor
+                          BindDelegation = fun _ _ -> () }
+                    task {
+                        let! answered = AdvisorSeat.consult deps session prompt
+                        return proseResult answered
+                    })
+                let sendSteer = Func<string, string, string, string, Task<obj>>(fun session epoch processId text ->
+                    task {
+                        let isCurrent () =
+                            scopeEpochForAdvisor session = epoch
+                        let! sent = runtime.SendAdvisorSteer(session, text, processId, isCurrent)
+                        return steerResult sent
+                    })
+                let currentEpoch = Func<string, string>(scopeEpochForAdvisor)
+                let languageFor = Func<string, string>(fun session ->
+                    ProviderLanguage.label (ProviderLanguageBinding.forSessionText session))
+                let withAdvisorJournal (action: obj -> obj) : Task<obj> =
+                    task {
+                        match runtime.WorkspaceDirectory with
+                        | None ->
+                            return createObj [ "ok" ==> false; "reason" ==> "Advisor persistence needs a durable workspace" ]
+                        | Some workspace ->
+                            try
+                                let! root = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+                                let directory = joinPath root "wanxiangshu"
+                                mkdirSync directory (createObj [ "recursive" ==> true ])
+                                let target = joinPath directory "advisor-process.sqlite"
+                                let loader = createRequire moduleUrl
+                                let sqlite = requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
+                                let connection =
+                                    if runningOnBun () then createNew sqlite?Database target
+                                    else createNew sqlite?DatabaseSync target
+                                let journal =
+                                    try createNew advisorJournalConstructor connection
+                                    with error ->
+                                        connection?close() |> ignore
+                                        reraise ()
+                                try
+                                    return action journal
+                                finally
+                                    journal?close() |> ignore
+                            with error ->
+                                return createObj [ "ok" ==> false; "reason" ==> ("Advisor durable operation unavailable: " + error.Message) ]
+                    }
+                let claim = Func<string, string, string, string, Task<obj>>(fun session epoch report issue ->
+                    withAdvisorJournal (fun journal ->
+                        emitJsExpr (advisorClaim, journal, session, epoch, report, issue) "$0($1,$2,$3,$4,$5)"))
+                let finish = Func<string, string, string array, string, Task<obj>>(fun session epoch reports outcome ->
+                    withAdvisorJournal (fun journal ->
+                        emitJsExpr (advisorFinish, journal, session, epoch, reports, outcome) "$0($1,$2,$3,$4,$5)"))
+                let beginStage = Func<string, string, string, int, string, string array, Task<obj>>(fun session epoch processId phase question reports ->
+                    withAdvisorJournal (fun journal ->
+                        emitJsExpr (advisorStageBegin, journal, session, epoch, processId, phase, question, reports) "$0($1,$2,$3,$4,$5,$6,$7)"))
+                let confirmStage = Func<string, string, string, int, string, Task<obj>>(fun session epoch processId phase prose ->
+                    withAdvisorJournal (fun journal ->
+                        emitJsExpr (advisorStageConfirm, journal, session, epoch, processId, phase, prose) "$0($1,$2,$3,$4,$5,$6)"))
+                let pending = Func<string, string, Task<obj>>(fun session epoch ->
+                    withAdvisorJournal (fun journal ->
+                        emitJsExpr (advisorPending, journal, session, epoch) "$0($1,$2,$3)"))
+                let ports = createObj [ "AskWorker" ==> askWorker
+                                        "AskSeat" ==> askSeat
+                                        "SendSteer" ==> sendSteer
+                                        "CurrentEpoch" ==> currentEpoch
+                                        "LanguageFor" ==> languageFor
+                                        "Claim" ==> claim
+                                        "Finish" ==> finish
+                                        "BeginStage" ==> beginStage
+                                        "ConfirmStage" ==> confirmStage
+                                        "Pending" ==> pending ]
+                emitJsExpr (createAdvisorFlow, advisorProcessQueue, ports) "$0($1,$2)"
+
+            let advisorFlow: obj =
+                toolRegistration |> Option.map createManagedAdvisor |> Option.defaultValue null
 
             let toolDefinition (_toolInput: obj) (_toolOutput: obj) = ()
 
@@ -881,6 +1092,9 @@ module PluginHooks =
                         )
                     | _ -> ()
 
+                    let actorSession = toolField toolInput "sessionID"
+                    if roleFor (SessionId.create actorSession) = Some Role.Advisor then
+                        invalidOp "The dedicated Advisor has no tools"
                     do! checkManagerReviewPermissions toolName toolInput
 
                     do! beforeStagePrepareProtocolArguments toolName toolInput toolOutput
@@ -931,18 +1145,24 @@ module PluginHooks =
 
             let chatMessageWithNegotiationPolicy (input: obj) (output: obj) : Task<unit> =
                 task {
-                    let pending: Task<unit> =
-                        emitJsExpr (originalChatMessage, input, output) "$0($1, $2)"
-
-                    do! pending
                     let rawSession = if isNull input then null else input?sessionID
+                    let temporary =
+                        not (isNull rawSession)
+                        && PluginTransforms.negotiationIsTemporary (string rawSession)
+                    // The SDK-created readonly temporary session is not an admitted
+                    // managed work execution. Its real provider tool schema remains
+                    // untouched, and tool.execute.before independently denies tools.
+                    if not temporary then
+                        let pending: Task<unit> =
+                            emitJsExpr (originalChatMessage, input, output) "$0($1, $2)"
+                        do! pending
 
                     let managedChild =
                         not (isNull rawSession)
                         && not (String.IsNullOrWhiteSpace(string rawSession))
                         && sessionPort.IsManagedChild(SessionId.create (string rawSession))
 
-                    if not managedChild && not (isNull output) && not (isNull output?message) then
+                    if not temporary && not managedChild && not (isNull output) && not (isNull output?message) then
                         let tools = requireUserMessageTools output?message
                         tools?negotiate <- box false
                 }
@@ -950,12 +1170,81 @@ module PluginHooks =
             let chatMessage =
                 registeredHook HookKey.ChatMessage (curriedHook (box chatMessageWithNegotiationPolicy))
 
+            let advisorIssue (sessionId: string) (receipt: obj) =
+                let old = receipt?previous
+                let next = string receipt?estimate
+                let english = ProviderLanguage.label (ProviderLanguageBinding.forSessionText sessionId) = "en"
+                if not (isNull old) && string old = "0" then
+                    if english then "You previously reported zero remaining rounds but have not reset the scope. What work remains, and what is blocking you?"
+                    else "接下来的工作还有哪些未完成？遇到了什么阻碍？请说明目前的情况。"
+                elif not (isNull old) && string old = next then
+                    if english then "What has kept the work from progressing as expected? What difficulties remain?"
+                    else "工作进展受到了什么阻碍？哪些困难还没有解决？"
+                else
+                    if english then "What new information or additional work changed your estimate? What is difficult now?"
+                    else "最近有什么新发现或额外工作？请说明目前的难点。"
+
+            let observeAdvisorTask (sessionId: string) (started: Task<obj>) =
+                task {
+                    try
+                        let! result = started
+                        if not (isNull result?ok) && not (unbox<bool> result?ok) then
+                            let reason = if isNull result?reason then "Advisor admission failed" else string result?reason
+                            Diagnostic.emit "advisor-flow-failed" [ "session_id", sessionId; "reason", reason ]
+                    with error ->
+                        Diagnostic.emit "advisor-flow-failed" [ "session_id", sessionId; "reason", error.Message ]
+                } |> ignore
+
+            let dispatchAdvisor (sessionId: string) (epoch: string) (item: obj) =
+                let receipt = item?result
+                let id = epoch + ":" + string item?providerRunId
+                let question = advisorIssue sessionId receipt
+                if isNull advisorFlow then
+                    Diagnostic.emit "advisor-flow-unavailable" [ "session_id", sessionId; "provider_run", id ]
+                else
+                    let started: Task<obj> = unbox (advisorFlow?trigger(sessionId, epoch, id, question))
+                    observeAdvisorTask sessionId started
+
+            let observeSettledProgress (sessionId: string) (epoch: string) (item: obj) =
+                let receipt = item?result
+                if not (isNull receipt?advisor) && unbox<bool> receipt?advisor then
+                    dispatchAdvisor sessionId epoch item
+
+            let settlePriorProgress (sessionId: string) =
+                let durableScope = scopeEpochForAdvisor sessionId
+                if not (String.IsNullOrWhiteSpace durableScope) then
+                    scopeProgress?ensureEpoch(sessionId, durableScope) |> ignore
+                let active: obj = scopeProgress?status(sessionId)
+                if not (isNull active?ok) && not (unbox<bool> active?ok) then
+                    failwith ("Cannot settle Provider round without reliable Scope progress: " + string active?reason)
+                let epoch = if isNull active?epoch then "" else string active?epoch
+                let settled: obj array =
+                    if String.IsNullOrWhiteSpace epoch then [||]
+                    else unbox (scopeProgress?settlePending(sessionId, epoch))
+                settled |> Array.iter (observeSettledProgress sessionId epoch)
+
+            let tryRecoverAdvisor (sessionId: string) =
+                if not (isNull advisorFlow) && not (String.IsNullOrWhiteSpace sessionId) then
+                    let epoch = scopeEpochForAdvisor sessionId
+                    if not (String.IsNullOrWhiteSpace epoch) then
+                        let resumed: Task<obj> = unbox (advisorFlow?resume(sessionId, epoch))
+                        observeAdvisorTask sessionId resumed
+
             let rememberModelParams (input: obj) (output: obj) =
-                emitJsExpr (chatParams, input, output) "$0($1, $2)" |> ignore
-                PluginTransforms.negotiationRememberModel input
+                let currentSession = if isNull input?sessionID then "" else string input?sessionID
+                let temporary =
+                    not (String.IsNullOrWhiteSpace currentSession)
+                    && PluginTransforms.negotiationIsTemporary currentSession
+                if not temporary then
+                    if not (String.IsNullOrWhiteSpace currentSession) then
+                        bindProgressJournal currentSession
+                        settlePriorProgress currentSession
+                    emitJsExpr (chatParams, input, output) "$0($1, $2)" |> ignore
+                    PluginTransforms.negotiationRememberModel input
+                    tryRecoverAdvisor currentSession
                 let modelSessionId = unbox<string> input?sessionID
 
-                if not (String.IsNullOrEmpty modelSessionId) then
+                if not temporary && not (String.IsNullOrEmpty modelSessionId) then
                     outboundViewStore?recordModel (modelSessionId, input?model) |> ignore
 
             let chatParamsRegistration =
@@ -1110,7 +1399,10 @@ module PluginHooks =
                     HostEventEnvelope.trySessionId raw
                     |> Option.iter (fun sessionId ->
                         Surface.clearSessionState (SessionId.value sessionId)
-                        calibration?clearSession (SessionId.value sessionId) |> ignore
+                        scopeProgress?clear(SessionId.value sessionId) |> ignore
+                        scopeProgress?unbindSessionJournal(SessionId.value sessionId) |> ignore
+                        advisorProcessQueue?clear(SessionId.value sessionId) |> ignore
+                        calibration?clearSession(SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore)
 

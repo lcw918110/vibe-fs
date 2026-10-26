@@ -14,8 +14,9 @@ test('WHAT[interaction-authority-022] actual work decision preserves an establis
   execFileSync('git', ['init'], { cwd: directory })
   mkdirSync(join(directory, '.Herdchestra'), { recursive: true })
   const store = workspace.acquire(realpathSync(join(directory, '.Herdchestra')))
-  const opened = await lifecycle.seedOpen(store, 'plan', 'work-fixed', directory, 1n)
-  assert.equal(opened.ok, true)
+  const surface = lifecycle.LifecycleSurface ?? lifecycle
+  const opened = surface.submitReview(store.gitCommonDir, 'work-fixed', 'open-work-fixed', 'Plan', 'run', 'open', [{ key: 'need', value: 'bind' }], [], '')
+  assert.equal(opened.kind, 'Reviewed', opened.reason)
   const bound = await lifecycle.bindDevOps(store, 'work-fixed', 'devops:work-fixed', 'provider/fixed-model:high')
   assert.equal(bound.ok, true)
   const original = lifecycle.workDevOps(store, 'work-fixed')

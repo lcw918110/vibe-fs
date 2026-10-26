@@ -57,7 +57,7 @@ test('WHAT[work-024] the Plan devops member requires bound lifecycle work and ne
     const runPlan = async (body) =>
       String(
         await hooks.tool['todowrite-for-plan'].execute(
-          { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'devops-plan-' + (++programSequence), planB: 'Wait for this planning operation without renewing the request deadline.' },
+          { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'devops-plan-' + (++programSequence), intent: 'Wait for this planning operation without renewing the request deadline.', remainingScopeTurnsEstimate: 3 },
           { sessionID, agent: 'plan' },
         ),
       )
@@ -94,7 +94,8 @@ test('WHAT[work-024] an unreviewed tenure may read the draft but cannot write it
         return { ok: true, hasReviewOnly: typeof this.reviewOnly !== 'undefined' };
       }
     }`, name: 'read-draft',
-          planB: 'Read the current planning capability under the admitted deadline.'
+          intent: 'Read the current planning capability under the admitted deadline.',
+          remainingScopeTurnsEstimate: 3,
         },
       { sessionID, agent: 'plan', callID: 'call-work-024', messageID: 'run-work-024', providerRunID: 'run-work-024' },
     )
@@ -125,11 +126,14 @@ test('WHAT[work-024] a keyed review relays when cleared, and deliver is not the 
     assert.equal(advanced.kind, 'Advanced')
     assert.equal(advanced.milestone, '理解与路径')
 
-    const refused = surface.deliverProbe('unused', 'run-x', 'call-x', 10n, null)
-    assert.equal(refused.decision, 'Refuse')
-    assert.match(refused.detail, /review is the only entry/)
-    const late = surface.reopenProbe('unused', 'missing')
-    assert.equal(late.decision, 'Refuse')
+    assert.throws(
+      () => surface.execute(root, 'work-24b', 'deliver-x', { type: 'Deliver', providerRunId: 'run-x', toolCallId: 'call-x' }),
+      /Unknown work command/,
+    )
+    const late = surface.execute(root, 'work-24b', 'reopen-x', { type: 'OperatorMessage', kind: 'Operator', messageId: 'late' })
+    assert.equal(late.Status, 'Conflict')
+    assert.match(late.Reason, /after completion/)
+    assert.equal(surface.inspected(root, 'work-24b').Stage, '理解与路径')
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

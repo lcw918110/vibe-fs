@@ -1,7 +1,7 @@
 async call(command) {
     // Drain this program's earlier SDK operations, then start one shell command.
     // Blocks this program even without await. Both stages and every later call
-    // share the remaining time of the top-level planB window. Expiry does not kill the command.
+    // share the remaining time of the top-level intent window. Expiry does not kill the command.
     // Final result retains stdout/stderr, real exitCode or signal, bytes, durationMs,
     // explicit truncation and raw outputFiles. Delta does not consume it.
   }

@@ -111,6 +111,11 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
     let mutable revision = JournalRevision.create writer.LastCommittedLocalSeq
     // DSL-MUTABLE: resource — last journal change notification payload
     let mutable lastChange: JournalChange option = None
+    // crash-reconciliation-020: restart recovery (e.g. void settlement) must
+    // land before the next handoff reads this journal for identity judgment.
+    let mutable pendingRecovery: (unit -> Task) option = None
+    let mutable startedRecovery: Task option = None
+    let mutable previousRecovery: Task option = None
 
     let waiters =
         ResizeArray<JournalRevision * TaskCompletionSource<JournalChange option>>()
@@ -143,8 +148,44 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
     /// Projection and revision read under one lock so Join cannot observe a split.
     member this.SnapshotWithRevision: ProjectionSet * JournalRevision =
         lock gate (fun () -> this.Snapshot, revision)
+    /// Register one restart-recovery body without running it. The first
+    /// `RunOrAwaitRecovery` caller starts it; every caller awaits the same
+    /// work, so a handoff cannot race the recovery it must observe.
+    ///
+    /// A second registration (a new incarnation booting over the same journal)
+    /// is a new generation: it must run its own recovery even though the
+    /// previous generation already completed, and it runs only after that
+    /// previous generation settled.
+    member _.EnqueueRecovery(start: unit -> Task) : unit =
+        lock gate (fun () ->
+            previousRecovery <- startedRecovery
+            startedRecovery <- None
+            pendingRecovery <- Some start)
 
+    /// Trigger the enqueued recovery once (first caller) and await its
+    /// completion (all callers). No recovery registered is a no-op.
+    member _.RunOrAwaitRecovery() : Task =
+        task {
+            let work =
+                lock gate (fun () ->
+                    match startedRecovery, pendingRecovery with
+                    | Some started, _ -> started
+                    | None, Some start ->
+                        let started =
+                            task {
+                                match previousRecovery with
+                                | Some previous -> do! previous
+                                | None -> ()
 
+                                do! start ()
+                            }
+
+                        startedRecovery <- Some started
+                        started
+                    | None, None -> Task.FromResult())
+
+            do! work
+        }
 
     member _.AwaitChangeFromOrCancel
         (fromRevision: JournalRevision, cancellation: CancellationToken)

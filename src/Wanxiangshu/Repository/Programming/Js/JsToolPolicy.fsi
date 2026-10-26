@@ -31,7 +31,8 @@ module JsToolPolicy =
 
     val argProgramProse: unit -> string
 
-    val argPlanBProse: unit -> string
+    val argIntentProse: unit -> string
+    val argEstimateProse: unit -> string
 
     /// The localized prose of the refusal of a call that carries no state.
     val missingProgramProse: unit -> string

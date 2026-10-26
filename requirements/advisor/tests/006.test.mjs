@@ -4,56 +4,50 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { generate, generateRole } from '../../../dist/Repository/Programming/Js/GeneratorSurface.js'
-import { execute, caseName, render } from '../../../dist/Repository/Programming/Js/WorkflowSurface.js'
+import { execute, caseName } from '../../../dist/Repository/Programming/Js/WorkflowSurface.js'
 import { installDelegationHost, clearDelegationHost } from '../../../dist/Repository/Programming/Js/RuntimeSurface.js'
 
 const program = (body) => 'class Js extends JsProgram { async run() { ' + body + ' } }'
-const managerRun = (dir, body, sessionId) =>
-  execute(dir, 'Manager', 'en', sessionId, { name: 'advisor contract probe', program: program(body), planB: 'Observe the advisor receipt before the request window ends.' }, 3000, Date.now() + 60_000, 1 << 20, null)
 
-test('WHAT[advisor-006] advisor is capability-gated and documents the intent parameter', () => {
-  const surface = generateRole('manager', 'en')
-  assert.equal(surface.toolName, 'todowrite-for-manager')
-  assert.equal(surface.capabilities.includes('Advisor'), true)
-  assert.equal(surface.members.filter((member) => member.memberName === 'advisor').length, 1)
-  assert.match(surface.description, /advisor\(intent\)/)
-  assert.match(surface.baseClassSource, /async advisor\(intent\)/)
-  assert.match(surface.baseClassSource, /this\._api\.advisor\(intent\)/)
-  const withoutAdvisor = generate('Manager', ['Read'], 'en')
-  assert.equal(withoutAdvisor.members.some((member) => member.memberName === 'advisor'), false)
-  assert.doesNotMatch(withoutAdvisor.baseClassSource, /this\._api\.advisor/)
+test('WHAT[advisor-006] advisor is not a public JS member or capability', () => {
+  const manager = generateRole('manager', 'en')
+  assert.equal(manager.toolName, 'todowrite-for-manager')
+  assert.equal(manager.capabilities.includes('Advisor'), false)
+  assert.equal(manager.members.some((member) => member.memberName === 'advisor'), false)
+  assert.doesNotMatch(manager.description, /advisor\(intent\)/)
+  assert.doesNotMatch(manager.baseClassSource, /async advisor\(/)
+
+  const forged = generate('Manager', ['Read', 'Advisor'], 'en')
+  assert.equal(forged.members.some((member) => member.memberName === 'advisor'), false)
+  assert.doesNotMatch(forged.baseClassSource, /_api\.advisor/)
 })
 
-test('WHAT[advisor-006] advisor invocation forwards intent and returns ok and advice', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'wxs-advisor-intent-'))
-  const session = 'advisor-intent-member'
-  const observed = []
-  const unused = async () => { throw new Error('unrelated member called') }
+test('WHAT[advisor-006] obsolete advisor calls cannot invoke a delegation callback', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wxs-advisor-retired-'))
+  const session = 'advisor-retired-member'
+  let delegated = false
+  const forbidden = async () => { delegated = true; throw Error('an obsolete callback was invoked') }
   try {
-    installDelegationHost(session, unused, unused, unused, async (intent) => {
-      observed.push(intent)
-      return { ok: true, advice: 'ADVICE: keep the fence, ship behind a flag' }
-    })
-    const outcome = await managerRun(dir, 'return await this.advisor("review evidence");', session)
-    assert.equal(caseName(outcome), 'Succeeded')
-    assert.match(render(outcome), /advice = /)
-    assert.doesNotMatch(render(outcome), /\[\[session\]\]/, 'the consult return carries no session payload')
-    assert.deepEqual(observed, ['review evidence'])
+    installDelegationHost(session, forbidden, forbidden, forbidden)
+    const result = await execute(
+      dir,
+      'Manager',
+      'en',
+      session,
+      {
+        name: 'reject-retired-advisor',
+        program: program('return await this.advisor("review");'),
+        intent: 'Verify that obsolete advice cannot be requested through the programming surface.',
+      },
+      3000,
+      Date.now() + 60_000,
+      1 << 20,
+      null,
+    )
+    assert.equal(caseName(result), 'Failed')
+    assert.equal(delegated, false)
   } finally {
     clearDelegationHost(session)
     rmSync(dir, { recursive: true, force: true })
   }
 })
-
-test('WHAT[advisor-006] absent host returns DELEGATION_UNAVAILABLE', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'wxs-advisor-nohost-'))
-  try {
-    clearDelegationHost('advisor-nohost')
-    const outcome = await managerRun(dir, 'return await this.advisor("review");', 'advisor-nohost')
-    assert.equal(caseName(outcome), 'Succeeded')
-    assert.match(render(outcome), /code = "DELEGATION_UNAVAILABLE"/)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-

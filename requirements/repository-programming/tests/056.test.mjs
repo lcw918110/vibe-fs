@@ -29,7 +29,7 @@ ${body}
 let nextProgram = 0
 const WAIT = 'Wait for this delegated operation and preserve its original outcome if the shared deadline expires.'
 const runProgram = (dir, body, sessionId) =>
-  execute(dir, 'Manager', 'en', sessionId, { name: 'delegation-' + (++nextProgram), program: program(body), planB: WAIT }, 3000, Date.now() + 60_000, 1 << 20, null)
+  execute(dir, 'Manager', 'en', sessionId, { name: 'delegation-' + (++nextProgram), program: program(body), intent: WAIT }, 3000, Date.now() + 60_000, 1 << 20, null)
 
 // The host receives structured delegation messages; join is a separate tool.
 const fakeHost = () => {
@@ -94,7 +94,7 @@ test('WHAT[repository-programming-056] delegation members return data envelopes,
       `${sessionId}-fission`,
       {
         name: 'fission-envelope',
-        planB: WAIT,
+        intent: WAIT,
         program: program(
           `    return await this.fission({ charge: "explore three designs", lanes: 2 });`,
         ),
@@ -174,7 +174,7 @@ test('WHAT[repository-programming-056] fork requires the Fork capability and dag
       'Engineer',
       'en',
       sessionId,
-      { name: 'fork-capability', planB: WAIT, program: program(`    return { allowFork: typeof this.fork, allowDag: typeof this.dag };`) },
+      { name: 'fork-capability', intent: WAIT, program: program(`    return { allowFork: typeof this.fork, allowDag: typeof this.dag };`) },
       3000,
       Date.now() + 60_000,
       1 << 20,

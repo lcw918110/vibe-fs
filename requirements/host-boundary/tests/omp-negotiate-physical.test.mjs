@@ -38,6 +38,24 @@ async function runCanary() {
   await testBody();
 }
 
+// TCP chunks can split one multibyte character; Buffer-to-string per chunk
+// replaces valid source UTF-8 with U+FFFD and falsifies exact-prefix canaries.
+async function decodeUtf8Chunks(chunks) {
+  const decoder = new TextDecoder('utf-8', { fatal: true })
+  let text = ''
+  for await (const chunk of chunks) text += decoder.decode(chunk, { stream: true })
+  return text + decoder.decode()
+}
+
+test('WHAT[delegation-034] the SSE receiver preserves UTF-8 code points split between network chunks', async () => {
+  const original = 'A'.repeat(83000) + '到得早不等于地位尊；' + 'B'.repeat(1000)
+  const bytes = Buffer.from(original, 'utf8')
+  const boundary = Buffer.byteLength('A'.repeat(83000) + '到', 'utf8')
+  for (const split of [boundary + 1, boundary + 2]) {
+    assert.equal(await decodeUtf8Chunks([bytes.subarray(0, split), bytes.subarray(split)]), original)
+  }
+})
+
 async function testBody() {
   // Public SDK import root resolution (portable, configurable via env var)
   const sdkRoot =
@@ -64,8 +82,7 @@ async function testBody() {
   let requestCounter = 0
   const EXPECTED_ANSWER = 'RFC-7807 problem details with traceId required.'
   const server = http.createServer(async (req, res) => {
-    let bodyText = ''
-    for await (const chunk of req) bodyText += chunk
+    const bodyText = await decodeUtf8Chunks(req)
     const body = bodyText ? JSON.parse(bodyText) : {}
     const msgs = body.messages || []
     const hasTools = Array.isArray(body.tools) && body.tools.length > 0
@@ -89,7 +106,7 @@ async function testBody() {
       return text.includes('format error responses')
     })
 
-    const priorScope = msgs.some((m) => JSON.stringify(m.content).includes('wanxiangshu-prior:'))
+    const priorScope = msgs.some((m) => JSON.stringify(m.content).includes('What was the old rule about traceId?'))
     const replyText = priorScope ? 'ROOT_OLD_SCOPE_ANSWER: errors must carry traceId.' : isEphemeral ? EXPECTED_ANSWER : 'MAIN_PROMPT_INITIALIZED'
 
     const chunk = {
@@ -126,7 +143,6 @@ async function testBody() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const port = server.address().port
   const baseUrl = `http://127.0.0.1:${port}/v1`
-
   // 2. Prepare isolated temporary git repository
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omp-smoke-canary-'))
   execSync('git init -b main && git config user.name "Canary Tester" && git config user.email "canary@test.local"', {
@@ -169,10 +185,12 @@ async function testBody() {
     // Capture host ports when plugin activates
     let capturedPorts = null
     let realProviderContext = null
+    let currentProviderHook = null
+    let activationFailure = null
     const origActivate = plugin.Activate.bind(plugin)
     plugin.Activate = (ports) => {
       capturedPorts = ports
-      return origActivate(ports)
+      return Promise.resolve(origActivate(ports)).catch(error => { activationFailure = String(error); throw error })
     }
 
     const registeredTools = new Map()
@@ -197,7 +215,7 @@ async function testBody() {
 
       const originalOn = pi.on.bind(pi)
       pi.on = (eventName, handler) => originalOn(eventName, (event, ctx) => {
-        if (eventName === 'before_provider_request') realProviderContext = ctx
+        if (eventName === 'before_provider_request') { realProviderContext = ctx; currentProviderHook = handler }
         return handler(event, ctx)
       })
 
@@ -243,7 +261,7 @@ async function testBody() {
     // Same real OMP provider hook: archive this root session's actual request,
     // run a native side turn with its frozen prefix, and observe the outgoing
     // provider request on the local SSE server.
-    assert.ok(realProviderContext, 'OMP must expose its real provider request context')
+    assert.ok(realProviderContext, `OMP must expose the registered provider request hook; Host activation failure: ${activationFailure ?? 'none observed'}`)
     assert.equal(typeof realProviderContext.runEphemeralTurn, 'function')
     const historicalPayload = requestsSeen.at(-1)
     const rootReset = registeredTools.get('resetScope')
@@ -252,23 +270,32 @@ async function testBody() {
     const rootId = parentSession.sessionManager.getSessionId()
     const archived = await rootReset.execute(
       'actual-root-reset-previous',
-      {newScopeObjective:'Clarify old historical rules',newScopeTurnBudget:7,
-       kpiCompletion:'met',oldScopeVerboseVerbatimExperience:DELEGATOR_CONTEXT_RULE},
+      {newScopeObjective:'Clarify old historical rules',oldScopeVerboseVerbatimExperience:DELEGATOR_CONTEXT_RULE},
       null,null,realProviderContext,
     )
     assert.equal(archived.details?.archived,true,JSON.stringify(archived))
+    // This reset was invoked as an actual registered tool, not emitted by the fake SSE model.
+    // Feed the next real SDK-registered provider hook a legal conversation boundary
+    // before the short-lived old-Scope consultation is dispatched.
+    assert.equal(typeof currentProviderHook,'function')
+    const postResetPayload={...structuredClone(historicalPayload),messages:[
+      ...structuredClone(historicalPayload.messages),
+      {role:'assistant',content:[{type:'toolCall',id:'actual-root-reset-previous',name:'resetScope',args:{newScopeObjective:'Clarify old historical rules'}}]},
+      {role:'user',content:'PRIVATE_NEW_SCOPE_CANARY_112358'},
+    ]}
+    await currentProviderHook({payload:postResetPayload},realProviderContext)
     const askedPrior = await rootPrior.execute('actual-root-prior-001',
       {questions:'What was the old rule about traceId?'},null,null,realProviderContext)
     assert.match(askedPrior.content?.[0]?.text??'',/readonly old-model turn was scheduled/)
     const nativeLimit = Date.now()+8000
     const hasPriorRequest=()=>requestsSeen.some(req=>req.messages?.some(msg=>{
       const content=typeof msg.content==='string'?msg.content:JSON.stringify(msg.content)
-      return content.includes('wanxiangshu-prior:')
+      return content.includes('What was the old rule about traceId?')
     }))
     while(!hasPriorRequest()&&Date.now()<nativeLimit)await new Promise(r=>setTimeout(r,20))
     assert.ok(hasPriorRequest(),'the old Scope request physically reached the local SSE provider')
     const priorWire=requestsSeen.find(req=>req.messages?.some(msg=>
-      (typeof msg.content==='string'?msg.content:JSON.stringify(msg.content)).includes('wanxiangshu-prior:')))
+      (typeof msg.content==='string'?msg.content:JSON.stringify(msg.content)).includes('What was the old rule about traceId?')))
     assert.deepEqual(priorWire.messages.slice(0,-1), historicalPayload.messages,
       'the original physical user/system/assistant prefix is replayed exactly')
     assert.deepEqual(priorWire.tools,historicalPayload.tools,
@@ -291,7 +318,7 @@ async function testBody() {
       {questions:'What was the old rule about traceId?'},null,null,realProviderContext)
     assert.match(priorReplay.content?.[0]?.text??'',/already accepted/)
     assert.equal(requestsSeen.filter(req=>req.messages?.some(msg=>
-      (typeof msg.content==='string'?msg.content:JSON.stringify(msg.content)).includes('wanxiangshu-prior:'))).length,1,
+      (typeof msg.content==='string'?msg.content:JSON.stringify(msg.content)).includes('What was the old rule about traceId?'))).length,1,
       'replayed toolCallId cannot send a second provider request')
 
     // 4. Create child session through actual ports.Sessions.Create path
@@ -459,14 +486,13 @@ async function testBody() {
         i: 'Transition to implementation',
         oldScopeVerboseVerbatimExperience: 'Exploration completed successfully',
         newScopeObjective: 'Implement verified change',
-        newScopeTurnBudget: 15,
-        kpiCompletion: 'met',
       },
       null,
       null,
       childCtx,
     )
-    assert.equal(admittedResetResult.details?.turnBudget, 15, JSON.stringify(admittedResetResult))
+    assert.equal(admittedResetResult.details?.archived, true, JSON.stringify(admittedResetResult))
+    assert.equal(admittedResetResult.details?.turnBudget,undefined,'reset no longer initializes a fixed countdown')
     assert.equal(admittedResetResult.details?.objective, 'Implement verified change', 'resetScope sets newScopeObjective')
     assert.equal(admittedResetResult.details?.archived, true, 'resetScope archives previous experience')
     assert.ok(admittedResetResult.content?.[0]?.text?.includes('Scope reset. Objective: Implement verified change'), 'content confirms scope reset')

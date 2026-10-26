@@ -23,6 +23,7 @@ module JsToolSpec =
         fileAccessObservation: (HostToolContext -> JsExplicitFileRead list -> string list -> Task<unit>) option ->
         rootOf: (string -> string) ->
         settlementOf: (HostToolContext -> Task<DeliverySettlement option>) ->
+        epochOf: (HostToolContext -> string) ->
             ToolSpec
 
     val createWithReviewCheck:
@@ -35,6 +36,7 @@ module JsToolSpec =
         fileAccessObservation: (HostToolContext -> JsExplicitFileRead list -> string list -> Task<unit>) option ->
         rootOf: (string -> string) ->
         settlementOf: (HostToolContext -> Task<DeliverySettlement option>) ->
+        epochOf: (HostToolContext -> string) ->
             ToolSpec
 
     val createWithPlanWriteCheck:
@@ -47,4 +49,5 @@ module JsToolSpec =
         fileAccessObservation: (HostToolContext -> JsExplicitFileRead list -> string list -> Task<unit>) option ->
         rootOf: (string -> string) ->
         settlementOf: (HostToolContext -> Task<DeliverySettlement option>) ->
+        epochOf: (HostToolContext -> string) ->
             ToolSpec

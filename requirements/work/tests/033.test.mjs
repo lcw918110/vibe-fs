@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import test from 'node:test'
 import { SqliteJournal } from 'wanxiangli/eventstore'
 import { DurableWork } from 'wanxiangli/durable-work'
 import { Work } from 'wanxiangli/work'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
-import * as planning from '../../../dist/Mission/Planning/Surface.js'
 import * as workspace from '../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js'
 import * as journalSurface from '../../../dist/Persistence/Journal/Surface.js'
 import * as eventStore from '../../../dist/Persistence/EventStore/Surface.js'
@@ -19,10 +18,21 @@ import { acceptAuthorityRoot, withExecutablePlugin } from '../../verification-sy
 
 const surface = lifecycle.LifecycleSurface ?? lifecycle
 
-const framesOf = (text) => text.split('\n').filter((line) => line.length > 0).map((line) => JSON.parse(line))
-const eventsOf = (text) => framesOf(text).flatMap((frame) => frame.events ?? [])
-const incumbencyIdOf = (text) => [...eventsOf(text)].reverse().find((event) => event.type === 'IncumbencyOpened').incumbencyId
 const sorted = (keys) => [...keys].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+const canonical = (value) => {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+const reviewCommand = (updates, toolCallId = 'call-1') => ({
+  type: 'Review',
+  office: 'Plan',
+  providerRunId: 'run',
+  toolCallId,
+  updates,
+})
 
 // 交付见证的观察口：已注册的 EventStore Surface 把 durable 事实读成普通 JSON
 // （payload.Fact = ["Agent", [family, [case, payload]]]），不构造任何 F# union。
@@ -67,23 +77,32 @@ const withStore = async (body) => {
 }
 
 test('WHAT[work-033] one projection uses one record snapshot even when another connection commits between reads', async () => {
-  await withStore(async (store, root) => {
+  await withStore(async (store) => {
     const workId = 'snapshot-race'
     const journal = new SqliteJournal(new DatabaseSync(surface.journalPath(store.gitCommonDir)))
     const originalPrepare = DatabaseSync.prototype.prepare
     try {
       const work = new DurableWork(workId, journal)
-      const opened = work.execute('open', {
-        type: 'Open', root, sequence: ['S1', 'S2', 'S3'], ownerId: workId, openingCursor: 0,
+      const opened = work.execute('review-open', {
+        type: 'Review',
+        office: 'Plan',
+        providerRunId: 'run-open',
+        toolCallId: 'call-open',
+        updates: [{ key: 'need', value: 'stay' }],
       })
       assert.equal(opened.status, 'Committed')
+      assert.equal(opened.result.kind, 'Reviewed')
       const initialId = opened.result.incumbencyId
       const candidate = new Work(workId, journal.read(workId))
       const relay = candidate.execute('relay', {
-        type: 'Deliver', incumbencyId: initialId, providerRunId: 'run', toolCallId: 'call',
-        cursor: 1, blockers: [], nextOwnerId: workId,
+        type: 'Review',
+        office: 'Plan',
+        providerRunId: 'run',
+        toolCallId: 'relay',
+        updates: [{ key: 'need', value: null }],
       })
       assert.equal(relay.status, 'Applied')
+      assert.equal(relay.result.kind, 'Relayed')
       let interleaved = false
       DatabaseSync.prototype.prepare = function (sql) {
         const statement = originalPrepare.call(this, sql)
@@ -114,192 +133,167 @@ test('WHAT[work-033] one projection uses one record snapshot even when another c
 })
 
 test('WHAT[work-033] the fixed DevOps identity and model target remain separate projection fields', async () => {
-  await withStore(async (store, root) => {
-    const opened = surface.execute(store.gitCommonDir, 'devops-target', 'open', {
-      type: 'Open', root, sequence: ['S4'], ownerId: 'manager', openingCursor: 0,
+  await withStore(async (store) => {
+    const reviewed = surface.submitReview(
+      store.gitCommonDir,
+      'devops-target',
+      'review-1',
+      'Manager',
+      'run-1',
+      'call-1',
+      [{ key: 'job', value: 'do' }],
+      null,
+      '',
+    )
+    assert.equal(reviewed.status, 'Committed', reviewed.reason)
+    assert.equal(reviewed.kind, 'Reviewed')
+    const command = {
+      type: 'BindDevOps',
+      trigger: 'Horizon',
+      devopsId: 'devops-identity',
+      target: 'provider/fixed-model',
+    }
+    const bound = surface.execute(store.gitCommonDir, 'devops-target', 'bind', command)
+    assert.equal(bound.Status, 'Committed', bound.Reason)
+    assert.equal(bound.Kind, 'DevOpsBound')
+    const again = surface.execute(store.gitCommonDir, 'devops-target', 'bind-again', command)
+    assert.equal(again.Status, 'Observed')
+    assert.equal(again.Kind, 'DevOpsBound')
+    const conflict = surface.execute(store.gitCommonDir, 'devops-target', 'bind-other', {
+      ...command,
+      target: 'provider/other',
     })
-    assert.equal(opened.Status, 'Committed')
-    const bound = surface.execute(store.gitCommonDir, 'devops-target', 'bind', {
-      type: 'BindDevOps', incumbencyId: opened.Result.incumbencyId, trigger: 'Horizon',
-      devopsId: 'devops-identity', target: 'provider/fixed-model',
-    })
-    assert.equal(bound.Status, 'Committed')
+    assert.equal(conflict.Status, 'Conflict')
+    assert.equal(conflict.Reason, 'DevOps binding conflict')
     const observed = surface.inspected(store.gitCommonDir, 'devops-target')
     assert.equal(observed.DevOpsId, 'devops-identity')
     assert.equal(observed.DevOpsTarget, 'provider/fixed-model')
+    assert.equal(Array.from(observed.Sequence ?? []).join(','), '')
   })
 })
 
 test('WHAT[work-033] lifecycle payload keys are ordered by Unicode code point', () => {
-  const opened = surface.encodeOpening('plan', 'work-1', '/repo/root', 42n)
-  const [workOpened, incumbencyOpened] = eventsOf(opened)
-  assert.deepEqual(Object.keys(workOpened), sorted(Object.keys(workOpened)))
-  assert.deepEqual(Object.keys(workOpened), ['authorityInitial', 'root', 'sequence', 'type', 'workId'])
-  assert.deepEqual(Object.keys(incumbencyOpened), ['incumbencyId', 'openingCursor', 'ownerId', 'stage', 'type', 'workId'])
-  assert.equal(incumbencyOpened.openingCursor, 42)
-
-  const reviewed = surface.reviewProbe(opened, incumbencyIdOf(opened), 'Promoted')
-  const review = eventsOf(reviewed.bytes)[0]
-  assert.deepEqual(Object.keys(review), sorted(Object.keys(review)))
-  assert.deepEqual(Object.keys(review), ['incumbencyId', 'outcome', 'stage', 'type', 'updates'])
-
-  const relayed = surface.deliverProbe(`${opened}${reviewed.bytes}`, 'run-1', 'call-1', 100n)
-  const [retired, successor] = eventsOf(relayed.bytes)
-  assert.deepEqual(Object.keys(retired), sorted(Object.keys(retired)))
-  assert.equal(retired.outcome, 'Relayed')
-  assert.equal(retired.retirementCursor, 100)
-  assert.ok(Object.keys(retired).includes('incumbencyId'))
-  assert.ok(Object.keys(retired).includes('retirementId'))
-  assert.deepEqual(Object.keys(successor), ['incumbencyId', 'openingCursor', 'ownerId', 'stage', 'type', 'workId'])
-
-  const authorized = surface.finalPromotionProbe(opened)
-  assert.equal(authorized.authorized, true)
-
-  const full = (() => {
-    let text = opened
-    for (let step = 0; step < 2; step += 1) {
-      const reviewStep = surface.reviewProbe(text, incumbencyIdOf(text), 'Promoted')
-      const relayStep = surface.deliverProbe(`${text}${reviewStep.bytes}`, `run-${step}`, `call-${step}`, 43n + BigInt(step))
-      text = `${text}${reviewStep.bytes}${relayStep.bytes}`
-    }
-    const last = surface.reviewProbe(text, incumbencyIdOf(text), 'Promoted')
-    const auth = surface.deliverProbe(`${text}${last.bytes}`, 'run-auth', 'call-auth', 49n)
-    text = `${text}${last.bytes}${auth.bytes}`
-    const planRoot = mkdtempSync(join(tmpdir(), 'wxs-work-033-keys-'))
-    let receipt
-    try {
-      const planPath = planning.PlanningSurface.resolvePlanPath(planRoot, 'work-1')
-      assert.equal(planPath.ok, true, planPath.error)
-      mkdirSync(dirname(planPath.path), { recursive: true })
-      writeFileSync(planPath.path, '# plan\n')
-      const selected = planning.PlanningSurface.readAndValidatePlan(planRoot, 'work-1')
-      assert.equal(selected.ok, true, selected.error)
-      receipt = surface.deliverStateProbe(text, 'run-final', 'call-final', 50n, { digest: selected.digest, path: selected.path })
-    } finally {
-      rmSync(planRoot, { recursive: true, force: true })
-    }
-    const reopened = surface.reopenProbe(`${text}${receipt.bytes}`, incumbencyIdOf(text))
-    return { receipt, reopened }
-  })()
-  const receipt = eventsOf(full.receipt.bytes).find((event) => event.type === 'IncumbencyRetired')
-  for (const key of ['digest', 'execSessionId', 'incumbencyId', 'outcome', 'path', 'retirementCursor']) {
-    assert.equal(Object.keys(receipt).includes(key), true, key)
+  const work = new Work('work-1')
+  const reviewed = work.execute('r1', reviewCommand([{ key: 'need', value: '范围' }], 'r1'))
+  assert.equal(reviewed.status, 'Applied', reviewed.reason)
+  const record = work.records()[0]
+  const frame = JSON.parse(record)
+  assert.deepEqual(Object.keys(frame), sorted(Object.keys(frame)))
+  assert.equal(record, canonical(frame))
+  for (const event of frame.events) {
+    assert.deepEqual(Object.keys(event), sorted(Object.keys(event)))
+    assert.equal(Object.hasOwn(event, 'openingCursor'), false)
   }
-  const reopened = eventsOf(full.reopened.bytes).find((event) => event.type === 'Reopened')
-  assert.deepEqual(Object.keys(reopened), sorted(Object.keys(reopened)))
-  assert.deepEqual(Object.keys(reopened), ['retirementId', 'type'])
+  const [workOpened, incumbencyOpened, reviewedEvent] = frame.events
+  assert.deepEqual(Object.keys(workOpened), ['office', 'type', 'workId'])
+  assert.deepEqual(Object.keys(incumbencyOpened), ['incumbencyId', 'messageId', 'milestone', 'origin', 'type'])
+  assert.equal(incumbencyOpened.milestone, '事实与取舍')
+  assert.deepEqual(Object.keys(reviewedEvent), ['incumbencyId', 'providerRunId', 'toolCallId', 'type', 'updates'])
+
+  const relayed = work.execute('r2', reviewCommand([{ key: 'need', value: null }], 'r2'))
+  assert.equal(relayed.result.kind, 'Relayed')
+  const relayFrame = JSON.parse(work.records().at(-1))
+  assert.equal(work.records().at(-1), canonical(relayFrame))
+  for (const event of relayFrame.events) {
+    assert.deepEqual(Object.keys(event), sorted(Object.keys(event)))
+    assert.equal(Object.hasOwn(event, 'openingCursor'), false)
+  }
+  const retired = relayFrame.events.find((event) => event.type === 'IncumbencyRetired')
+  assert.equal(retired.outcome, 'Relayed')
+  assert.deepEqual(Object.keys(retired), ['incumbencyId', 'outcome', 'providerRunId', 'retirementId', 'toolCallId', 'type', 'updates'])
+
+  const before = work.records()
+  assert.throws(
+    () => work.execute('bad', { ...reviewCommand([], 'bad'), snapshotId: 's' }),
+    /Unknown field: snapshotId/,
+  )
+  assert.deepEqual(work.records(), before)
 })
 
-test('WHAT[work-033] canonical lines round-trip and keep int64 cursor precision', () => {
-  const precise = 9007199254740991n
-  const opened = surface.encodeOpening('plan', 'work-1', '/repo/root', precise)
-  assert.equal(opened.endsWith('\n'), true, 'a canonical lifecycle line ends with LF')
-  const decoded = surface.decodeDocument(opened)
-  assert.equal(decoded.ok, true, decoded.fault)
-  assert.equal(decoded.names, 'WorkOpened,IncumbencyOpened')
-  const openedEvent = eventsOf(opened)[1]
-  assert.equal(openedEvent.openingCursor, Number(precise))
-  assert.equal(BigInt(openedEvent.openingCursor), precise)
-  assert.equal(surface.documentView(opened).openingCursor, Number(precise))
+test('WHAT[work-033] canonical records round-trip and a non-canonical line is refused', () => {
+  const work = new Work('work-1')
+  work.execute('r1', reviewCommand([{ key: 'need', value: 'keep' }], 'r1'))
+  const body = work.records()[0]
+  assert.equal(body.endsWith('\n'), false, 'a canonical lifecycle record has no trailing newline')
+  const restored = new Work('work-1', [body])
+  assert.equal(restored.inspect().milestone, '事实与取舍')
+  assert.deepEqual(restored.history()[0].events.map((event) => event.type), ['WorkOpened', 'IncumbencyOpened', 'Reviewed'])
+  assert.throws(() => new Work('work-1c', [`${body}\n`]), /canonical/)
 
-  const outside = surface.encodeOpening('plan', 'work-1', '/repo/root', precise + 4n)
-  assert.equal(outside.startsWith('REFUSE'), true, 'a cursor outside the safe range is refused, not rounded')
-  assert.equal(outside.endsWith('\n'), false)
+  const unknown = JSON.parse(body)
+  unknown.events[2].type = 'StageOpened'
+  assert.throws(() => new Work('work-1d', [canonical(unknown)]), /Unknown lifecycle event/)
 
-  const truncated = opened.replace(/\n$/, '')
-  assert.equal(truncated.endsWith('\n'), false)
+  const relayed = work.execute('r2', reviewCommand([{ key: 'need', value: null }], 'r2'))
+  assert.equal(relayed.result.kind, 'Relayed')
+  const retirement = JSON.parse(work.records().at(-1))
+  const retired = retirement.events.find((event) => event.type === 'IncumbencyRetired')
+  assert.throws(
+    () => new Work('work-1f', [canonical({ ...retirement, events: [retired] })]),
+    /Illegal lifecycle transaction/,
+  )
+  retired.outcome = 'Delivered'
+  assert.throws(() => new Work('work-1e', [canonical(retirement)]), /Unknown value: Delivered/)
 })
 
 test('WHAT[work-033] real bytes fold through the codec and the live store', async () => {
-  const opened = surface.encodeOpening('plan', 'work-demo', '/workspace', 0n)
-  let text = opened
-  for (let step = 0; step < 2; step += 1) {
-    const reviewed = surface.reviewProbe(text, incumbencyIdOf(text), 'Promoted')
-    const relayed = surface.deliverProbe(`${text}${reviewed.bytes}`, `run-${step}`, `call-${step}`, BigInt((step + 1) * 10))
-    text = `${text}${reviewed.bytes}${relayed.bytes}`
-  }
-  const reviewed = surface.reviewProbe(text, incumbencyIdOf(text), 'Promoted')
-  const authorized = surface.deliverProbe(`${text}${reviewed.bytes}`, 'run-auth', 'call-auth', 25n)
-  text = `${text}${reviewed.bytes}${authorized.bytes}`
-  const planRoot = mkdtempSync(join(tmpdir(), 'wxs-work-033-plan-'))
-  let delivered
-  let selected
-  try {
-    const planPath = planning.PlanningSurface.resolvePlanPath(planRoot, 'work-demo')
-    assert.equal(planPath.ok, true, planPath.error)
-    mkdirSync(dirname(planPath.path), { recursive: true })
-    writeFileSync(planPath.path, '# plan\n')
-    selected = planning.PlanningSurface.readAndValidatePlan(planRoot, 'work-demo')
-    assert.equal(selected.ok, true, selected.error)
-    delivered = surface.deliverStateProbe(text, 'run-demo', 'call-demo', 30n, { digest: selected.digest, path: selected.path })
-    assert.equal(delivered.decision, 'Write', delivered.detail)
-  } finally {
-    rmSync(planRoot, { recursive: true, force: true })
-  }
-  text = `${text}${delivered.bytes}`
-  assert.equal(surface.documentView(text).digest, selected.digest)
-
-  const folded = surface.readProbe(text)
-  assert.equal(folded.ok, true)
-  assert.equal(folded.next, 'Done')
-  assert.equal(folded.activeId, '')
-  const view = surface.documentView(text)
-  assert.equal(view.found, true)
-  assert.equal(view.workId, 'work-demo')
-  assert.equal(view.retiredCount, 3)
-  assert.equal(view.delivered, true)
-  assert.equal(view.digest.length, 64)
-  assert.equal(view.projection, 'S3')
+  const work = new Work('work-demo')
+  const reviewed = work.execute('r1', reviewCommand([{ key: 'need', value: '范围' }], 'call-1'))
+  assert.equal(reviewed.result.kind, 'Reviewed')
+  const folded = new Work('work-demo', work.records())
+  assert.equal(folded.inspect().office, 'Plan')
+  assert.equal(folded.inspect().milestone, '事实与取舍')
+  assert.equal(folded.history().flatMap((frame) => frame.events).some((event) => event.type === 'IncumbencyRetired'), false)
 
   await withStore(async (store) => {
-    const seeded = await surface.seedOpen(store, 'plan', 'work-demo', '/workspace', 0n)
-    assert.equal(seeded.ok, true, seeded.error)
-    const bound = await surface.bindDevOps(store, 'work-demo', 'devops-fixed', null)
+    const recorded = surface.submitReview(
+      store.gitCommonDir,
+      'work-demo',
+      'r1',
+      'Plan',
+      'run',
+      'call-1',
+      [{ key: 'need', value: '范围' }],
+      null,
+      '',
+    )
+    assert.equal(recorded.status, 'Committed', recorded.reason)
+    assert.equal(recorded.kind, 'Reviewed')
+    assert.equal(recorded.milestone, '事实与取舍')
+    const bound = await surface.bindDevOps(store, 'work-demo', 'devops-fixed', 'provider/fixed-model')
     assert.equal(bound.ok, true, bound.error)
-    for (let step = 0; step < 2; step += 1) {
-      const review = await surface.seedReview(store, 'work-demo', 'Promoted')
-      assert.equal(review.ok, true, review.error)
-      const relay = await surface.seedDeliver(store, 'work-demo', `run-${step}`, `call-${step}`, BigInt((step + 1) * 10))
-      assert.equal(relay.ok, true, relay.error)
-      assert.equal(relay.decision, 'Promoted')
-    }
-    const last = await surface.seedReview(store, 'work-demo', 'Promoted')
-    assert.equal(last.ok, true, last.error)
-    const auth = await surface.seedDeliver(store, 'work-demo', 'run-auth', 'call-auth', 25n)
-    assert.equal(auth.ok, true, auth.error)
-    assert.equal(auth.decision, 'Authorized')
-    const blocked = await surface.seedDeliver(store, 'work-demo', 'run-demo', 'call-demo', 30n)
-    assert.equal(blocked.ok, false, 'an authorized tenure does not deliver without a draft and a session')
-    assert.match(blocked.error, /draft|session/i)
     const stored = surface.workView(store, 'work-demo')
     assert.equal(stored.found, true)
-    assert.equal(stored.sequence, 'S1,S2,S3')
+    assert.equal(stored.sequence, '')
     assert.equal(stored.active, true)
-    assert.equal(stored.reviewed, 'Promoted')
-    assert.equal(stored.delivered, false, 'the refused deliver writes no retirement')
+    assert.equal(stored.delivered, false)
     assert.equal(surface.workDevOps(store, 'work-demo').devopsId, 'devops-fixed')
+    const inspected = surface.inspected(store.gitCommonDir, 'work-demo')
+    assert.equal(Array.from(inspected.Sequence ?? []).join(','), '')
+    assert.equal(inspected.Stage, '事实与取舍')
+    assert.equal(inspected.DevOpsId, 'devops-fixed')
+    assert.equal(inspected.DevOpsTarget, 'provider/fixed-model')
   })
 })
 
-test('WHAT[work-033] an illegal first stage is rejected by the fold before any live append', async () => {
-  const opened = surface.encodeOpening('plan', 'work-mock', '/repo', 0n)
-  const illegal = opened.replace('"stage":"S1"', '"stage":"S2"')
-  const read = surface.readProbe(illegal)
-  assert.equal(read.ok, false, 'the first incumbency must open at S1')
-  assert.equal(read.opened, false)
-  assert.equal(read.names, '')
-  assert.match(read.reason, /Invalid first stage/)
+test('WHAT[work-033] an unknown field is rejected by the fold before any live append', async () => {
+  const work = new Work('work-mock')
+  const reviewed = work.execute('r1', reviewCommand([{ key: 'need', value: 'keep' }], 'r1'))
+  assert.equal(reviewed.status, 'Applied')
+  const frame = JSON.parse(work.records()[0])
+  frame.events[1].snapshotId = 'extra'
+  assert.throws(() => new Work('work-mock', [canonical(frame)]), /Unknown field: snapshotId/)
+  assert.equal(work.records().length, 1)
 
   await withStore(async (store) => {
-    const seeded = await surface.seedOpen(store, 'plan', 'work-mock', '/repo', 0n)
-    assert.equal(seeded.ok, true, seeded.error)
+    assert.throws(
+      () => surface.execute(store.gitCommonDir, 'work-mock', 'bad', { ...reviewCommand([], 'bad'), snapshotId: 's' }),
+      /Unknown field: snapshotId/,
+    )
     const database = new DatabaseSync(surface.journalPath(store.gitCommonDir))
     const journal = new SqliteJournal(database)
     try {
-      const appended = journal.read('work-mock')
-      assert.equal(appended.length, 1)
-      const events = JSON.parse(appended[0]).events
-      assert.equal(events[1].stage, 'S1', 'the kernel does not append an S2 opening')
+      assert.equal(journal.read('work-mock').length, 0, 'an unknown field writes nothing')
     } finally {
       journal.close()
     }
@@ -347,7 +341,7 @@ test('WHAT[work-033] Engineer and DevOps natural stop completes cleanly without 
 
       const program = 'class Js extends JsProgram { async run() { return 1; } }'
       const executed = await hooks.tool[`todowrite-for-${name}`].execute(
-        { name: `program-${run}`, program, planB: 'Observe this program result without treating it as a business delivery.' },
+        { name: `program-${run}`, program, intent: 'Observe this program result without treating it as a business delivery.', remainingScopeTurnsEstimate: 3 },
           { sessionID: session, agent: name, callID: `call-${session}`, messageID: run },
         )
       assert.match(String(executed), /# ok/)
@@ -361,21 +355,27 @@ test('WHAT[work-033] a same-request replay is idempotent and a different payload
     const journal = new SqliteJournal(database)
     try {
       const durable = new DurableWork('work-replay', journal)
-      const command = (root) => ({ type: 'Open', root, sequence: ['S1', 'S2', 'S3'], ownerId: 'owner', openingCursor: 0 })
+      const command = (value) => reviewCommand([{ key: 'need', value }], 'call-replay')
 
-      const first = durable.execute('open:work-replay', command('/workspace'))
+      const first = durable.execute('review:work-replay', command('one'))
       assert.equal(first.status, 'Committed')
+      assert.equal(first.result.kind, 'Reviewed')
       assert.equal(journal.read('work-replay').length, 1)
 
-      const replay = durable.execute('open:work-replay', command('/workspace'))
+      const replay = durable.execute('review:work-replay', command('one'))
       assert.equal(replay.status, 'Replayed', 'the same request id and payload replays the original receipt')
       assert.equal(journal.read('work-replay').length, 1, 'a replay appends nothing')
 
-      const conflict = durable.execute('open:work-replay', command('/other-workspace'))
+      const conflict = durable.execute('review:work-replay', command('two'))
       assert.equal(conflict.status, 'Conflict', 'a different payload under the same request id is a structured conflict, not a thrown failure')
       assert.equal(conflict.reason, 'RequestIdConflict')
       assert.equal(journal.read('work-replay').length, 1, 'a conflict appends nothing')
       assert.equal(durable.inspect().revision, 1, 'a conflict leaves the revision unchanged')
+      const before = journal.read('work-replay')
+      assert.throws(() => durable.execute('open:work-replay', { type: 'Open' }), /Unknown work command/)
+      assert.throws(() => durable.execute('deliver:work-replay', { type: 'Deliver' }), /Unknown work command/)
+      assert.throws(() => durable.execute('advance:work-replay', { type: 'Advance' }), /Unknown work command/)
+      assert.deepEqual(journal.read('work-replay'), before)
     } finally {
       journal.close()
     }

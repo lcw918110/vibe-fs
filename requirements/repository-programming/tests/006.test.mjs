@@ -20,7 +20,8 @@ test('WHAT[repository-programming-006] todowrite can continue after waiting long
           return { continued: true };
         }
       }`,
-      planB: 'wait for the running operation '.repeat(20),
+      intent: 'wait for the running operation '.repeat(20),
+      remainingScopeTurnsEstimate: 3,
     }, { sessionID: 'ses-006-long-wait' })
     assert.equal(result.startsWith('# ok'), true, result)
     assert.match(result, /continued = true/)

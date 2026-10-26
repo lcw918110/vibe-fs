@@ -152,13 +152,6 @@ module JsToolsBindings =
             | Some delegation -> box (delegation.Horizon())
             | None -> box (task { return failureObj JsFailure.DelegationUnavailable })
 
-    let makeAdvisorMember (host: JsDelegationHost option) : (string * obj) =
-        "advisor"
-        ==> fun (intent: obj) ->
-            match host with
-            | None -> box (task { return failureObj JsFailure.DelegationUnavailable })
-            | Some delegation -> box (delegation.Advisor intent)
-
     let createApi
         (capabilities: Set<JsCapability>)
         (root: string)
@@ -206,8 +199,6 @@ module JsToolsBindings =
                   makeFissionMember delegationHost
               if present "horizon" then
                   makeHorizonMember delegationHost
-              if present "advisor" then
-                  makeAdvisorMember delegationHost
               if present "ask" then
                   makeAskMember askInvoke
               if present "review" then

@@ -1,4 +1,4 @@
-工具参数 name、program、planB 均为必填字符串。顶层 planB 按 UTF-8 字节数 × 50 ms 确定整个程序的一次准入期限，成员不能续期。
+工具参数 name、program、intent 均为必填字符串，remainingScopeTurnsEstimate 为必填非负整数。顶层 intent 按 UTF-8 字节数 × 50 ms 确定整个程序的一次准入期限，成员不能续期。
 
 用一次原子的 JavaScript transformation 编写 staged Case 的下一形态。
 

@@ -4,7 +4,7 @@ import {fixture,assert,data,caseName,render,command,stopped,existsSync,readFileS
 test('WHAT[repository-programming-051] send adds a newline without resuming the named command continuation', {timeout:12000}, async t=>{
   const h=fixture(t,'051-input','DevOps')
   const cmd=command(h,'reader',String.raw`fs.writeFileSync(file('reader.pid'),String(process.pid));process.stdin.setEncoding('utf8');let input='';process.stdin.on('data',part=>{input+=part;if(input.includes('\n')){fs.writeFileSync(file('input'),input);process.stdout.write(input,()=>process.exit(0));}});`)
-  const first=await h.run('reader','const r=await this.call('+JSON.stringify(cmd)+');this.write("after",r.stdout);return r.stdout;',{planB:'w'.repeat(20)})
+  const first=await h.run('reader','const r=await this.call('+JSON.stringify(cmd)+');this.write("after",r.stdout);return r.stdout;',{intent:'w'.repeat(20)})
   assert.equal(caseName(first),'Parked',render(first))
   const sent=data(await h.run('sender','return await this.send("reader","hello");'))
   assert.equal(sent.sent,true)
@@ -19,7 +19,7 @@ test('WHAT[repository-programming-051] send adds a newline without resuming the 
 test('WHAT[repository-programming-051] signal preserves the true null exit code and leaves the target parked', {timeout:12000}, async t=>{
   const h=fixture(t,'051-signal','DevOps')
   const cmd=command(h,'server',"fs.writeFileSync(file('server.pid'),String(process.pid));setInterval(()=>{},1000);")
-  assert.equal(caseName(await h.run('server','const r=await this.call('+JSON.stringify(cmd)+');this.write("after",JSON.stringify({exitCode:r.exitCode,signal:r.signal}));return "done";',{planB:'w'.repeat(20)})),'Parked')
+  assert.equal(caseName(await h.run('server','const r=await this.call('+JSON.stringify(cmd)+');this.write("after",JSON.stringify({exitCode:r.exitCode,signal:r.signal}));return "done";',{intent:'w'.repeat(20)})),'Parked')
   assert.equal(data(await h.run('signal','return await this.signal("server","SIGTERM");')).sent,true)
   await stopped(h,'server')
   assert.equal(existsSync(h.file('after')),false)

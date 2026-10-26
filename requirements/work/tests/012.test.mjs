@@ -18,23 +18,6 @@ const review = (work, id, updates) =>
   })
 
 test('WHAT[work-012] a repeated opening is refused and the first review records the work', () => {
-  const opened = surface.encodeOpening('plan', 'work-1', '/repo', 7n)
-  assert.match(opened, /^REFUSE /)
-  const probe = surface.readProbe(opened)
-  assert.equal(probe.ok, false)
-  assert.equal(probe.opened, false)
-  assert.equal(probe.sequence, '')
-  assert.equal(probe.names, '')
-  assert.doesNotMatch(String(probe.reason), /SyntaxError/)
-
-  const legacy = '{"type":"Open","sequence":["S1","S2","S3"],"confirmationCount":1,"spawn":true}\n'
-  const read = surface.readProbe(legacy)
-  assert.equal(read.ok, false)
-  assert.equal(read.opened, false)
-  assert.equal(read.names, '')
-  assert.doesNotMatch(String(read.reason), /SyntaxError/)
-  assert.equal(surface.finalPromotionProbe(opened).authorized, false)
-
   const work = new Work('work-12')
   const asked = review(work, 'r1', [])
   assert.equal(asked.result.kind, 'Asked')
@@ -49,6 +32,13 @@ test('WHAT[work-012] a repeated opening is refused and the first review records 
   })
   assert.equal(again.status, 'Replayed')
   assert.equal(work.history().filter((frame) => frame.events.some((event) => event.type === 'WorkOpened')).length, 1)
+
+  const before = work.records()
+  assert.throws(() => work.execute('open', { type: 'Open', sequence: ['S1', 'S2', 'S3'] }), /Unknown work command/)
+  assert.deepEqual(work.records(), before)
+  assert.throws(() => new Work('legacy', ['{"type":"Open","sequence":["S1","S2","S3"],"confirmationCount":1}\n']))
+  const doubled = work.records().concat(work.records())
+  assert.throws(() => new Work('work-12', doubled))
 
   const root = mkdtempSync(join(tmpdir(), 'wxs-work-012-'))
   try {

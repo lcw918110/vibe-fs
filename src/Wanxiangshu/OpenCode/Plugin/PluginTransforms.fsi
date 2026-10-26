@@ -17,7 +17,7 @@ module PluginTransforms =
     val negotiationRememberModel: input: obj -> unit
     val negotiationModelFor: sessionId: string -> obj
     val negotiationStartTemporary: tempId: string -> delegatorId: string -> Result<unit, string>
-    val consultationStartFrozen: tempId: string -> snapshot: obj -> Result<unit, string>
+    val consultationStartPrevious: tempId: string -> sourceSessionId: string -> metadata: obj -> Result<unit, string>
     val consultationModelForTemporary: tempId: string -> obj
     val negotiationFinishTemporary: tempId: string -> unit
     val negotiationForgetSession: sessionId: string -> unit
@@ -50,7 +50,7 @@ module PluginTransforms =
               string option -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option -> Task<unit>
           InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
           SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
-          SanitizeMessages: obj -> unit
+          SanitizeMessages: string option -> obj -> unit
           AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
           StopAfterDelivery:
               string option

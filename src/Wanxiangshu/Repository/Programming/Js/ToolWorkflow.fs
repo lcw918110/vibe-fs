@@ -203,7 +203,7 @@ module JsToolWorkflow =
             moved: (string * string) list
         | Parked of name: string * payload: obj * source: string
 
-    [<Emit("typeof $0 === 'object' && $0 !== null && !Array.isArray($0) && Object.keys($0).length === 3 && typeof $0.name === 'string' && $0.name.trim().length > 0 && typeof $0.program === 'string' && $0.program.trim().length > 0 && typeof $0.planB === 'string' && $0.planB.length > 0")>]
+    [<Emit("typeof $0 === 'object' && $0 !== null && !Array.isArray($0) && Object.keys($0).length === 3 && typeof $0.name === 'string' && $0.name.trim().length > 0 && typeof $0.program === 'string' && $0.program.trim().length > 0 && typeof $0.intent === 'string' && $0.intent.length > 0")>]
     let private validInput (value: obj) : bool = jsNative
 
     [<Emit("Object.assign({}, $0, $1)")>]
@@ -313,7 +313,7 @@ module JsToolWorkflow =
         if validInput input then
             None
         else
-            Some "exactly name, program and planB are required strings; planB must be non-empty"
+            Some "exactly name, program and intent are required strings; intent must be non-empty"
 
     let private applyReadGate gate api =
         match gate with
@@ -526,7 +526,7 @@ module JsToolWorkflow =
                 createObj
                     [ "name" ==> input?name
                       "program" ==> input?program
-                      "planB" ==> input?planB
+                      "intent" ==> input?intent
                       "baseClass" ==> baseClassSource
                       "callId" ==> callId
                       "capabilities"
@@ -543,16 +543,20 @@ module JsToolWorkflow =
                       "settle" ==> settle
                       "lifecycle" ==> lifecycle lifecyclePersistence sessionId ]
 
-            let session = JsPrograms.forSession sessionId
-            let! receipt = unbox<Task<obj>> (session?execute (spec))
-            let reported = outcome receipt
+            JsPrograms.noteCaller sessionId callId (string input?name)
+            try
+                let session = JsPrograms.forSession sessionId
+                let! receipt = unbox<Task<obj>> (session?execute (spec))
+                let reported = outcome receipt
 
-            match reported, settlementFailure with
-            | JsToolOutcome.Failed(_, rewritten, created, removed, moved), Some failure when
-                string receipt?code = JsFailure.code failure
-                ->
-                return JsToolOutcome.Failed(failure, rewritten, created, removed, moved)
-            | _ -> return reported
+                match reported, settlementFailure with
+                | JsToolOutcome.Failed(_, rewritten, created, removed, moved), Some failure when
+                    string receipt?code = JsFailure.code failure
+                    ->
+                    return JsToolOutcome.Failed(failure, rewritten, created, removed, moved)
+                | _ -> return reported
+            finally
+                JsPrograms.clearCaller sessionId callId
         }
 
     let executeWithReviewCheckAndDelivery
@@ -672,7 +676,7 @@ module JsToolWorkflow =
             (createObj
                 [ "name" ==> "run"
                   "program" ==> modelSource
-                  "planB"
+                  "intent"
                   ==> "Wait for this isolated verification program to finish and preserve its real result." ])
             deadlineMs
             deadlineEpochMs

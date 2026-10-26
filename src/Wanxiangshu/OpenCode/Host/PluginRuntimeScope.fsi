@@ -29,6 +29,12 @@ type PluginRuntimeScope =
 
     member ActivateDurability: unit -> unit
 
+    /// crash-reconciliation-020: load-phase recovery work whose completion the
+    /// next handoff must observe; admission awaits these before dispatching.
+    member TrackDurabilityActivation: work: Task -> unit
+
+    member AwaitDurabilityActivation: unit -> Task
+
     /// crash-reconciliation-018: load-phase normalization owes one restart
     /// status guidance to the next real user instruction in this process.
     member MarkRestartGuidancePending: unit -> unit
@@ -117,6 +123,9 @@ type PluginRuntimeScope =
     member TrackReconcileShutdown: stopAndDrain: (unit -> Task) -> unit
 
     member RunBackground: start: (unit -> Task) -> unit
+
+    /// RunBackground variant returning the observed task for await tracking.
+    member RunBackgroundTracked: start: (unit -> Task) -> Task
 
     member RunOwnedWork: start: (unit -> Task) -> Task
 

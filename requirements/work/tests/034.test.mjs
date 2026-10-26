@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Work } from 'wanxiangli/work'
 import * as prefix from '../../../dist/Context/Prefix/Surface.js'
-import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import * as surface from '../../../dist/Mission/Planning/Surface.js'
 import {
   assistantText,
@@ -17,10 +17,14 @@ import {
 const assemble = (rawMessages, tenure, messageCursors) =>
   surface.PlanningSurface.assembleTenureMessages(rawMessages, tenure, messageCursors)
 
-const life = lifecycle.LifecycleSurface ?? lifecycle
-const framesOf = (text) => text.split('\n').filter((line) => line.length > 0).map((line) => JSON.parse(line))
-const eventsOf = (text) => framesOf(text).flatMap((frame) => frame.events ?? [])
-const incumbencyIdOf = (text) => [...eventsOf(text)].reverse().find((event) => event.type === 'IncumbencyOpened').incumbencyId
+const planReview = (work, id, updates) =>
+  work.execute(id, {
+    type: 'Review',
+    office: 'Plan',
+    providerRunId: 'run',
+    toolCallId: id,
+    updates,
+  })
 
 test('WHAT[work-034] initial tenure (S1) assembles U + current messages with no synthetic record and requests reanchor on first turn', () => {
   const rawMessages = [
@@ -63,44 +67,33 @@ test('WHAT[work-034] initial tenure (S1) assembles U + current messages with no 
   )
 })
 
-test('WHAT[work-034] non-initial tenure strips prior assistant/tool messages, injects no synthetic-prev-* row, and preserves the current user reply in chronological order', () => {
-  // Real Host rows: historical U, prior S1 assistant+tool, a current user
-  // reply (feedback) and a current assistant row. Prior assistant/tool rows
-  // observed before openingCursor are stripped; no synthetic-prev-* row
-  // is ever injected.
+const mark = (message, fields) => Object.assign(message, { toolCallId: null, resultFor: null, tenureId: null, ...fields })
+
+const barrierTenure = (extra = {}) => ({
+  workId: 'work-1',
+  incumbencyId: 'next',
+  stage: '执行',
+  openingCursor: 0n,
+  isFreshHandover: false,
+  barrierToolCallId: 'review-1',
+  successorTenureId: 'next',
+  ...extra,
+})
+
+test('WHAT[work-034] a committed barrier hides the triggering review and the user messages before it', () => {
   const rawMessages = [
-    userText('u1', 'Initial user prompt'),
-    assistantText('a-old', 'S1 assistant work', 'u1'),
-    toolResult('t-old', 'todowrite-for-plan', 'S1 tool work'),
-    userText('u2', 'Feedback from user'),
-    assistantText('a-current', 'S2 assistant fresh', 'u2'),
-    toolResult('t-current', 'todowrite-for-plan', 'S2 tool result'),
+    mark(userText('u-old', 'Initial user prompt'), { tenureId: 'old' }),
+    mark(assistantText('a-old', 'previous tenure', 'u-old'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(toolResult('result', 'review', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    mark(userText('u-next', 'Feedback from user'), { tenureId: 'next' }),
+    mark(assistantText('a-current', 'successor work', 'u-next'), { tenureId: 'next' }),
   ]
-
-  const tenureS2 = {
-    workId: 'work-1',
-    incumbencyId: 'inc-2',
-    stage: 'S2',
-    openingCursor: 20n,
-    isFreshHandover: false,
-  }
-
-  const result = assemble(
-    rawMessages,
-    tenureS2,
-    cursors({ 'a-old': 5n, 't-old': 8n, u2: 22n, 'a-current': 25n, 't-current': 26n }),
-  )
-
-  assert.deepEqual(
-    ids(result.messages),
-    ['u1', 'u2', 'a-current', 't-current'],
-  )
-
-  // Prior assistant/tool messages and any synthetic-prev-* rows must be absent
-  const assembledIds = ids(result.messages)
-  assert.ok(!assembledIds.some((id) => id.startsWith('synthetic-prev-')), 'no synthetic-prev-* row is injected')
-  assert.ok(!assembledIds.includes('a-old'), 'prior assistant message must be stripped')
-  assert.ok(!assembledIds.includes('t-old'), 'prior tool message must be stripped')
+  const before = JSON.stringify(rawMessages)
+  const result = assemble(rawMessages, barrierTenure(), {})
+  assert.equal(JSON.stringify(rawMessages), before)
+  assert.deepEqual(ids(result.messages), ['u-next', 'a-current'])
+  assert.equal(ids(result.messages).some((id) => id === 'u-old' || id === 'call' || id === 'result'), false)
 })
 
 test('WHAT[work-034] user messages U preserve original bytes and order verbatim without modification', () => {
@@ -166,7 +159,7 @@ test('WHAT[work-034] a current assistant row with a Host id but no first-observa
   assert.equal(result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-')).length, 0)
 })
 
-test('WHAT[work-034] a semantic assistant row with no Host info.id rejects assembly', () => {
+test('WHAT[work-034] assembly does not invent a host id or a synthetic predecessor', () => {
   const rawMessages = [
     userText('u1', 'go'),
     {
@@ -174,44 +167,29 @@ test('WHAT[work-034] a semantic assistant row with no Host info.id rejects assem
       parts: [{ type: 'text', text: 'current work without a stable identity' }],
     },
   ]
-  const identified = assistantText('a-uncaptured', 'captured later', 'u1')
   const tenure = {
     workId: 'work-1',
     incumbencyId: 'inc-2',
-    stage: 'S2',
-    openingCursor: 20n,
+    stage: '执行',
+    openingCursor: 0n,
     isFreshHandover: false,
   }
-  assert.throws(
-    () => assemble(rawMessages, tenure, {}),
-    /no stable XTrace message identity/i,
-  )
-  const stayed = assemble([userText('u1', 'go'), identified], tenure, {})
-  assert.ok(ids(stayed.messages).includes('a-uncaptured'))
+  const result = assemble(rawMessages, tenure, {})
+  assert.equal(result.messages.some((message) => String(msgId(message) ?? '').startsWith('synthetic-prev-')), false)
+  assert.ok(ids(result.messages).includes('u1'))
 })
 
-test('WHAT[work-034] synthetic rows are stripped and no synthetic record is ever injected', () => {
+test('WHAT[work-034] a barrier drops synthetic rows and does not inject a predecessor', () => {
   const rawMessages = [
-    userText('u1', 'go'),
-    syntheticPredecessor('inc-old', 'work-1', 'stale synthesized row'),
-    assistantText('a-current', 'current work', 'u1'),
+    mark(userText('u1', 'go'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(toolResult('result', 'review', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    mark(syntheticPredecessor('inc-old', 'work-1', 'stale synthesized row'), { tenureId: 'next' }),
+    mark(assistantText('a-current', 'current work', 'u1'), { tenureId: 'next' }),
   ]
-  const tenure = {
-    workId: 'work-1',
-    incumbencyId: 'inc-2',
-    stage: 'S2',
-    openingCursor: 20n,
-    isFreshHandover: false,
-  }
-  const result = assemble(
-    rawMessages,
-    tenure,
-    cursors({ 'a-current': 25n }),
-  )
-  const syntheticRows = result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-'))
-  assert.equal(syntheticRows.length, 0, 'no synthetic-prev-* row is injected')
-  assert.ok(!result.messages.some((m) => msgId(m) === 'synthetic-prev-inc-old'))
-  assert.deepEqual(ids(result.messages), ['u1', 'a-current'])
+  const result = assemble(rawMessages, barrierTenure(), {})
+  assert.equal(result.messages.some((message) => msgId(message).startsWith('synthetic-prev-')), false)
+  assert.deepEqual(ids(result.messages), ['a-current'])
 })
 
 test('WHAT[work-034] durable Plan active state assembles U + current interactions in place', () => {
@@ -236,10 +214,15 @@ test('WHAT[work-034] durable Plan active state assembles U + current interaction
   assert.equal(result.reanchorRequested, false, 'a continuing durable tenure must not re-request reanchor')
 })
 
-test('WHAT[work-034] the lifecycle document view is reachable as a pure function', () => {
-  assert.equal(typeof life.documentView, 'function')
-  const opened = life.encodeOpening('plan', 'w-25a', '/tmp/plan-test', 0n)
-  assert.equal(life.documentView(opened).found, true)
+test('WHAT[work-034] a fresh Plan review opens at 事实与取舍 and carries no retirement', () => {
+  const work = new Work('w-25a')
+  const reviewed = planReview(work, 'r1', [{ key: 'need', value: 'scope' }])
+  assert.equal(reviewed.status, 'Applied', reviewed.reason)
+  assert.equal(reviewed.result.kind, 'Reviewed')
+  assert.equal(reviewed.result.milestone, '事实与取舍')
+  const events = work.history().flatMap((frame) => frame.events)
+  assert.equal(events.some((event) => event.type === 'WorkOpened'), true)
+  assert.equal(events.some((event) => event.type === 'IncumbencyRetired'), false)
 })
 
 test('WHAT[work-034] reanchorRequested is returned by assemble and is true only on a fresh handover', () => {
@@ -259,59 +242,35 @@ test('WHAT[work-034] reanchorRequested is returned by assemble and is true only 
   assert.equal(continuing.reanchorRequested, false, 'a continuing tenure must not re-request reanchor on an empty stop')
 })
 
-const tenureFor = (overrides) => ({
-  workId: 'w1',
-  incumbencyId: 'inc-2',
-  stage: 'S2',
-  openingCursor: 20n,
-  isFreshHandover: false,
-  ...overrides,
+test('WHAT[work-034] clearing the plan ledger relays in one record', () => {
+  const work = new Work('w1')
+  const reviewed = planReview(work, 'r1', [{ key: 'need', value: 'scope' }])
+  assert.equal(reviewed.result.kind, 'Reviewed')
+  assert.equal(reviewed.result.milestone, '事实与取舍')
+  assert.equal(work.history().some((frame) => frame.events.some((event) => event.type === 'IncumbencyRetired')), false)
+  const relayed = planReview(work, 'call-034', [{ key: 'need', value: null }])
+  assert.equal(relayed.status, 'Applied', relayed.reason)
+  assert.equal(relayed.result.kind, 'Relayed')
+  const record = work.history().at(-1)
+  assert.deepEqual(record.events.map((event) => event.type), ['IncumbencyRetired', 'ContextBarrier', 'IncumbencyOpened', 'PromptObliged'])
+  assert.equal(record.events.filter((event) => event.type === 'IncumbencyRetired').length, 1)
+  assert.equal(record.events.find((event) => event.type === 'IncumbencyRetired').outcome, 'Relayed')
+  assert.equal(work.history().filter((frame) => frame.events.some((event) => event.type === 'IncumbencyRetired')).length, 1)
 })
 
-test('WHAT[work-034] S1 with no retirement carries no previous range', () => {
-  const opened = life.encodeOpening('plan', 'w1', '/tmp/plan-test', 0n)
-  const view = life.documentView(opened)
-  assert.equal(view.openingStage, 'S1')
-  assert.equal(view.latestRetirement, '')
-  assert.equal(view.predecessor, '')
-  assert.equal(view.openingCursor, 0)
-})
-
-test('WHAT[work-034] S1 retirement preserves its opening range for the next tenure', () => {
-  const opened = life.encodeOpening('plan', 'w1', '/tmp/plan-test', 7n)
-  const reviewed = life.reviewProbe(opened, incumbencyIdOf(opened), 'Stayed')
-  assert.equal(reviewed.decision, 'Write', reviewed.detail)
-  const cleared = life.reviewProbe(`${opened}${reviewed.bytes}`, incumbencyIdOf(opened), 'Cleared')
-  assert.equal(cleared.decision, 'Write', cleared.detail)
-  const relayed = life.deliverProbe(`${opened}${reviewed.bytes}${cleared.bytes}`, 'run-034', 'call-034', 25n)
-  assert.equal(relayed.decision, 'Write', relayed.detail)
-  const retired = eventsOf(relayed.bytes)[0]
-  const successor = eventsOf(relayed.bytes)[1]
-  assert.equal(retired.retirementCursor, 25)
-  assert.equal(successor.openingCursor, 25)
-  assert.equal(successor.stage, 'S1', 'Stayed keeps the opening stage for the successor')
-  const view = life.documentView(`${opened}${reviewed.bytes}${cleared.bytes}${relayed.bytes}`)
-  assert.equal(view.latestRetirement, '7,25')
-  assert.equal(view.predecessor, '7,25')
-  assert.equal(view.openingCursor, 25)
-})
-
-test('WHAT[work-034] tenure assembly strips prior interactions by openingCursor without materializing a previous record', () => {
+test('WHAT[work-034] tenure assembly hides the review and does not materialize a previous record', () => {
   const rawMessages = [
-    userText('u1', 'go'),
-    assistantText('a-old', 'old work', 'u1'),
-    assistantText('a-new', 'new work', 'u1'),
+    mark(userText('u1', 'go'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(toolResult('result', 'review', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    mark(assistantText('a-new', 'new work', 'u1'), { tenureId: 'next' }),
   ]
-  const result = surface.PlanningSurface.assembleTenureMessages(
-    rawMessages,
-    tenureFor(),
-    cursors({ 'a-old': 9n, 'a-new': 30n }),
-  )
+  const result = surface.PlanningSurface.assembleTenureMessages(rawMessages, barrierTenure(), {})
   const assembledIds = ids(result.messages)
-  assert.ok(!assembledIds.includes('a-old'))
+  assert.ok(!assembledIds.includes('u1'))
   assert.ok(assembledIds.includes('a-new'))
   assert.ok(!assembledIds.some((id) => id.startsWith('synthetic-prev-')))
-  assert.deepEqual(assembledIds, ['u1', 'a-new'])
+  assert.deepEqual(assembledIds, ['a-new'])
 })
 
 test('WHAT[work-034] tenure reanchor event shape carries session, epochs, work and incumbency', () => {
@@ -349,64 +308,33 @@ test('WHAT[work-034] reanchorRequested is true on fresh handover and deduplicate
   assert.equal(continuing.reanchorRequested, false)
 })
 
-test('WHAT[work-034] successor projection strips earlier assistant and tool messages and never inserts a synthetic predecessor record', () => {
+test('WHAT[work-034] successor projection hides earlier rows and never inserts a synthetic predecessor', () => {
   const rawMessages = [
-    userText('u-history', 'Original user request'),
-    assistantText('a-old', 'previous tenure answer'),
-    toolResult('t-old', 'todowrite-for-plan', 'old draft'),
-    assistantText('a-current', 'this tenure answer'),
-    assistantText('a-uncaptured', 'this request, not captured yet'),
+    mark(userText('u-history', 'Original user request'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(toolResult('result', 'review', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    mark(assistantText('a-current', 'this tenure answer'), { tenureId: 'next' }),
+    mark(assistantText('a-uncaptured', 'this request, not captured yet'), { tenureId: 'next' }),
   ]
-  const tenure = {
-    workId: 'work-1',
-    incumbencyId: 'inc-2',
-    stage: 'S2',
-    openingCursor: 20n,
-    isFreshHandover: false,
-  }
-  const result = assemble(
-    rawMessages,
-    tenure,
-    cursors({ 'a-old': 4n, 't-old': 5n, 'a-current': 25n }),
-  )
-  const syntheticRows = result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-'))
-  assert.equal(syntheticRows.length, 0, 'no synthetic predecessor record is inserted')
-  assert.deepEqual(ids(result.messages), ['u-history', 'a-current', 'a-uncaptured'])
+  const result = assemble(rawMessages, barrierTenure(), {})
+  assert.equal(result.messages.filter((message) => msgId(message).startsWith('synthetic-prev-')).length, 0)
+  assert.deepEqual(ids(result.messages), ['a-current', 'a-uncaptured'])
 })
 
-test('WHAT[work-034] post-S3 projection strips all S3-and-earlier context and injects no synthetic record', () => {
-  const deliveredFrontier = 40n
+test('WHAT[work-034] the barrier hides every row before the review, including earlier user text', () => {
   const rawMessages = [
-    userText('u-history', 'Original user request'),
-    assistantText('a-s1', 'S1 tenure assistant'),
-    toolResult('t-s1', 'todowrite-for-plan', 'S1 tool'),
-    assistantText('a-s2', 'S2 tenure assistant'),
-    assistantText('a-s3', 'S3 tenure assistant'),
-    userText('u-command', 'Please execute deliver now.'),
-    assistantText('a-post', 'post-S3 assistant', 'u-command'),
+    mark(userText('u-history', 'Original user request'), { tenureId: 'old' }),
+    mark(assistantText('a-s1', 'earlier assistant'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(toolResult('result', 'review', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    mark(userText('u-command', 'Please continue.'), { tenureId: 'next' }),
+    mark(assistantText('a-post', 'successor assistant', 'u-command'), { tenureId: 'next' }),
   ]
-  const tenure = {
-    workId: 'work-post-s3',
-    incumbencyId: 'post-s3',
-    stage: 'S3',
-    openingCursor: deliveredFrontier + 1n,
-    isFreshHandover: false,
-  }
-  const result = assemble(
-    rawMessages,
-    tenure,
-    cursors({ 'a-s1': 5n, 't-s1': 8n, 'a-s2': 20n, 'a-s3': 38n, 'u-command': 41n, 'a-post': 42n }),
-  )
+  const result = assemble(rawMessages, barrierTenure({ workId: 'work-post', incumbencyId: 'next' }), {})
   const kept = ids(result.messages)
-  assert.equal(
-    result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-')).length,
-    0,
-    'post-S3 inherits no previous delivered view',
-  )
-  assert.ok(kept.includes('u-history'), 'historical user input is preserved verbatim')
-  assert.ok(kept.includes('u-command'), 'the post-S3 command survives')
-  assert.ok(kept.includes('a-post'), 'post-S3 assistant after the frontier stays')
-  for (const prior of ['a-s1', 't-s1', 'a-s2', 'a-s3']) {
-    assert.ok(!kept.includes(prior), `${prior} (S3-and-earlier) must be stripped`)
-  }
+  assert.equal(result.messages.filter((message) => msgId(message).startsWith('synthetic-prev-')).length, 0)
+  assert.ok(!kept.includes('u-history'))
+  assert.ok(!kept.includes('a-s1'))
+  assert.ok(!kept.includes('call'))
+  assert.deepEqual(kept, ['u-command', 'a-post'])
 })

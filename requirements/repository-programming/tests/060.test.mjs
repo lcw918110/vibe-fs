@@ -51,7 +51,7 @@ test('WHAT[repository-programming-060] LC-007: failure during ledger settlement 
       sessionId,
       {
         name: 'ledger-failure',
-        planB: 'Wait for physical file effects and their durable ledger settlement.',
+        intent: 'Wait for physical file effects and their durable ledger settlement.',
         program: program(`
     this.write('effect.txt', 'mutated-data');
     return { done: true };
@@ -102,7 +102,7 @@ test('WHAT[repository-programming-060] LC-007: commit phase append failure also 
       sessionId,
       {
         name: 'ledger-failure',
-        planB: 'Wait for physical file effects and their durable ledger settlement.',
+        intent: 'Wait for physical file effects and their durable ledger settlement.',
         program: program(`
     this.write('target.txt', 'after');
     return { done: true };

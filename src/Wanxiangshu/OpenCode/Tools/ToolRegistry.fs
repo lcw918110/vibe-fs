@@ -103,9 +103,12 @@ module ToolRegistry =
                 let runId = ProviderRunIdentity.value providerRun
                 let callId = ToolCallId.value toolCallId
 
+                let selfName = JsPrograms.callerName ctx.SessionId (runId + ":" + callId)
+
                 let parked =
                     JsPrograms.deliveryBlockersWithChoicesForSession ctx.SessionId
                     |> List.map fst
+                    |> List.filter (fun name -> selfName <> Some name)
 
                 let blockers =
                     parked @ runtime.RetirementBlockersFor ctx.SessionId

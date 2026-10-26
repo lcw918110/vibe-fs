@@ -20,7 +20,7 @@ export function fixture(t, label, role = 'Coder') {
     rmSync(root, { recursive: true, force: true })
   })
   const run = (name, body, options = {}) => execute(root, options.role ?? role, 'en', options.session ?? session,
-    { name, program: source(body), planB: options.planB ?? WAIT }, options.executionBudgetMs ?? 2000, Date.now() + 60000, 1 << 20, options.store ?? null)
+    { name, program: source(body), intent: options.intent ?? WAIT }, options.executionBudgetMs ?? 2000, Date.now() + 60000, 1 << 20, options.store ?? null)
   return {
     root, session, run,
     file: name => join(root, name),

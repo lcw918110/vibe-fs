@@ -576,7 +576,7 @@ const canonicalJson = await import("../../../dist/OpenCode/Codec/CanonicalJsonSu
 const language = await import("../../../dist/Participant/Provider/LanguageSurface.js");
 const providerProjection = await import("../../../dist/Participant/Provider/Projection/Surface.js");
 const promptSurface = await import("../../../dist/Resources/PromptSurface.js");
-const lifecycle = await import("../../../dist/Mission/Lifecycle/Surface.js");
+const { Work } = await import('wanxiangli/work');
 const tools = await import("../../../dist/OpenCode/Tools/ToolSurface.js");
 const pluginHooks = await import("../../../dist/OpenCode/Host/PluginHooksSurface.js");
 const { installDefaultResources } = await import("../../../dist/OpenCode/Host/ManagedAgentConfigSurface.js");
@@ -713,14 +713,20 @@ const wire = (
 
 test('WHAT[prefix-stability-001] manager_life_review_acceptance_provider_wire_is_append_only_prefix_and_tools_identical', () => {
   const roadId = 'road-life-001'
-  const root = 'workspace-life-001'
 
-  // 1. Initial state: an S4 Manager life opens unreviewed. Delivery stays closed until review.
-  const opening = lifecycle.encodeOpening('S4', roadId, root, 1n)
-  assert.equal(opening.startsWith('REFUSE'), false, opening)
-  const initialProbe = lifecycle.readProbe(opening)
-  assert.equal(initialProbe.sequence, 'S4', 'Manager life opens on the execution sequence')
-  assert.equal(initialProbe.authorized, false, 'an unreviewed Manager life must not authorize delivery')
+  const work = new Work(roadId)
+  const reviewedLife = work.execute('review-life-001', {
+    type: 'Review',
+    office: 'Manager',
+    providerRunId: 'run',
+    toolCallId: 'review-life-001',
+    updates: [{ key: 'opened', value: 'do' }],
+  })
+  assert.equal(reviewedLife.status, 'Applied', reviewedLife.reason)
+  assert.equal(reviewedLife.result.kind, 'Reviewed', reviewedLife.reason)
+  assert.equal(reviewedLife.result.milestone, '执行')
+  assert.equal(work.inspect().milestone, '执行')
+  assert.equal(work.inspect().completed, false)
 
   // 资源文档经 provider-language owner 面读取
   const assessPromptDoc = language.readText('zh-CN', 'runtime/manager-assess')
@@ -766,14 +772,6 @@ test('WHAT[prefix-stability-001] manager_life_review_acceptance_provider_wire_is
     tools: toolsBefore.map((tool) => canonicalJson.canonicalJson(tool)),
     system: [managerSystemPrompt],
   })
-
-  // 3. State transition: the accepted review is a unified Reviewed fact. Stayed keeps delivery closed.
-  const incId = lifecycle.readProbe(opening).activeId
-  const reviewed = lifecycle.reviewProbe(opening, incId, 'Stayed')
-  assert.equal(reviewed.decision, 'Write', reviewed.detail)
-  const afterReview = lifecycle.readProbe(opening + reviewed.bytes)
-  assert.equal(afterReview.sequence, 'S4', 'review does not change the opened sequence')
-  assert.equal(afterReview.authorized, false, 'a Stayed review must not authorize delivery')
 
   const reviewAssistantMessage = {
     id: 'msg-02',

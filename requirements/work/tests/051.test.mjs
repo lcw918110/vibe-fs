@@ -30,7 +30,7 @@ test('WHAT[work-051] first S4 Manager empty review asks the user once, without w
     runtime.client.tui={showToast:async ({body})=>{notice.push(body);return {}}}
     const output=await hooks.tool['todowrite-for-manager'].execute(
       {name:'initial-empty',program:program('return await this.review([]);'),
-        planB:'Record the real ask receipt; do not fabricate a complete review.'},
+        intent:'Record the real ask receipt; do not fabricate a complete review.'},
       call(session,'first-empty'))
     assert.match(String(output),/WaitingForUser|awaitingUser|询问|waiting/)
     assert.equal(notice.length,1,'the Host presents the actual question to the human')
@@ -46,7 +46,7 @@ test('WHAT[work-051] first S4 Manager empty review asks the user once, without w
     await input(hooks,runtime,session,'reply-051','Finish exactly the user-specified mission.')
     const done=await hooks.tool['todowrite-for-manager'].execute(
       {name:'review-after-answer',program:program('return await this.review([]);'),
-        planB:'Review after the same logical run received the human answer.'},
+        intent:'Review after the same logical run received the human answer.'},
       call(session,'review-after-answer'))
     assert.match(String(done),/Promoted|firstReview|outcome|review/)
     assert.equal(notice.length,1,'answer does not cause a second synthetic question')

@@ -421,7 +421,6 @@ const { execFileSync } = await import('node:child_process')
 const dispatch = await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
 const journal = await import('../../../dist/Persistence/Journal/Surface.js')
 const lifecycle = await import('../../../dist/Mission/Lifecycle/Surface.js')
-const workspaceEvents = await import('../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js')
 
 for (const newPhysicalInput of [false, true]) {
   test(`WHAT[dispatch-protocol-002] production Manager idle dispatch (crash-reconciliation-006 compatibility) ${newPhysicalInput ? 'abandons a captured permit revoked by Human physical ingress before SDK send' : 'sends with the same road and fresh captured permit'}`, async () => {
@@ -435,9 +434,19 @@ for (const newPhysicalInput of [false, true]) {
       const rootPhysical = 'msg-manager-root'
       const root = await dispatch.acceptHumanRoot(opened.journal, session, rootPhysical, 'manager')
       assert.equal(root.ok, true, root.error)
-      const store = workspaceEvents.acquire(base)
-      const opening = await lifecycle.seedOpen(store, 'S4', session, base, 1n)
-      assert.equal(opening.ok, true, JSON.stringify(opening.error))
+      const surface = lifecycle.LifecycleSurface ?? lifecycle
+      const opening = await surface.submitReview(
+        base,
+        session,
+        'open-' + session,
+        'Manager',
+        'run',
+        'open',
+        [{ key: 'opened', value: 'do' }],
+        [],
+        '',
+      )
+      assert.equal(opening.kind, 'Reviewed', opening.reason)
 
       const gate = quiescence.create()
       quiescence.beginAttempt(gate, session)

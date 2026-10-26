@@ -158,58 +158,77 @@ const eventJournalBytes = (workspace) => {
     .reduce((total, name) => total + statSync(join(events, name)).size, 0)
 }
 
-const mustOk = (result) => {
-  assert.equal(result.ok, true, JSON.stringify(result.error))
-  return result
+const surface = lifecycle.LifecycleSurface ?? lifecycle
+
+const completeManagerReviews = (directory, session) => {
+  const step = (requestId, updates) => {
+    const receipt = surface.submitReview(directory, session, requestId, 'Manager', 'run-1', requestId, updates, [], '')
+    assert.equal(receipt.status, 'Committed', receipt.reason)
+    return receipt
+  }
+  const reviewed = step('review', [{ key: 'job', value: 'do' }])
+  assert.equal(reviewed.kind, 'Reviewed', reviewed.reason)
+  assert.equal(reviewed.milestone, '执行')
+  const relayed = step('relay', [{ key: 'job', value: null }])
+  assert.equal(relayed.kind, 'Relayed', relayed.reason)
+  const advanced = step('advance', [])
+  assert.equal(advanced.kind, 'Advanced', advanced.reason)
+  assert.equal(advanced.milestone, '收尾')
+  const completed = step('close', [])
+  assert.equal(completed.kind, 'Completed', completed.reason)
+  assert.equal(completed.milestone, '已完成')
+  const view = surface.inspected(directory, session)
+  assert.equal(view.Delivered, true)
+  assert.equal(view.ActiveId ?? null, null)
+  const retirement = Array.from(view.Retirements ?? []).at(-1)
+  assert.equal(retirement.Outcome, 'Completed')
+  assert.match(retirement.RetirementId, /\S/)
+  return retirement.RetirementId
+}
+
+const expectClosureRefused = async (directory, session, retirementId) => {
+  let refused = null
+  try {
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirementId)
+  } catch (error) {
+    refused = error
+  }
+  assert.ok(refused, 'a missing shared journal entry must throw')
+  assert.match(String(refused.message ?? refused.Message ?? refused), /authority closure refused/)
 }
 
 test('WHAT[interaction-authority-018] a missing shared journal entry refuses the closure append without creating a second writer', async () => {
-  await withJournal('narrow-absent', async (handle, reopen, directory) => {
-    const store = journal.JournalSurface_eventStore(handle)
-    assert.ok(store)
+  await withJournal('narrow-absent', async (_handle, _reopen, directory) => {
     const session = 'narrow-absent'
-    mustOk(await lifecycle.seedOpen(store, 'S4', session, directory, 1n))
-    mustOk(await lifecycle.seedReview(store, session, 'Promoted'))
-
-    // A bootWithWriterId journal never registered a shared entry for this
-    // directory, so the S4 retirement commits while its exact closure append
-    // must refuse before touching any writer.
+    const retirementId = completeManagerReviews(directory, session)
+    // bootWithWriterId never registers a shared entry. work.sqlite is already
+    // the work writer; the refused append must not create another one.
     const before = inventory(directory)
-    const retired = await lifecycle.seedDeliver(store, session, 'run-absent', 'call-first', 2n)
-    assert.equal(retired.ok, false, 'closure append must refuse without a shared journal entry')
-    assert.match(retired.error, /authority closure refused|no shared journal runtime/)
+    await expectClosureRefused(directory, session, retirementId)
     assert.deepEqual(inventory(directory), before, 'the refusal must not create a second writer segment')
-
-    // The refusal is stable and leaves no half-registered entry behind.
-    const again = await lifecycle.seedDeliver(store, session, 'run-absent', 'call-first', 2n)
-    assert.equal(again.ok, false)
-    assert.match(again.error, /authority closure refused|no shared journal runtime/)
+    await expectClosureRefused(directory, session, retirementId)
     assert.deepEqual(inventory(directory), before)
   })
 })
 
-test('WHAT[interaction-authority-018] a repeated delivery for an already closed run is a successful no-op with zero durable append', async () => {
+test('WHAT[interaction-authority-018] a repeated closure of an already closed run is a successful no-op with zero durable append', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'wxs-narrow-idempotent-'))
   execFileSync('git', ['init', '--quiet', workspace])
-  const acquired = mustOk(await journal.JournalSurface_acquireSharedForWorkspace(workspace, process.pid, '2026-10-14T00:00:00Z'))
+  const acquired = await journal.JournalSurface_acquireSharedForWorkspace(workspace, process.pid, '2026-10-14T00:00:00Z')
+  assert.equal(acquired.ok, true, JSON.stringify(acquired.error))
   const handle = acquired.journal
   try {
-    const store = journal.JournalSurface_eventStore(handle)
-    assert.ok(store)
     const session = 'narrow-idempotent'
     const original = await acceptOwner(handle, session)
-    mustOk(await lifecycle.seedOpen(store, 'S4', session, workspace, 1n))
-    mustOk(await lifecycle.seedReview(store, session, 'Promoted'))
-    mustOk(await lifecycle.seedDeliver(store, session, 'run-idempotent', 'call-first', 2n))
-    mustOk(await lifecycle.seedDeliver(store, session, 'run-idempotent', 'call-second', 3n))
+    const retirementId = completeManagerReviews(workspace, session)
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(workspace, session, retirementId)
 
     const closed = journal.JournalSurface_snapshot(handle).sessionProjections[session].promptAuthority
-    assert.equal(closed.activeLogicalRun, null, 'the S4 retirement closure cleared the active run')
+    assert.equal(closed.activeLogicalRun, null, 'the completed retirement closure cleared the active run')
     assert.equal(closed.lastAuthorityProfile.logicalRun, original.logicalRun)
 
     const before = eventJournalBytes(workspace)
-    const replay = await lifecycle.seedDeliver(store, session, 'run-idempotent', 'call-second', 3n)
-    assert.equal(replay.ok, true, JSON.stringify(replay.error))
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(workspace, session, retirementId)
     assert.equal(eventJournalBytes(workspace), before, 'an already closed run must not append a second closure')
     const after = journal.JournalSurface_snapshot(handle).sessionProjections[session].promptAuthority
     assert.equal(after.activeLogicalRun, null)
@@ -222,14 +241,12 @@ test('WHAT[interaction-authority-018] a repeated delivery for an already closed 
 
 test('WHAT[interaction-authority-018] a refused closure append keeps the active run and blocks identity reuse across restart', async () => {
   await withJournal('narrow-refused', async (handle, reopen, directory) => {
-    const store = journal.JournalSurface_eventStore(handle)
-    assert.ok(store)
     const session = 'narrow-refused'
     const original = await acceptOwner(handle, session)
-    mustOk(await lifecycle.seedOpen(store, 'S4', session, directory, 1n))
-    mustOk(await lifecycle.seedReview(store, session, 'Promoted'))
-    const retired = await lifecycle.seedDeliver(store, session, 'run-refused', 'call-first', 2n)
-    assert.equal(retired.ok, false, 'closure append must refuse without a shared journal entry')
+    const retirementId = completeManagerReviews(directory, session)
+    const before = inventory(directory)
+    await expectClosureRefused(directory, session, retirementId)
+    assert.deepEqual(inventory(directory), before, 'the refusal must not create a second writer segment')
 
     const after = journal.JournalSurface_snapshot(handle).sessionProjections[session].promptAuthority
     assert.notEqual(after.activeLogicalRun, null, 'a refused closure must not release the active run')
@@ -259,12 +276,9 @@ test('WHAT[interaction-authority-018] a refused closure append keeps the active 
 // LifeCompleted(life, retirement) witness, and durable replay admits a closure
 // only with the exact source witness of the active root's expected kind.
 const closedManagerLife = async (handle, directory, session) => {
-  const store = journal.JournalSurface_eventStore(handle)
   const owner = await acceptOwner(handle, session)
-  mustOk(await lifecycle.seedOpen(store, 'S4', session, directory, 1n))
-  mustOk(await lifecycle.seedReview(store, session, 'Promoted'))
-  mustOk(await lifecycle.seedDeliver(store, session, 'run-witness', 'call-first', 2n))
-  mustOk(await lifecycle.seedDeliver(store, session, 'run-witness', 'call-second', 3n))
+  const retirementId = completeManagerReviews(directory, session)
+  await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirementId)
   return owner
 }
 
@@ -286,7 +300,7 @@ const rewriteClosureWitness = (directory, rewrite) => {
   assert.equal(rewritten, 1, 'exactly one durable closure was written')
 }
 
-test('WHAT[interaction-authority-018] a delivered S4 retirement closes the Manager life with the canonical LifeCompleted witness', async () => {
+test('WHAT[interaction-authority-018] a completed Manager retirement closes the life with the canonical LifeCompleted witness', async () => {
   await withSharedJournal('witness-canonical', async (handle, reopen, directory) => {
     const session = 'witness-canonical'
     const owner = await closedManagerLife(handle, directory, session)
@@ -298,7 +312,7 @@ test('WHAT[interaction-authority-018] a delivered S4 retirement closes the Manag
       return witness
     })
     const [kind, life, fact] = JSON.parse(witness)
-    assert.deepEqual([kind, life], ['LifeCompleted', session], 'the Manager life is the session whose S4 retirement delivered')
+    assert.deepEqual([kind, life], ['LifeCompleted', session], 'the Manager life is the session whose completed retirement closed')
     assert.match(fact, /\S/, 'the witness names the exact delivered retirement')
     const cold = await reopen()
     assert.equal(journal.JournalSurface_snapshot(cold).sessionProjections[session].promptAuthority.activeLogicalRun, null)
@@ -392,8 +406,6 @@ const authorityOf = (handle, session) =>
 test('WHAT[interaction-authority-018] GAP-123 an accepted root records its expected closure kind and a durable source terminal becomes the exact closure witness', async () => {
   await withSharedJournal('managed-closure', async (handle, reopen, directory) => {
     const session = 'managed-closure'
-    const store = journal.JournalSurface_eventStore(handle)
-    assert.ok(store)
 
     // A non-Manager HumanRoot is a managed run: its expected closure kind is
     // HumanRootManagedRun, recorded atomically with the acceptance.
@@ -430,7 +442,7 @@ test('WHAT[interaction-authority-018] GAP-123 an accepted root records its expec
 
     // The closure writer cites the durable source and writes exactly one
     // closure for this run.
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(store.gitCommonDir ?? directory, session, 'retirement-managed')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, 'retirement-managed')
 
     const closed = authorityOf(handle, session)
     assert.equal(closed.activeLogicalRun, null, 'the durable closure releases the active run')
@@ -446,7 +458,6 @@ test('WHAT[interaction-authority-018] GAP-123 an accepted root records its expec
 test('WHAT[interaction-authority-018] GAP-123 a closure without a durable source terminal is refused and the active run keeps its identity', async () => {
   await withSharedJournal('managed-no-source', async (handle, reopen, directory) => {
     const session = 'managed-no-source'
-    const store = journal.JournalSurface_eventStore(handle)
     const accepted = await dispatch.acceptHumanRootSelection(
       handle,
       session,
@@ -456,7 +467,7 @@ test('WHAT[interaction-authority-018] GAP-123 a closure without a durable source
     assert.equal(accepted.ok, true, JSON.stringify(accepted.error))
 
     // No durable source terminal exists, so no closure may be written.
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(store.gitCommonDir ?? directory, session, 'retirement-no-source')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, 'retirement-no-source')
 
     const active = authorityOf(handle, session)
     assert.notEqual(active.activeLogicalRun, null, 'a closure without a durable source releases nothing')
@@ -468,7 +479,6 @@ test('WHAT[interaction-authority-018] GAP-123 a closure without a durable source
 test('WHAT[interaction-authority-018] GAP-123 a repeated closure append is idempotent and a conflicting closure is refused across restart', async () => {
   await withSharedJournal('managed-conflict', async (handle, reopen, directory) => {
     const session = 'managed-conflict'
-    const store = journal.JournalSurface_eventStore(handle)
     const accepted = await dispatch.acceptHumanRootSelection(
       handle,
       session,
@@ -491,7 +501,7 @@ test('WHAT[interaction-authority-018] GAP-123 a repeated closure append is idemp
     )
     assert.equal(appended.ok, true, JSON.stringify(appended.error))
 
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(store.gitCommonDir ?? directory, session, 'retirement-conflict-1')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, 'retirement-conflict-1')
     const closed = authorityOf(handle, session)
     assert.equal(closed.activeLogicalRun, null)
     assert.equal(closed.closedRuns.length, 1)

@@ -71,7 +71,7 @@ module JsToolHostSurface =
                 // This surface carries no host attribution: the delivery witness
                 // of a call is settled by the host's own tool registration.
                 JsToolSpec.create factory surface workspaceRoot persistence lifecyclePersistence None rootOf (fun _ ->
-                    Task.FromResult None)
+                    Task.FromResult None) (fun _ -> "0")
 
             let registered = ToolHostCodec.register factory spec
             box (JsRegisteredToolHandle(spec, registered))

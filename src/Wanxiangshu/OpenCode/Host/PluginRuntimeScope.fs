@@ -56,6 +56,10 @@ type PluginRuntimeScope
     let mutable durabilityActivators: (unit -> unit) list = []
     // DSL-MUTABLE: resource — first real durable admission owns activation exactly once.
     let mutable durabilityActivated = false
+    // DSL-MUTABLE: resource — load-phase recovery work started by durability
+    // activators. crash-reconciliation-020 requires the void settlement to land
+    // BEFORE the next handoff's identity judgment, so admission awaits these.
+    let mutable durabilityActivationWorks: Task list = []
     // DSL-MUTABLE: resource — crash-reconciliation-018: one restart status guidance
     // is owed to the next real user instruction after this process's load-phase
     // normalization; consumed once, never persisted (the delivered bytes are
@@ -137,6 +141,38 @@ type PluginRuntimeScope
 
         for activate in activators do
             activate ()
+
+    /// Register load-phase recovery work started by a durability activator so the
+    /// first admission can await it (crash-reconciliation-020 ordering: the void
+    /// settlement must land before the next handoff reads the durable authority).
+    member _.TrackDurabilityActivation(work: Task) : unit =
+        lock durabilityActivationGate (fun () ->
+            durabilityActivationWorks <- work :: durabilityActivationWorks)
+        ()
+
+    /// Await every durability-activation recovery work registered so far. The
+    /// tracked tasks never fault (failures are captured into the background
+    /// failure slot), so awaiting cannot throw.
+    member _.AwaitDurabilityActivation() : Task =
+        let pending =
+            lock durabilityActivationGate (fun () -> durabilityActivationWorks)
+
+        task {
+            if pending.Length > 0 then
+                for work in pending do
+                    do! work
+
+                lock durabilityActivationGate (fun () ->
+                    durabilityActivationWorks <-
+                        durabilityActivationWorks
+                        |> List.filter (fun work ->
+                            not (
+                                List.exists (fun awaited ->
+                                    obj.ReferenceEquals(work, awaited))
+                                    pending
+                            )))
+        }
+        :> Task
 
     /// crash-reconciliation-018: load-phase normalization just happened; the next
     /// real user instruction in this process must carry one restart status guidance.
@@ -282,9 +318,16 @@ type PluginRuntimeScope
         }
         :> Task
 
-    member this.RunBackground(start: unit -> Task) : unit =
+    /// RunBackground variant that returns the observed task so a durability
+    /// activator can register it for admission awaiting.
+    member this.RunBackgroundTracked(start: unit -> Task) : Task =
         if this.AdmitOwnedWork() then
-            this.ObserveBackgroundWork(start) |> ignore
+            this.ObserveBackgroundWork start
+        else
+            Task.FromResult(()) :> Task
+
+    member this.RunBackground(start: unit -> Task) : unit =
+        this.RunBackgroundTracked start |> ignore
 
     member private this.RunAdmittedOwnedWork(start: unit -> Task) : Task =
         task {

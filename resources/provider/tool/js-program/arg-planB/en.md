@@ -1,1 +1,0 @@
-Required non-empty text describing what to do if this request cannot keep waiting. At admission, UTF8Bytes(planB) × 50ms sets one deadline for the entire request, including every call and unpark and their resumed targets. Program code cannot renew it. This text is not executable code. Expiry pauses active programs and preserves running commands.

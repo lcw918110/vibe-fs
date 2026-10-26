@@ -117,16 +117,33 @@ module AdvisorSeat =
             | true, seat -> seat
             | false, _ -> createSeat callerSessionId)
 
-    let private createAdvisorChild (deps: AdvisorSeatDeps) (callerId: SessionId) : Task<Result<SessionId, string>> =
+    let private createNewAdvisorChild (deps: AdvisorSeatDeps) (callerId: SessionId) (options: ChildSessionOptions) =
         task {
-            let options: ChildSessionOptions =
-                { Title = Some advisorAgent
-                  Agent = Some advisorAgent
-                  Directory = deps.Directory }
-
             match! deps.Sessions.CreateChildSession(callerId, options) with
             | Ok childId -> return Ok childId
             | Error reason -> return Error(sprintf "advisor seat creation failed: %s" reason)
+        }
+
+    let private adoptAdvisorChild (deps: AdvisorSeatDeps) (callerId: SessionId) (options: ChildSessionOptions) (children: ChildSessionInfo list) =
+        let matches =
+            children |> List.filter (fun child ->
+                child.Title = options.Title && child.Agent = Some advisorAgent)
+        match matches with
+        | [ existing ] -> Task.FromResult(Ok existing.SessionId)
+        | _ :: _ -> Task.FromResult(Error "multiple advisor seats already exist for this caller; refusing to create another")
+        | [] -> createNewAdvisorChild deps callerId options
+
+    let private createAdvisorChild (deps: AdvisorSeatDeps) (callerId: SessionId) : Task<Result<SessionId, string>> =
+        task {
+            let options: ChildSessionOptions =
+                { Title = Some("wanxiangshu:dedi-advisor:" + SessionId.value callerId)
+                  Agent = Some advisorAgent
+                  Directory = deps.Directory }
+            let familyRoot = deps.Sessions.FamilyRootOf callerId
+            let! listed = deps.Sessions.ListChildren familyRoot
+            match listed with
+            | Error reason -> return Error("advisor seat adoption requires physical child listing: " + reason)
+            | Ok children -> return! adoptAdvisorChild deps callerId options children
         }
 
     let private startSeatChild (deps: AdvisorSeatDeps) (seat: Seat) : Task<Result<SessionId, string>> =
@@ -471,6 +488,24 @@ module AdvisorSeat =
                 return! runConsultAndVoid deps journal callerSessionId childId intent
         }
 
+    let private verifyAdvisorCaller (journal: AgentJournal) (callerSessionId: string) =
+        let sessions = (AgentJournal.snapshot journal).AgentProjections
+        let caller = SessionId.create callerSessionId
+        let owner =
+            PromptAuthorityProjectionQueries.activeProfile caller sessions
+            |> Option.orElseWith (fun () -> PromptAuthorityProjectionQueries.lastAuthorityProfile caller sessions)
+        match owner with
+        | Some profile when profile.CanonicalRole = Role.Advisor ->
+            Error "A dedicated Advisor cannot open another dedicated Advisor seat"
+        | _ -> Ok ()
+
+    let private consultAfterJournal (deps: AdvisorSeatDeps) (callerSessionId: string) (intent: string) (journal: AgentJournal) =
+        task {
+            match verifyAdvisorCaller journal callerSessionId with
+            | Error reason -> return Error reason
+            | Ok () -> return! openSeat deps journal callerSessionId intent
+        }
+
     let private consultCore
         (deps: AdvisorSeatDeps)
         (callerSessionId: string)
@@ -479,7 +514,7 @@ module AdvisorSeat =
         task {
             match requireJournal deps with
             | Error reason -> return Error reason
-            | Ok journal -> return! openSeat deps journal callerSessionId intent
+            | Ok journal -> return! consultAfterJournal deps callerSessionId intent journal
         }
 
 

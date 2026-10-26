@@ -55,10 +55,10 @@ module ToolAdmissions =
     /// resetScope is the context-protocol tool: every role that holds the
     /// ResetScope office capability may archive its own scope.
     let resetScope: ToolAdmission =
-        officeRole (fun r -> r = Role.Advisor || OfficeCapability.isAllowed r ToolPermission.ResetScope)
+        officeRole (fun r -> r <> Role.Advisor && OfficeCapability.isAllowed r ToolPermission.ResetScope)
 
     /// Non-authorizing protocol: only bound delegates can submit questions.
-    let negotiate: ToolAdmission = officeRole (fun _ -> true)
+    let negotiate: ToolAdmission = officeRole (fun role -> role <> Role.Advisor)
 
     let askPreviousScope: ToolAdmission = resetScope
 

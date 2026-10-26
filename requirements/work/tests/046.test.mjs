@@ -7,13 +7,13 @@ import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 
 const surface = lifecycle.LifecycleSurface ?? lifecycle
 
-const open = (work, requestId) =>
+const review = (work, requestId, updates) =>
   work.execute(requestId, {
-    type: 'Open',
-    root: '/repo/wanxiangshu',
-    sequence: ['S1', 'S2', 'S3'],
-    ownerId: 'owner-1',
-    openingCursor: 7,
+    type: 'Review',
+    office: 'Plan',
+    providerRunId: 'run',
+    toolCallId: requestId,
+    updates,
   })
 
 test('WHAT[work-046] durable result keeps the caller requestId and only a committed DeliveryRequested may start', () => {
@@ -21,24 +21,24 @@ test('WHAT[work-046] durable result keeps the caller requestId and only a commit
   const journal = new SqliteJournal(database)
   const work = new DurableWork('work-1', journal)
   try {
-    const requestId = 'open-work-1'
-    const committed = open(work, requestId)
+    const requestId = 'review-work-1'
+    const committed = review(work, requestId, [])
     const seen = surface.observeDurable(requestId, committed)
     assert.equal(seen.requestId, requestId)
     assert.equal(seen.status, 'Committed')
-    assert.equal(seen.kind, 'Opened')
+    assert.equal(seen.kind, 'Asked')
     assert.equal(surface.mayStartDelivery(committed), false)
 
-    const replayed = open(work, requestId)
+    const replayed = review(work, requestId, [])
     const replayedSeen = surface.observeDurable(requestId, replayed)
     assert.equal(replayedSeen.requestId, requestId)
-    assert.notEqual(replayedSeen.requestId, 'open-work-1-replay')
+    assert.notEqual(replayedSeen.requestId, 'review-work-1-replay')
     assert.equal(replayedSeen.status, 'Replayed')
     assert.equal(surface.mayStartDelivery(replayed), false)
 
-    const refused = open(work, 'open-work-1-other')
+    const refused = review(work, 'review-work-1-other', [{ key: 'item', value: 'later' }])
     assert.notEqual(refused.status, 'Committed')
-    assert.equal(surface.observeDurable('open-work-1-other', refused).requestId, 'open-work-1-other')
+    assert.equal(surface.observeDurable('review-work-1-other', refused).requestId, 'review-work-1-other')
     assert.equal(surface.mayStartDelivery(refused), false)
 
     for (const status of ['Unknown', 'NotWritten', 'Conflict']) {

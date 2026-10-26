@@ -663,11 +663,8 @@ type ToolRuntimeScope
 
     let managerFactsOfSession (directory: string option) (sessionId: string) : Task<ManagerCapabilityFacts> =
         task {
-            // The capability gate reads the wanxiangli work snapshot for this
-            // session. No phase enum crosses this boundary: an inactive work grants
-            // nothing, a recorded cleanup blocker confines to the finish window, a
-            // promoted final incumbent keeps the read/cleanup/close-out surface, and
-            // every other active fact keeps the full Manager set.
+            // The capability gate reads the committed work snapshot. A substantive
+            // review is the assessment. Cleanup is the milestone 「收尾」.
             let! work = lifecycleWorkOfDirectory directory sessionId
 
             return
@@ -677,7 +674,7 @@ type ToolRuntimeScope
                     | None -> defaultEmptyManagerFacts
                     | Some _ ->
                         { HasActiveIncumbency = true
-                          HasAssessment = false
+                          HasAssessment = work.Reviewed
                           IsFinalIncumbent = work.Stage = "收尾"
                           CleanupBlockerDigest = work.BlockerDigest })
                 |> Option.defaultValue defaultEmptyManagerFacts
@@ -994,6 +991,7 @@ type ToolRuntimeScope
         (answer: string)
         (receipt: string)
         (confirm: string -> string -> bool)
+        (awaitPhysical: bool)
         : Task<Result<unit, string>> =
         let target = SessionId.create recipient
         let directory = directoryFor recipient |> Option.orElse workspaceDirectory
@@ -1014,7 +1012,10 @@ type ToolRuntimeScope
         match journal, active, last with
         | None, _, _ -> Task.FromResult(Error "No AgentJournal: cannot enqueue visible negotiation guidance")
         | Some _, Some current, _ ->
-            HostForkBusyNudge.sendObserved sessions journal target current directory answer observer
+            if awaitPhysical then
+                HostForkBusyNudge.sendObservedAwait sessions journal target current directory answer observer
+            else
+                HostForkBusyNudge.sendObserved sessions journal target current directory answer observer
         | Some durable, None, Some closed ->
             // A completed child needs a new owned logical run, not a
             // continuation of a closed run. Both paths share Dispatcher.
@@ -1026,13 +1027,13 @@ type ToolRuntimeScope
                 (LlmFacing.renderInstruction answer)
                 closed.IdentitySeed
                 directory
-                PromptDispatcher.AwaitMode.Detached
+                (if awaitPhysical then PromptDispatcher.AwaitMode.Await else PromptDispatcher.AwaitMode.Detached)
                 (Some observer)
             |> TaskValue.map (Result.map ignore)
         | Some _, None, None -> Task.FromResult(Error "Negotiation recipient has no previous managed authority profile")
 
     let sendNegotiationSteer (recipient: string) (answer: string) (receipt: string) =
-        sendConsultationSteer recipient answer receipt Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer
+        sendConsultationSteer recipient answer receipt Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer false
 
     let scopeArchive (sessionText: string) : Result<Wanxiangshu.Context.Prefix.ArchivedScope, string> =
         let current =
@@ -1066,7 +1067,7 @@ type ToolRuntimeScope
         if not (isCurrent ()) then
             Task.FromResult(Error "stale previous Scope answer: target epoch is no longer current")
         else
-            sendConsultationSteer recipient answer receipt confirm
+            sendConsultationSteer recipient answer receipt confirm false
 
     let parseVerifiedScope (sessionText: string) (text: string) : Result<obj, string> =
         let decoded: Result<obj, string> =
@@ -1283,10 +1284,16 @@ type ToolRuntimeScope
         sendNegotiationSteer recipient answer receipt
 
     member _.SendAdvisorSteer(recipient: string, answer: string, processId: string, isCurrent: unit -> bool) =
-        if not (isCurrent ()) then
-            Task.FromResult(Error "stale Advisor answer: source Scope is no longer current")
-        else
-            sendConsultationSteer recipient answer processId (fun _ _ -> isCurrent ())
+        task {
+            if not (isCurrent ()) then
+                return Error "stale Advisor answer: source Scope is no longer current"
+            else
+                let! delivered = sendConsultationSteer recipient answer processId (fun _ _ -> isCurrent ()) true
+                if not (isCurrent ()) then
+                    return Error "stale Advisor answer: Scope advanced before physical steer confirmation"
+                else
+                    return delivered
+        }
 
     member _.AttachPreviousScopeTransport(ask: string -> obj -> string -> Task<Result<string, string>>) =
         askArchivedScope <- Some ask
@@ -1557,8 +1564,9 @@ type ToolRuntimeScope
 
         let send (request: obj) =
             task {
-                let! outcome =
-                    sessions.SendPrompt(SessionId.create ctx.SessionId, string request?text, promptOptions None)
+                let sessionId = SessionId.create ctx.SessionId
+                use _listener = sessions.SubscribeTerminal(sessionId, (fun _ _ -> ()))
+                let! outcome = sessions.SendPrompt(sessionId, string request?text, promptOptions None)
 
                 if admitted outcome then
                     return createObj [ "ok", box true ]
@@ -1581,9 +1589,12 @@ type ToolRuntimeScope
 
         let draft (request: obj) =
             task {
+                let sessionId = SessionId.create(string request?sessionId)
+                use _listener = sessions.SubscribeTerminal(sessionId, (fun _ _ -> ()))
+
                 let! outcome =
                     sessions.SendPrompt(
-                        SessionId.create(string request?sessionId),
+                        sessionId,
                         string request?digest,
                         promptOptions (Some "manager")
                     )

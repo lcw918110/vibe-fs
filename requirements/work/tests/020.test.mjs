@@ -21,63 +21,54 @@ import {
 const assemble = (rawMessages, tenure, messageCursors) =>
   surface.PlanningSurface.assembleTenureMessages(rawMessages, tenure, messageCursors)
 
-test('WHAT[work-020] U messages are preserved verbatim in original order', () => {
-  const rawMessages = [
-    userText('u-1', '设计缓存架构\n第二行'),
-    assistantText('a-old', 'previous tenure work', 'u-1'),
-    userText('u-2', '补充约束: no cache invalidation'),
-    assistantText('a-new', 'current tenure work', 'u-2'),
-  ]
-  const tenure = {
-    workId: 'w-001-inputs',
-    incumbencyId: 'inc-2',
-    stage: 'S2',
-    openingCursor: 20n,
-    isFreshHandover: false,
-  }
-  const result = assemble(
-    rawMessages,
-    tenure,
-    cursors({ 'a-old': 15n, 'a-new': 30n }),
-  )
-  const userContents = result.messages
-    .filter((m) => msgRole(m) === 'user')
-    .map(msgText)
-  assert.deepEqual(userContents, ['设计缓存架构\n第二行', '补充约束: no cache invalidation'])
+const mark = (message, fields) => Object.assign(message, { toolCallId: null, resultFor: null, tenureId: null, ...fields })
+
+const barrierTenure = (extra = {}) => ({
+  workId: 'w-001-inputs',
+  incumbencyId: 'next',
+  stage: '执行',
+  openingCursor: 0n,
+  isFreshHandover: false,
+  barrierToolCallId: 'review-1',
+  successorTenureId: 'next',
+  ...extra,
 })
 
-test('WHAT[work-020] neither initial nor later tenures ever inject a synthetic-prev-* message', () => {
+test('WHAT[work-020] a current-tenure user message keeps its original bytes', () => {
+  const current = mark(userText('u-2', '补充约束: no cache invalidation'), { tenureId: 'next' })
   const rawMessages = [
-    userText('u-1', 'go'),
-    assistantText('a-old', 'prior work', 'u-1'),
-    assistantText('a-new', 'current work', 'u-1'),
+    mark(userText('u-1', '设计缓存架构\n第二行'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review', 'u-1'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(assistantText('result', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    current,
+    mark(assistantText('a-new', 'current tenure work', 'u-2'), { tenureId: 'next' }),
   ]
+  const result = assemble(rawMessages, barrierTenure(), {})
+  assert.equal(result.messages[0], current)
+  assert.equal(msgText(result.messages[0]), '补充约束: no cache invalidation')
+  assert.equal(ids(result.messages).includes('u-1'), false)
+})
+
+test('WHAT[work-020] neither an open tenure nor a successor view injects a synthetic-prev-* message', () => {
   const firstTenure = {
     workId: 'w-001-inputs',
     incumbencyId: 'inc-1',
-    stage: 'S1',
+    stage: '事实与取舍',
     openingCursor: 0n,
     isFreshHandover: true,
   }
-  const laterTenure = {
-    workId: 'w-001-inputs',
-    incumbencyId: 'inc-2',
-    stage: 'S2',
-    openingCursor: 20n,
-    isFreshHandover: true,
-  }
+  const laterMessages = [
+    mark(userText('u-1', 'go'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(assistantText('result', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    mark(assistantText('a-new', 'current work', 'u-1'), { tenureId: 'next' }),
+  ]
   const firstResult = assemble([userText('u-1', 'go')], firstTenure, {})
-  const laterResult = assemble(rawMessages, laterTenure, cursors({ 'a-old': 10n, 'a-new': 25n }))
-  assert.ok(
-    !firstResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true),
-    'first tenure must not carry any synthetic-prev-* message',
-  )
-  assert.ok(
-    !laterResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true),
-    'later tenure must not carry any synthetic-prev-* message',
-  )
+  const laterResult = assemble(laterMessages, barrierTenure({ isFreshHandover: true }), {})
+  assert.ok(!firstResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true))
+  assert.ok(!laterResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true))
   assert.deepEqual(ids(firstResult.messages), ['u-1'])
-  assert.deepEqual(ids(laterResult.messages), ['u-1', 'a-new'])
+  assert.deepEqual(ids(laterResult.messages), ['a-new'])
 })
 
 test('WHAT[work-020] assembled messages come only from U and current-tenure interactions', () => {
@@ -132,26 +123,15 @@ test('WHAT[work-020] a negative openingCursor rejects assembly fail-closed', () 
   )
 })
 
-test('WHAT[work-020] synthetic rows are stripped and never re-injected during assembly', () => {
+test('WHAT[work-020] synthetic rows are dropped by the barrier and never re-injected', () => {
   const rawMessages = [
-    userText('u-1', 'go'),
-    syntheticPredecessor('inc-old', 'w-001', 'old synthesized previous row'),
-    assistantText('a-1', 'current work', 'u-1'),
+    mark(userText('u-1', 'go'), { tenureId: 'old' }),
+    mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
+    mark(assistantText('result', 'recorded'), { resultFor: 'review-1', tenureId: 'old' }),
+    mark(syntheticPredecessor('inc-old', 'w-001', 'old synthesized previous row'), { tenureId: 'next' }),
+    mark(assistantText('a-1', 'current work', 'u-1'), { tenureId: 'next' }),
   ]
-  const tenure = {
-    workId: 'w-001-inputs',
-    incumbencyId: 'inc-2',
-    stage: 'S2',
-    openingCursor: 20n,
-    isFreshHandover: false,
-  }
-  const result = assemble(
-    rawMessages,
-    tenure,
-    cursors({ 'a-1': 30n }),
-  )
-  const syntheticRows = result.messages.filter((m) => msgId(m).startsWith('synthetic-prev-'))
-  assert.equal(syntheticRows.length, 0, 'no synthetic-prev-* row is ever present')
-  assert.ok(!result.messages.some((m) => msgId(m) === 'synthetic-prev-inc-old'))
-  assert.deepEqual(ids(result.messages), ['u-1', 'a-1'])
+  const result = assemble(rawMessages, barrierTenure(), {})
+  assert.equal(result.messages.filter((message) => msgId(message).startsWith('synthetic-prev-')).length, 0)
+  assert.deepEqual(ids(result.messages), ['a-1'])
 })

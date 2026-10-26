@@ -160,7 +160,7 @@ test('WHAT[repository-programming-018] JS019_missing_anchor_uses_stable_code', a
     return { ok: true };
   }
 }`
-    const outcome = await execute(dir, 'Coder', 'en', 'sess-018', { name: "missing-anchor-018", program, planB: "Wait for the anchor lookup and preserve its original pause." }, 2000, Date.now() + 60_000, 1 << 20, null)
+    const outcome = await execute(dir, 'Coder', 'en', 'sess-018', { name: "missing-anchor-018", program, intent: "Wait for the anchor lookup and preserve its original pause." }, 2000, Date.now() + 60_000, 1 << 20, null)
     assert.equal(caseName(outcome), 'Parked')
     const payload = parkedPayload(outcome).payload
     assert.equal(payload.needle, '## JS-007 FileView.text()')

@@ -4,7 +4,6 @@ open System.Threading.Tasks
 
 module JsToolsBindings =
     val createLedger: persistence: IJsTransactionPersistence option -> JsAsIsLedger
-    val makeAdvisorMember: host: JsDelegationHost option -> (string * obj)
     val makeReviewMember: host: JsDelegationHost option -> (string * obj)
 
     val createApi:

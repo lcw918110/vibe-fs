@@ -8,16 +8,29 @@ import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import { rootFor, rootSelection, withJournal, withSharedJournal, acceptOwner, hostPort } from './support/authority.mjs'
 
 const completeManagerLife = async (handle, session, directory) => {
-  const store = journal.JournalSurface_eventStore(handle)
-  assert.ok(store, 'journal handle has no event store')
-  const opened = await lifecycle.seedOpen(store, 'S4', session, directory, 1n)
-  assert.equal(opened.ok, true, opened.error)
-  const reviewed = await lifecycle.seedReview(store, session, 'Promoted')
-  assert.equal(reviewed.ok, true, reviewed.error)
-  const confirmed = await lifecycle.seedDeliver(store, session, `run-close-${session}`, 'call-first', 2n)
-  assert.equal(confirmed.ok, true, confirmed.error)
-  const retired = await lifecycle.seedDeliver(store, session, `run-close-${session}`, 'call-second', 3n)
-  assert.equal(retired.ok, true, retired.error)
+  const surface = lifecycle.LifecycleSurface ?? lifecycle
+  const step = (requestId, updates) => {
+    const receipt = surface.submitReview(directory, session, requestId, 'Manager', 'run-1', requestId, updates, [], '')
+    assert.equal(receipt.status, 'Committed', receipt.reason)
+    return receipt
+  }
+  const reviewed = step('review', [{ key: 'job', value: 'do' }])
+  assert.equal(reviewed.kind, 'Reviewed', reviewed.reason)
+  assert.equal(reviewed.milestone, '执行')
+  const relayed = step('relay', [{ key: 'job', value: null }])
+  assert.equal(relayed.kind, 'Relayed', relayed.reason)
+  const advanced = step('advance', [])
+  assert.equal(advanced.kind, 'Advanced', advanced.reason)
+  assert.equal(advanced.milestone, '收尾')
+  const completed = step('close', [])
+  assert.equal(completed.kind, 'Completed', completed.reason)
+  assert.equal(completed.milestone, '已完成')
+  const view = surface.inspected(directory, session)
+  assert.equal(view.Delivered, true)
+  assert.equal(view.ActiveId ?? null, null)
+  const retirement = Array.from(view.Retirements ?? []).at(-1)
+  assert.equal(retirement.Outcome, 'Completed')
+  await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirement.RetirementId)
   assert.equal(dispatch.projectionObservation(handle, session).activeLogicalRun, null)
 }
 

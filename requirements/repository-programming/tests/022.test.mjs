@@ -66,7 +66,7 @@ test('WHAT[repository-programming-022] JS_description_is_action_first_then_teach
     true,
     'the first screen must identify the required argument before the long editing discipline',
   )
-  assert.match(lessonText.slice(0, 500), /name.*program.*planB/i)
+  assert.match(lessonText.slice(0, 500), /name.*program.*intent/i)
   assert.match(lessonText.slice(0, 1000), /WARNING: You may be about to turn a bounded filesystem task into a self-inflicted repair job\./,
     'the paid-failure warning remains immediately after the short tool-call contract')
 
@@ -118,7 +118,7 @@ test('WHAT[repository-programming-022] JS_description_is_action_first_then_teach
     true,
     '中文第一屏先交代三个必填参数',
   )
-  assert.match(zh.slice(0, 380), /name.*program.*planB/)
+  assert.match(zh.slice(0, 380), /name.*program.*intent/)
   assert.match(zh.slice(0, 750), /警告：你正准备把一个本来有边界保护的文件任务，亲手变成一场返工事故。/,
     '原有边界警告紧接在简短调用合同后仍保留')
 

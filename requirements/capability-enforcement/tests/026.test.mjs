@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import fc from 'fast-check'
+import { mkdtempSync, rmSync, readdirSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { acceptAuthorityRoot, injectAcceptedAssessment, openIncumbency, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import { acceptAuthorityRoot, injectAcceptedAssessment, openIncumbency, withExecutablePlugin, withRestartablePlugin, notifyCompleted } from '../../verification-system/tests/support/plugin-fixture.mjs'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
-import * as workspaceEvents from '../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js'
+import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as journalSurface from '../../../dist/Persistence/Journal/Surface.js'
 import { superviseNodeTest } from '../../verification-system/tests/e2e/support/supervise-node-test.mjs'
 import { UNIT_VERDICT_SILENCE_MS } from '../../verification-system/tests/e2e/support/time-budget.js'
@@ -28,19 +31,43 @@ const UNKNOWN_CALLING = 'unknown-calling'
 const CALLING_CONFLICT = 'calling-conflict'
 const PERSON_UNKNOWN = 'person-unknown'
 
-// 派工门读插件正在读的同一份工作区事件库，与 fixture 的 lifecycleStore 同源。
-const storeOf = async (directory) => workspaceEvents.acquire(await journalSurface.JournalSurface_initializeStateRoot(directory))
-
 // 编程面成员的唯一入口：Manager 的 `todowrite-for-manager` 工具执行一段程序，
 // 程序内调用 `this.fork` / `this.resume`。返回渲染后的 TOML 字符串。
 let programSequence = 0
 const runManagerProgram = async (hooks, sessionID, body) =>
   await hooks.tool['todowrite-for-manager'].execute(
     { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'manager-program-' + (++programSequence),
-          planB: 'Wait for the actual manager dispatch receipt without extending the request window.'
+          intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
+          remainingScopeTurnsEstimate: 8,
         },
     { sessionID, agent: 'manager' },
   )
+
+const runAndSettleManagerProgram = async (hooks, sessionID, body, maxWaitMs = 4000) => {
+  const name = 'manager-program-' + (++programSequence)
+  let result = await hooks.tool['todowrite-for-manager'].execute(
+    {
+      program: `class Js extends JsProgram { async run() { ${body} } }`,
+      name,
+      intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
+      remainingScopeTurnsEstimate: 8,
+    },
+    { sessionID, agent: 'manager' },
+  )
+  const deadline = Date.now() + maxWaitMs
+  while (/^state = "parked"$/m.test(String(result)) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 40))
+    result = await hooks.tool['todowrite-for-manager'].execute(
+      {
+        resume: name,
+        intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
+        remainingScopeTurnsEstimate: 8,
+      },
+      { sessionID, agent: 'manager' },
+    )
+  }
+  return result
+}
 
 // 载荷与 carry（整数锚点和字面字符串组成的数组，缺省为空）。
 const forkCall = (payload) => `return await this.fork(${JSON.stringify(payload)}, []);`
@@ -295,13 +322,23 @@ test('WHAT[capability-enforcement-026] D09_relayed_tenure_refuses_new_devops_dis
     await openIncumbency(runtime, sessionID)
     await injectAcceptedAssessment(runtime, sessionID) // Stayed
 
-    const store = await storeOf(directory)
-    await lifecycle.seedReview(store, sessionID, 'Cleared')
-    // Single delivery: Stayed review relays to successor in one deliver call
-    const relayed = await lifecycle.seedDeliver(store, sessionID, 'run-d09', 'call-d09-first', 2n)
-    assert.equal(relayed.ok, true, relayed.error)
-    const view = lifecycle.workView(store, sessionID)
-    assert.equal(view.active, true, 'relay opened successor tenure')
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    const surface = lifecycle.LifecycleSurface ?? lifecycle
+    const relayed = await surface.submitReview(
+      commonDir,
+      sessionID,
+      'relay-' + sessionID,
+      'Manager',
+      'run-d09',
+      'call-d09-first',
+      [{ key: 'opened', value: null }],
+      [],
+      '',
+    )
+    assert.equal(relayed.kind, 'Relayed', relayed.reason)
+    const inspected = surface.inspected(commonDir, sessionID)
+    assert.ok(inspected?.ActiveId, 'relay opened successor tenure')
+    assert.equal(inspected.Delivered, false)
 
     const createdBefore = createdIds.length
     const promptsBefore = runtime.prompts.length
@@ -410,6 +447,139 @@ test('WHAT[capability-enforcement-026] D11_cross_process_devops_dispatch_capabil
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+test('WHAT[capability-enforcement-026] D12_devops_session_reuse_property_lands_restart_void_before_handoff_without_conflict', async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      fc.tuple(
+        fc.stringMatching(/^[A-Z0-9_-]{1,16}$/),
+        fc.array(
+          fc.record({
+            charge: fc.stringMatching(/^[A-Z0-9_-]{1,16}$/),
+            restartBefore: fc.boolean(),
+          }),
+          { minLength: 1, maxLength: 3 },
+        ),
+      ).map(([initCharge, continuations]) => {
+        if (!continuations.some((c) => c.restartBefore)) {
+          continuations[0].restartBefore = true
+        }
+        return [{ charge: initCharge, restartBefore: false }, ...continuations]
+      }),
+      async (operations) => {
+        await withRestartablePlugin(async (start, _directory, fixture) => {
+          const sessionID = `ses-d12-${++programSequence}`
+          let currentHooks = await start()
+          await fixture.withRuntime(async (runtime) => {
+            await acceptAuthorityRoot(runtime, sessionID, 'manager')
+            await openIncumbency(runtime, sessionID)
+            await injectAcceptedAssessment(runtime, sessionID)
+          })
+
+          const initial = await runAndSettleManagerProgram(
+            currentHooks,
+            sessionID,
+            resumeCall({ name: 'devops', charge: 'INIT-' + operations[0].charge, intent: 'PROCEED-SOLO-IF-BUSY' }),
+          )
+          assert.equal(envelopeOk(initial), true, `Initial dispatch failed: ${rendered(initial)}`)
+          assert.equal(outcomeOf(initial), 'created', initial)
+          assert.equal(fixture.createdIds.length, 1, 'DevOps initial creation must place exactly 1 child session')
+          const devopsChildId = fixture.createdIds[0]
+
+          let initialLogicalRun
+          let initialAuthorityRoot
+          await fixture.withRuntime(async (runtime) => {
+            const profile = dispatch.projectionObservation(runtime.journal, devopsChildId).activeLogicalRun
+            assert.ok(profile, 'devops child must have an active logical run')
+            initialLogicalRun = profile.logicalRun
+            initialAuthorityRoot = profile.authorityRoot
+          })
+
+          let currentLogicalRun = initialLogicalRun
+          let currentAuthorityRoot = initialAuthorityRoot
+
+          for (let i = 1; i < operations.length; i++) {
+            const op = operations[i]
+
+            if (op.restartBefore) {
+              // Start a second plugin incarnation without stopping the previous one,
+              // simulating host crash recovery where in-memory pendingRuns is empty
+              // but durable child session authority remains active.
+              currentHooks = await start()
+
+              // crash-reconciliation-020: the load-phase void is a settlement that
+              // lands at this incarnation's FIRST admission, not at boot. Before
+              // dispatch the durable projection must still hold the previous
+              // active logical run and root.
+              await fixture.withRuntime(async (runtime) => {
+                const preProfile = dispatch.projectionObservation(runtime.journal, devopsChildId).activeLogicalRun
+                assert.ok(preProfile, 'Durable child authority must remain active across restart before next dispatch')
+                assert.equal(
+                  preProfile.logicalRun,
+                  currentLogicalRun,
+                  'Active logical run identity must survive restart intact',
+                )
+                assert.equal(
+                  preProfile.authorityRoot,
+                  currentAuthorityRoot,
+                  'Active authority root must survive restart intact',
+                )
+              })
+            }
+
+            const resumed = await runAndSettleManagerProgram(
+              currentHooks,
+              sessionID,
+              resumeCall({ name: 'devops', charge: `ASSIGN-${i}-${op.charge}`, intent: 'PROCEED-SOLO-IF-BUSY' }),
+            )
+
+            assert.equal(
+              envelopeOk(resumed),
+              true,
+              `Dispatch ${i} must succeed without ActiveRunIdentityConflict: ${rendered(resumed)}`,
+            )
+
+            await fixture.withRuntime(async (runtime) => {
+              const currentProfile = dispatch.projectionObservation(runtime.journal, devopsChildId).activeLogicalRun
+              assert.ok(currentProfile, 'devops child must hold an active logical run after dispatch')
+              if (op.restartBefore) {
+                // crash-reconciliation-020: the void retires the previous run BEFORE
+                // the next handoff, so this dispatch creates a fresh lawful root —
+                // never a second parallel authority, never an identity conflict.
+                assert.notEqual(
+                  currentProfile.logicalRun,
+                  currentLogicalRun,
+                  'Restart void must retire the previous run before the new root is registered',
+                )
+                assert.notEqual(
+                  currentProfile.authorityRoot,
+                  currentAuthorityRoot,
+                  'Restart must replace the retired authority root with exactly one fresh root',
+                )
+              } else {
+                // interaction-authority-013A: same-process reuse continues the
+                // active run via ManagedDelegationAssignment, no new root.
+                assert.equal(
+                  currentProfile.logicalRun,
+                  currentLogicalRun,
+                  'Active logical run identity must be preserved across same-process continuation',
+                )
+                assert.equal(
+                  currentProfile.authorityRoot,
+                  currentAuthorityRoot,
+                  'Authority root identity must be preserved without second root collision',
+                )
+              }
+              currentLogicalRun = currentProfile.logicalRun
+              currentAuthorityRoot = currentProfile.authorityRoot
+            })
+          }
+        })
+      },
+    ),
+    { numRuns: 16, seed: 0x53554242 },
+  )
 })
 
 const durableSnapshot = (directory) => {

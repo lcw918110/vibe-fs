@@ -61,7 +61,6 @@ module JsDescriptionAssets =
           BaseClassDevOps = template lang JsCanonicalDescription.Path.BaseClassDevOps
           BaseClassFission = template lang JsCanonicalDescription.Path.BaseClassFission
           BaseClassHorizon = template lang JsCanonicalDescription.Path.BaseClassHorizon
-          BaseClassAdvisor = template lang JsCanonicalDescription.Path.BaseClassAdvisor
           BaseClassAsk = template lang JsCanonicalDescription.Path.BaseClassAsk
           BaseClassReview = template lang JsCanonicalDescription.Path.BaseClassReview
           BaseClassLifecycle = template lang JsCanonicalDescription.Path.BaseClassLifecycle

@@ -37,7 +37,7 @@ const withJournalRuntime = async (directory, action) => {
   if (!journalResult?.ok) {
     throw new Error(`journal acquire rejected: ${journalResult?.error ?? 'unknown error'}`)
   }
-  const terminalPort = eventsSurface.acquireSharedForWorkspace(directory)
+  const terminalPort = await eventsSurface.acquireSharedForWorkspace(directory)
   try {
     return await action({
       journal: journalResult.journal,
@@ -47,7 +47,7 @@ const withJournalRuntime = async (directory, action) => {
     })
   } finally {
     try {
-      eventsSurface.releaseSharedForWorkspace(directory, terminalPort)
+      await eventsSurface.releaseSharedForWorkspace(directory, terminalPort)
     } finally {
       journalSurface.JournalSurface_dispose(journalResult.journal)
     }
@@ -207,13 +207,10 @@ const stubClient = (createdIds, prompts, messages, abortedIds) => {
         }
         const hk = self.__hooks;
         if (hk && hk['chat.message']) {
-          const admitted = (async () => {
-            try {
-              await hk['chat.message']({ sessionID: sessionId, messageID: message.id, agent: args?.body?.agent }, { message, parts: message.parts })
-            } catch (err) {
-              console.log('HOOK CHAT MESSAGE FAILED:', err)
-            }
-          })()
+          const admitted = hk['chat.message'](
+            { sessionID: sessionId, messageID: message.id, agent: args?.body?.agent },
+            { message, parts: message.parts },
+          )
           ingress.add(admitted)
           try {
             await admitted
@@ -280,7 +277,7 @@ export const withExecutablePlugin = async (body, options = {}, createHooks = ini
         new Date().toISOString(),
       )
       if (!journalResult?.ok) throw new Error(`journal acquire rejected: ${journalResult?.error ?? 'unknown error'}`)
-      const terminalPort = eventsSurface.acquireSharedForWorkspace(directory)
+      const terminalPort = await eventsSurface.acquireSharedForWorkspace(directory)
       if (terminalPort == null) {
         journalSurface.JournalSurface_dispose(journalResult.journal)
         throw new Error('shared terminal port is unavailable')
@@ -309,7 +306,7 @@ export const withExecutablePlugin = async (body, options = {}, createHooks = ini
       } finally {
         if (runtime !== undefined) {
           try {
-            eventsSurface.releaseSharedForWorkspace(directory, runtime.terminalPort)
+            await eventsSurface.releaseSharedForWorkspace(directory, runtime.terminalPort)
           } finally {
             journalSurface.JournalSurface_dispose(runtime.journal)
           }
@@ -408,6 +405,8 @@ export const startPluginIncarnation = async (directory) => {
 
   return {
     hooks,
+    client,
+    createdIds,
     withRuntime: (action) => withJournalRuntime(directory, action),
   }
 }
@@ -482,24 +481,45 @@ export const acceptChildAgentOwnerRoot = async (runtime, childSessionId, promptK
  * one vocabulary in one store; a test seeds real unified events there instead of
  * inventing a relay-shaped private surface.
  */
-const lifecycleStore = async (runtime) => {
+const lifecycleCommonDir = async (runtime) => {
   const directory = runtime?.directory
   if (!directory) throw new Error('lifecycle seeding needs an executable plugin runtime (runtime.directory)')
-  const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+  return journalSurface.JournalSurface_initializeStateRoot(directory)
+}
+
+const lifecycleStore = async (runtime) => {
+  const commonDir = await lifecycleCommonDir(runtime)
   return workspaceEventStoreSurface.acquire(commonDir)
+}
+
+const officeOf = (kind) => {
+  const name = String(kind || '')
+  if (name === 'plan' || name === 'Plan' || name === 'S1') return 'Plan'
+  return 'Manager'
+}
+
+const submitLifecycleReview = (commonDir, sessionId, requestId, office, updates) =>
+  lifecycleSurface.submitReview(commonDir, sessionId, requestId, office, 'run', requestId, updates, [], '')
+
+const obligationsOf = (snapshot) => {
+  const listed = snapshot?.active?.obligations ?? snapshot?.obligations ?? []
+  return Array.from(listed)
 }
 
 export const openIncumbency = async (
   runtime,
   sessionId,
-  incumbencyId = `inc-${sessionId}`,
+  _incumbencyId = `inc-${sessionId}`,
   kind = 'S4',
-  ownerId = 'owner',
+  _ownerId = 'owner',
 ) => {
-  const store = await lifecycleStore(runtime)
-  const result = await lifecycleSurface.seedOpenAs(store, kind, sessionId, runtime.directory, 1n, ownerId)
-  if (!result?.ok) throw new Error(`openIncumbency(${sessionId}) rejected: ${result?.error ?? 'unknown error'}`)
-  return result
+  const commonDir = await lifecycleCommonDir(runtime)
+  const office = officeOf(kind)
+  const receipt = await submitLifecycleReview(commonDir, sessionId, `open-${sessionId}`, office, [])
+  if (receipt?.kind !== 'Asked' && receipt?.status !== 'Replayed') {
+    throw new Error(`openIncumbency(${sessionId}) rejected: ${receipt?.reason ?? receipt?.status ?? 'unknown error'}`)
+  }
+  return { ok: true, kind: receipt.kind, incumbencyId: receipt.incumbencyId ?? '', error: '' }
 }
 
 export const injectAuditPendingIncumbency = openIncumbency
@@ -516,18 +536,38 @@ export const injectAcceptedAssessment = async (
   sessionId,
   incumbencyId = `inc-${sessionId}`,
   outcome = 'Stayed',
-  reviewerId = 'reviewer',
+  _reviewerId = 'reviewer',
 ) => {
-  const store = await lifecycleStore(runtime)
-  const opened = await lifecycleSurface.workView(store, sessionId)
-  if (!opened?.found) {
+  const commonDir = await lifecycleCommonDir(runtime)
+  const opened = lifecycleSurface.inspect(commonDir, sessionId)
+  if (!opened?.office) {
     await openIncumbency(runtime, sessionId, incumbencyId)
   }
-  const result = await lifecycleSurface.seedReviewAs(store, sessionId, outcome, reviewerId)
-  if (!result?.ok) {
-    throw new Error(`injectAcceptedAssessment(${sessionId}) rejected: ${result?.error ?? 'unknown error'}`)
+  const snapshot = lifecycleSurface.inspect(commonDir, sessionId)
+  const office = snapshot?.office || 'Manager'
+  if (outcome === 'Cleared') {
+    const keys = obligationsOf(snapshot)
+    const updates = (keys.length ? keys : [{ key: 'opened' }]).map((entry) => ({ key: entry.key, value: null }))
+    const relayed = await submitLifecycleReview(commonDir, sessionId, `clear-${sessionId}`, office, updates)
+    if (relayed?.kind !== 'Relayed' && relayed?.status !== 'Replayed') {
+      throw new Error(`injectAcceptedAssessment(${sessionId}) rejected: ${relayed?.reason ?? relayed?.kind ?? 'unknown error'}`)
+    }
+    return { ok: true, kind: relayed.kind, error: '' }
   }
-  return result
+  if (obligationsOf(snapshot).length > 0 || snapshot?.active?.substantive === true) {
+    return { ok: true, kind: 'Reviewed', error: '' }
+  }
+  const reviewed = await submitLifecycleReview(
+    commonDir,
+    sessionId,
+    `review-${sessionId}`,
+    office,
+    [{ key: 'opened', value: 'accepted' }],
+  )
+  if (reviewed?.kind !== 'Reviewed' && reviewed?.status !== 'Replayed') {
+    throw new Error(`injectAcceptedAssessment(${sessionId}) rejected: ${reviewed?.reason ?? reviewed?.kind ?? 'unknown error'}`)
+  }
+  return { ok: true, kind: reviewed.kind, error: '' }
 }
 
 export const grantWorkOwned = injectAcceptedAssessment
@@ -537,18 +577,37 @@ export const activateLife = async (runtime, sessionId) => {
 }
 
 export const completeManagerLife = async (runtime, sessionId) => {
-  const store = await lifecycleStore(runtime)
-  const view = await lifecycleSurface.workView(store, sessionId)
-  if (!view?.found) await openIncumbency(runtime, sessionId)
-  const reviewed = await lifecycleSurface.workView(store, sessionId)
-  if (!reviewed?.reviewed) {
-    const seeded = await lifecycleSurface.seedReview(store, sessionId, 'Promoted')
-    if (!seeded?.ok) throw new Error(`LifeCompleted(${sessionId}) review rejected: ${seeded?.error ?? 'unknown error'}`)
+  const commonDir = await lifecycleCommonDir(runtime)
+  if (!lifecycleSurface.inspect(commonDir, sessionId)?.office) {
+    await openIncumbency(runtime, sessionId)
   }
-  const confirm = await lifecycleSurface.seedDeliver(store, sessionId, `run-${sessionId}`, 'call-first', 2n)
-  if (!confirm?.ok) throw new Error(`LifeCompleted(${sessionId}) confirmation rejected: ${confirm?.error ?? 'unknown error'}`)
-  const retired = await lifecycleSurface.seedDeliver(store, sessionId, `run-${sessionId}`, 'call-second', 3n)
-  if (!retired?.ok) throw new Error(`LifeCompleted(${sessionId}) retirement rejected: ${retired?.error ?? 'unknown error'}`)
+  const office = lifecycleSurface.inspect(commonDir, sessionId)?.office
+  if (office !== 'Manager') {
+    throw new Error(`LifeCompleted(${sessionId}) requires a Manager work`)
+  }
+  const step = (id, updates) => submitLifecycleReview(commonDir, sessionId, `${id}-${sessionId}`, office, updates)
+  const milestone = () => lifecycleSurface.inspect(commonDir, sessionId)?.milestone
+  const requireKind = (receipt, expected, label) => {
+    if (receipt?.kind !== expected && receipt?.status !== 'Replayed') {
+      throw new Error(`LifeCompleted(${sessionId}) ${label} rejected: ${receipt?.reason ?? receipt?.kind ?? 'unknown error'}`)
+    }
+  }
+  if (milestone() === '已完成') return
+  if (obligationsOf(lifecycleSurface.inspect(commonDir, sessionId)).length === 0 && milestone() !== '收尾') {
+    requireKind(await step('fill', [{ key: 'opened', value: 'do' }]), 'Reviewed', 'review')
+  }
+  if (milestone() !== '收尾' && milestone() !== '已完成') {
+    const keys = obligationsOf(lifecycleSurface.inspect(commonDir, sessionId))
+    requireKind(
+      await step('relay', keys.map((entry) => ({ key: entry.key, value: null }))),
+      'Relayed',
+      'relay',
+    )
+    requireKind(await step('advance', []), 'Advanced', 'advance')
+  }
+  if (milestone() !== '已完成') {
+    requireKind(await step('close', []), 'Completed', 'close')
+  }
 }
 
 /**
@@ -566,7 +625,8 @@ export const completeManagerLife = async (runtime, sessionId) => {
 export const notifyCompleted = async (runtime, childSessionId, sessionWideText, turnFormalText, roleCaseTag = 2) => {
   const roleLabels = ['manager', 'orchestrator', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'engineer']
   const role = roleLabels[roleCaseTag] ?? 'coder'
-  await eventsSurface.notifyCompleted(runtime.terminalPort, childSessionId, sessionWideText, turnFormalText, role)
+  const port = await runtime.terminalPort
+  return eventsSurface.notifyCompleted(port, childSessionId, sessionWideText, turnFormalText, role)
 }
 
 /**

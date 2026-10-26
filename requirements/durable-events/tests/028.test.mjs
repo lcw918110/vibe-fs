@@ -116,8 +116,9 @@ test('WHAT[durable-events-028] a missing manager worktree still reads work from 
   const store = workspaceSurface.acquire(stateRoot)
   const workId = 'ses-missing-worktree'
   try {
-    const opened = await lifecycle.seedOpen(store, 'S4', workId, stateRoot, 0n)
-    assert.equal(opened.ok, true, opened.error)
+    const surface = lifecycle.LifecycleSurface ?? lifecycle
+    const opened = surface.submitReview(stateRoot, workId, 'open', 'Manager', 'run', 'open', [{ key: 'job', value: 'do' }], [], '')
+    assert.equal(opened.kind, 'Reviewed', opened.reason)
     const missingWorktree = path.join(repo, 'not-created-yet')
     const signal = await hostSurface.loopSignalOf(missingWorktree, workId)
     assert.equal(signal.kind, 'None')

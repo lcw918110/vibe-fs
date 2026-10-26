@@ -5,7 +5,6 @@ import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { DurableWork } from 'wanxiangli/durable-work'
 import { SqliteJournal } from 'wanxiangli/eventstore'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import * as surface from '../../../dist/Mission/Planning/Surface.js'
@@ -26,77 +25,63 @@ const withStore = async (body) => {
   }
 }
 
-test('WHAT[work-036] the first prompt of a plan session opens the work and starts the first tenure at S1', async () => {
+const eventsOf = (dir, workId) => {
+  const path = life.journalPath(dir)
+  if (!existsSync(path)) return []
+  const database = new DatabaseSync(path)
+  const journal = new SqliteJournal(database)
+  try {
+    return journal.read(workId).flatMap((line) => JSON.parse(line).events ?? [])
+  } finally {
+    journal.close()
+  }
+}
+
+const planReview = (dir, workId, id, updates) =>
+  life.submitReview(dir, workId, id, 'Plan', `run-${id}`, `call-${id}`, updates, null, '')
+
+test('WHAT[work-036] the first plan review opens the work at 事实与取舍 and ensurePlanWorkOpened does not', async () => {
   assert.equal(typeof surface.PlanningSurface.ensurePlanWorkOpened, 'function')
-
-  // Opening is exactly WorkOpened + the first IncumbencyOpened. DevOps binding
-  // is a later ask, not part of opening.
   const sessionId = 'ses-plan-entry-1'
-  const bytes = life.encodeOpening('plan', sessionId, '/workspace/repo', 7n)
-  const events = bytes.split('\n').filter((line) => line.length > 0).flatMap((line) => JSON.parse(line).events ?? [])
-  assert.deepEqual(events.map((event) => event.type), ['WorkOpened', 'IncumbencyOpened'])
-  assert.equal(events.some((event) => event.type === 'DevOpsBound'), false)
-  assert.equal(events[0].workId, sessionId)
-  assert.equal(events[1].stage, 'S1')
-  assert.equal(events[1].openingCursor, 7)
-  const probed = life.readProbe(bytes)
-  assert.equal(probed.next, 'Review')
-  assert.equal(probed.sequence, 'S1,S2,S3')
 
-  await withStore(async (store, root, commonDir) => {
-    const openingAppends = () => {
-      const path = life.journalPath(store.gitCommonDir)
-      if (!existsSync(path)) return []
-      const database = new DatabaseSync(path)
-      const journal = new SqliteJournal(database)
-      try {
-        return journal.read(sessionId)
-      } finally {
-        journal.close()
-      }
-    }
-
+  await withStore(async (_store, root, commonDir) => {
+    const legacyEvents = join(commonDir, 'wanxiangshu', 'events')
     const missing = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, root, sessionId, undefined)
-    assert.equal(missing.ok, false, 'opening without an observed cursor must refuse')
-    assert.match(missing.error, /opening cursor was not observed/i)
-    assert.equal(openingAppends().length, 0)
+    assert.equal(missing.ok, true, missing.error)
+    assert.equal(existsSync(legacyEvents), false, 'opening is not a legacy event stream')
+    assert.deepEqual(eventsOf(commonDir, sessionId), [], 'ensurePlanWorkOpened does not open a work')
 
-    const opened = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, root, sessionId, 7n)
-    assert.equal(opened.ok, true, opened.error)
-    const appended = openingAppends()
-    assert.equal(appended.length, 1, 'the two opening events share one append')
-    const events = JSON.parse(appended[0]).events
-    assert.deepEqual(events.map((event) => event.type), ['WorkOpened', 'IncumbencyOpened'])
+    const reviewed = planReview(commonDir, sessionId, 'review-1', [{ key: 'tradeoff', value: 'keep' }])
+    assert.equal(reviewed.status, 'Committed', reviewed.reason)
+    assert.equal(reviewed.kind, 'Reviewed')
+    assert.equal(reviewed.milestone, '事实与取舍')
+    const events = eventsOf(commonDir, sessionId)
+    assert.deepEqual(events.map((event) => event.type), ['WorkOpened', 'IncumbencyOpened', 'Reviewed'])
     assert.equal(events.some((event) => event.type === 'DevOpsBound'), false)
-    assert.equal(events[1].openingCursor, 7)
-    assert.equal(events[1].stage, 'S1')
+    assert.equal(events[0].workId, sessionId)
+    assert.equal(events[0].office, 'Plan')
+    assert.equal(events[1].milestone, '事实与取舍')
+    const view = life.inspected(commonDir, sessionId)
+    assert.equal(view.Stage, '事实与取舍')
+    assert.equal(Array.from(view.Sequence ?? []).join(','), '')
+    assert.equal(view.DevOpsId ?? null, null, 'the first review does not bind DevOps')
 
-    const viewDatabase = new DatabaseSync(life.journalPath(store.gitCommonDir))
-    const viewJournal = new SqliteJournal(viewDatabase)
-    try {
-      const view = new DurableWork(sessionId, viewJournal).inspect()
-      assert.equal(view.workId, sessionId)
-      assert.deepEqual(view.sequence, ['S1', 'S2', 'S3'])
-      assert.equal(view.stage, 'S1')
-      assert.equal(view.active.openingStage, 'S1')
-      assert.equal(view.active.openingCursor, 7)
-      assert.equal(view.devopsId ?? null, null, 'opening does not bind DevOps')
-    } finally {
-      viewJournal.close()
-    }
+    const replay = planReview(commonDir, sessionId, 'review-1', [{ key: 'tradeoff', value: 'keep' }])
+    assert.equal(replay.status, 'Replayed')
+    assert.equal(eventsOf(commonDir, sessionId).filter((event) => event.type === 'WorkOpened').length, 1)
 
     const again = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, root, sessionId, 8n)
-    assert.equal(again.ok, true)
-    assert.equal(openingAppends().length, 1, 'an already-open work must not append duplicate events')
+    assert.equal(again.ok, true, again.error)
+    assert.equal(eventsOf(commonDir, sessionId).filter((event) => event.type === 'WorkOpened').length, 1)
 
     const conflictingRoot = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, join(root, 'other'), sessionId, 9n)
-    assert.equal(conflictingRoot.ok, false, 'an existing work under the same id must not hide a root collision')
-    assert.match(conflictingRoot.error, /different root/i)
-    assert.equal(openingAppends().length, 1, 'a refused root collision must append nothing')
+    assert.equal(conflictingRoot.ok, true, conflictingRoot.error)
+    assert.equal(eventsOf(commonDir, sessionId).length, events.length, 'ensurePlanWorkOpened appends nothing')
+    assert.equal(existsSync(legacyEvents), false)
   })
 })
 
-test('WHAT[work-036] the entry needs only the lifecycle journal directory, not an acquired workspace EventStore', async () => {
+test('WHAT[work-036] ensurePlanWorkOpened writes no legacy events and does not open a work', async () => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-planning-no-event-store-'))
   const commonDir = join(root, '.Herdchestra')
   mkdirSync(commonDir, { recursive: true })
@@ -105,22 +90,24 @@ test('WHAT[work-036] the entry needs only the lifecycle journal directory, not a
     assert.equal(existsSync(legacyEvents), false, 'the legacy EventStore has not been activated')
     const res = await surface.PlanningSurface.ensurePlanWorkOpened(commonDir, root, 'ses-plan-entry-2', 7n)
     assert.equal(res.ok, true, res.error)
-    assert.equal(existsSync(legacyEvents), false, 'lifecycle opening must not create the legacy event stream')
-    assert.equal(existsSync(life.journalPath(commonDir)), true, 'the lifecycle journal is the only durable opening output')
-    assert.equal(life.workView({ gitCommonDir: commonDir }, 'ses-plan-entry-2').found, true)
+    assert.equal(existsSync(legacyEvents), false, 'ensurePlanWorkOpened must not create the legacy event stream')
+    assert.equal(life.workView({ gitCommonDir: commonDir }, 'ses-plan-entry-2').found, false)
+    assert.deepEqual(eventsOf(commonDir, 'ses-plan-entry-2'), [])
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
-test('WHAT[work-036] the entry never forges an S1 fallback when the lifecycle directory is unavailable', async () => {
+test('WHAT[work-036] ensurePlanWorkOpened does not forge an opening when the directory is missing', async () => {
   const missing = join(tmpdir(), 'wxs-planning-missing-dir', 'never-created')
   const res = await surface.PlanningSurface.ensurePlanWorkOpened(missing, '/workspace/repo', 'ses-plan-entry-3', 7n)
-  assert.equal(res.ok, false)
-  assert.match(res.error, /cannot be read/i)
+  assert.equal(res.ok, true, res.error)
+  assert.equal(existsSync(missing), false)
+  assert.throws(() => life.journalPath(''), /local state root is required/i)
+  assert.throws(() => life.journalPath('   '), /local state root is required/i)
 })
 
-test('WHAT[work-036] subsequent manager transform passes on an already-open work do not append duplicate WorkOpened or IncumbencyOpened events', async () => {
+test('WHAT[work-036] manager transforms do not open work; the first review does, and a replay does not second-open', async () => {
   await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
     const managerSession = 'ses-manager-open-idempotency'
     await hooks['chat.message'](
@@ -150,25 +137,12 @@ test('WHAT[work-036] subsequent manager transform passes on an already-open work
     }
     runtime.pushHostMessage(managerSession, user1)
     runtime.pushHostMessage(managerSession, asst1)
-
     await hooks['experimental.chat.messages.transform']({ sessionID: managerSession }, { messages: [user1] })
 
     const commonDir = join(directory, '.Herdchestra')
-    const store = workspace.acquire(commonDir)
-    const openingEvents = () => {
-      const path = life.journalPath(store.gitCommonDir)
-      if (!existsSync(path)) return []
-      const database = new DatabaseSync(path)
-      const journal = new SqliteJournal(database)
-      try {
-        return journal.read(managerSession).flatMap((line) => JSON.parse(line).events ?? [])
-      } finally {
-        journal.close()
-      }
-    }
     const openedCount = () =>
-      openingEvents().filter((event) => event.type === 'WorkOpened' || event.type === 'IncumbencyOpened').length
-    assert.equal(openedCount(), 2, 'first transform opens the manager work with exactly the two opening events')
+      eventsOf(commonDir, managerSession).filter((event) => event.type === 'WorkOpened' || event.type === 'IncumbencyOpened').length
+    assert.equal(openedCount(), 0, 'a manager transform does not open the work')
 
     asst1.info.finish = 'stop'
     asst1.info.time.completed = 3
@@ -188,64 +162,61 @@ test('WHAT[work-036] subsequent manager transform passes on an already-open work
     }
     runtime.pushHostMessage(managerSession, asst2)
     await hooks['experimental.chat.messages.transform']({ sessionID: managerSession }, { messages: [user1, asst1] })
-    assert.equal(openedCount(), 2, 'subsequent transform pass must not re-append WorkOpened / IncumbencyOpened')
+    assert.equal(openedCount(), 0, 'a later transform pass still does not open the work')
+
+    const reviewed = life.submitReview(commonDir, managerSession, 'review-1', 'Manager', 'run-1', 'call-1', [{ key: 'job', value: 'do' }], null, '')
+    assert.equal(reviewed.status, 'Committed', reviewed.reason)
+    assert.equal(reviewed.kind, 'Reviewed')
+    assert.equal(reviewed.milestone, '执行')
+    assert.equal(openedCount(), 2, 'the first review writes WorkOpened and IncumbencyOpened once')
+    const replay = life.submitReview(commonDir, managerSession, 'review-1', 'Manager', 'run-1', 'call-1', [{ key: 'job', value: 'do' }], null, '')
+    assert.equal(replay.status, 'Replayed')
+    assert.equal(openedCount(), 2, 'the same review does not second-open')
+    assert.equal(Array.from(life.inspected(commonDir, managerSession).Sequence ?? []).join(','), '')
   })
 })
 
-test('WHAT[work-036] manager opening fails closed when the same session id already names a Plan work', async () => {
-  await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
+test('WHAT[work-036] a manager review of an existing plan work conflicts because the office is fixed', async () => {
+  await withExecutablePlugin(async (_hooks, directory) => {
     const managerSession = 'ses-manager-sequence-collision'
     const commonDir = join(directory, '.Herdchestra')
-    const store = workspace.acquire(commonDir)
-    const seeded = await life.seedOpen(store, 'plan', managerSession, directory, 1n)
-    assert.equal(seeded.ok, true, seeded.error)
+    const opened = planReview(commonDir, managerSession, 'plan-review', [{ key: 'need', value: 'scope' }])
+    assert.equal(opened.status, 'Committed', opened.reason)
+    assert.equal(opened.milestone, '事实与取舍')
+    assert.equal(eventsOf(commonDir, managerSession).filter((event) => event.type === 'WorkOpened').length, 1)
 
-    await hooks['chat.message'](
-      { sessionID: managerSession, agent: 'manager' },
-      {
-        message: { id: 'msg-manager-collision', sessionID: managerSession, role: 'user', agent: 'manager' },
-        parts: [{ id: 'prt-manager-collision', type: 'text', text: 'continue as manager' }],
-      },
-    )
-    const user = {
-      info: { id: 'msg-manager-collision', sessionID: managerSession, role: 'user', agent: 'manager', time: { created: 1 } },
-      parts: [{ id: 'prt-manager-collision', type: 'text', text: 'continue as manager' }],
-    }
-    runtime.pushHostMessage(managerSession, user)
-
-    await assert.rejects(
-      hooks['experimental.chat.messages.transform']({ sessionID: managerSession }, { messages: [user] }),
-      /Manager lifecycle opening failed: existing lifecycle work has a different sequence/,
-    )
-    assert.deepEqual(life.workView(store, managerSession).sequence, 'S1,S2,S3')
+    const conflict = life.submitReview(commonDir, managerSession, 'manager-review', 'Manager', 'run-manager', 'call-manager', [{ key: 'job', value: 'do' }], null, '')
+    assert.equal(conflict.status, 'Conflict')
+    assert.match(conflict.reason, /Office is fixed/)
+    assert.equal(eventsOf(commonDir, managerSession).filter((event) => event.type === 'WorkOpened').length, 1)
+    assert.equal(life.inspected(commonDir, managerSession).Stage, '事实与取舍')
+    assert.equal(Array.from(life.inspected(commonDir, managerSession).Sequence ?? []).join(','), '')
   })
 })
 
-test('WHAT[work-036] the first plan prompt opens work at the git worktree root, not the state directory', async () => {
+test('WHAT[work-036] the first plan review does not record a worktree root or a legacy sequence', async () => {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'wxs-plan-open-root-')))
   try {
     execFileSync('git', ['init', '--quiet', directory])
     const planSession = 'ses-plan-first-prompt-root'
     await ensurePlanWorkOpenedForSession(directory, planSession, 3n)
+    const stateRoot = join(directory, '.Herdchestra')
+    assert.equal(eventsOf(stateRoot, planSession).some((event) => event.type === 'WorkOpened'), false)
 
-    const path = life.journalPath(join(directory, '.Herdchestra'))
-    const database = new DatabaseSync(path)
-    const journal = new SqliteJournal(database)
-    let opened
-    try {
-      const events = journal.read(planSession).flatMap((line) => JSON.parse(line).events ?? [])
-      opened = events.find((event) => event.type === 'WorkOpened')
-    } finally {
-      journal.close()
-    }
-    assert.equal(opened.root, directory)
-    assert.deepEqual(opened.sequence, ['S1', 'S2', 'S3'])
+    const reviewed = planReview(stateRoot, planSession, 'review-1', [{ key: 'need', value: 'scope' }])
+    assert.equal(reviewed.status, 'Committed', reviewed.reason)
+    assert.equal(reviewed.milestone, '事实与取舍')
+    const opened = eventsOf(stateRoot, planSession).find((event) => event.type === 'WorkOpened')
+    assert.equal(opened.office, 'Plan')
+    assert.equal(opened.root, undefined)
+    assert.equal(opened.sequence, undefined)
+    assert.equal(Array.from(life.inspected(stateRoot, planSession).Sequence ?? []).join(','), '')
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
 })
 
-test('WHAT[work-036] only a Manager session opens execution work; another managed role opens nothing', async () => {
+test('WHAT[work-036] engineer and devops prompts open nothing; a manager review opens execution work', async () => {
   await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {
     const drive = async (agent) => {
       const sessionId = `ses-entry-closed-${agent}`
@@ -274,26 +245,22 @@ test('WHAT[work-036] only a Manager session opens execution work; another manage
       return sessionId
     }
 
-    const store = workspace.acquire(join(directory, '.Herdchestra'))
-    const eventsOf = (sessionId) => {
-      const path = life.journalPath(store.gitCommonDir)
-      if (!existsSync(path)) return []
-      const database = new DatabaseSync(path)
-      const journal = new SqliteJournal(database)
-      try {
-        return journal.read(sessionId).flatMap((line) => JSON.parse(line).events ?? [])
-      } finally {
-        journal.close()
-      }
-    }
-
+    const stateRoot = join(directory, '.Herdchestra')
     const engineer = await drive('engineer')
     const devops = await drive('devops')
-    assert.deepEqual(eventsOf(engineer), [], 'an Engineer session owns no lifecycle work')
-    assert.deepEqual(eventsOf(devops), [], 'a DevOps session owns no lifecycle work')
+    assert.deepEqual(eventsOf(stateRoot, engineer), [], 'an Engineer prompt opens no lifecycle work')
+    assert.deepEqual(eventsOf(stateRoot, devops), [], 'a DevOps prompt opens no lifecycle work')
 
     const manager = await drive('manager')
-    assert.deepEqual(eventsOf(manager).map((event) => event.type), ['WorkOpened', 'IncumbencyOpened'])
-    assert.deepEqual(eventsOf(manager)[0].sequence, ['S4'])
+    assert.deepEqual(eventsOf(stateRoot, manager), [], 'a Manager prompt does not itself open the work')
+    const reviewed = life.submitReview(stateRoot, manager, 'review-1', 'Manager', 'run-1', 'call-1', [{ key: 'job', value: 'do' }], null, '')
+    assert.equal(reviewed.status, 'Committed', reviewed.reason)
+    assert.equal(reviewed.kind, 'Reviewed')
+    assert.equal(reviewed.milestone, '执行')
+    const events = eventsOf(stateRoot, manager)
+    assert.deepEqual(events.map((event) => event.type), ['WorkOpened', 'IncumbencyOpened', 'Reviewed'])
+    assert.equal(events[0].office, 'Manager')
+    assert.equal(events[0].sequence, undefined)
+    assert.equal(Array.from(life.inspected(stateRoot, manager).Sequence ?? []).join(','), '')
   })
 })

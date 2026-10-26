@@ -9,464 +9,90 @@ import * as workspaceSurface from '../../../dist/OpenCode/Host/WorkspaceEventSto
 import * as hostSurface from '../../../dist/Change/Host/Surface.js'
 import * as managerWorkflow from '../../../dist/Mission/Manager/WorkflowSurface.js'
 import {withReview, scores} from './support/plugin.mjs'
-import {withSuccessor, messageId} from './support/cut.mjs'
-import { withExecutablePlugin, acceptAuthorityRoot, injectAcceptedAssessment, lifecycleWorkView } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import { lifecycleWorkView } from '../../verification-system/tests/support/plugin-fixture.mjs'
 
 const life = lifecycle.LifecycleSurface ?? lifecycle
 
-test('WHAT[work-011] a Delivered deliver records the established delivery, and the next transform suppresses the request, interrupts the attempt and dispatches no successor', async () => {
-  await withReview(async ({execute, hooks, runtime, session}) => {
-    assert.match(String(await execute(scores('PERFECT'))), /ok = true/)
-    const retirement = {
-      info: {id: 'retirement-run', role: 'assistant', sessionID: session, parentID: 'user-root', time: {created: 3}},
-      parts: [{type: 'tool', tool: 'deliver', callID: 'deliver-call', state: {status: 'pending', input: {}}}],
-    }
-    runtime.pushHostMessage(session, retirement)
-    const retire = {sessionID: session, callID: 'deliver-call', messageID: 'retirement-run', providerRunID: 'run-retire', agent: 'manager'}
-    // Single delivery completes in one call without confirmation ritual.
-    const delivery = await hooks.tool.deliver.execute({}, retire)
-    assert.match(delivery, /Finished\. Do not continue work\./)
-    assert.deepEqual(runtime.abortedIds, [], 'the deliver tool does not interrupt the attempt')
-    const committed = await lifecycleWorkView(runtime, session)
-    assert.equal(committed.delivered, true, 'the delivery is committed')
-    assert.equal(committed.active, false, 'a final delivery has no successor tenure')
-    assert.equal(runtime.prompts.length, 0)
+const successorTexts = (runtime) =>
+  runtime.prompts.map((item) => JSON.stringify(item)).filter((text) => text.includes('继任「执行」'))
 
-    // 下一次请求按已成立的交付裁决：不再放行给 provider（LLM 看不到 deliver
-    // 回复）、中断本次 attempt，且不派发任何后继。
-    const output = {messages: [
-      {info: {id: 'user-root', role: 'user', sessionID: session, model: {providerID: 'provider', modelID: 'manager-model'}}, parts: [{type: 'text', text: 'Deliver the requested behavior and verification.'}]},
-      {info: {id: 'review-run', role: 'assistant', parentID: 'user-root', time: {created: 2, completed: 2}}, parts: [{type: 'text', text: 'review closed'}]},
-      {info: {id: 'retirement-run', role: 'assistant', parentID: 'user-root', time: {created: 3}}, parts: [{type: 'text', text: 'Old closing tail'}]},
-    ]}
-    await hooks['experimental.chat.messages.transform']({sessionID: session}, output)
-    assert.deepEqual(output.messages, [], 'the request carries no content: the model never sees the deliver reply')
-    assert.deepEqual(runtime.abortedIds, [session], 'the transform interrupts the current attempt')
-    assert.equal(runtime.prompts.length, 0, 'the interrupted attempt dispatches no successor')
-    const stopped = await lifecycleWorkView(runtime, session)
-    assert.equal(stopped.delivered, true, 'the established delivery survives the stop')
-    assert.equal(stopped.active, false, 'a final delivery has no successor tenure')
+test('WHAT[work-011] clearing the manager ledger relays once, sends the successor prompt once, and a replay does not send again', async () => {
+  await withReview(async ({ execute, runtime, session, directory }) => {
+    const root = runtime.messages.find((message) => (message.info?.id ?? message.id) === 'user-root')
+    const rootBytes = JSON.stringify(root)
+    const before = successorTexts(runtime).length
+    const relayed = String(await execute(scores('CLEAR'), { call: 'relay-call', run: 'relay-run' }))
+    assert.match(relayed, /ok = true/)
+    assert.match(relayed, /kind = "Relayed"/)
+    assert.equal(successorTexts(runtime).length, before + 1)
+    assert.deepEqual(runtime.abortedIds.filter((id) => id === session), [])
+    assert.equal(JSON.stringify(root), rootBytes, 'the relay does not rewrite stored user text')
+    const replay = String(await execute(scores('CLEAR'), { call: 'relay-call', run: 'relay-run' }))
+    assert.match(replay, /ok = true/)
+    assert.match(replay, /kind = "Relayed"/)
+    assert.equal(successorTexts(runtime).length, before + 1)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    const view = life.inspected(commonDir, session)
+    assert.equal(view.Delivered, false)
+    assert.equal(view.ActiveId.length > 0, true)
   })
 })
 
-for (const failure of ['rejected', 'thrown']) {
-  test(`WHAT[work-011] a ${failure} Host interrupt leaves the committed delivery established and is not reported as a failed delivery`, async () => {
-    await withReview(async ({execute, hooks, runtime, session}) => {
-      await execute(scores('PERFECT'))
-      runtime.pushHostMessage(session, {
-        info: {id: 'final-run', role: 'assistant', sessionID: session, parentID: 'user-root', time: {created: 3}},
-        parts: [{type: 'tool', tool: 'deliver', callID: 'final-call', state: {status: 'pending', input: {}}}],
-      })
-      const reason = `terminal-interrupt-${failure}`
-      let interruptAttempts = 0
-      runtime.client.session.abort = async () => {
-        interruptAttempts += 1
-        if (failure === 'thrown') throw new Error(reason)
-        return {error: reason}
-      }
-      // 「已提交」与「中断未确认」是两个分别取证的事实：交付落盘不因后来的
-      // 中断失败而消失，工具本身也不再因中断失败而失败。
-      const delivery = await hooks.tool.deliver.execute({}, {
-        sessionID: session, agent: 'manager', messageID: 'final-run', callID: 'final-call',
-      })
-      assert.match(delivery, /Finished\. Do not continue work\./)
-      const work = await lifecycleWorkView(runtime, session)
-      assert.equal(work.delivered, true, 'a failed physical interrupt must not undo committed delivery')
-      assert.equal(work.active, false, 'interrupt failure must not create a successor')
-      assert.equal(runtime.prompts.length, 0)
-
-      // 中断在 transform 钩子处发出：发出被登记，未被确认也被登记；两者都
-      // 不把已提交的交付呈现为失败，本次请求仍被抑制。
-      const output = {messages: [
-        {info: {id: 'user-root', role: 'user', sessionID: session, model: {providerID: 'provider', modelID: 'manager-model'}}, parts: [{type: 'text', text: 'Deliver the requested behavior and verification.'}]},
-        {info: {id: 'final-run', role: 'assistant', sessionID: session, parentID: 'user-root', time: {created: 3}}, parts: [{type: 'text', text: 'final delivery'}]},
-      ]}
-      await assert.doesNotReject(
-        () => hooks['experimental.chat.messages.transform']({sessionID: session}, output),
-        'an unconfirmed interrupt must not present the committed delivery as a failure',
-      )
-      assert.equal(interruptAttempts, 1, 'the interrupt was issued once for this attempt')
-      assert.deepEqual(output.messages, [], 'the request is still suppressed when the interrupt is not confirmed')
-      const after = await lifecycleWorkView(runtime, session)
-      assert.equal(after.delivered, true, 'the delivery stays established when the interrupt is not confirmed')
-      assert.equal(after.active, false, 'an unconfirmed interrupt must not create a successor')
-      assert.equal(runtime.prompts.length, 0, 'no successor is dispatched')
-    }, {session: `final-interrupt-${failure}`})
-  })
-}
-
-test('WHAT[work-011] actual Stayed deliver starts one same-session successor, the next transform stops the retired attempt, and the successor transform retains the old physical history without another abort', async () => {
-  await withSuccessor(async ({hooks, runtime, session, history, gate}) => {
-    // withSuccessor is the two-stage Stayed path: first call confirms, the
-    // second call with a different callID retires Relayed, and that retirement
-    // already stopped the retired attempt and started exactly one successor.
-    // The stop clears the request; a root session is not aborted.
-    assert.deepEqual(runtime.abortedIds.filter(id => id === session), [])
-    assert.equal(runtime.prompts.filter(p => p.sessionID === session).length, 1)
-    const output = {messages: [...structuredClone(history), gate]}
-    await hooks['experimental.chat.messages.transform']({sessionID: session}, output)
-    const successorParamsOut = { temperature: 0, options: {} }
-    await assert.doesNotReject(
-      () => Promise.resolve(hooks['chat.params']({ sessionID: session, messageID: messageId(gate), agent: 'manager' }, successorParamsOut)),
-      'chat.params on the successor manager turn must pass with its committed lease',
-    )
-    assert.equal(successorParamsOut.temperature, 1)
-
-    // And if a second Stayed retirement later stops the successor attempt, the
-    // superseded successor's physical message also passes chat.params without PROMPT-006.
-    const supersededParamsOut = { temperature: 0, options: {} }
-    await hooks['chat.message'](
-      { sessionID: session, messageID: 'next-successor-msg', agent: 'manager' },
-      {
-        message: { id: 'next-successor-msg', sessionID: session, role: 'user', agent: 'manager' },
-        parts: [{ type: 'text', text: 'next turn' }],
-      },
-    )
-    await assert.doesNotReject(
-      () => Promise.resolve(hooks['chat.params']({ sessionID: session, messageID: messageId(gate), agent: 'manager' }, supersededParamsOut)),
-      'chat.params on a superseded retired attempt must not throw PROMPT-006',
-    )
-    // The relay keeps the predecessor's physical history: context retention
-    // belongs to the view declaration, not to the successor hand-off.
-    assert.ok(output.messages.some(message => messageId(message) === 'user-root'))
-    assert.ok(output.messages.some(message => messageId(message) === messageId(gate)))
-    assert.ok(output.messages.some(message => messageId(message) === 'review-run'))
-    // The successor keeps the user root, strips the predecessor assistant, and does not abort.
-    assert.deepEqual(runtime.abortedIds.filter(id => id === session), [])
-    assert.equal(runtime.prompts.filter(p => p.sessionID === session).length, 1)
+test('WHAT[work-011] an empty cleanup review stops the current attempt once, and a replay does not stop again', async () => {
+  await withReview(async ({ execute, runtime, session, directory }) => {
+    assert.match(String(await execute(scores('CLEAR'), { call: 'relay-call', run: 'relay-run' })), /kind = "Relayed"/)
+    const advanced = String(await execute(scores('PERFECT'), { call: 'advance-call', run: 'advance-run' }))
+    assert.match(advanced, /ok = true/)
+    assert.match(advanced, /kind = "Advanced"/)
+    assert.match(advanced, /收尾/)
+    const before = runtime.abortedIds.filter((id) => id === session).length
+    const finished = String(await execute(scores('PERFECT'), { call: 'finish-call', run: 'finish-run' }))
+    assert.match(finished, /ok = true/)
+    assert.match(finished, /kind = "Completed"/)
+    assert.equal(runtime.abortedIds.filter((id) => id === session).length, before + 1)
+    const replay = String(await execute(scores('PERFECT'), { call: 'finish-call', run: 'finish-run' }))
+    assert.match(replay, /ok = true/)
+    assert.match(replay, /kind = "Completed"/)
+    assert.equal(runtime.abortedIds.filter((id) => id === session).length, before + 1)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    const seen = life.inspected(commonDir, session)
+    assert.equal(seen.Stage, '已完成')
+    assert.equal(seen.Delivered, true)
+    assert.equal(seen.ActiveId ?? null, null)
   })
 })
 
-test('WHAT[work-011] physical prompt after Accepted deliver invalidates certificate and unblocks successor manager tools', async () => {
-  const { withExecutablePlugin, acceptAuthorityRoot } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
-  await withExecutablePlugin(async (hooks, _directory, _children, runtime) => {
-    const sessionID = 'ses-accepted-human-successor'
-    const rootID = `root-${sessionID}`
-    const root = {
-      id: rootID,
-      role: 'user',
-      parts: [{ type: 'text', text: 'Design the capability reuse resolver.' }],
+test('WHAT[work-011] a thrown stop leaves the committed completion in place', async () => {
+  await withReview(async ({ execute, runtime, session, directory }) => {
+    assert.match(String(await execute(scores('CLEAR'), { call: 'relay-call', run: 'relay-run' })), /kind = "Relayed"/)
+    assert.match(String(await execute(scores('PERFECT'), { call: 'advance-call', run: 'advance-run' })), /kind = "Advanced"/)
+    runtime.client.session.abort = async () => {
+      throw new Error('terminal-interrupt-thrown')
     }
-    await acceptAuthorityRoot(runtime, sessionID, 'manager')
-    runtime.pushHostMessage(sessionID, root)
-    await hooks['chat.message'](
-      { sessionID, messageID: rootID, agent: 'manager' },
-      { message: root, parts: root.parts },
-    )
-    const user = { info: { id: rootID, role: 'user', sessionID }, parts: root.parts }
-    runtime.pushHostMessage(sessionID, {
-      info: { id: 'run-root', role: 'assistant', sessionID, parentID: rootID, time: { created: 1 } },
-      parts: [],
-    })
-    await hooks['experimental.chat.messages.transform']({ sessionID }, { messages: [user] })
-
-    // Step 1: a non-empty review is Stayed.
-    const findings = [{ key: 'target-gap', value: 'close the remaining gap' }]
-    const review = {
-      id: 'run-review', role: 'assistant', parentID: rootID, time: { created: 2 },
-      parts: [
-        { type: 'text', text: 'Target not reached.' },
-        { type: 'tool', tool: 'todowrite-for-manager', callID: 'call-review', state: { status: 'pending', input: {} } },
-      ],
+    try {
+      await execute(scores('PERFECT'), { call: 'finish-call', run: 'finish-run' })
+    } catch {
+      // The stop port may surface the throw. The committed completion stays.
     }
-    runtime.pushHostMessage(sessionID, review)
-    const reviewResult = await hooks.tool['todowrite-for-manager'].execute(
-      { program: `class Js extends JsProgram { async run() { return await this.review(${JSON.stringify(findings)}); } }`,
-          name: 'review-findings',
-          planB: 'Wait for the actual review or delegation receipt under the admitted deadline.'
-        },
-      { sessionID, agent: 'manager', callID: 'call-review', messageID: review.id },
-    )
-    assert.match(String(reviewResult), /ok = true/)
-
-    // Non-empty review must be explicitly cleared key-by-key before relay
-    const clearFindings = [{ key: 'target-gap', value: null }]
-    const clearReview = {
-      id: 'run-clear-review', role: 'assistant', parentID: rootID, time: { created: 3 },
-      parts: [
-        { type: 'text', text: 'Gap cleared.' },
-        { type: 'tool', tool: 'todowrite-for-manager', callID: 'call-clear-review', state: { status: 'pending', input: {} } },
-      ],
-    }
-    runtime.pushHostMessage(sessionID, clearReview)
-    const clearResult = await hooks.tool['todowrite-for-manager'].execute(
-      { program: `class Js extends JsProgram { async run() { return await this.review(${JSON.stringify(clearFindings)}); } }`,
-          name: 'clear-findings',
-          planB: 'Wait for the actual review or delegation receipt under the admitted deadline.'
-        },
-      { sessionID, agent: 'manager', callID: 'call-clear-review', messageID: clearReview.id },
-    )
-    assert.match(String(clearResult), /ok = true/)
-
-    // Step 2: deliver commits retirement
-    const retiredRun = {
-      id: 'run-deliver', role: 'assistant', parentID: rootID, time: { created: 4 },
-      parts: [{ type: 'tool', tool: 'deliver', callID: 'call-deliver', state: { status: 'pending', input: {} } }],
-    }
-    runtime.pushHostMessage(sessionID, retiredRun)
-    const context = (callID, messageID, providerRunID = `run-${callID}`) => ({ sessionID, agent: 'manager', callID, messageID, providerRunID })
-    const deliverResult = await hooks.tool.deliver.execute({}, context('call-deliver', retiredRun.id, 'run-retire'))
-    assert.match(deliverResult, /Finished\. Do not continue work\./)
-
-    // Step 3: Human inputs new instructions in the continuous session.
-    // A Relayed successor is a new tenure, so the retirement freeze does not
-    // carry over; the denial the old certificate freeze asserted no longer exists.
-    const humanNext = {
-      id: 'human-phase-2', role: 'user',
-      parts: [{ type: 'text', text: 'Plan approved. Please start implementation.' }],
-    }
-    await hooks['chat.message'](
-      { sessionID, messageID: humanNext.id, agent: 'manager' },
-      { message: humanNext, parts: humanNext.parts },
-    )
-    const humanRequest = {
-      messages: [
-        user,
-        { info: { id: review.id, role: 'assistant', sessionID, parentID: rootID, time: { created: 2, completed: 2 } }, parts: review.parts },
-        { info: { id: clearReview.id, role: 'assistant', sessionID, parentID: rootID, time: { created: 3, completed: 3 } }, parts: clearReview.parts },
-        { info: { id: retiredRun.id, role: 'assistant', sessionID, parentID: rootID, time: { created: 4, completed: 4 } }, parts: retiredRun.parts },
-        { info: { id: humanNext.id, role: 'user', sessionID }, parts: humanNext.parts },
-      ],
-    }
-    runtime.pushHostMessage(sessionID, {
-      info: { id: 'run-human-successor', role: 'assistant', sessionID, parentID: humanNext.id, time: { created: 5 } },
-      parts: [],
-    })
-    await hooks['experimental.chat.messages.transform']({ sessionID }, humanRequest)
-
-    // Step 4: After human input, the dispatch member must NOT be denied.
-    // 派工是编程面成员（宿主 fork 工具已整体退役）：`this.fork(payload, extra = [])`。
-    const forkSuccessor = await hooks.tool['todowrite-for-manager'].execute(
-      {
-        program:
-          'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "alice", charge: "implement" }, []); } }',
-        name: 'fork-successor',
-          planB: 'Wait for the actual review or delegation receipt under the admitted deadline.'
-        },
-      context('call-fork-successor', 'msg-successor'),
-    )
-    // 断言「不是拒绝」这一可观察事实：调用以成功信封返回，不含拒绝信封。
-    assert.doesNotMatch(forkSuccessor, /ok = false/, 'the dispatch member must be unblocked after human input advances the continuous session')
-    assert.match(forkSuccessor, /ok = true/)
-    assert.match(forkSuccessor, /outcome = "created"/)
+    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    const seen = life.inspected(commonDir, session)
+    assert.equal(seen.Stage, '已完成')
+    assert.equal(seen.Delivered, true)
+    assert.equal(seen.ActiveId ?? null, null)
   })
 })
 
-test('WHAT[work-011] an established delivery interrupts its own attempt exactly once, dispatches no successor, and does not interrupt again for a second request of the same attempt', async () => {
-  // 现场选择：交付已成立（Delivered）的终态。
-  // 现行架构里唯一的后继派发是接力（Relayed）成功后继提示，而终态交付不产生
-  // 任何后继；所以终态现场足以表达「在途中断未完成前不得派发后继」——
-  // 中断已发出而宿主尚未确认时，本次请求仍被抑制，后继仍不派发，且同一
-  // attempt 的第二次请求不重复发中断。
-  await withReview(async ({execute, hooks, runtime, session}) => {
-    assert.match(String(await execute(scores('PERFECT'))), /ok = true/)
-    const retirement = {
-      info: {id: 'retirement-run', role: 'assistant', sessionID: session, parentID: 'user-root', time: {created: 3}},
-      parts: [{type: 'tool', tool: 'deliver', callID: 'deliver-call', state: {status: 'pending', input: {}}}],
-    }
-    runtime.pushHostMessage(session, retirement)
-    const retire = {sessionID: session, callID: 'deliver-call', messageID: 'retirement-run', providerRunID: 'run-retire', agent: 'manager'}
-    assert.match(await hooks.tool.deliver.execute({}, retire), /Finished\. Do not continue work\./)
-
-    // 中断次数可数：包裹宿主的 abort，但仍让它登记到 abortedIds。
-    let interruptAttempts = 0
-    const hostAbort = runtime.client.session.abort
-    runtime.client.session.abort = async (args) => {
-      interruptAttempts += 1
-      return hostAbort(args)
-    }
-
-    const request = () => ({messages: [
-      {info: {id: 'user-root', role: 'user', sessionID: session, model: {providerID: 'provider', modelID: 'manager-model'}}, parts: [{type: 'text', text: 'Deliver the requested behavior and verification.'}]},
-      {info: {id: 'review-run', role: 'assistant', parentID: 'user-root', time: {created: 2, completed: 2}}, parts: [{type: 'text', text: 'review closed'}]},
-      {info: {id: 'retirement-run', role: 'assistant', parentID: 'user-root', time: {created: 3}}, parts: [{type: 'text', text: 'Old closing tail'}]},
-    ]})
-
-    const first = request()
-    await hooks['experimental.chat.messages.transform']({sessionID: session}, first)
-    // (a) 清空本次请求的消息；(b) 中断本次 attempt；(c) 不派发后继。
-    assert.deepEqual(first.messages, [], 'the request carries no content once the delivery is established')
-    assert.deepEqual(runtime.abortedIds, [session], 'the transform interrupts exactly this attempt')
-    assert.equal(interruptAttempts, 1, 'the interrupt is issued once for this attempt')
-    assert.equal(runtime.prompts.length, 0, 'the interrupted attempt dispatches no successor')
-
-    // 同一 attempt 的第二次请求：不重复发中断，也仍不派发后继。
-    const second = request()
-    await hooks['experimental.chat.messages.transform']({sessionID: session}, second)
-    assert.deepEqual(second.messages, [], 'the second request of the same attempt stays suppressed')
-    assert.deepEqual(runtime.abortedIds, [session], 'the same attempt is not interrupted a second time')
-    assert.equal(interruptAttempts, 1, 'no second interrupt is issued for the same attempt')
-    assert.equal(runtime.prompts.length, 0, 'no successor is dispatched while the attempt stays stopped')
-
-    const stopped = await lifecycleWorkView(runtime, session)
-    assert.equal(stopped.delivered, true, 'the established delivery survives the stop')
-    assert.equal(stopped.active, false, 'a final delivery has no successor tenure')
-  }, {session: 'delivery-interrupt-once'})
-})
-
-test('WHAT[work-011] a post-cut wake after a fresh successor root is cleared without session abort and without MANAGER-LOOP-004 crash', async () => {
-  await withExecutablePlugin(async (hooks, _directory, _children, runtime) => {
-    const sessionID = 'ses-late-retired-after-successor'
-    const rootID = `root-${sessionID}`
-    const root = {
-      id: rootID,
-      role: 'user',
-      parts: [{ type: 'text', text: 'Design the capability reuse resolver.' }],
-    }
-    await acceptAuthorityRoot(runtime, sessionID, 'manager')
-    runtime.pushHostMessage(sessionID, root)
-    await hooks['chat.message'](
-      { sessionID, messageID: rootID, agent: 'manager' },
-      { message: root, parts: root.parts },
-    )
-    const user = { info: { id: rootID, role: 'user', sessionID }, parts: root.parts }
-    runtime.pushHostMessage(sessionID, {
-      info: { id: 'run-root', role: 'assistant', sessionID, parentID: rootID, time: { created: 1 } },
-      parts: [],
-    })
-    await hooks['experimental.chat.messages.transform']({ sessionID }, { messages: [user] })
-
-    // Step 1: a non-empty review is Stayed.
-    const findings = [{ key: 'target-gap', value: 'close the remaining gap' }]
-    const review = {
-      id: 'run-review', role: 'assistant', parentID: rootID, time: { created: 2 },
-      parts: [
-        { type: 'text', text: 'Target not reached.' },
-        { type: 'tool', tool: 'todowrite-for-manager', callID: 'call-review', state: { status: 'pending', input: {} } },
-      ],
-    }
-    runtime.pushHostMessage(sessionID, review)
-    const reviewResult = await hooks.tool['todowrite-for-manager'].execute(
-      { program: `class Js extends JsProgram { async run() { return await this.review(${JSON.stringify(findings)}); } }`,
-          name: 'review-findings',
-          planB: 'Wait for the actual review or delegation receipt under the admitted deadline.'
-        },
-      { sessionID, agent: 'manager', callID: 'call-review', messageID: review.id },
-    )
-    assert.match(String(reviewResult), /ok = true/)
-
-    // Non-empty review must be explicitly cleared key-by-key before relay
-    const clearFindings = [{ key: 'target-gap', value: null }]
-    const clearReview = {
-      id: 'run-clear-review', role: 'assistant', parentID: rootID, time: { created: 3 },
-      parts: [
-        { type: 'tool', tool: 'todowrite-for-manager', callID: 'call-clear-review', state: { status: 'pending', input: {} } },
-      ],
-    }
-    runtime.pushHostMessage(sessionID, clearReview)
-    const clearResult = await hooks.tool['todowrite-for-manager'].execute(
-      { program: `class Js extends JsProgram { async run() { return await this.review(${JSON.stringify(clearFindings)}); } }`,
-          name: 'clear-findings',
-          planB: 'Wait for the actual review or delegation receipt under the admitted deadline.'
-        },
-      { sessionID, agent: 'manager', callID: 'call-clear-review', messageID: clearReview.id },
-    )
-    assert.match(String(clearResult), /ok = true/)
-
-    // Step 2: deliver commits retirement
-    const retiredRun = {
-      id: 'run-deliver', role: 'assistant', parentID: rootID, time: { created: 4 },
-      parts: [{ type: 'tool', tool: 'deliver', callID: 'call-deliver', state: { status: 'pending', input: {} } }],
-    }
-    runtime.pushHostMessage(sessionID, retiredRun)
-    const context = (callID, messageID, providerRunID = `run-${callID}`) => ({ sessionID, agent: 'manager', callID, messageID, providerRunID })
-    const deliverResult = await hooks.tool.deliver.execute({}, context('call-deliver', retiredRun.id, 'run-retire'))
-    assert.match(deliverResult, /Finished\. Do not continue work\./)
-
-    // Step 3: Human successor input activates a fresh authority root, so the
-    // root session is no longer lifecycle-terminated and MANAGED-SESSION-016
-    // refuses automation interrupts.
-    const humanNext = {
-      id: 'human-phase-2', role: 'user',
-      parts: [{ type: 'text', text: 'Plan approved. Please start implementation.' }],
-    }
-    await hooks['chat.message'](
-      { sessionID, messageID: humanNext.id, agent: 'manager' },
-      { message: humanNext, parts: humanNext.parts },
-    )
-    runtime.pushHostMessage(sessionID, {
-      info: { id: 'run-human-successor', role: 'assistant', sessionID, parentID: humanNext.id, time: { created: 5 } },
-      parts: [],
-    })
-
-    // Step 4: A post-cut wake that was never admitted carries no ChatExecution,
-    // so the provider-step gate passes it through and the relay transform must
-    // stop it as a stale retired attempt. Per WHAT[work-011] no
-    // old-term session abort may be re-issued after successor dispatch, and per
-    // WHAT[managed-session-lifecycle-016] the guard rightly refuses the
-    // interrupt: the wake is cleared without crashing the manager loop with
-    // MANAGER-LOOP-004.
-    const wake = {
-      info: { id: 'wake-after-successor', role: 'user', sessionID },
-      parts: [{ type: 'text', text: 'runtime/manager-assess stray wake' }],
-    }
-    const strayWake = { messages: [
-      user,
-      { info: { id: review.id, role: 'assistant', sessionID, parentID: rootID, time: { created: 2, completed: 2 } }, parts: review.parts },
-      { info: { id: clearReview.id, role: 'assistant', sessionID, parentID: rootID, time: { created: 3, completed: 3 } }, parts: clearReview.parts },
-      { info: { id: retiredRun.id, role: 'assistant', sessionID, parentID: rootID, time: { created: 4, completed: 4 } }, parts: retiredRun.parts },
-      wake,
-    ] }
-    const abortsBefore = runtime.abortedIds.length
-    await hooks['experimental.chat.messages.transform']({ sessionID }, strayWake)
-    assert.deepEqual(strayWake.messages, [])
-    assert.equal(runtime.abortedIds.length, abortsBefore)
+test('WHAT[work-011] a review by the incumbency owner is recorded', async () => {
+  await withReview(async ({ execute, runtime, session }) => {
+    const recorded = String(await execute([{ key: 'extra', value: 'noted' }], { call: 'self-call', run: 'self-run' }))
+    assert.match(recorded, /ok = true/)
+    assert.match(recorded, /kind = "Reviewed"/)
+    assert.match(recorded, /milestone = "执行"/)
+    assert.doesNotMatch(recorded, /PROGRAM_FAILED|owner cannot review/)
+    const view = await lifecycleWorkView(runtime, session)
+    assert.equal(view.active, true)
+    assert.equal(view.delivered, false)
   })
-})
-
-test('WHAT[work-011] a review whose reviewer identity is the incumbency owner is refused by the kernel self-review gate', async () => {
-  // The Manager backend reviews as the fixed manager-reviewer identity. Seed the
-  // incumbency with that same identity as owner: the reviewer equals the owner,
-  // and the kernel refuses the self-review instead of recording it.
-  await withReview(async ({execute, runtime, session}) => {
-    assert.equal((await lifecycleWorkView(runtime, session)).active, true)
-    const selfReview = await execute(scores('PERFECT'))
-    assert.match(String(selfReview), /# failed|PROGRAM_FAILED/)
-    assert.match(String(selfReview), /owner cannot review/i)
-    // The refusal wrote nothing: the tenure stays active and unreviewed.
-    const afterTool = await lifecycleWorkView(runtime, session)
-    assert.equal(afterTool.reviewed, '')
-    assert.equal(afterTool.active, true)
-    // The seeding path with the explicit reviewer identity is refused by the
-    // same gate, so an identity that never reaches the kernel would fail here.
-    await assert.rejects(
-      injectAcceptedAssessment(runtime, session, undefined, 'Promoted', 'manager-reviewer'),
-      (error) => {
-        assert.match(String(error && error.message ? error.message : error), /owner cannot review/i)
-        return true
-      },
-    )
-    assert.equal((await lifecycleWorkView(runtime, session)).reviewed, '')
-  }, {ownerId: 'manager-reviewer', session: 'review-manager-self-review'})
-})
-
-test('WHAT[work-011] Stayed deliver enqueues the successor manager-assess prompt before returning so no LLM request can slip in between', async () => {
-  await withReview(async ({execute, hooks, runtime, session}) => {
-    assert.match(String(await execute(scores('REVISE'))), /ok = true/)
-    // Non-empty review must be explicitly cleared key-by-key before relay
-    assert.match(String(await execute(scores('CLEAR'), { call: 'clear-call', run: 'clear-run' })), /ok = true/)
-    const retirement = {
-      info: {id: 'retirement-run', role: 'assistant', sessionID: session, parentID: 'user-root', time: {created: 4}},
-      parts: [{type: 'tool', tool: 'deliver', callID: 'deliver-call', state: {status: 'pending', input: {}}}],
-    }
-    runtime.pushHostMessage(session, retirement)
-    const retire = {sessionID: session, callID: 'deliver-call', messageID: 'retirement-run', providerRunID: 'run-retire', agent: 'manager'}
-
-    let promptsAtReturn = -1
-    const deliverPromise = hooks.tool.deliver.execute({}, retire).then((res) => {
-      promptsAtReturn = runtime.prompts.filter(p => p.sessionID === session).length
-      return res
-    })
-    const result = await deliverPromise
-    // 条款 5：交接回执必须说明「已接力 + 后继要做什么」，因此本用例不断言
-    // 回执措辞，只断言交接事实成立、本任不再继续。
-    assert.doesNotMatch(result, /confirmation_required = true/, 'deliver hands the work over in a single call without confirmation ritual')
-    assert.equal(promptsAtReturn, 1, 'successor prompt must already be enqueued when deliver resolves')
-    assert.ok(runtime.prompts[0]?.body?.parts?.some(p => p?.type === 'text' && p.text.length > 0), 'successor prompt must have non-empty text')
-    const handedOver = await lifecycleWorkView(runtime, session)
-    assert.equal(handedOver.active, true, 'the hand-off opened the successor tenure: this tenure does not continue')
-    assert.equal(handedOver.delivered, false, 'a hand-off is not a final delivery')
-  }, {session: 'review-manager-atomic-enqueue'})
 })
 
 // ── The successor-prompt occasion, read from the fold alone ────────────────
@@ -481,25 +107,20 @@ const withSeededManagerWork = async (outcome, body) => {
   const store = workspaceSurface.acquire(stateRoot)
   try {
     const sessionId = `manager-${outcome ?? 'first'}`
-    const opened = await life.seedOpen(store, 'S4', sessionId, root, 0n)
-    assert.equal(opened.ok, true, opened.error)
-    if (outcome != null) {
-      const host = await import('../../../dist/Mission/Lifecycle/DurableWorkHost.js')
-      const inspected = (host.inspected ?? host.DurableWorkHost?.inspected)(stateRoot, sessionId)
-      const activeId = inspected.ActiveId
-      const reviewed = await life.seedReview(store, sessionId, outcome)
-      assert.equal(reviewed.ok, true, reviewed.error)
-      if (outcome === 'Stayed') {
-        // Non-empty review must be explicitly cleared key-by-key before relay
-        const clearReview = (host.execute ?? host.DurableWorkHost?.execute)(stateRoot, sessionId, 'rev-clear', {
-          type: 'Review',
-          incumbencyId: activeId,
-          reviewerId: 'reviewer',
-          updates: [{ key: 'stayed', value: null }],
-        })
-        assert.equal(clearReview.Status, 'Committed')
-      }
-      await life.seedDeliver(store, sessionId, 'run-1', 'call-1', 1n)
+    const submit = (id, updates) =>
+      life.submitReview(stateRoot, sessionId, id, 'Manager', 'run-1', id, updates, [], '')
+    if (outcome == null) {
+      const opened = submit('open', [])
+      assert.equal(opened.kind, 'Asked', opened.reason)
+    } else if (outcome === 'Completed') {
+      assert.equal(submit('review', [{ key: 'job', value: 'do' }]).kind, 'Reviewed')
+      assert.equal(submit('relay', [{ key: 'job', value: null }]).kind, 'Relayed')
+      assert.equal(submit('advance', []).kind, 'Advanced')
+      assert.equal(submit('close', []).kind, 'Completed')
+    } else {
+      assert.equal(submit('review', [{ key: 'stayed', value: 'keep' }]).kind, 'Reviewed')
+      const relayed = submit('relay', [{ key: 'stayed', value: null }])
+      assert.equal(relayed.kind, 'Relayed', relayed.reason)
     }
     await body({root, stateRoot, store, sessionId, view: life.inspected(stateRoot, sessionId)})
   } finally {
@@ -520,7 +141,7 @@ test('WHAT[work-011] a first tenure with no retirement owes no successor prompt'
 })
 
 test('WHAT[work-011] a Relayed retirement owes the successor prompt until that successor is reviewed', async () => {
-  await withSeededManagerWork('Stayed', async ({root, store, sessionId, view}) => {
+  await withSeededManagerWork('Stayed', async ({root, stateRoot, sessionId, view}) => {
     const retirement = Array.from(view.Retirements ?? []).at(-1)
     assert.equal(retirement.Outcome, 'Relayed')
     assert.equal(view.ActiveId.length > 0, true, 'the relay opened its successor in the same record')
@@ -531,27 +152,51 @@ test('WHAT[work-011] a Relayed retirement owes the successor prompt until that s
     assert.equal(context.retirementId, retirement.RetirementId, 'the occasion is named by the retirement')
     assert.equal(context.providerRunId, 'run-1', 'the cut carries the provider run that made the retirement')
 
-    const reviewed = await life.seedReview(store, sessionId, 'Stayed')
-    assert.equal(reviewed.ok, true, reviewed.error)
+    const reviewed = life.submitReview(
+      stateRoot,
+      sessionId,
+      'reviewed-successor',
+      'Manager',
+      'run-1',
+      'reviewed-successor',
+      [{ key: 'stayed', value: 'accepted' }],
+      [],
+      '',
+    )
+    assert.equal(reviewed.kind, 'Reviewed', reviewed.reason)
     assert.equal((await successorPromptOf(root, sessionId)).present, false, 'a reviewed successor owes no successor prompt')
   })
 })
 
-test('WHAT[work-011] the delivered hand-off reopens the occasion on the unreviewed next tenure', async () => {
-  await withSeededManagerWork('Promoted', async ({root, sessionId, view}) => {
-    const delivered = Array.from(view.Retirements ?? []).at(-1)
-    assert.equal(delivered.Outcome, 'Delivered')
-    assert.equal(view.ActiveId ?? null, null, 'a delivery leaves no open tenure')
-    assert.equal((await successorPromptOf(root, sessionId)).present, false, 'a delivered work owes no successor prompt')
+test('WHAT[work-011] a completed work refuses hand-off and reopens only from an operator message', async () => {
+  await withSeededManagerWork('Completed', async ({root, stateRoot, sessionId, view}) => {
+    const retired = Array.from(view.Retirements ?? []).at(-1)
+    assert.equal(retired.Outcome, 'Completed')
+    assert.equal(view.ActiveId ?? null, null, 'a completed work has no open tenure')
+    assert.equal((await successorPromptOf(root, sessionId)).present, false, 'a completed work owes no successor prompt')
 
     const receipt = await hostSurface.handOffDeliveredTenure(root, sessionId, 'hand-off:successor-context', 3)
-    assert.equal(receipt.ok, true, receipt.error)
-    assert.equal(receipt.kind, 'HandOff')
+    assert.equal(receipt.ok, false, receipt.error)
+    assert.match(receipt.error, /operator message/)
+    assert.equal(life.inspected(stateRoot, sessionId).ActiveId ?? null, null)
 
-    const context = await successorPromptOf(root, sessionId)
-    assert.equal(context.present, true, 'the reopened tenure owes the successor prompt')
-    assert.equal(context.retirementId, delivered.RetirementId, 'the delivered retirement is the cut')
-    assert.equal(context.providerRunId, 'run-1', 'the cut carries the delivering provider run')
+    const reopened = life.execute(stateRoot, sessionId, 'operator-1', {
+      type: 'OperatorMessage', kind: 'Operator', messageId: 'operator-1',
+    })
+    assert.equal(reopened.Status, 'Committed', reopened.Reason)
+    assert.equal(reopened.Kind, 'Reopened')
+    const after = life.inspected(stateRoot, sessionId)
+    assert.equal(after.Stage, '执行')
+    assert.equal((await successorPromptOf(root, sessionId)).present, false)
+    const same = life.execute(stateRoot, sessionId, 'operator-1b', {
+      type: 'OperatorMessage', kind: 'Operator', messageId: 'operator-1',
+    })
+    assert.equal(same.Status, 'Observed')
+    const other = life.execute(stateRoot, sessionId, 'operator-2', {
+      type: 'OperatorMessage', kind: 'Operator', messageId: 'operator-2',
+    })
+    assert.equal(other.Status, 'Conflict')
+    assert.equal(life.inspected(stateRoot, sessionId).ActiveId, after.ActiveId)
   })
 })
 

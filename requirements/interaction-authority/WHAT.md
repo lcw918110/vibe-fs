@@ -55,6 +55,9 @@
 
 同一 LogicalRun 下的强类型 continuation 推进属于权限连续演进：仅 execution binding 的 per-physical target/lease 可按规则变化；participant、Root、identity evidence 与 Profile 关联全部保持不变。SessionId 相同但 LogicalRun 不同不构成 continuity。新物理目标的路由绝不改变 participant。
 
+## [013A] 既有受管子代理委托延续
+已承接委托并在 Durable Authority 投影中保持活跃 LogicalRun 的受管子会话（Managed Child Session），宿主再度指派后续任务或复用时必须使用 `ManagedDelegationAssignment` continuation 延续该活跃运行，绝对禁止在已有活跃运行的情况下重复派发新的 `AgentOwnerRoot`。仅当受管子会话无活跃运行或已合规终结后，方允许创建并准入新的 `AgentOwnerRoot`。
+
 ## [014] Nudge 与 JoinGuard 是 Continuation
 
 JoinGuard、闲置 Nudge 等流转控制指令均为 Continuation，不产生新的 Authority。在存在未决后台任务时仅允许发送 JoinGuard 延续等待，禁止隐式创建新 Root。Nudge 是 gate reminder 而不是一次性预算：只要对应业务 gate 仍未满足，每个新的合法 terminal occasion 都必须重新获得提醒资格；幂等范围只允许收窄到同一 exact `ProviderRunIdentity` occasion，禁止用 Session、LogicalRun、Life 或 barrier 本身永久压掉后续 fresh terminal。

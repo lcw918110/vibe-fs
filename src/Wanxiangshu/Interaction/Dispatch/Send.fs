@@ -642,6 +642,16 @@ module PromptDispatcherSend =
 
                 let registration = registerAcceptance key onAccepted
 
+                let confirmation =
+                    match awaitMode, onAccepted with
+                    | PromptDispatcher.AwaitMode.Await, Some observer ->
+                        Some(beginOwnedConfirmation key registration observer)
+                    | _ -> None
+
+                let ownedOpt = confirmation |> Option.map snd
+                use _ownedScope =
+                    { new System.IDisposable with member _.Dispose() = ownedOpt |> Option.iter (fun d -> d.Dispose()) }
+
                 // The admission check and the Host call are deliberately
                 // synchronous neighbours. No await may reopen a window where
                 // newer physical material can arrive after quiescence was
@@ -671,8 +681,19 @@ module PromptDispatcherSend =
                             match awaitMode with
                             | PromptDispatcher.AwaitMode.Detached -> detachedOutcome ()
                             | PromptDispatcher.AwaitMode.Await ->
-                                awaitPhysicalAwareContinuationAttempt sendTask (fun outcome ->
-                                    this.RecordSendOutcome key sessionId outcome acceptFn)
+                                task {
+                                    let! outcome =
+                                        awaitPhysicalAwareSend
+                                            key
+                                            sessionId
+                                            (fun fact -> this.Persist sessionId None fact)
+                                            acceptFn
+                                            (fun reason error ->
+                                                this.Abandon key sessionId reason |> TaskValue.map (fun _ -> Error error))
+                                            sendTask
+                                            (confirmation |> Option.map fst)
+                                    return continuationAttemptOutcome (SendOutcome.AdmittedWithReceipt(TransportReceipt.create "accepted")) outcome
+                                }
 
                         return! sendAfterAdmission ()
                     }
@@ -934,7 +955,62 @@ module PromptDispatcherSend =
                     None
                     None
                     tools
-            | None -> this.SendAgentOwnerRootWithSeed port sessionId text directory tools issueIdentitySeed
+            | None ->
+                match issueIdentitySeed () with
+                | Error reason -> Task.FromResult(Error reason)
+                | Ok identitySeed ->
+                    this.SendAgentOwnerRootCore
+                        port
+                        sessionId
+                        text
+                        identitySeed
+                        directory
+                        PromptDispatcher.AwaitMode.Detached
+                        None
+                        None
+                        None
+                        tools
+
+        member this.SendManagedAssignmentObserved
+            (port: IDispatchSessionPort)
+            (sessionId: SessionId)
+            (text: string)
+            (issueIdentitySeed: unit -> Result<PromptAuthority.IdentitySeed, string>)
+            (directory: string option)
+            (awaitMode: PromptDispatcher.AwaitMode)
+            (onAccepted: ContinuationAcceptanceObserver option)
+            (onSendObserved: (PromptDispatcher.PromptSendObservation -> unit) option)
+            (tools: Map<string, bool> option)
+            : Task<Result<PromptKey, string>> =
+            match (this.ProjectionFor sessionId).ActiveLogicalRun with
+            | Some profile ->
+                this.SendContinuationWithDigest
+                    port
+                    sessionId
+                    text
+                    (HostDigest.sha256Hex text)
+                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
+                    profile
+                    directory
+                    awaitMode
+                    onAccepted
+                    onSendObserved
+                    tools
+            | None ->
+                match issueIdentitySeed () with
+                | Error reason -> Task.FromResult(Error reason)
+                | Ok identitySeed ->
+                    this.SendAgentOwnerRootCore
+                        port
+                        sessionId
+                        text
+                        identitySeed
+                        directory
+                        awaitMode
+                        onAccepted
+                        onSendObserved
+                        None
+                        tools
 
         /// provider-attempt-recovery-008: the one request + terminal-scoped interaction repair an unusable terminal earns.
         ///

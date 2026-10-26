@@ -96,6 +96,47 @@ test('WHAT[host-boundary-011] HOST_030_non_array_parts_projects_safely_to_empty_
   const userStringParts = sanitizeMessage({ info: { role: 'user' }, parts: 'not-an-array' })
   assert.deepEqual(Array.from(userStringParts.parts), [{ type: 'text', text: '#' }])
 })
+test('WHAT[host-boundary-011] dedicated Advisor provider view never invents assistant dot or a prior answer', () => {
+  const historical = [
+    {info:{id:'u1',role:'user'},parts:[{type:'text',text:'What evidence changed the estimate?'}]},
+    {info:{id:'a1',role:'assistant'},parts:[{type:'reasoning',text:'Only private reasoning, no final answer'}]},
+    {info:{id:'u2',role:'user'},parts:[{type:'text',text:'Please provide the missing facts'}]},
+    {info:{id:'a2',role:'assistant'},parts:[{type:'text',text:'The missing fact is 314159'}]},
+    {info:{id:'u3',role:'user'},parts:[{type:'text',text:'What follows from that?'}]},
+  ]
+  const original = structuredClone(historical)
+  const output={messages:structuredClone(historical)}
+  HostMessageProjection.sanitizeAdvisorOutputMessages(output)
+  const projected=output.messages
+  assert.deepEqual(projected.map(m=>m.info.role), ['user','assistant','user'])
+  assert.deepEqual(projected[0].parts.filter(p=>p.type==='text').map(p=>p.text),
+    ['What evidence changed the estimate?','\n\n','Please provide the missing facts'])
+  assert.equal(projected[1].parts[0].text,'The missing fact is 314159')
+  assert.equal(projected.some(m=>m.info.role==='assistant' && m.parts.some(p=>p.text==='.' || p.text==='...')),false)
+  assert.deepEqual(historical,original,'only the outgoing request copy is reprojected')
+  const ordinary = sanitizeMessages(original)
+  assert.equal(ordinary.filter(m=>m.info.role==='assistant' && m.parts.some(p=>p.text==='.')).length,1,
+    'ordinary Host 016 behavior remains unchanged')
+})
+
+test('WHAT[host-boundary-011] consecutive pure user content in Advisor merges without a fake assistant turn', () => {
+  const source = [
+    {role:'user',content:'First question'},
+    {role:'user',content:'Additional context'},
+    {role:'user',content:'Follow-up question'},
+  ]
+  const output={messages:structuredClone(source)}
+  HostMessageProjection.sanitizeAdvisorOutputMessages(output)
+  const projected=output.messages
+  assert.equal(projected.length,1)
+  assert.equal(projected[0].role,'user')
+  assert.deepEqual(projected[0].parts.map(part=>part.text),
+    ['First question','\n\n','Additional context','\n\n','Follow-up question'])
+  assert.equal(projected[0].content,undefined)
+  assert.deepEqual(source.map(m=>m.content),['First question','Additional context','Follow-up question'])
+})
+
+
 }
 
 {
@@ -106,6 +147,7 @@ const { default: test } = await import("node:test");
 
 const root = resolve(import.meta.dirname, '../../..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
+
 
 test('WHAT[host-boundary-011] HostMessageProjection owns sanitizeOutputMessages entry point', () => {
   const projection = read('src/Wanxiangshu/OpenCode/Host/HostMessageProjection.fs')

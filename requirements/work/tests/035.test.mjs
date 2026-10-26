@@ -1,292 +1,80 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
-import * as planning from '../../../dist/Mission/Planning/Surface.js'
-import * as workspace from '../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js'
-import * as journalSurface from '../../../dist/Persistence/Journal/Surface.js'
+import { Work } from 'wanxiangli/work'
 
-const surface = lifecycle.LifecycleSurface ?? lifecycle
+const review = (work, id, office, updates) =>
+  work.execute(id, {
+    type: 'Review',
+    office,
+    providerRunId: 'run',
+    toolCallId: id,
+    updates,
+  })
 
-const framesOf = (text) => text.split('\n').filter((line) => line.length > 0).map((line) => JSON.parse(line))
-const eventsOf = (text) => framesOf(text).flatMap((frame) => frame.events ?? [])
-const incumbencyIdOf = (text) => [...eventsOf(text)].reverse().find((event) => event.type === 'IncumbencyOpened').incumbencyId
-
-const withStore = async (body) => {
-  const root = mkdtempSync(join(tmpdir(), 'wxs-work-035-'))
-  execFileSync('git', ['init', '--quiet', root])
-  try {
-    await body(workspace.acquire(await journalSurface.JournalSurface_initializeStateRoot(root)), root)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
+const confirm = (work, effect, outcome = 'Sent') => {
+  const reply = work.execute(`confirm-${effect.id}-${outcome}`, { type: 'Confirm', effectId: effect.id, outcome })
+  assert.equal(reply.status, 'Applied', reply.reason)
 }
 
-const climb = (workId, relays) => {
-  let text = surface.encodeOpening('plan', workId, '/root', 0n)
-  for (let step = 0; step < relays; step += 1) {
-    const reviewed = surface.reviewProbe(text, incumbencyIdOf(text), 'Promoted')
-    const relayed = surface.deliverProbe(`${text}${reviewed.bytes}`, `run-${step}`, `call-${step}`, BigInt((step + 1) * 10))
-    text = `${text}${reviewed.bytes}${relayed.bytes}`
-  }
-  return text
+const closeManager = (workId) => {
+  const work = new Work(workId)
+  review(work, 'r1', 'Manager', [{ key: 'job', value: 'do' }])
+  const relayed = review(work, 'r2', 'Manager', [{ key: 'job', value: null }])
+  confirm(work, relayed.result.effect)
+  const advanced = review(work, 'r3', 'Manager', [])
+  confirm(work, advanced.result.effect)
+  const closed = review(work, 'r4', 'Manager', [])
+  assert.equal(closed.result.kind, 'Completed')
+  confirm(work, closed.result.effect, 'Requested')
+  return work
 }
 
-test('WHAT[work-035] a delivered document recovers Done and not Review', () => {
-  let text = climb('work-rec-1', 2)
-  const reviewed = surface.reviewProbe(text, incumbencyIdOf(text), 'Promoted')
-  const auth = surface.deliverProbe(`${text}${reviewed.bytes}`, 'run-auth', 'call-auth', 25n)
-  text = `${text}${reviewed.bytes}${auth.bytes}`
-  const planRoot = mkdtempSync(join(tmpdir(), 'wxs-work-035-plan-'))
-  let delivered
-  let selected
-  try {
-    const planPath = planning.PlanningSurface.resolvePlanPath(planRoot, 'work-rec-1')
-    assert.equal(planPath.ok, true, planPath.error)
-    mkdirSync(dirname(planPath.path), { recursive: true })
-    writeFileSync(planPath.path, '# plan\n')
-    selected = planning.PlanningSurface.readAndValidatePlan(planRoot, 'work-rec-1')
-    assert.equal(selected.ok, true, selected.error)
-    delivered = surface.deliverStateProbe(text, 'run-final', 'call-final', 30n, { digest: selected.digest, path: selected.path })
-  } finally {
-    rmSync(planRoot, { recursive: true, force: true })
-  }
-  assert.equal(delivered.decision, 'Write', delivered.detail)
-  text = `${text}${delivered.bytes}`
-
-  const read = surface.readProbe(text)
-  assert.equal(read.ok, true)
-  assert.equal(read.next, 'Done')
-  assert.equal(read.activeId, '')
-  assert.notEqual(read.next, 'Review')
-  const view = surface.documentView(text)
-  assert.equal(view.delivered, true)
-  assert.equal(view.active, false)
-  assert.equal(view.digest, selected.digest)
-  assert.equal(view.path, selected.path)
-  assert.equal(view.projection, 'S3')
-})
-
-test('WHAT[work-035] an active work rebinds the incumbency and stage; draft text does not choose the stage', async () => {
-  await withStore(async (store, root) => {
-    const opened = await surface.seedOpen(store, 'plan', 'work-rec-2', root, 7n)
-    assert.equal(opened.ok, true, opened.error)
-    const reviewed = await surface.seedReview(store, 'work-rec-2', 'Promoted')
-    assert.equal(reviewed.ok, true, reviewed.error)
-    const relayed = await surface.seedDeliver(store, 'work-rec-2', 'run-2', 'call-2', 11n)
-    assert.equal(relayed.ok, true, relayed.error)
-
-    const planPath = planning.PlanningSurface.resolvePlanPath(root, 'work-rec-2')
-    assert.equal(planPath.ok, true, planPath.error)
-    mkdirSync(dirname(planPath.path), { recursive: true })
-    writeFileSync(planPath.path, '# Stage S3 - Final Deliver - Finished Work')
-    const stored = surface.workView(store, 'work-rec-2')
-    assert.equal(stored.found, true)
-    assert.equal(stored.active, true)
-    assert.equal(stored.sequence, 'S1,S2,S3')
-    assert.equal(stored.delivered, false)
-
-    const bytes = surface.encodeOpening('plan', 'work-rec-2', root, 7n)
-    const promoted = surface.reviewProbe(bytes, incumbencyIdOf(bytes), 'Promoted')
-    const successor = surface.deliverProbe(`${bytes}${promoted.bytes}`, 'run-2', 'call-2', 11n)
-    const folded = surface.readProbe(`${bytes}${promoted.bytes}${successor.bytes}`)
-    assert.equal(folded.ok, true)
-    assert.equal(folded.next, 'Review')
-    assert.equal(folded.activeId.length > 0, true)
-    const view = surface.documentView(`${bytes}${promoted.bytes}${successor.bytes}`)
-    assert.equal(view.activeId.length > 0, true)
-    assert.equal(view.openingStage, 'S2', 'recovery reads the folded stage, not the draft text')
-    assert.equal(view.authorized, false)
-    assert.equal(existsSync(planning.PlanningSurface.resolvePlanPath(root, 'work-rec-2').path), true)
+test('WHAT[work-035] a completed work restores completed and does not open a tenure', () => {
+  const work = closeManager('work-35-done')
+  const draft = 'this prose must not choose a milestone'
+  const restored = new Work('work-35-done', work.records())
+  assert.equal(restored.inspect().completed, true)
+  assert.equal(restored.inspect().milestone, '已完成')
+  assert.equal(restored.inspect().active, null)
+  assert.equal(restored.inspect().milestone, work.inspect().milestone)
+  assert.equal(draft.includes('已完成'), false)
+  const late = restored.execute('late', {
+    type: 'Review', office: 'Manager', providerRunId: 'run', toolCallId: 'late', updates: [],
   })
+  assert.equal(late.status, 'Conflict')
+  assert.equal(restored.records().length, work.records().length)
 })
 
-test('WHAT[work-035] a missing draft stays Review and is not read as delivered', async () => {
-  await withStore(async (store, root) => {
-    const opened = await surface.seedOpen(store, 'plan', 'work-rec-3', root, 1n)
-    assert.equal(opened.ok, true, opened.error)
-    const missing = planning.PlanningSurface.resolvePlanPath(root, 'work-rec-3')
-    assert.equal(missing.ok, true, missing.error)
-    assert.equal(existsSync(missing.path), false)
-    const stored = surface.workView(store, 'work-rec-3')
-    assert.equal(stored.active, true)
-    assert.equal(stored.delivered, false)
-    const folded = surface.readProbe(surface.encodeOpening('plan', 'work-rec-3', root, 1n))
-    assert.equal(folded.ok, true)
-    assert.equal(folded.next, 'Review')
-    assert.equal(folded.activeId.length > 0, true)
-    assert.notEqual(folded.next, 'Done')
-    assert.equal(surface.documentView(surface.encodeOpening('plan', 'work-rec-3', root, 1n)).openingStage, 'S1')
+test('WHAT[work-035] an active work rebinds the same tenure, milestone, and ledger', () => {
+  const work = new Work('work-35-active')
+  const recorded = review(work, 'r1', 'Plan', [{ key: 'need', value: 'scope' }])
+  assert.equal(recorded.result.milestone, '事实与取舍')
+  const restored = new Work('work-35-active', work.records())
+  assert.deepEqual(restored.inspect(), work.inspect())
+  assert.equal(restored.inspect().active.id, work.inspect().active.id)
+  assert.equal(restored.inspect().active.milestone, '事实与取舍')
+  assert.deepEqual(restored.inspect().obligations, [{ key: 'need', value: 'scope' }])
+  assert.equal(restored.recover().next, work.recover().next)
+})
+
+test('WHAT[work-035] a missing work stays unopened', () => {
+  const missing = new Work('work-35-missing')
+  assert.deepEqual(missing.records(), [])
+  assert.equal(missing.inspect().office, null)
+  assert.equal(missing.inspect().active, null)
+  assert.equal(missing.inspect().completed, false)
+  assert.equal(missing.recover().next, 'Review')
+})
+
+test('WHAT[work-035] the same request with different bytes is refused and the history is unchanged', () => {
+  const work = new Work('work-35-bytes')
+  review(work, 'r1', 'Plan', [])
+  const before = work.records()
+  const conflict = work.execute('r1', {
+    type: 'Review', office: 'Plan', providerRunId: 'run', toolCallId: 'r1', updates: [{ key: 'need', value: 'other' }],
   })
-})
-
-test('WHAT[work-035] a missing work is not opened and does not guess', async () => {
-  await withStore(async (store) => {
-    const missing = surface.workView(store, 'work-rec-4')
-    assert.equal(missing.found, false)
-    assert.equal(missing.active, false)
-    assert.equal(missing.delivered, false)
-    assert.equal(missing.sequence, '')
-  })
-  const rejected = surface.readProbe('\n')
-  assert.equal(rejected.ok, true)
-  assert.equal(rejected.opened, false, 'a newline with no WorkOpened is not a guessed opening')
-  assert.equal(rejected.next, 'Open')
-  assert.equal(rejected.names, '')
-  assert.equal(rejected.activeId, '')
-  assert.notEqual(rejected.next, 'Done')
-  assert.notEqual(rejected.next, 'Review')
-})
-
-test('WHAT[work-035] a second opening with the same request id and different bytes is refused', () => {
-  let text = climb('work-rec-5', 2)
-  const reviewed = surface.reviewProbe(text, incumbencyIdOf(text), 'Promoted')
-  const auth = surface.deliverProbe(`${text}${reviewed.bytes}`, 'run-auth', 'call-auth', 25n)
-  text = `${text}${reviewed.bytes}${auth.bytes}`
-  const planRoot = mkdtempSync(join(tmpdir(), 'wxs-work-035-conflict-'))
-  let delivered
-  try {
-    const planPath = planning.PlanningSurface.resolvePlanPath(planRoot, 'work-rec-5')
-    assert.equal(planPath.ok, true, planPath.error)
-    mkdirSync(dirname(planPath.path), { recursive: true })
-    writeFileSync(planPath.path, '# plan\n')
-    const selected = planning.PlanningSurface.readAndValidatePlan(planRoot, 'work-rec-5')
-    assert.equal(selected.ok, true, selected.error)
-    delivered = surface.deliverStateProbe(text, 'run-5', 'call-5', 30n, { digest: selected.digest, path: selected.path })
-  } finally {
-    rmSync(planRoot, { recursive: true, force: true })
-  }
-  text = `${text}${delivered.bytes}`
-  assert.equal(surface.readProbe(text).next, 'Done')
-
-  const forged = `${text}${surface.encodeOpening('plan', 'work-rec-5', '/root', 40n)}`
-  const conflict = surface.readProbe(forged)
-  assert.equal(conflict.ok, false, 'the conflicting replay must be refused')
-  assert.equal(conflict.opened, false)
-  assert.equal(conflict.next, '')
-  assert.equal(conflict.activeId, '')
-  assert.match(conflict.reason, /RequestIdConflict/)
-})
-
-test('WHAT[work-035] recovery effects keep Done and Review for an open incumbency while a missing id stays unopened', async () => {
-  const effects = []
-  let delivered = climb('work-batch-deliv', 2)
-  const reviewed = surface.reviewProbe(delivered, incumbencyIdOf(delivered), 'Promoted')
-  const auth = surface.deliverProbe(`${delivered}${reviewed.bytes}`, 'run-auth', 'call-auth', 25n)
-  delivered = `${delivered}${reviewed.bytes}${auth.bytes}`
-  const planRoot = mkdtempSync(join(tmpdir(), 'wxs-work-035-effects-'))
-  let receipt
-  try {
-    const planPath = planning.PlanningSurface.resolvePlanPath(planRoot, 'work-batch-deliv')
-    assert.equal(planPath.ok, true, planPath.error)
-    mkdirSync(dirname(planPath.path), { recursive: true })
-    writeFileSync(planPath.path, '# plan\n')
-    const selected = planning.PlanningSurface.readAndValidatePlan(planRoot, 'work-batch-deliv')
-    assert.equal(selected.ok, true, selected.error)
-    receipt = surface.deliverStateProbe(delivered, 'run-b', 'call-b', 30n, { digest: selected.digest, path: selected.path })
-  } finally {
-    rmSync(planRoot, { recursive: true, force: true })
-  }
-  delivered = `${delivered}${receipt.bytes}`
-  effects.push(surface.readProbe(delivered))
-  effects.push(surface.readProbe(climb('work-batch-active', 2)))
-  assert.equal(effects.length, 2)
-  assert.equal(effects[0].next, 'Done')
-  assert.equal(effects[0].activeId, '')
-  assert.equal(effects[1].next, 'Review')
-  assert.equal(effects[1].activeId.length > 0, true)
-  assert.equal(surface.documentView(delivered).workId, 'work-batch-deliv')
-  assert.equal(surface.documentView(climb('work-batch-active', 2)).workId, 'work-batch-active')
-
-  await withStore(async (store) => {
-    const missing = surface.workView(store, '')
-    assert.equal(missing.found, false)
-  })
-})
-
-test('WHAT[work-035] S4 recovery reads single delivery, relay and delivery from the fold, and a reopened delivered tenure is active again', async () => {
-  await withStore(async (store, root) => {
-    const commonDir = await journalSurface.JournalSurface_initializeStateRoot(root)
-    const workId = 'work-rec-s4-successor'
-    const accepted = ['Committed', 'Replayed', 'Observed']
-    const commit = (requestId, command) => {
-      const receipt = surface.execute(commonDir, workId, requestId, command)
-      assert.ok(accepted.includes(receipt.Status), JSON.stringify(receipt))
-      return receipt
-    }
-    const activeId = () => surface.inspected(commonDir, workId).ActiveId
-    const review = (requestId, promoted) =>
-      commit(requestId, {
-        type: 'Review',
-        incumbencyId: activeId(),
-        reviewerId: 'reviewer',
-        updates: promoted ? [] : [{ key: 'gap', value: 'gap' }],
-      })
-    const deliver = (requestId, providerRunId, toolCallId, cursor) =>
-      commit(requestId, {
-        type: 'Deliver',
-        incumbencyId: activeId(),
-        providerRunId,
-        toolCallId,
-        cursor,
-        blockers: [],
-        nextOwnerId: workId,
-      })
-
-    commit('open', {
-      type: 'Open',
-      root,
-      sequence: ['S4'],
-      ownerId: workId,
-      openingCursor: 0,
-    })
-    // Single delivery relays with successor in one call when stayed.
-    review('review-1', false)
-    // Single delivery relays once obligation ledger is cleared key-by-key
-    commit('clear-1', {
-      type: 'Review', incumbencyId: activeId(), reviewerId: 'reviewer',
-      updates: [{ key: 'gap', value: null }],
-    })
-    const relay = deliver('relay-1', 'run-1', 'call-2', 2)
-    assert.equal(relay.Kind, 'Relayed')
-    const successor = surface.inspected(commonDir, workId)
-    assert.equal(successor.Reviewed, false)
-    assert.equal(Array.from(successor.Retirements).at(-1).Outcome, 'Relayed')
-    assert.notEqual(successor.ActiveId, undefined, 'a relay leaves its successor active')
-
-    // Single delivery completes work directly in one call when promoted.
-    review('review-2', true)
-    const closed = commit('close-2', {
-      type: 'Deliver',
-      incumbencyId: activeId(),
-      providerRunId: 'run-2',
-      toolCallId: 'call-4',
-      cursor: 4,
-      blockers: [],
-    })
-    assert.equal(closed.Kind, 'Delivered')
-    const delivered = surface.inspected(commonDir, workId)
-    assert.equal(delivered.Delivered, true)
-    assert.equal(Array.from(delivered.Retirements).at(-1).Outcome, 'Delivered')
-
-    const retired = Array.from(delivered.Retirements).at(-1)
-    const reopened = commit('reopen', {
-      type: 'Reopen',
-      retirementId: retired.RetirementId,
-      ownerId: workId,
-      openingCursor: 5,
-      blockers: [],
-    })
-    assert.equal(reopened.Kind, 'Reopened')
-    const rebound = surface.inspected(commonDir, workId)
-    assert.notEqual(rebound.ActiveId, undefined)
-    assert.equal(rebound.Reviewed, false)
-    assert.equal(rebound.Delivered, false, 'reopen clears the delivered read')
-    assert.equal(Array.from(rebound.Retirements).at(-1).Outcome, 'Delivered')
-    assert.notEqual(rebound.ActiveId, retired.IncumbencyId, 'reopen opens a tenure, it revives none')
-    assert.equal(surface.workView(store, workId).active, true)
-  })
+  assert.equal(conflict.status, 'Conflict')
+  assert.equal(conflict.reason, 'RequestIdConflict')
+  assert.deepEqual(work.records(), before)
+  assert.throws(() => new Work('work-35-bytes', [`${before[0]}\n`]), /canonical/)
 })

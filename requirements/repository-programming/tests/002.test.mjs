@@ -57,7 +57,7 @@ const MEMBERS_BY_PERMISSION = {
   DevOpsConsultation: ['devops'],
   Fission: ['fission'],
   Horizon: ['horizon'],
-  Advisor: ['advisor'],
+  Advisor: [],
   Ask: ['ask'],
   Review: ['review'],
   ReviewAssessment: ['review'],
@@ -83,7 +83,6 @@ const BINDING_BY_MEMBER = {
   devops: 'devops',
   fission: 'fission',
   horizon: 'horizon',
-  advisor: 'advisor',
   ask: 'ask',
   review: 'review',
   deliver: 'deliver',
@@ -95,7 +94,7 @@ const MEMBER_ORDER = [
   'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where',
   'call', 'signal', 'send',
   'fork', 'resume', 'commission', 'devops', 'dag',
-  'fission', 'horizon', 'advisor', 'ask',
+  'fission', 'horizon',  'ask',
   'review',
 ]
 
@@ -104,10 +103,10 @@ const MEMBER_ORDER = [
 // surface members only: the host registers no fork/resume/commission/devops
 // tool of its own.
 const EXPECTED_MEMBERS = {
-  engineer: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'fission', 'advisor'],
-  devops: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'call', 'signal', 'send', 'horizon', 'advisor'],
-  manager: ['reviewOnly.cat', 'reviewOnly.ls', 'reviewOnly.rg', 'reviewOnly.stat', 'whereAll', 'where', 'fork', 'resume', 'horizon', 'advisor', 'review'],
-  orchestrator: ['commission', 'horizon', 'advisor'],
+  engineer: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'fission'],
+  devops: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'call', 'signal', 'send', 'horizon'],
+  manager: ['reviewOnly.cat', 'reviewOnly.ls', 'reviewOnly.rg', 'reviewOnly.stat', 'whereAll', 'where', 'fork', 'resume', 'horizon',  'review'],
+  orchestrator: ['commission', 'horizon'],
   plan: ['write', 'cat', 'stat', 'mkdir', 'whereAll', 'where', 'devops', 'ask', 'review'],
 }
 
@@ -170,7 +169,7 @@ ${body}
 }`
 
 const runProgram = (dir, role, sessionId, body) =>
-  execute(dir, role, 'en', sessionId, { name: 'repository-programming-002', program: program(body), planB: 'Wait for these business receipts under one unchanged request deadline.' }, 3000, Date.now() + 60_000, 1 << 20, null)
+  execute(dir, role, 'en', sessionId, { name: 'repository-programming-002', program: program(body), intent: 'Wait for these business receipts under one unchanged request deadline.' }, 3000, Date.now() + 60_000, 1 << 20, null)
 
 // A recording delegation host: every dispatch member travels the single
 // `(name, payload, carry)` entry, so the payload the host receives is
@@ -226,6 +225,10 @@ test('WHAT[repository-programming-002] the delegation verbs are programming-surf
 test('WHAT[repository-programming-002] every capability family reaches all four layers', () => {
   for (const [permission, family] of Object.entries(MEMBERS_BY_PERMISSION)) {
     const result = surface('Engineer', caps(permission))
+    if (family.length === 0) {
+      assert.equal(result, null, `${permission} grants no programming surface`)
+      continue
+    }
     assert.equal(isSome(result), true, `${permission} projects a surface`)
 
     const layers = layersOf(result)
@@ -401,57 +404,20 @@ test('WHAT[repository-programming-002] JS004_horizon_projects_four_layers_for_ev
   assert.equal(memberBinding('Engineer', caps('Fork', 'Join'), 'horizon'), undefined)
 })
 
-test('WHAT[repository-programming-002] JS004_advisor_projects_four_layers_for_every_holding_role', () => {
-  const holders = allRoleLabels.filter((role) => rolePermissions(role.toLowerCase()).includes('Advisor'))
-  assert.deepEqual(holders, ['devops', 'engineer', 'manager', 'orchestrator'], 'the roles holding ToolPermission.Advisor')
-
-  for (const role of holders) {
-    const permissions = rolePermissions(role.toLowerCase())
-    const result = surface(role, permissions)
-    assert.equal(isSome(result), true, `${role} gets a js-* surface`)
-    assert.deepEqual(projectedMembers(result), EXPECTED_MEMBERS[role], `${role} member set`)
-    assert.equal(
-      memberBinding(role, permissions, 'advisor'),
-      'advisor',
-      `${role} advisor runtime gate`,
-    )
-
-    const layers = layersOf(result)
-    assert.equal(layers.advisor.binding, 'advisor', `${role}: advisor binding key`)
-    assert.match(result.description, /advisor\(intent/, `${role}: advisor pseudocode signature`)
-    for (const [member, layer] of Object.entries(layers)) {
-      const baseClassMarker = SUGAR_MEMBERS.includes(member)
-        ? `async ${member}(`
-        : `this._api.${layer.binding}`
-      assert.equal(
-        result.baseClassSource.includes(baseClassMarker),
-        true,
-        `${role}: ${member} in base class`,
-      )
-      assert.equal(layer.inDescription, true, `${role}: ${member} in description`)
-      assert.equal(layer.binding, BINDING_BY_MEMBER[member.split('.').at(-1)], `${role}: ${member} binding`)
-    }
+test('WHAT[repository-programming-002] dedicated Advisor is automatic and has no callable JS member', () => {
+  const holders = allRoleLabels.filter(role => rolePermissions(role.toLowerCase()).includes('Advisor'))
+  assert.deepEqual(holders,['devops','engineer','manager','orchestrator'])
+  for(const role of holders){
+    const permissions=rolePermissions(role)
+    const result=surface(role,permissions)
+    assert.equal(isSome(result),true)
+    assert.equal(memberBinding(role,permissions,'advisor'),undefined)
+    assert.equal(memberNames(result).includes('advisor'),false)
+    assert.doesNotMatch(result.baseClassSource,/async advisor\(/)
+    assert.doesNotMatch(result.description,/advisor\(intent/)
   }
-
-  // The permission is the sole source of the member: Fork/Join without Advisor
-  // project fork but neither advisor nor the independent join tool.
-  const delegationOnly = surface('Engineer', caps('Fork', 'Join'))
-  assert.deepEqual(memberNames(delegationOnly), ['fork'])
-  assert.equal(memberBinding('Engineer', caps('Fork', 'Join'), 'advisor'), undefined)
-  assert.deepEqual(memberNames(surface('Engineer', caps('Advisor'))), ['advisor'])
-
-  // Absence: a role without the permission never projects the member — the
-  // advisor seat itself holds no permission at all, and plan keeps its
-  // surface advisor-free.
-  const without = allRoleLabels.filter((role) => !rolePermissions(role.toLowerCase()).includes('Advisor'))
-  assert.deepEqual(without, ['advisor', 'plan'], 'the roles without ToolPermission.Advisor')
-  for (const role of without) {
-    assert.equal(
-      memberBinding(role, rolePermissions(role.toLowerCase()), 'advisor'),
-      undefined,
-      `${role} never resolves this.advisor`,
-    )
-  }
+  assert.equal(surface('Engineer', caps('Advisor')), null,
+    'the retired Advisor permission cannot manufacture a programming surface')
 })
 
 test('WHAT[repository-programming-002] dispatch members accept no carry parameter; pull members take no selection', () => {
@@ -459,7 +425,7 @@ test('WHAT[repository-programming-002] dispatch members accept no carry paramete
   assert.equal(isSome(manager), true)
 
   // Dispatch members: context travels via full post-scope view, not carry.
-  for (const member of ['fork', 'resume', 'advisor']) {
+  for (const member of ['fork', 'resume']) {
     assert.match(
       manager.baseClassSource,
       new RegExp(`async ${member}\\(`),

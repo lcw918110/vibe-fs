@@ -172,6 +172,56 @@ module HostMessageProjection =
         |> List.map sanitizeMessage
         |> intersperseAssistantBetweenConsecutiveUsers
 
+    let private isReasoningOnlyAssistant (raw: obj) : bool =
+        let parts = readParts raw
+        let onlyNonProse =
+            parts |> Array.forall (fun part ->
+                let kind = partKind part
+                kind = "reasoning" || kind = "thinking" || kind = "text")
+        readRole raw = "assistant"
+        && onlyNonProse
+        && not (hasNonEmptyText raw parts)
+        && not (hasTool raw parts)
+
+    let private userContentParts (raw: obj) : obj array =
+        let parts = readParts raw
+        if parts.Length > 0 then parts
+        else
+            let content = readField raw "content"
+            if isNull content then [||]
+            elif emitJsExpr content "typeof $0 === 'string'" then
+                [| createObj [ "type", box "text"; "text", content ] |]
+            else [||]
+
+    let private mergeUserMessages (first: obj) (second: obj) : obj =
+        let separator = createObj [ "type", box "text"; "text", box "\n\n" ]
+        let both =
+            Array.concat [| userContentParts first; [| separator |]; userContentParts second |]
+        let merged = emitJsExpr second "Object.assign({}, $0)"
+        emitJsExpr (merged, both) "$0.parts = $1; delete $0.content;" |> ignore
+        merged
+
+    let rec private foldAdvisorUserTurns (messages: obj list) : obj list =
+        match messages with
+        | [] -> []
+        | [ only ] -> [ only ]
+        | first :: (second :: tail) when isUserRole first && isUserRole second ->
+            foldAdvisorUserTurns (mergeUserMessages first second :: tail)
+        | first :: rest -> first :: foldAdvisorUserTurns rest
+
+    /// Dedicated Advisor receives genuine assistant prose only. In its provider request copy,
+    /// omit a textless reasoning-only assistant run and merge adjacent user prompts instead
+    /// of inventing an assistant ".". The persisted session is never altered.
+    let sanitizeAdvisorMessages (messages: obj list) : obj list =
+        messages
+        |> List.filter (isReasoningOnlyAssistant >> not)
+        |> List.map sanitizeMessage
+        |> foldAdvisorUserTurns
+
+    let sanitizeAdvisorOutputMessages (outObj: obj) : unit =
+        let current = unbox<obj array> outObj?messages |> Array.toList
+        replaceMessagesInPlace outObj (sanitizeAdvisorMessages current)
+
     let sanitizeOutputMessages (outObj: obj) : unit =
         let currentMessages = unbox<obj array> outObj?messages |> Array.toList
         let sanitized = sanitizeMessages currentMessages

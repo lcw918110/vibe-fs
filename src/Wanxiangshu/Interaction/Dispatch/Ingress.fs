@@ -43,7 +43,8 @@ module PromptIngress =
             match journal, message.SessionId with
             | Some durable, Some sessionId ->
                 let runtime = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
-                Some(runtime.ProjectionFor sessionId)
+                let projection = runtime.ProjectionFor sessionId
+                Some projection
             | Some _, None -> Some PromptAuthority.empty
             | None, _ -> None
 

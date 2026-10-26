@@ -62,8 +62,11 @@ module JsToolPolicy =
     let argProgramProse () : string =
         JsDescriptionAssets.argProgram (ProviderLanguageBinding.readGlobalPreference ())
 
-    let argPlanBProse () : string =
-        ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) "tool/js-program/arg-planB" Map.empty
+    let argIntentProse () : string =
+        ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) "tool/js-program/arg-intent" Map.empty
+
+    let argEstimateProse () : string =
+        ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) "tool/js-program/arg-estimate" Map.empty
 
     /// The prose of the refusal of a call that carries no state at all.
     let missingProgramProse () : string =

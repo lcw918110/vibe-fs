@@ -5,7 +5,9 @@ type ActiveTenureInfo =
       IncumbencyId: string
       Stage: string
       OpeningCursor: int64
-      IsFreshHandover: bool }
+      IsFreshHandover: bool
+      BarrierToolCallId: string option
+      SuccessorTenureId: string option }
 
 type TenureMessage =
     { Id: string option
@@ -20,13 +22,14 @@ type TenureAssemblyResult =
 
 module TenureIsolation =
 
+    open System
     open Fable.Core
     open Fable.Core.JsInterop
 
-    /// 任期过滤规则的唯一实现：wanxiangli/projection（CUT-17）。
+    /// 任期过滤规则的唯一实现：wanxiangli/projection。
     [<AllowNullLiteral>]
     type private ProjectionMessages =
-        abstract tenure: messages: obj * openingCursor: obj -> obj
+        abstract tenure: messages: obj * barrier: obj -> obj
 
     [<Import("Projection", "wanxiangli/projection")>]
     let private createProjection: unit -> ProjectionMessages = jsNative
@@ -37,7 +40,15 @@ module TenureIsolation =
         message.Id
         |> Option.bind (fun messageId -> Map.tryFind messageId messageCursors)
 
-    let private wireMessage (messageCursors: Map<string, int64>) (message: TenureMessage) : obj =
+    let private presentText (raw: obj) (name: string) : obj =
+        let value = raw?(name)
+
+        if isNull value || jsTypeof value <> "string" || String.IsNullOrEmpty(unbox<string> value) then
+            null
+        else
+            value
+
+    let private neutral (messageCursors: Map<string, int64>) (message: TenureMessage) : obj =
         createObj
             [ "id" ==> Option.toObj message.Id
               "role" ==> message.Role
@@ -46,15 +57,14 @@ module TenureIsolation =
               "cursor"
               ==> (match physicalCursor messageCursors message with
                    | Some cursor -> box cursor
-                   | None -> null) ]
+                   | None -> null)
+              "toolCallId" ==> presentText message.Raw "toolCallId"
+              "resultFor" ==> presentText message.Raw "resultFor"
+              "tenureId" ==> presentText message.Raw "tenureId" ]
 
-    /// Assembles the physical message set for an active or post-S3 Plan tenure:
-    /// verbatim user messages `U` (role user, non-synthetic, in original order)
-    /// plus current-tenure physical messages whose first XTrace observation
-    /// cursor is `>= tenure.OpeningCursor` (or uncaptured with a stable Host
-    /// identity). All prior-tenure assistant/tool messages and synthetic rows
-    /// are stripped; handover is carried by the predecessor's ANCHOR view
-    /// declaration rather than a machine-materialized record.
+    /// No committed barrier leaves the decoded rows in place.
+    /// A barrier hides the triggering review and everything before it,
+    /// then keeps only the successor's non-synthetic rows.
     let assemble
         (messages: TenureMessage list)
         (tenure: ActiveTenureInfo)
@@ -62,11 +72,21 @@ module TenureIsolation =
         : TenureAssemblyResult =
         let rows = List.toArray messages
 
-        let kept =
-            projection.tenure (rows |> Array.map (wireMessage messageCursors) |> box, box tenure.OpeningCursor)
+        let selected =
+            match tenure.BarrierToolCallId, tenure.SuccessorTenureId with
+            | Some callId, Some successor ->
+                let barrier =
+                    createObj
+                        [ "toolCallId" ==> callId
+                          "successorTenureId" ==> successor ]
 
-        { Messages =
-            unbox<int array> kept
-            |> Array.map (fun index -> rows.[index].Raw)
-            |> Array.toList
+                let kept =
+                    projection.tenure (rows |> Array.map (neutral messageCursors) |> box, barrier)
+
+                unbox<obj array> kept
+                |> Array.map (fun index -> rows.[int (unbox<float> index)].Raw)
+                |> Array.toList
+            | _ -> messages |> List.map (fun message -> message.Raw)
+
+        { Messages = selected
           ReanchorRequested = tenure.IsFreshHandover }

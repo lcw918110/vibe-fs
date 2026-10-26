@@ -44,6 +44,8 @@
 
 在向底层提供者交付消息前，必须对空白内容进行安全补占位符处理，并在连续出现的两条用户消息之间插桩无语义的助手消息，防止底层协议报校验错误。
 
+**专席 Advisor 的独立出站投影例外：**专席的持久原文包含只有 reasoning、没有普通正文的 assistant 回合，或相邻的两条 user 载体时，不得给模型捏造 `assistant "."`（它会把此兼容占位错认成自己前次的真实答复）。仅在专席的 Provider 请求副本中省略没有正文也没有工具效果的 reasoning-only assistant，合并相邻 user 消息及其原始文字；从不修改原始会话、reasoning 的持久事实或已经产生的真实 assistant prose。普通角色仍受上述 Provider 非空与交替规则约束。判断专席身份依据持久的 CanonicalRole，而不是 user 消息文字。以 HOST-011 的 HNI 正反例和已建立真实 AcceptedChatExecution、ProviderRun 的 OpenCode 正式 transform 反例验证。
+
 ## [012] SessionID 与 CallID 定位唯一性
 
 依据 `SessionID + CallID` 在完整快照中解析原始调用分段时，必须证明其能唯一确定对应的运行上下文与追踪范围；若匹配出现歧义或无法定位，必须安全失败。

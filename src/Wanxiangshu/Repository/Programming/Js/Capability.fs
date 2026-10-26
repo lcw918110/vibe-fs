@@ -29,10 +29,6 @@ type JsCapability =
     /// Who remains at the horizon (`this.horizon`): a data-only roster of the
     /// session's horizon-visible participants — never a prose rendering.
     | Horizon
-    /// Consultation with this session's own advisor seat (`this.advisor`): the
-    /// seat answers in prose and the member hands that prose back as data —
-    /// never as a rendering.
-    | Advisor
     /// The one question a program may put to the user (`this.ask`).
     | Ask
     | Review
@@ -75,7 +71,6 @@ module JsCapability =
         | "DevOps" -> Some JsCapability.DevOps
         | "Fission" -> Some JsCapability.Fission
         | "Horizon" -> Some JsCapability.Horizon
-        | "Advisor" -> Some JsCapability.Advisor
         | "Ask" -> Some JsCapability.Ask
         | "Review" -> Some JsCapability.Review
         | "Park" -> Some JsCapability.Park
@@ -96,7 +91,6 @@ module JsCapability =
         | JsCapability.DevOps -> "DevOps"
         | JsCapability.Fission -> "Fission"
         | JsCapability.Horizon -> "Horizon"
-        | JsCapability.Advisor -> "Advisor"
         | JsCapability.Ask -> "Ask"
         | JsCapability.Review -> "Review"
         | JsCapability.Park -> "Park"
@@ -247,10 +241,6 @@ module JsFragmentRegistry =
         { Capability = JsCapability.Horizon
           MemberName = "horizon" }
 
-    let advisor: JsCapabilityFragment =
-        { Capability = JsCapability.Advisor
-          MemberName = "advisor" }
-
     let ask: JsCapabilityFragment =
         { Capability = JsCapability.Ask
           MemberName = "ask" }
@@ -289,7 +279,6 @@ module JsFragmentRegistry =
           devops
           fission
           horizon
-          advisor
           ask
           review
           park ]

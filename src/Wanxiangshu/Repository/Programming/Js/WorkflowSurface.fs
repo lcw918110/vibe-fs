@@ -96,7 +96,7 @@ module JsWorkflowSurface =
         : Task<obj> =
         runWithObservation workspaceRoot role language program deadlineMs deadlineEpochMs outputBoundBytes store None
 
-    /// Execute the exact named-program input { name, program, planB }.
+    /// Execute the exact named-program input { name, program, intent }.
     /// Lifecycle control uses members inside another named program.
     let execute
         (workspaceRoot: string)

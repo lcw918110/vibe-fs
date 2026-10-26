@@ -42,7 +42,8 @@ module DurableLoopSignal =
     let ofWork (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
         match work.ActiveId, work.Retirements |> List.tryLast with
         | Some _, _ -> None
-        | None, Some retirement when retirement.Outcome = "Delivered" -> Some ManagerLoopSignal.Candidate
+        | None, Some retirement when retirement.Outcome = "Delivered" || retirement.Outcome = "Completed" ->
+            Some ManagerLoopSignal.Candidate
         | None, Some retirement when retirement.Outcome = "Relayed" -> Some ManagerLoopSignal.Continue
         | None, Some retirement ->
             Some(
@@ -73,7 +74,8 @@ module DeliveredTenureHandOff =
         | "Relayed", Some activeId, _ -> Ok(IncumbencyId.create activeId)
         | "Relayed", None, _ -> Error "relay continuation has no successor incumbency"
         | "Delivered", Some activeId, _ -> Ok(IncumbencyId.create activeId)
-        | "Delivered", None, _ -> Error "a completed work reopens only from a new operator message"
+        | "Delivered", None, _
+        | "Completed", None, _ -> Error "a completed work reopens only from a new operator message"
         | _ -> Error(sprintf "retirement %s is neither a relay nor a delivery continuation" retirement.RetirementId)
 
 /// Host wiring for one Change manager session. One physical Manager session can host many

@@ -89,18 +89,35 @@ module HostForkRunLifecycle =
     let private acceptedOutcome
         durable
         childId
+        (capturedActiveProfile: PromptAuthority.AuthorityExecutionProfile option)
         identitySeed
         (onAccepted: ContinuationAcceptanceObserver)
         (evidence: PromptAuthority.AcceptedDispatch)
         =
-        onAccepted.Notify evidence.PhysicalUserMessageId
+        let rootResult =
+            match evidence.Origin with
+            | PromptAuthority.PromptOrigin.Continuation _ ->
+                match capturedActiveProfile with
+                | Some profile -> Ok profile.AuthorityRootUserMessageId
+                | None ->
+                    match PromptAuthorityProjectionQueries.activeProfile childId (AgentJournal.snapshot durable).AgentProjections with
+                    | Some profile when profile.IdentitySeed = evidence.IdentitySeed ->
+                        Ok profile.AuthorityRootUserMessageId
+                    | Some _ -> Error "Active child authority profile does not match accepted continuation identity seed"
+                    | None -> Error "Managed delegation continuation accepted but active child authority profile is missing"
+            | _ ->
+                Ok(PhysicalUserMessageId.promoteToAuthorityRoot evidence.PhysicalUserMessageId)
 
-        let root =
-            PhysicalUserMessageId.promoteToAuthorityRoot evidence.PhysicalUserMessageId
-
-        match PromptAuthority.identitySeedOwner identitySeed with
-        | Some(parentId, _, _) -> acceptedBindingOutcome durable parentId childId root evidence.PhysicalUserMessageId
-        | None -> AgentOwnerDispatchOutcome.Rejected "child assignment has no exact owner identity"
+        match rootResult with
+        | Error err -> AgentOwnerDispatchOutcome.Rejected err
+        | Ok root ->
+            let effectiveSeed =
+                match evidence.Origin with
+                | PromptAuthority.PromptOrigin.Continuation _ -> evidence.IdentitySeed
+                | _ -> identitySeed
+            match PromptAuthority.identitySeedOwner effectiveSeed with
+            | Some(parentId, _, _) -> acceptedBindingOutcome durable parentId childId root evidence.PhysicalUserMessageId
+            | None -> AgentOwnerDispatchOutcome.Rejected "child assignment has no exact owner identity"
 
     let issueCurrentOwnerIdentitySeed
         (journal: AgentJournal option)
@@ -136,6 +153,7 @@ module HostForkRunLifecycle =
     let private durableDispatchObservation
         (durable: AgentJournal)
         (childId: SessionId)
+        (capturedActiveProfile: PromptAuthority.AuthorityExecutionProfile option)
         (payloadDigest: string)
         (identitySeed: PromptAuthority.IdentitySeed)
         =
@@ -143,6 +161,20 @@ module HostForkRunLifecycle =
 
         match PromptAuthorityProjectionQueries.dispatchStatusFor childId payloadDigest projections with
         | PromptAuthorityProjectionQueries.DispatchStatus.Accepted evidence when evidence.IdentitySeed = identitySeed ->
+            DurableDispatchObservation.Accepted evidence
+        | PromptAuthorityProjectionQueries.DispatchStatus.Accepted evidence when
+            (match evidence.Origin with
+             | PromptAuthority.PromptOrigin.Continuation _ ->
+                 let capturedMatches =
+                     match capturedActiveProfile with
+                     | Some captured -> captured.IdentitySeed = evidence.IdentitySeed
+                     | None -> false
+                 let durableMatches =
+                     match PromptAuthorityProjectionQueries.activeProfile childId projections with
+                     | Some current -> current.IdentitySeed = evidence.IdentitySeed
+                     | None -> false
+                 capturedMatches || durableMatches
+             | _ -> false) ->
             DurableDispatchObservation.Accepted evidence
         | PromptAuthorityProjectionQueries.DispatchStatus.Accepted _ -> DurableDispatchObservation.IdentityMismatch
         | PromptAuthorityProjectionQueries.DispatchStatus.Pending ->
@@ -152,6 +184,7 @@ module HostForkRunLifecycle =
     let private classifyPendingSend
         (durable: AgentJournal)
         (childId: SessionId)
+        (capturedActiveProfile: PromptAuthority.AuthorityExecutionProfile option)
         (payloadDigest: string)
         (identitySeed: PromptAuthority.IdentitySeed)
         (claim: PromptAuthority.PromptClaim)
@@ -168,7 +201,7 @@ module HostForkRunLifecycle =
             registration.Dispose()
             raise error
 
-        match durableDispatchObservation durable childId payloadDigest identitySeed with
+        match durableDispatchObservation durable childId capturedActiveProfile payloadDigest identitySeed with
         | DurableDispatchObservation.Accepted evidence ->
             registration.Dispose()
             accepted evidence
@@ -183,6 +216,7 @@ module HostForkRunLifecycle =
     let private classifySendError
         (durable: AgentJournal)
         (childId: SessionId)
+        (capturedActiveProfile: PromptAuthority.AuthorityExecutionProfile option)
         (identitySeed: PromptAuthority.IdentitySeed)
         (prompt: string)
         (onAccepted: ContinuationAcceptanceObserver)
@@ -190,20 +224,20 @@ module HostForkRunLifecycle =
         =
         let payloadDigest = HostDigest.sha256Hex prompt
 
-        let accepted = acceptedOutcome durable childId identitySeed onAccepted
+        let accepted = acceptedOutcome durable childId capturedActiveProfile identitySeed onAccepted
 
-        match durableDispatchObservation durable childId payloadDigest identitySeed with
+        match durableDispatchObservation durable childId capturedActiveProfile payloadDigest identitySeed with
         | DurableDispatchObservation.Accepted evidence -> accepted evidence
         | DurableDispatchObservation.IdentityMismatch ->
             AgentOwnerDispatchOutcome.Rejected "Durable child dispatch identity witness does not match this owner run"
         | DurableDispatchObservation.Dispatchable -> AgentOwnerDispatchOutcome.Rejected error
         | DurableDispatchObservation.Pending claim ->
-            classifyPendingSend durable childId payloadDigest identitySeed claim onAccepted accepted error
+            classifyPendingSend durable childId capturedActiveProfile payloadDigest identitySeed claim onAccepted accepted error
 
-    let private classifySendSuccess durable childId identitySeed prompt onAccepted =
-        match durableDispatchObservation durable childId (HostDigest.sha256Hex prompt) identitySeed with
+    let private classifySendSuccess durable childId capturedActiveProfile identitySeed prompt onAccepted =
+        match durableDispatchObservation durable childId capturedActiveProfile (HostDigest.sha256Hex prompt) identitySeed with
         | DurableDispatchObservation.Accepted evidence ->
-            acceptedOutcome durable childId identitySeed onAccepted evidence
+            acceptedOutcome durable childId capturedActiveProfile identitySeed onAccepted evidence
         | DurableDispatchObservation.Pending _ ->
             AgentOwnerDispatchOutcome.AcceptanceUncertain "Prompt submitted but physical acceptance unconfirmed"
         | DurableDispatchObservation.IdentityMismatch ->
@@ -211,10 +245,10 @@ module HostForkRunLifecycle =
         | DurableDispatchObservation.Dispatchable ->
             AgentOwnerDispatchOutcome.Rejected "Host reported admission without a durable prompt claim"
 
-    let private interpretDispatchResult durable childId identitySeed prompt onAccepted =
+    let private interpretDispatchResult durable childId capturedActiveProfile identitySeed prompt onAccepted =
         function
-        | Ok _ -> classifySendSuccess durable childId identitySeed prompt onAccepted
-        | Error error -> classifySendError durable childId identitySeed prompt onAccepted error
+        | Ok _ -> classifySendSuccess durable childId capturedActiveProfile identitySeed prompt onAccepted
+        | Error error -> classifySendError durable childId capturedActiveProfile identitySeed prompt onAccepted error
 
     let private sendAgentOwnerRootWithJournal
         (sessions: ISessionHostPort)
@@ -226,19 +260,35 @@ module HostForkRunLifecycle =
         (onAccepted: ContinuationAcceptanceObserver)
         : Task<AgentOwnerDispatchOutcome> =
         task {
+            // crash-reconciliation-020: the restart void settlement must land
+            // before this handoff judges the child's identity; otherwise the
+            // continuation claim is pruned after it was written and admission
+            // rejects the physical message as unclaimed.
+            do! durable.RunOrAwaitRecovery()
+
+            let capturedActiveProfile =
+                PromptAuthorityProjectionQueries.activeProfile childId (AgentJournal.snapshot durable).AgentProjections
+
+            let dispatchIdentitySeed =
+                match capturedActiveProfile with
+                | Some profile -> profile.IdentitySeed
+                | None -> identitySeed
+
             let svc = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
 
             let! sent =
-                svc.SendAgentOwnerRoot
+                svc.SendManagedAssignmentObserved
                     (DispatchSessionPort.ofSessionPort sessions)
                     childId
                     prompt
-                    identitySeed
+                    (fun () -> Ok dispatchIdentitySeed)
                     directory
                     PromptDispatcher.AwaitMode.Await
                     (Some onAccepted)
+                    None
+                    None
 
-            return interpretDispatchResult durable childId identitySeed prompt onAccepted sent
+            return interpretDispatchResult durable childId capturedActiveProfile dispatchIdentitySeed prompt onAccepted sent
         }
 
     let private chooseView delivered observed =

@@ -51,7 +51,7 @@ test('WHAT[capability-enforcement-009] FORK_disposed_or_unbound_execution_surfac
     const result = await hooks.tool['todowrite-for-manager'].execute(
       { program: 'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Ada", charge: "do work" }, { 1: null }); } }',
           name: 'unbound',
-          planB: 'Wait for the delegation refusal within this request window.'
+          intent: 'Wait for the delegation refusal within this request window.'
         },
       { sessionID: '', agent: 'engineer' },
     )
@@ -70,7 +70,7 @@ test('WHAT[capability-enforcement-009] FORK_disposed_or_unbound_execution_surfac
       'Manager',
       'en',
       sessionID,
-      { name: 'disposed', planB: 'Observe the unavailable delegation owner without repeating work.', program: 'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Ada", charge: "do work" }, { 1: null }); } }' },
+      { name: 'disposed', intent: 'Observe the unavailable delegation owner without repeating work.', program: 'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Ada", charge: "do work" }, { 1: null }); } }' },
       3000,
       Date.now() + 60_000,
       1 << 20,

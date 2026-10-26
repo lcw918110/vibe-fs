@@ -30,7 +30,7 @@ const runManagerProgram = async (hooks, sessionID, body) => {
       {
         program: 'class Js extends JsProgram { async run() { ' + body + ' } }',
           name: callID,
-          planB: 'Wait for the manager delegation receipt under one absolute deadline.'
+          intent: 'Wait for the manager delegation receipt under one absolute deadline.'
         },
       { sessionID, agent: 'manager', callID, messageID: 'msg-' + callID },
     ),

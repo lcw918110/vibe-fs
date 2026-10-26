@@ -64,7 +64,7 @@ module AttemptSettlement =
 
     /// The reasons a retry cannot be planned.
     [<RequireQualifiedAccess>]
-    type RetryPlanBlocker =
+    type RetryIntentlocker =
         /// The session has no active authority profile.
         | NoAuthority
         /// The session has no provider failure state.
@@ -75,11 +75,11 @@ module AttemptSettlement =
     /// A retry needs an active authority profile and a recorded provider
     /// failure; without either one the plan would name an identity nobody
     /// recorded.
-    let retryPlanBlockers (hasAuthority: bool) (hasFailureState: bool) : RetryPlanBlocker list =
+    let retryIntentlockers (hasAuthority: bool) (hasFailureState: bool) : RetryIntentlocker list =
         [ if not hasAuthority then
-              RetryPlanBlocker.NoAuthority
+              RetryIntentlocker.NoAuthority
           if not hasFailureState then
-              RetryPlanBlocker.NoFailureState ]
+              RetryIntentlocker.NoFailureState ]
 
     /// Whether settling this attempt records a confirmed provider success.
     ///

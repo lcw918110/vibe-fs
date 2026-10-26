@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
+import { Work } from 'wanxiangli/work'
 
-const surface = lifecycle.LifecycleSurface ?? lifecycle
-
-function canonical(value) {
+const canonical = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   if (value !== null && typeof value === 'object') {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`
@@ -13,23 +11,38 @@ function canonical(value) {
 }
 
 test('WHAT[work-040] one open Work has at most one active tenure', () => {
-  const first = surface.encodeOpening('plan', 'work-single-tenure', '/repo', 4n)
-  const opened = surface.readProbe(first)
-  assert.equal(opened.ok, true)
-  assert.equal(opened.next, 'Review')
-  assert.equal(opened.activeId.length > 0, true)
-  assert.equal(opened.names.includes('IncumbencyOpened'), true)
+  const work = new Work('work-single-tenure')
+  const opened = work.execute('open', {
+    type: 'Review',
+    office: 'Plan',
+    providerRunId: 'run',
+    toolCallId: 'open',
+    updates: [],
+  })
+  assert.equal(opened.result.kind, 'Asked')
+  assert.equal(work.inspect().active.origin, 'Originator')
+  const firstId = work.inspect().active.id
+  const kept = work.execute('kept', {
+    type: 'Review',
+    office: 'Plan',
+    providerRunId: 'run',
+    toolCallId: 'kept',
+    updates: [{ key: 'need', value: 'one' }],
+  })
+  assert.equal(kept.status, 'Conflict')
+  assert.equal(work.inspect().active.id, firstId)
+  const replay = work.execute('open', {
+    type: 'Review',
+    office: 'Plan',
+    providerRunId: 'run',
+    toolCallId: 'open',
+    updates: [],
+  })
+  assert.equal(replay.status, 'Replayed')
+  assert.equal(work.history().filter((frame) => frame.events.some((event) => event.type === 'IncumbencyOpened')).length, 1)
 
-  // A second opening of the same work under a different request id is refused:
-  // one open work has at most one active tenure.
-  const secondFrame = JSON.parse(first)
-  secondFrame.requestId = 'open:work-single-tenure:second'
-  const second = `${canonical(secondFrame)}\n`
-  const again = surface.readProbe(`${first}${second}`)
-  assert.equal(again.ok, false)
-  assert.equal(again.opened, false)
-  assert.equal(again.names, '')
-  assert.equal(again.activeId, '')
-  assert.equal(again.reason, 'Work is already open or identity differs')
-  assert.notEqual(again.next, 'Review')
+  const second = JSON.parse(work.records()[0])
+  second.requestId = 'open-second'
+  assert.throws(() => new Work('work-single-tenure', [work.records()[0], canonical(second)]))
+  assert.equal(new Work('work-single-tenure', work.records()).inspect().active.id, firstId)
 })

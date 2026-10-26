@@ -30,7 +30,7 @@ module PendingAttemptPlanAdmission =
 
 /// Binding error when a pending attempt plan cannot be found at bind time.
 [<RequireQualifiedAccess>]
-type TransformAttemptPlanBindingError =
+type TransformAttemptIntentindingError =
     | PendingAttemptPlanMissing of SessionId * PhysicalUserMessageId * ProviderRunIdentity
 
 /// Process-local join admission, immutable attempt evidence, and manual

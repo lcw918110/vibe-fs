@@ -20,14 +20,12 @@ test('WHAT[repository-programming-031] deliver hard gate is wired at the deliver
   // G1 门禁路径常量与资源路径一致。
   assert.match(registry, /DeliverBlockedByParked = "tool\/js-program\/parked-deliver-blocked"/)
 
-  // 门禁调用 lane-a-core 的按会话只读查询接口，且位于 deliver 执行链
-  // （plan/manager 分派之前），拒绝时列出本 session 的全部 handle；
-  // 无关 session 的 park 不得阻塞本次交付（LC-008）。
-  assert.match(registry, /deliveryBlockers.*ForSession ctx\.SessionId/)
-  assert.match(registry, /if not \(List\.isEmpty blockers\)/)
-  assert.match(registry, /program_names/, 'refusal must carry the pending program names')
-  assert.match(registry, /Path\.DeliverBlockedByParked/)
-  assert.match(registry, /Some \[ "S1"; "S2"; "S3" \] -> return! planSpec\.Execute args ctx/)
+  // 未结清程序名进入 review 的 blockers。正在执行 review 的程序排除自己，
+  // 否则收尾永远被自己挡住。生命周期 deliver 执行链已退出。
+  assert.match(registry, /deliveryBlockersWithChoicesForSession ctx\.SessionId/)
+  assert.match(registry, /JsPrograms\.callerName ctx\.SessionId/)
+  assert.match(registry, /DurableWorkHost\.submitReview/)
+  assert.doesNotMatch(registry, /planSpec\.Execute/)
 })
 
 test('WHAT[repository-programming-031] parked reminder rides the PairHint composeMarkerDocument', () => {
@@ -115,7 +113,7 @@ const parkProgram = (tag) => `class Js extends JsProgram {
 
 const parkOne = async (dir, sessionId, tag) => {
   const name = `park-${tag}`
-  const outcome = await executeWorkflow(dir, 'Engineer', 'en', sessionId, { name, program: parkProgram(tag), planB: WAIT }, 2000, Date.now() + 60_000, 1 << 20, null)
+  const outcome = await executeWorkflow(dir, 'Engineer', 'en', sessionId, { name, program: parkProgram(tag), intent: WAIT }, 2000, Date.now() + 60_000, 1 << 20, null)
   assert.equal(caseName(outcome), 'Parked', `park for ${tag} must produce a real parked site`)
   const handle = parkedName(outcome)
   assert.ok(typeof handle === 'string' && handle.length > 0, 'the parked payload must carry a non-empty handle')
@@ -129,37 +127,30 @@ test('WHAT[repository-programming-031] a real parked handle blocks deliver and t
   // 才谈得上被触达。断言据此区分"parked 拒绝"（具体 code + 真 handle）与
   // "权威缺失"的统一拒绝文案。
   await withReview(async ({ execute, hooks, runtime, session }) => {
-    assert.match(await execute(scores('PERFECT')), /outcome = "Promoted"|recorded = true/, 'the reviewed tenure establishes the deliver authority')
-    runtime.pushHostMessage(session, {
-      info: { id: 'parked-gate-run', role: 'assistant', sessionID: session, parentID: 'user-root', time: { created: 9 } },
-      parts: [{ type: 'tool', tool: 'deliver', callID: 'deliver-parked', state: { status: 'pending', input: {} } }],
-    })
-    const context = { sessionID: session, agent: 'manager', callID: 'deliver-parked', messageID: 'parked-gate-run', providerRunID: 'run-parked' }
-
-    // LC-008：门禁按会话隔离，park 必须发生在 deliver 的同一 session 下，
-    // 门禁才会拦截；无关 session 的 park 不得阻塞本次交付。
+    const replyId = 'review-clarification-031'
+    const message = { id: replyId, role: 'user', agent: 'manager', sessionID: session, model: { providerID: 'provider', modelID: 'manager-model' } }
+    const parts = [{ type: 'text', text: 'The scope and acceptance criteria are already specified; proceed with this review.' }]
+    runtime.pushHostMessage(session, { info: { ...message, time: { created: 10 } }, parts })
+    await hooks['chat.message']({ sessionID: session, messageID: replyId, agent: 'manager' }, { message, parts })
+    const recorded = String(await execute([{ key: 'extra', value: 'noted' }], { call: 'noted-call', run: 'noted-run' }))
+    assert.match(recorded, /ok = true/)
+    assert.match(recorded, /kind = "Reviewed"/)
+    assert.equal(hooks.tool.deliver, undefined, 'lifecycle deliver is not a registered tool')
+    assert.match(String(await execute([
+      { key: 'target-gap', value: null },
+      { key: 'extra', value: null },
+    ], { call: 'relay-031', run: 'run-relay-031' })), /kind = "Relayed"/)
+    assert.match(String(await execute(scores('PERFECT'), { call: 'advance-031', run: 'run-advance-031' })), /kind = "Advanced"/)
     const handle = await parkOne(runtime.directory, session, 'deliver-gate')
     try {
-      const refused = await hooks.tool.deliver.execute({}, context)
-      assert.match(refused, /parked-deliver-blocked/, 'deliver must reach the parked gate and be refused with its code')
-      assert.ok(String(refused).includes(handle), `refusal must list the live handle ${handle}`)
-      // 先放弃本 session 的 handle，才轮到外会话对照。
-      await executeWorkflow(runtime.directory, 'Engineer', 'en', session, { name: 'abandon-deliver-gate', planB: WAIT, program: 'class Js extends JsProgram { async run() { return await this.abandon(' + JSON.stringify(handle) + '); } }' }, 2000, Date.now() + 60_000, 1 << 20, null)
-
-      // 反向对照：清空现场后，同一合法权威的另一次调用直接落到正常两段确认
-      // （confirmation_required），不再得到 parked 拒绝。这既证明上下文本来
-      // 就能触达业务语义（不是权威拒绝冒充门禁），也排除"恒拒"假门禁。
-      await closeAll()
-      const released = await hooks.tool.deliver.execute({}, { ...context, callID: 'deliver-cleared', messageID: 'cleared-run', providerRunID: 'run-cleared' })
-      assert.ok(!String(released).includes('parked-deliver-blocked'), 'cleared table must release the deliver gate')
-      assert.match(released, /outcome = "Delivered"|confirmation_required = true/, 'the released call must land on the real deliver path')
-
-      // LC-008 收尾对照：另一个 session 的 park 不阻塞本 session 的门禁。
-      // 放在最后：这次调用穿过门禁后走真实交付路径（上一次调用已提交确认
-      // 围栏），其终态不影响前面的断言。
+      const blocked = String(await execute(scores('PERFECT'), { call: 'blocked-031', run: 'run-blocked-031' }))
+      assert.match(blocked, /kind = "Blocked"/)
+      assert.ok(blocked.includes(handle), `cleanup must name the parked program ${handle}`)
+      await executeWorkflow(runtime.directory, 'Engineer', 'en', session, { name: 'abandon-deliver-gate', intent: WAIT, program: 'class Js extends JsProgram { async run() { return await this.abandon(' + JSON.stringify(handle) + '); } }' }, 2000, Date.now() + 60_000, 1 << 20, null)
       await parkOne(runtime.directory, 'parked-gate-js-031', 'foreign-gate')
-      const afterForeign = await hooks.tool.deliver.execute({}, { ...context, callID: 'deliver-foreign', messageID: 'foreign-run', providerRunID: 'run-foreign' })
-      assert.ok(!String(afterForeign).includes('parked-deliver-blocked'), 'a foreign session park must not block this deliver')
+      const finished = String(await execute(scores('PERFECT'), { call: 'finish-031', run: 'run-finish-031' }))
+      assert.match(finished, /kind = "Completed"/)
+      assert.equal(hooks.tool.deliver, undefined)
     } finally {
       await closeAll()
     }

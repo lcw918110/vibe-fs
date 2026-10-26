@@ -5,7 +5,7 @@ let programSequence = 0
 const bookkeeperRequest = program => ({
   name: 'bookkeeper-006-' + (++programSequence),
   program,
-  planB: 'Complete the bound Bookkeeper transaction and retain an explicit result if execution cannot finish.',
+  intent: 'Complete the bound Bookkeeper transaction and retain an explicit result if execution cannot finish.',
 })
 
 import assert from 'node:assert/strict'
@@ -331,7 +331,7 @@ const factory = { tool: { schema: fakeSchema } }
 test('WHAT[knowledge-reuse-006] CASE006_bookkeeper_provider_contract_is_one_program', () => {
   const tool = bookkeeperTool.contract(factory)
   assert.equal(tool.name, 'todowrite-for-bookkeeper')
-  assert.deepEqual([...tool.argumentNames].sort(), ['name', 'planB', 'program'])
+  assert.deepEqual([...tool.argumentNames].sort(), ['name', 'intent', 'program'])
   assert.match(tool.description, /one atomic JavaScript transformation|用一次原子的 JavaScript transformation/i)
   assert.match(tool.description, /setQuestion\(newText\)/)
   assert.match(tool.description, /setAnswer\(newText\)/)
@@ -365,7 +365,7 @@ const currentCase = (question, answer) => [question, answer]
 test('WHAT[knowledge-reuse-006] js_bookkeeper_surface_requires_request_envelope_and_has_case_sdk', () => {
   const tool = bookkeeperTool.contract(factory)
   assert.equal(tool.name, 'todowrite-for-bookkeeper')
-  assert.deepEqual([...tool.argumentNames].sort(), ['name', 'planB', 'program'])
+  assert.deepEqual([...tool.argumentNames].sort(), ['name', 'intent', 'program'])
   assert.match(tool.description, /question\(matches = \[\]\)/)
   assert.match(tool.description, /answer\(matches = \[\]\)/)
   assert.match(tool.description, /setQuestion\(newText\)/)

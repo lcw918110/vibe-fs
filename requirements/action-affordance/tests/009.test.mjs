@@ -18,7 +18,7 @@ integrationTest('WHAT[action-affordance-009] commission descriptions do not adve
     const commission = async (calling) => String(await hooks.tool['todowrite-for-orchestrator'].execute(
       { program: commissionProgram({ calling, name: 'North Road', charge: 'x' }),
           name: `commission-${calling}`,
-          planB: 'Observe this role-specific commission result before continuing.'
+          intent: 'Observe this role-specific commission result before continuing.'
         },
       { sessionID, agent: 'orchestrator', callID: `call-009-${calling}`, messageID: `msg-009-${calling}` },
     ))

@@ -9,7 +9,7 @@ let programSequence = 0
 const bookkeeperRequest = program => ({
   name: 'bookkeeper-scripted-' + (++programSequence),
   program,
-  planB: 'Complete the bound Bookkeeper transaction and retain an explicit result if execution cannot finish.',
+  intent: 'Complete the bound Bookkeeper transaction and retain an explicit result if execution cannot finish.',
 })
 
 export const fileRead = (path, contentHash) => ({ kind: 'file-read', path, contentHash })

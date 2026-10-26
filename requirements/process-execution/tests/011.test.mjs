@@ -38,7 +38,7 @@ test('WHAT[process-execution-011] command descriptors and retired Callable class
 test('WHAT[process-execution-011] deadline parks without terminating the active command; explicit abandon confirms cleanup',{timeout:12000},async t=>{
   const {fixture,data,barrier,stopped,until}=await import('../../repository-programming/tests/support/command-program.fixture.mjs')
   const h=fixture(t,'proc011-expiry','DevOps'),cmd=barrier(h,'held')
-  const output=await h.run('held','return await this.call('+JSON.stringify(cmd)+');',{planB:'w'.repeat(20)})
+  const output=await h.run('held','return await this.call('+JSON.stringify(cmd)+');',{intent:'w'.repeat(20)})
   assert.equal(caseName(output),'Parked')
   await until(()=>existsSync(h.file('held.pid')))
   const closed=data(await h.abandon('held'))

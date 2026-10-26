@@ -81,7 +81,7 @@ module PendingAttemptPlanAdmission =
             plan.RequestKind
 
 [<RequireQualifiedAccess>]
-type TransformAttemptPlanBindingError =
+type TransformAttemptIntentindingError =
     | PendingAttemptPlanMissing of SessionId * PhysicalUserMessageId * ProviderRunIdentity
 
 /// Family recovery coordination (PROMPT-011 + C5 + RECOVERY-FAMILY) and

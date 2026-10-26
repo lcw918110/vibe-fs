@@ -24,10 +24,10 @@ const withTool = (check, role = 'Coder') => {
 
 const sample = 'class Js extends JsProgram { async run() { return { ok: true }; } }'
 
-test('WHAT[repository-programming-049] todowrite has exactly three required string arguments', () => {
+test('WHAT[repository-programming-049] todowrite requires three strings and a nonnegative estimate', () => {
   for (const role of ['Coder', 'Engineer', 'Manager', 'DevOps', 'Plan', 'Orchestrator']) {
     withTool(handle => {
-      assert.deepEqual(argumentNames(handle), ['name', 'program', 'planB'], `${role} must expose exactly three required Host parameters`)
+      assert.deepEqual(argumentNames(handle), ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'], `${role} must expose the required estimate`)
       const program = argumentSchema(handle, 'program')
       assert.equal(program.safeParse(undefined).success, false, 'program is required')
       assert.equal(program.safeParse(null).success, false)
@@ -35,14 +35,19 @@ test('WHAT[repository-programming-049] todowrite has exactly three required stri
       assert.equal(program.safeParse(sample).success, true)
       assert.match(program.description, /program|JsProgram/)
       const name = argumentSchema(handle, 'name')
-      const planB = argumentSchema(handle, 'planB')
-      for (const schema of [name, planB]) {
+      const intent = argumentSchema(handle, 'intent')
+      for (const schema of [name, intent]) {
         assert.equal(schema.safeParse(undefined).success,false)
         assert.equal(schema.safeParse(42).success,false)
         assert.equal(schema.safeParse('value').success,true)
       }
-      const modelSchema = z.object({ name, program, planB }).strict()
-      assert.deepEqual(z.toJSONSchema(modelSchema).required, ['name', 'program', 'planB'])
+      const remainingScopeTurnsEstimate = argumentSchema(handle,'remainingScopeTurnsEstimate')
+      assert.equal(remainingScopeTurnsEstimate.safeParse(-1).success,false)
+      assert.equal(remainingScopeTurnsEstimate.safeParse(0).success,true)
+      assert.equal(remainingScopeTurnsEstimate.safeParse(2.5).success,false)
+      assert.equal(remainingScopeTurnsEstimate.safeParse(undefined).success,false)
+      const modelSchema = z.object({ name, program, intent, remainingScopeTurnsEstimate }).strict()
+      assert.deepEqual(z.toJSONSchema(modelSchema).required, ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'])
       assert.equal(modelSchema.safeParse({}).success, false, 'an empty tool call must be schema-invalid')
       for (const retired of ['unpark', 'abandon', 'handle']) {
         assert.equal(argumentSchema(handle, retired), null, retired + ' is not a Host tool argument')
@@ -61,15 +66,15 @@ test('WHAT[repository-programming-049] tool description leads with the three req
   })
 })
 
-test('WHAT[repository-programming-049] the actual OpenCode plugin exposes required name, program and planB to the LLM', async () => {
+test('WHAT[repository-programming-049] the actual OpenCode plugin exposes required name, program and intent to the LLM', async () => {
   const { withExecutablePlugin } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
   await withExecutablePlugin(async hooks => {
     for (const role of ['manager', 'engineer', 'devops', 'plan', 'orchestrator']) {
       const registered = hooks.tool[`todowrite-for-${role}`]
       assert.ok(registered, role + ' must expose a generated tool')
-      assert.deepEqual(Object.keys(registered.args), ['name', 'program', 'planB'])
+      assert.deepEqual(Object.keys(registered.args), ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'])
       const schema = z.toJSONSchema(z.object(registered.args))
-      assert.deepEqual(schema.required, ['name', 'program', 'planB'], role + ' must require program')
+      assert.deepEqual(schema.required, ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'], role + ' must require program and progress')
       assert.equal(schema.properties.program.type, 'string')
       assert.equal(z.object(registered.args).safeParse({}).success, false)
       assert.match(registered.description.slice(0,520), /program.*required|required.*program|唯一.*program|program.*必填|必填.*program/i)

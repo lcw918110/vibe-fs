@@ -37,7 +37,7 @@ const WAIT = 'Give this named program enough time to reach the requested operati
 const program = body => `class Js extends JsProgram { async run() { ${body} } }`
 const parkProgram = program("return await this.park({ stage: 'host-schema' });")
 const writeProgram = program("await this.write('probe.txt', 'ran'); return { wrote: true };")
-const input = (name, source = writeProgram, planB = WAIT) => ({ name, program: source, planB })
+const input = (name, source = writeProgram, intent = WAIT) => ({ name, program: source, intent, remainingScopeTurnsEstimate: 5 })
 const register = dir => createRegistered(toolModule(), 'Engineer', 'en', dir, null)
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), 'wxs-064-contract-'))
@@ -57,18 +57,22 @@ test.afterEach(async () => {
   else process.env.WANXIANGSHU_PROVIDER_LANGUAGE = previousLanguage
   language.refreshGlobalLanguage()
 })
-test('WHAT[repository-programming-064] the physical Host ToolSpec requires exactly name, program and planB', t => {
+test('WHAT[repository-programming-064] the physical Host ToolSpec requires the progress estimate in addition to the three sandbox strings', t => {
   const { registered } = fixture(t)
-  assert.deepEqual(argumentNames(registered), ['name', 'program', 'planB'])
-  for (const key of ['name', 'program', 'planB']) {
+  assert.deepEqual(argumentNames(registered), ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'])
+  for (const key of ['name', 'program', 'intent']) {
     const schema = argumentSchema(registered, key)
     assert.equal(schema.type, 'string')
     assert.notEqual(schema.optional, true)
   }
+  const estimate = argumentSchema(registered,'remainingScopeTurnsEstimate')
+  assert.notEqual(estimate.optional, true)
+  assert.equal(estimate.integer,true)
+  assert.equal(typeof estimate.nonnegative,'function', 'the integer schema requires an exposed nonnegative validator')
   for (const former of ['unpark', 'abandon', 'prefixUntil', 'carry'])
     assert.equal(argumentSchema(registered, former), null)
 })
-test('WHAT[repository-programming-064] three top-level fields execute at the actual Host ToolSpec entry', async t => {
+test('WHAT[repository-programming-064] four top-level fields execute at the actual Host ToolSpec entry', async t => {
   const { dir, registered } = fixture(t)
   const result = await execute(registered, input('write'), { sessionID: 'ses-064-write' })
   assert.equal(result.startsWith('# ok'), true, result)
@@ -78,9 +82,9 @@ test('WHAT[repository-programming-064] three top-level fields execute at the act
 for (const [label, args] of [
   ['empty', {}],
   ['source only', { program: writeProgram }],
-  ['no planB', { name: 'bad', program: writeProgram }],
-  ['empty planB', input('bad', writeProgram, '')],
-  ['numeric planB', input('bad', writeProgram, 48000)],
+  ['no intent', { name: 'bad', program: writeProgram }],
+  ['empty intent', input('bad', writeProgram, '')],
+  ['numeric intent', input('bad', writeProgram, 48000)],
   ['blank name', input(' ')],
   ['legacy unpark', { unpark: { handle: 'forged' } }],
   ['extra control', { ...input('bad'), abandon: { name: 'target' } }],
@@ -103,7 +107,7 @@ test('WHAT[repository-programming-064] only a new program controls a retained ta
   assert.equal(data.handle, undefined)
   assert.deepEqual(Array.from(pendingNames(context.sessionID)), ['target'])
   const invalid = await execute(registered, { ...input('invalid'), unpark: { name: 'target', value: 'forged' } }, context)
-  assert.equal(invalid.startsWith('# failed'), true, invalid)
+  assert.ok(invalid.startsWith('# failed') || typeof parseToml(invalid).error === 'string', invalid)
   assert.deepEqual(Array.from(pendingNames(context.sessionID)), ['target'])
   const resumed = await execute(registered, input('controller', program("return await this.unpark('target', 'accepted');")), context)
   assert.equal(resumed.startsWith('# ok'), true, resumed)

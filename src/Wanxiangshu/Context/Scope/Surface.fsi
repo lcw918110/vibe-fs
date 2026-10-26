@@ -32,10 +32,12 @@ module Surface =
     val toolCanCarryHint: message: obj -> bool
     val rememberSystem: sessionId: string -> system: string array -> unit
     val rememberMessages: sessionId: string -> messages: obj array -> unit
+    val rememberTransform: sessionId: string -> input: obj array -> output: obj array -> unit
+    val latestPrevious: sessionId: string -> obj
     val rememberModel: sessionId: string -> model: obj -> unit
     val modelFor: sessionId: string -> obj
     val startTemporary: tempId: string -> delegatorId: string -> obj
-    val startTemporaryFromFrozen: tempId: string -> snapshot: obj -> obj
+    val startTemporaryPrevious: tempId: string -> sourceSessionId: string -> metadata: obj -> obj
     val modelForTemporary: tempId: string -> obj
     val isTemporary: sessionId: string -> bool
     val finishTemporary: tempId: string -> unit
@@ -43,6 +45,7 @@ module Surface =
     val toolViolationCount: tempId: string -> int
     val forgetSession: sessionId: string -> unit
     val projectSystem: tempId: string -> current: string array -> string array option
+    val projectPreviousMessages: messages: obj array -> obj
     val projectMessages: tempId: string -> question: obj -> obj array option
     val pendingKind: sessionId: string -> string
     val isPreviousScopePending: sessionId: string -> bool

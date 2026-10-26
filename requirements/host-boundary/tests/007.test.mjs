@@ -7,15 +7,15 @@ const requiredSettings = CompactionPolicySurface.requiredSettings()
 
 const judgeFirstTurn = (pseudoRuns) => CompactionPolicySurface.judgeFirstTurn('ses_probe', pseudoRuns)
 
-test('WHAT[host-boundary-007] HOST_006_prevention_requires_compaction_settings_off_and_autocontinue_off', () => {
+test('WHAT[host-boundary-007] compaction auto and autocontinue are on but destructive prune remains off', () => {
   assert.deepEqual(requiredSettings.map((s) => s.path), ['compaction.auto', 'compaction.prune', 'compaction.autocontinue'])
-  assert.deepEqual(requiredSettings.map((s) => s.required), [false, false, false])
-  assert.equal(CompactionPolicySurface.autoContinueEnabled(), false)
+  assert.deepEqual(requiredSettings.map((s) => s.required), [true, false, true])
+  assert.equal(CompactionPolicySurface.autoContinueEnabled(), true)
 })
 
 test('WHAT[host-boundary-007] HOST_006_first_turn_probe_is_the_only_startup_verdict', () => {
   assert.equal(judgeFirstTurn(0).kind, 'Satisfied')
-  assert.equal(judgeFirstTurn(1).kind, 'CompactedDespiteSettings')
+  assert.equal(judgeFirstTurn(1).kind, 'Satisfied')
 })
 
 test('WHAT[host-boundary-007] HOST_006_containment_folds_observation_and_reanchors_newest_unhandled_once', () => {
@@ -27,7 +27,7 @@ test('WHAT[host-boundary-007] HOST_006_containment_folds_observation_and_reancho
 test('WHAT[host-boundary-007] HOST_006_first_turn_window_ends_at_the_first_completed_assistant', () => {
   const window = (messages) => CompactionPolicySurface.firstTurnCompactionRuns(messages)
 
-  // A compaction before the first completed assistant refuses startup.
+  // Automatic compaction before first assistant completion is legal and must be observed.
   assert.equal(
     window([
       { completedAssistant: false, compaction: false },
@@ -39,7 +39,7 @@ test('WHAT[host-boundary-007] HOST_006_first_turn_window_ends_at_the_first_compl
 
   // The boundary message itself counts: the compaction is the first completion seen.
   assert.equal(window([{ completedAssistant: true, compaction: true }]), 1)
-  assert.equal(judgeFirstTurn(window([{ completedAssistant: true, compaction: true }])).kind, 'CompactedDespiteSettings')
+  assert.equal(judgeFirstTurn(window([{ completedAssistant: true, compaction: true }])).kind, 'Satisfied')
 
   // A user /compact or later-round compaction after the window is containment work.
   assert.equal(

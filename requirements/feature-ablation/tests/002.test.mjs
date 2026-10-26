@@ -223,7 +223,7 @@ test('WHAT[feature-ablation-002] ABL_002_ablated_package_tool_is_refused_at_the_
         const result = await hooks.tool['todowrite-for-engineer'].execute(
           { program: 'class Js extends JsProgram { async run() { return null; } }',
           name: 'ablated-program',
-          planB: 'Observe the admission refusal before any program effects.'
+          intent: 'Observe the admission refusal before any program effects.'
         },
           { sessionID: 'ses-ablation-gate', agent: 'engineer' },
         )

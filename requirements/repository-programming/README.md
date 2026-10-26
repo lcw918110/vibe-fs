@@ -32,9 +32,9 @@ park 现场表是独立的进程级静态表模块 JsParkedSites（ParkedSites.f
 
 ## js.call（WHAT[repository-programming-050]、[058]）
 
-Exec capability 投影 `this.call(command, planB)`、`this.signal(signal)`、`this.send(input)`。`planB` 是 `call` 的第二个参数，不是工具参数。谁让这次程序 park，`signal` 与 `send` 就作用在谁身上；那条命令已经结束时是 `CALL_CHILD_UNKNOWN`。
+Exec capability 投影 `this.call(command, intent)`、`this.signal(signal)`、`this.send(input)`。`intent` 是 `call` 的第二个参数，不是工具参数。谁让这次程序 park，`signal` 与 `send` 就作用在谁身上；那条命令已经结束时是 `CALL_CHILD_UNKNOWN`。
 
-工具参数 `name` 的描述写明每次调用都填。park 的 handle 就是这个 `name`。自动 yield park 的载荷带 `{ name, planB, delta: { stdout, stderr } }`。`where` 是字面 `IndexOf`。
+工具参数 `name` 的描述写明每次调用都填。park 的 handle 就是这个 `name`。自动 yield park 的载荷带 `{ name, intent, delta: { stdout, stderr } }`。`where` 是字面 `IndexOf`。
 
 ## 委托原语：fork / join / fission / dag（WHAT[repository-programming-056]）
 

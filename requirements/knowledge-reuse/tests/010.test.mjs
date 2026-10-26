@@ -5,7 +5,7 @@ let programSequence = 0
 const bookkeeperRequest = program => ({
   name: 'bookkeeper-010-' + (++programSequence),
   program,
-  planB: 'Complete the bound Bookkeeper transaction and retain an explicit result if execution cannot finish.',
+  intent: 'Complete the bound Bookkeeper transaction and retain an explicit result if execution cannot finish.',
 })
 
 
@@ -376,7 +376,7 @@ test('WHAT[knowledge-reuse-010] actual Engineer charge results can be manually s
         delegateId,
         {
           name: `engineer-turn-${i + 1}`,
-          planB: 'Observe this program result before separately recording the explicit archived material.',
+          intent: 'Observe this program result before separately recording the explicit archived material.',
           program: `class Js extends JsProgram { async run() { return { ok: true }; } }`,
         },
         3000,

@@ -79,6 +79,11 @@ module Surface =
     let rememberMessages (sessionId: string) (messages: obj array) : unit =
         owner?rememberMessages (sessionId, messages)
 
+    let rememberTransform (sessionId: string) (input: obj array) (output: obj array) : unit =
+        owner?rememberTransform (sessionId, input, output)
+
+    let latestPrevious (sessionId: string) : obj = owner?latestPrevious sessionId
+
     let rememberModel (sessionId: string) (model: obj) : unit = owner?rememberModel (sessionId, model)
 
     let modelFor (sessionId: string) : obj = owner?modelFor (sessionId)
@@ -86,8 +91,10 @@ module Surface =
     let startTemporary (tempId: string) (delegatorId: string) : obj =
         owner?startTemporary (tempId, delegatorId)
 
-    let startTemporaryFromFrozen (tempId: string) (snapshot: obj) : obj =
-        owner?startTemporaryFromFrozen (tempId, snapshot)
+    let projectPreviousMessages (messages: obj array) : obj = owner?projectPreviousMessages messages
+
+    let startTemporaryPrevious (tempId: string) (sourceSessionId: string) (metadata: obj) : obj =
+        owner?startTemporaryPrevious(tempId, sourceSessionId, metadata)
 
     let modelForTemporary (tempId: string) : obj = owner?modelForTemporary (tempId)
 

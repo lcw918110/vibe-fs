@@ -66,7 +66,7 @@ const MEMBERS_BY_PERMISSION = {
   DevOpsConsultation: ['devops'],
   Fission: ['fission'],
   Horizon: ['horizon'],
-  Advisor: ['advisor'],
+  Advisor: [],
   Ask: ['ask'],
   Review: ['review'],
   ReviewAssessment: ['review'],
@@ -77,7 +77,7 @@ const MEMBER_ORDER = [
   'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where',
   'call', 'signal', 'send',
   'fork', 'resume', 'commission', 'devops', 'dag',
-  'fission', 'horizon', 'advisor', 'ask', 'review',
+  'fission', 'horizon',  'ask', 'review',
 ]
 
 // The offices that hold at least one programming-surface permission, with the
@@ -88,22 +88,22 @@ const EXPECTED_MEMBERS = [
   {
     role: 'Engineer',
     label: 'engineer',
-    members: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'fission', 'advisor'],
+    members: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'fission'],
   },
   {
     role: 'DevOps',
     label: 'devops',
-    members: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'call', 'signal', 'send', 'horizon', 'advisor'],
+    members: ['write', 'rm', 'mv', 'cat', 'ls', 'rg', 'stat', 'mkdir', 'whereAll', 'where', 'call', 'signal', 'send', 'horizon'],
   },
   {
     role: 'Manager',
     label: 'manager',
-    members: ['reviewOnly.cat', 'reviewOnly.ls', 'reviewOnly.rg', 'reviewOnly.stat', 'whereAll', 'where', 'fork', 'resume', 'horizon', 'advisor', 'review'],
+    members: ['reviewOnly.cat', 'reviewOnly.ls', 'reviewOnly.rg', 'reviewOnly.stat', 'whereAll', 'where', 'fork', 'resume', 'horizon',  'review'],
   },
   {
     role: 'Orchestrator',
     label: 'orchestrator',
-    members: ['commission', 'horizon', 'advisor'],
+    members: ['commission', 'horizon'],
   },
   {
     role: 'Plan',
@@ -128,7 +128,7 @@ test('WHAT[repository-programming-001] JS001_generate_none_when_no_filesystem_ca
   assert.equal(isNone(orchestrator), false, 'Orchestrator gets the delegation-only surface')
   assert.deepEqual(
     projectedMembers(orchestrator),
-    ['commission', 'horizon', 'advisor'],
+    ['commission', 'horizon'],
   )
 })
 
@@ -157,7 +157,7 @@ test('WHAT[repository-programming-001] JS001_manager_carries_the_delegation_memb
 
   // Manager holds Fork/Resume/Join/Horizon/Advisor, so it carries the
   // dispatch members and the pull members alike.
-  for (const member of ['fork', 'resume', 'horizon', 'advisor']) {
+  for (const member of ['fork', 'resume', 'horizon']) {
     assert.ok(names.includes(member), `Manager carries ${member}`)
     assert.equal(memberBinding('Manager', permissions, member), member, `Manager: ${member} runtime gate`)
   }

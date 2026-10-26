@@ -157,9 +157,6 @@ module JsCanonicalDescription =
         let BaseClassHorizon = "tool/js-program/base-class-horizon"
 
         [<Literal>]
-        let BaseClassAdvisor = "tool/js-program/base-class-advisor"
-
-        [<Literal>]
         let BaseClassAsk = "tool/js-program/base-class-ask"
 
         [<Literal>]
@@ -225,7 +222,6 @@ module JsCanonicalDescription =
           BaseClassDevOps: string
           BaseClassFission: string
           BaseClassHorizon: string
-          BaseClassAdvisor: string
           BaseClassAsk: string
           BaseClassReview: string
           BaseClassLifecycle: string
@@ -337,11 +333,6 @@ class JsProgram {"""
               "baseClassHorizon",
               if present capabilities "horizon" then
                   prose.BaseClassHorizon
-              else
-                  ""
-              "baseClassAdvisor",
-              if present capabilities "advisor" then
-                  prose.BaseClassAdvisor
               else
                   ""
               "baseClassAsk",
@@ -532,7 +523,7 @@ class JsProgram {"""
               if present capabilities "call" then
                   fill
                       """  async call(command) {
-    if (arguments.length !== 1) throw Object.assign(new Error("call requires one command; planB belongs to the tool request."), { code: "INVALID_ARGUMENT" });
+    if (arguments.length !== 1) throw Object.assign(new Error("call requires one command; intent belongs to the tool request."), { code: "INVALID_ARGUMENT" });
     return await this._api.call(command);
   }"""
                       []
@@ -588,12 +579,6 @@ class JsProgram {"""
                   fill
                       """  async horizon() {
     return await this._api.horizon();
-  }"""
-                      []
-              if present capabilities "advisor" then
-                  fill
-                      """  async advisor(intent) {
-    return await this._api.advisor(intent);
   }"""
                       []
               if present capabilities "review" then
@@ -722,7 +707,6 @@ class JsProgram {"""
                           JsCapability.Fork
                           JsCapability.Resume
                           JsCapability.Horizon
-                          JsCapability.Advisor
                           JsCapability.Review ])
                 && not (Set.isEmpty capabilities)
                 ->

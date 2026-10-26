@@ -1,4 +1,4 @@
-Required tool arguments: name, program and planB, all strings. The top-level planB sets one admission deadline (UTF-8 bytes × 50 ms) for the whole program; members cannot renew it.
+Required tool arguments: name, program and intent (strings) and remainingScopeTurnsEstimate (nonnegative integer). The top-level intent sets one admission deadline (UTF-8 bytes × 50 ms) for the whole program; members cannot renew it.
 
 Program the next form of the staged Case with one atomic JavaScript transformation.
 

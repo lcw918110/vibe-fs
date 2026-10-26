@@ -609,7 +609,23 @@ module HostSignalBootstrap =
                                     } })
 
             // 本机持久化不安装 Git hooks，不改 SSH 配置，不发布运行状态 refs。
-            let requireDurabilityActivation () = scope.ActivateDurability()
+            let requireDurabilityActivation () =
+                task {
+                    scope.ActivateDurability()
+
+                    // crash-reconciliation-020: the load-phase void settlement must
+                    // land BEFORE the next handoff's identity judgment, so admission
+                    // awaits the recovery work started by the activators.
+                    do! scope.AwaitDurabilityActivation()
+
+                    // The journal barrier covers recovery registered outside this
+                    // scope (dispatch can reach it first); awaiting it here keeps
+                    // admission from observing a half-applied restart recovery.
+                    match journal with
+                    | Some durable -> do! durable.RunOrAwaitRecovery()
+                    | None -> ()
+                }
+                :> Task
 
             let observePhysicalAdmission output sessionId physicalId =
                 scope.Sessions.Quiescence.ObservePhysicalUserMessage(sessionId, physicalId)
@@ -738,7 +754,7 @@ module HostSignalBootstrap =
 
                         resumed |> requireQuestionSettled
 
-                    requireDurabilityActivation ()
+                    do! requireDurabilityActivation ()
                 }
 
             let observeVisibleChatMessage raw =
@@ -1121,8 +1137,7 @@ module HostSignalBootstrap =
                 match intent, journal, admissionTransaction with
                 | ChatAdmissionIntent.Decision.NoManagedExecution _, _, _
                 | ChatAdmissionIntent.Decision.HostInternal _, _, _ ->
-                    continueUnmanagedChatMessage ()
-                    Task.FromResult()
+                    task { do! continueUnmanagedChatMessage () }
                 | ChatAdmissionIntent.Decision.Reject rejection, _, _ -> rejectedChatMessage (IntentRejected rejection)
                 | ChatAdmissionIntent.Decision.ExternalRootIntent _, Some durable, Some createTransaction ->
                     admitManagedChatMessage durable createTransaction ChatAdmissionPurpose.PublishInput intent output
@@ -1258,7 +1273,7 @@ module HostSignalBootstrap =
             let chatMessageHook =
                 fun (input: obj) (output: obj) ->
                     task {
-                        requireDurabilityActivation ()
+                        do! requireDurabilityActivation ()
 
                         // Decode once; routing and physical authority consume
                         // the same frozen claim and identity evidence.

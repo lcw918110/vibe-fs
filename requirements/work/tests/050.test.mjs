@@ -111,11 +111,12 @@ test('WHAT[work-050] ask still parks after a review, and deliver is not a promot
     assert.equal(recorded.kind, 'Reviewed', recorded.reason)
     assert.equal(recorded.milestone, '事实与取舍')
 
-    const store = workspaceEventStoreSurface.acquire(commonDir)
-    const advanced = await surface.seedDeliver(store, session, 'run-promote', 'call-promote', 1n)
-    assert.equal(advanced.ok, false, advanced.error)
-    assert.notEqual(advanced.decision, 'Promoted')
-    assert.match(String(advanced.error), /review is the only/)
+    assert.throws(
+      () => surface.execute(commonDir, session, 'deliver-promote', {
+        type: 'Deliver', providerRunId: 'run-promote', toolCallId: 'call-promote',
+      }),
+      /Unknown work command/,
+    )
 
     runtime.client.tui = { showToast: async () => ({}) }
     const output = await hooks.tool['todowrite-for-plan'].execute(

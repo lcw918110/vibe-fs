@@ -418,7 +418,7 @@ export async function bindManagerLoopSequence(scenario) {
     ...(prefixText ? { prefixText } : {}),
     args: {
       name: `review-${grade.toLowerCase()}-${++programNameCounter}`,
-      planB: '等待评审打分回执，保留当前评审任期事实。',
+      intent: '等待评审打分回执，保留当前评审任期事实。',
       program: `class Js extends JsProgram { async run() { return await this.review(${JSON.stringify(scores(grade))}); } }`,
     },
   });
@@ -428,7 +428,7 @@ export async function bindManagerLoopSequence(scenario) {
     tool: 'todowrite-for-manager',
     args: {
       name: `fork-conflict-resolver-${++programNameCounter}`,
-      planB: '等待派工回执，保留冲突修复子任务。',
+      intent: '等待派工回执，保留冲突修复子任务。',
       program: `class Js extends JsProgram { async run() { return await this.fork(${JSON.stringify(payload)}, []); } }`,
     },
   });

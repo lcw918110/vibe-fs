@@ -15,7 +15,6 @@ class JsProgram {
 {{baseClassDevOps}}
 {{baseClassFission}}
 {{baseClassHorizon}}
-{{baseClassAdvisor}}
 {{baseClassAsk}}
 {{baseClassReview}}
 {{baseClassLifecycle}}

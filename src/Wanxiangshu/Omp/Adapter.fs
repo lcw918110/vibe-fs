@@ -17,6 +17,7 @@ open Wanxiangshu.Context.Scope
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Context.Companion
 open Wanxiangshu.Context.Prefix
+open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Mission.Work.OpenCode
 
 /// Host-neutral adapter over the omp (oh-my-pi) extension API.
@@ -35,6 +36,48 @@ module Adapter =
 
     [<Import("outboundViewStore", "wanxiangli/pair-hint")>]
     let private outboundViewStore: obj = jsNative
+
+    [<Import("scopeProgress", "wanxiangli/scope-progress")>]
+    let private scopeProgress: obj = jsNative
+
+    [<Import("AdvisorFlow", "wanxiangli/scope-progress")>]
+    let private createAdvisorFlow: obj = jsNative
+
+    [<Import("AdvisorProcessQueue", "wanxiangli/scope-progress")>]
+    let private createAdvisorQueue: obj = jsNative
+
+    [<Import("advisorClaim", "wanxiangli/scope-progress")>]
+    let private advisorClaim: obj = jsNative
+
+    [<Import("advisorFinish", "wanxiangli/scope-progress")>]
+    let private advisorFinish: obj = jsNative
+
+    [<Import("advisorPending", "wanxiangli/scope-progress")>]
+    let private advisorPending: obj = jsNative
+
+    [<Import("advisorStageBegin", "wanxiangli/scope-progress")>]
+    let private advisorStageBegin: obj = jsNative
+
+    [<Import("advisorStageConfirm", "wanxiangli/scope-progress")>]
+    let private advisorStageConfirm: obj = jsNative
+
+    [<Import("SqliteJournal", "wanxiangli/eventstore")>]
+    let private sqliteJournalConstructor: obj = jsNative
+
+    [<Import("createRequire", "node:module")>]
+    let private createRequire (url: string) : obj = jsNative
+
+    [<Emit("import.meta.url")>]
+    let private moduleUrl: string = jsNative
+
+    [<Emit("typeof globalThis.Bun !== 'undefined'")>]
+    let private runningOnBun () : bool = jsNative
+
+    [<Import("join", "node:path")>]
+    let private joinPath (a: string) (b: string) : string = jsNative
+
+    [<Import("mkdirSync", "node:fs")>]
+    let private mkdirSync (directory: string) (options: obj) : unit = jsNative
 
     [<Emit("$0 == null")>]
     let private isNullOrUndefined (x: obj) : bool = jsNative
@@ -279,17 +322,16 @@ module Adapter =
     let private liveChildren = System.Collections.Generic.Dictionary<string, Child>()
     let private sessionContexts = System.Collections.Generic.Dictionary<string, obj>()
 
-    type private FrozenProviderLease =
+    type private LatestProviderLease =
         { SessionId: string
           Marker: string
-          NativePayload: obj
           ProviderId: string
           ModelId: string
           mutable Replaced: int
           mutable Cancelled: bool }
 
-    let private frozenProviderLeases =
-        System.Collections.Generic.Dictionary<string, FrozenProviderLease>()
+    let private latestProviderLeases =
+        System.Collections.Generic.Dictionary<string, LatestProviderLease>()
 
     let private pendingPreviousSteers =
         System.Collections.Generic.Dictionary<string, string * PrefixEpochId>()
@@ -1105,13 +1147,44 @@ module Adapter =
             [ "content", box [| createObj [ "type", box "text"; "text", box reason ] |]
               "details", createObj [ "refused", box true; "archived", box false ] ]
 
+    let private outstandingOmpPrompt (childId: SessionId) =
+        childTranscript (SessionId.value childId)
+        |> Result.toOption
+        |> Option.bind (fun messages ->
+            messages
+            |> List.filter (fun message ->
+                message.Role = TranscriptRole.User && message.Correlation.IsSome)
+            |> List.tryLast)
+        |> Option.map (fun message ->
+            message.Parts
+            |> List.choose (function TranscriptPart.Text text -> Some text | _ -> None)
+            |> String.concat "\n")
+        |> Option.filter (String.IsNullOrWhiteSpace >> not)
+        |> Option.defaultValue "最近一次已接受派出提示词：当前宿主未提供可核实原文。"
+
+    let private outstandingOmpReminder (journal: AgentJournal) (sessionId: SessionId) =
+        let active =
+            AgentProjection.tryFind sessionId (AgentJournal.snapshot journal).AgentProjections
+            |> Option.bind (fun session -> session.Handles)
+            |> Option.map (fun projection -> projection.Handles |> Map.toList |> List.map snd)
+            |> Option.defaultValue []
+            |> List.filter (fun handle ->
+                handle.Lifecycle = Wanxiangshu.Execution.Delegation.HandleLifecycle.Active)
+            |> List.sortBy (fun handle -> handle.CreationOrder)
+        let notices =
+            active
+            |> List.map (fun handle ->
+                "## " + handle.Byname + " · " + SessionId.value handle.ChildSessionId
+                + "\n" + outstandingOmpPrompt handle.ChildSessionId)
+        if List.isEmpty notices then ""
+        else "\n\n尚未归队的外派工作（最近一次已接受的指令全文）：\n" + String.concat "\n\n" notices
+
     let private ompCommittedArchive
         (journal: AgentJournal)
         (sid: string)
         (sessionId: SessionId)
         (epoch: ActivePrefixEpoch)
         (toolCallId: ToolCallId)
-        (budget: int)
         (objective: string)
         (experience: string option)
         (archived: BlobWriteReceipt)
@@ -1132,21 +1205,20 @@ module Adapter =
             | Ok _ -> ()
             | Error failure -> raise (JournalAppendException failure)
 
-            outboundViewStore?discardSealed (sid) |> ignore
-            Surface.resetScopeState sid budget
-
+            outboundViewStore?discardSealed(sid) |> ignore
+            Surface.resetScopeState sid 0
+            scopeProgress?reset(sid, string (Set.count epoch.ReanchoredScopes + 1)) |> ignore
             if not (Set.isEmpty epoch.ReanchoredScopes) then
                 Surface.beginAskPreviousScope sid
 
             Surface.setHasPreviousScope sid true
 
+            let outstanding = outstandingOmpReminder journal sessionId
             let content =
-                box [| createObj [ "type", box "text"; "text", box $"Scope reset. Objective: %s{objective}" ] |]
-
+                box [| createObj [ "type", box "text"; "text", box ($"Scope reset. Objective: %s{objective}" + outstanding) ] |]
             let details =
                 createObj
                     [ "objective", box objective
-                      "turnBudget", box budget
                       "archived", box true
                       "experience", box experience.IsSome ]
 
@@ -1159,7 +1231,6 @@ module Adapter =
         (sessionId: SessionId)
         (epoch: ActivePrefixEpoch)
         (toolCallId: ToolCallId)
-        (budget: int)
         (objective: string)
         (experience: string option)
         (previous: obj)
@@ -1172,7 +1243,7 @@ module Adapter =
             | Error reason ->
                 return ompScopeRefused ("resetScope refused: durable scope archive write failed: " + reason)
             | Ok archived ->
-                return! ompCommittedArchive journal sid sessionId epoch toolCallId budget objective experience archived
+                return! ompCommittedArchive journal sid sessionId epoch toolCallId objective experience archived
         }
 
     let private ompScopeResetReplayed (journalOpt: AgentJournal option) (sessionText: string) (callId: string) =
@@ -1403,12 +1474,9 @@ module Adapter =
         (journalOpt: AgentJournal option)
         (sid: string)
         (callId: obj)
-        (estimate: int)
-        (completion: string)
         (objective: string)
         (experience: string option)
         : obj =
-        let budget = Surface.adjustBudgetForKpi estimate completion
         let toolCallIdStr = stringOf callId
 
         if String.IsNullOrWhiteSpace toolCallIdStr then
@@ -1436,7 +1504,7 @@ module Adapter =
                     ompScopeRefused
                         "resetScope refused: the preceding real provider request has no complete archived system/messages/model observation"
             else
-                return! ompWriteArchivedScope journal sid sessionId epoch toolCallId budget objective experience rawSnap
+                return! ompWriteArchivedScope journal sid sessionId epoch toolCallId objective experience rawSnap
         }
         |> unbox<obj>
 
@@ -1449,8 +1517,7 @@ module Adapter =
                   "loadMode", box "essential"
                   "approval", box "read"
                   "description",
-                  box
-                      "Execution barrier and context garbage collector. Preserves operator messages and the complete historical call/result pairs for resetScope, assume, negotiate, askPreviousScope, and advisor across later resets. Other old-scope working context is removed from subsequent model requests. Requires a KPI completion level; the Host scales the proposed new scope turnBudget using that tier."
+                  box "End the current Scope; preserve operator and assistant prose/reasoning plus critical consultation tool call/results, remove ordinary old tool process, and report outstanding work. Arguments: experience and objective."
                   "parameters",
                   box (
                       createObj
@@ -1470,56 +1537,16 @@ module Adapter =
                                       box (
                                           createObj
                                               [ "type", box "string"
-                                                "description",
-                                                box
-                                                    "The objective for the new scope. The scope must form a self-contained state closed-loop (状态闭环)." ]
-                                      )
-                                      "newScopeTurnBudget",
-                                      box (
-                                          createObj
-                                              [ "type", box "integer"
-                                                "minimum", box 0
-                                                "description",
-                                                box
-                                                    "Estimated number of LLM turns needed for the new scope (1 LLM request = 1 turn)." ]
-                                      )
-                                      "kpiCompletion",
-                                      box (
-                                          createObj
-                                              [ "type", box "string"
-                                                "enum",
-                                                box
-                                                    [| "not_started"
-                                                       "far_below"
-                                                       "partially_met"
-                                                       "met"
-                                                       "exceeded"
-                                                       "not_applicable" |]
-                                                "description",
-                                                box
-                                                    "Previous KPI achievement: not_started (0.50x), far_below (0.75x), partially_met (0.90x), met (1.00x), exceeded (1.25x), or not_applicable for first scope (1.00x). Host multiplies the proposed new budget, rounding upward." ]
+                                                "description", box "The objective for the new scope. The scope must form a self-contained state closed-loop (状态闭环)." ]
                                       ) ]
                             )
-                            "required", box [| "newScopeObjective"; "newScopeTurnBudget"; "kpiCompletion" |] ]
+                            "required", box [| "newScopeObjective" |] ]
                   )
                   "execute",
                   box (
                       Func<obj, obj, obj, obj, obj, obj>(fun callId arguments signal onUpdate toolCtx ->
                           let ctx = orNull toolCtx
                           let sid = ctxSessionId ctx
-
-                          let estimate =
-                              if not (isNull arguments) && not (isNull arguments?newScopeTurnBudget) then
-                                  unbox<int> arguments?newScopeTurnBudget
-                              else
-                                  -1
-
-                          let completion =
-                              if isNull arguments || isNull arguments?kpiCompletion then
-                                  ""
-                              else
-                                  stringOf arguments?kpiCompletion
-
                           let objective =
                               if not (isNull arguments) && not (isNull arguments?newScopeObjective) then
                                   stringOf arguments?newScopeObjective
@@ -1553,14 +1580,13 @@ module Adapter =
                               let details =
                                   createObj
                                       [ "objective", box ""
-                                        "turnBudget", box 0
                                         "archived", box false
                                         "refused", box true ]
 
                               task { return createObj [ "content", content; "details", details ] }
                               |> unbox<obj>
                           else
-                              ompCommitResetScope journalOpt sid callId estimate completion objective experience)
+                              ompCommitResetScope journalOpt sid callId objective experience)
                   ) ]
 
         registerTool pi resetScopeDef
@@ -2162,13 +2188,18 @@ module Adapter =
         let staged = Array.copy original
         unbox<obj array> plan?hints |> Array.iter (ompApplyHint staged)
         let scoped = unbox<obj array> plan?slots |> Array.map (ompApplySlot staged)
-
-        if not (isNull plan?strong) then
-            ompScopeSteer scoped (stringOf plan?strong) true
-        elif not (isNull plan?weak) then
-            ompScopeSteer scoped (stringOf plan?weak) false
-        else
-            scoped
+        let progress: obj = scopeProgress?status(sessionId)
+        let last = original |> Array.tryLast |> Option.defaultValue null
+        let isSideOnly =
+            stringOf (fieldValue last "attribution") = "agent"
+            && stringOf (fieldValue last "steering") <> "true"
+        if not (unbox<bool> plan?active) || isSideOnly then scoped
+        elif not (isNull plan?strong) then ompScopeSteer scoped (stringOf plan?strong) true
+        elif not (isNull progress?resetDue) && unbox<bool> progress?resetDue then
+            ompScopeSteer scoped "你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。" true
+        elif isNull progress?known || not (unbox<bool> progress?known) then
+            ompScopeSteer scoped "当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中提交 remainingScopeTurnsEstimate。" true
+        else scoped
 
     let private contextMessagesReply (rawList: obj) (withSteer: obj array) : obj =
         if Surface.isUnchanged withSteer (Surface.toObjArray rawList) then
@@ -2517,7 +2548,7 @@ module Adapter =
         (sid: string)
         (archive: ArchivedScope)
         (receipt: string)
-        (lease: FrozenProviderLease)
+        (lease: LatestProviderLease)
         (result: Result<string, string>)
         =
         match result with
@@ -2537,7 +2568,6 @@ module Adapter =
         (questions: string)
         (receipt: string)
         (archive: ArchivedScope)
-        (native: obj)
         (providerId: string)
         (modelId: string)
         : unit =
@@ -2546,27 +2576,16 @@ module Adapter =
         let lease =
             { SessionId = sid
               Marker = marker
-              NativePayload = native
               ProviderId = providerId
               ModelId = modelId
               Replaced = 0
               Cancelled = false }
 
-        frozenProviderLeases[marker] <- lease
+        latestProviderLeases[marker] <- lease
 
-        let prompt =
-            "Consult the strictly frozen preceding Scope request only. No tools and no follow-up. "
-            + "If the evidence is absent, explicitly say so. Questions:\n"
-            + questions
-            + "\n"
-            + marker
+        let prompt = questions + "\n请直接用文字回答，不调用工具。\n" + marker
 
-        let retry =
-            "The previous reply was blank or tried a tool. Answer in plain text only, "
-            + "without tools, from the archived context.\n"
-            + questions
-            + "\n"
-            + marker
+        let retry = "刚才的回答不完整。请直接用文字回答：\n" + questions + "\n" + marker
 
         let guarded =
             task {
@@ -2582,7 +2601,7 @@ module Adapter =
                     let! result = guarded
                     do! settleArchivedTurn pi journal sid archive receipt lease result
                 finally
-                    frozenProviderLeases.Remove marker |> ignore
+                    latestProviderLeases.Remove marker |> ignore
             }
 
         run |> ignore
@@ -2597,7 +2616,11 @@ module Adapter =
         (archive: ArchivedScope)
         (source: obj)
         : bool =
-        let native = fieldValue source "nativePayload"
+        let latest: obj = outboundViewStore?tryGetSealed sid
+        let liveNative = fieldValue latest "nativePayload"
+        // One shared last-transform view, maintained by the normal Provider hook.
+        let previousMessages: obj = Surface.latestPrevious sid
+        let native = liveNative
         let priorModel = fieldValue source "model"
         let providerId = stringOf (fieldValue priorModel "providerID")
         let modelId = stringOf (fieldValue priorModel "modelID")
@@ -2608,6 +2631,7 @@ module Adapter =
 
         let valid =
             available
+            && not (isNull previousMessages)
             && isArray (fieldValue native "messages")
             && isArray (fieldValue native "tools")
             && providerId <> ""
@@ -2616,7 +2640,7 @@ module Adapter =
         if not valid then
             false
         else
-            executeArchivedTurn pi journal ctx sid questions receipt archive native providerId modelId
+            executeArchivedTurn pi journal ctx sid questions receipt archive providerId modelId
             true
 
     let private deliverNegotiationSteerToChild
@@ -2703,33 +2727,39 @@ module Adapter =
 
         stringOf providerId, stringOf modelId
 
-    let private projectFrozenProvider (active: FrozenProviderLease) (latest: obj) (payload: obj) (ctx: obj) : obj =
-        let native = active.NativePayload
+    let private projectLatestProvider (active: LatestProviderLease) (latest: obj) (payload: obj) (ctx: obj) : obj =
+        // Never pin an entire previous Provider request on the temporary lease.
+        // At the physical outgoing hook read the only most-recent work view.
+        let observed: obj = outboundViewStore?tryGetSealed active.SessionId
+        let native = fieldValue observed "nativePayload"
+        let oldMessages: obj = Surface.latestPrevious active.SessionId
         let originalTools = fieldValue native "tools"
         let provider, modelId = priorProviderModel (fieldValue ctx "model")
         let actualNativeModel = stringOf (fieldValue payload "model")
-        let frozenNativeModel = stringOf (fieldValue native "model")
-
+        let latestNativeModel = stringOf (fieldValue native "model")
         let matches =
-            provider = active.ProviderId
+            not (isNull native) && not (isNull oldMessages)
+            && provider = active.ProviderId
             && modelId = active.ModelId
-            && actualNativeModel = frozenNativeModel
+            && actualNativeModel = latestNativeModel
             && isArray (fieldValue native "messages")
             && isArray originalTools
 
         if not matches then
-            invalidOp "Archived Scope side turn cannot replay: provider/model/catalog does not match actual request"
+            invalidOp "Previous Scope consultation cannot replay: current provider/model/catalog or latest old-Scope boundary is unavailable"
         else
+            let baseRequest: obj =
+                emitJsExpr (native, oldMessages)
+                    "Object.assign({}, structuredClone($0), { messages: structuredClone($1) })"
             let projected: obj =
                 emitJsExpr
-                    (native, latest)
-                    "Object.assign({}, structuredClone($0), { messages: [...structuredClone($0.messages), structuredClone($1)] })"
-
+                    (baseRequest, latest, active.Marker)
+                    "(() => { const base = structuredClone($0); const prompt = structuredClone($1); if (typeof prompt.content === 'string') prompt.content = prompt.content.replaceAll($2, '').trim(); else if (Array.isArray(prompt.content)) for (const block of prompt.content) if (block.type === 'text' && typeof block.text === 'string') block.text = block.text.replaceAll($2, '').trim(); return Object.assign({}, base, { messages: [...base.messages, prompt] }); })()"
             active.Replaced <- active.Replaced + 1
             projected
 
 
-    let private replayFrozenProvider (sid: string) (payload: obj) (ctx: obj) : obj option =
+    let private replayLatestProvider (sid: string) (payload: obj) (ctx: obj) : obj option =
         let messages = fieldValue payload "messages"
 
         let latest =
@@ -2746,12 +2776,12 @@ module Adapter =
                 emitJsExpr latest "JSON.stringify($0)"
 
         let lease =
-            frozenProviderLeases.Values
+            latestProviderLeases.Values
             |> Seq.tryFind (fun active -> active.SessionId = sid && latestText.Contains(active.Marker))
 
         match lease with
         | None -> None
-        | Some active -> Some(projectFrozenProvider active latest payload ctx)
+        | Some active -> Some(projectLatestProvider active latest payload ctx)
 
     /// Register the product hooks on the omp event bus and return the
     /// combined signal emitter: every signal reaches the host subscribers
@@ -2805,9 +2835,14 @@ module Adapter =
         registerEvent pi "session_switch" (fun (_event: obj) (ctx: obj) -> refreshSessionState ctx)
         registerEvent pi "session_branch" (fun (_event: obj) (ctx: obj) -> refreshSessionState ctx)
 
-        let recordNormalRequest (sid: string) (submitted: obj) (model: obj) (shouldFilter: bool) : obj =
+        let recordNormalRequest (sid: string) (source: obj) (submitted: obj) (model: obj) (shouldFilter: bool) : obj =
             if not (isNull model) then
                 outboundViewStore?recordModel (sid, model) |> ignore
+
+            let incoming = fieldValue source "messages"
+            let outgoing = fieldValue submitted "messages"
+            if isArray incoming && isArray outgoing then
+                Surface.rememberTransform sid (unbox<obj array> incoming) (unbox<obj array> outgoing)
 
             outboundViewStore?recordNativeRequest (sid, submitted, model) |> ignore
 
@@ -2832,9 +2867,9 @@ module Adapter =
                     else
                         payload
 
-                match replayFrozenProvider sid submitted ctx with
+                match replayLatestProvider sid submitted ctx with
                 | Some frozen -> return frozen
-                | None -> return recordNormalRequest sid submitted model shouldFilter
+                | None -> return recordNormalRequest sid payload submitted model shouldFilter
             }
             |> unbox<obj>)
 
@@ -2940,6 +2975,7 @@ module Adapter =
                 let sid = ctxSessionId ctx
                 sessionContexts.[sid] <- ctx
                 let rawList = fieldValue event "messages"
+
                 let visible = RelayNarrativeTransform.visibleMessages stateRoot sid rawList
                 let scoped = ompScopeRequest sid visible
 
@@ -3236,10 +3272,10 @@ module Adapter =
 
         registerEvent pi "session_shutdown" (fun (_event: obj) (_ctx: obj) ->
             task {
-                for kv in frozenProviderLeases do
+                for kv in latestProviderLeases do
                     kv.Value.Cancelled <- true
 
-                frozenProviderLeases.Clear()
+                latestProviderLeases.Clear()
                 pendingPreviousSteers.Clear()
 
                 for sid in sessionContexts.Keys do

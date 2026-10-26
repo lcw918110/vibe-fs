@@ -1,12 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
+import { Work } from 'wanxiangli/work'
 
-const surface = lifecycle.LifecycleSurface ?? lifecycle
-
-const opening = () => surface.encodeOpening('plan', 'work-1', '/repo', 7n)
-
-function canonical(value) {
+const canonical = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
   if (value !== null && typeof value === 'object') {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`
@@ -14,54 +10,51 @@ function canonical(value) {
   return JSON.stringify(value)
 }
 
-const incumbencyIdOf = (text) =>
-  [...text.split('\n').filter((line) => line.length > 0).map((line) => JSON.parse(line)).flatMap((frame) => frame.events ?? [])].reverse().find((event) => event.type === 'IncumbencyOpened').incumbencyId
+const review = (work, id, office, updates) =>
+  work.execute(id, {
+    type: 'Review',
+    office,
+    providerRunId: 'run',
+    toolCallId: id,
+    updates,
+  })
 
-test('WHAT[work-013] 一段式无评审的 deliver 不得写成 Delivered，也不得被拒绝', () => {
-  const plan = opening()
-  const delivered = surface.deliverProbe(plan, 'run-1', 'call-1', 9n)
-  assert.equal(delivered.decision, 'Write')
-  assert.equal(delivered.detail, 'Relayed')
-  assert.equal(delivered.names.includes('IncumbencyRetired'), true)
-  assert.equal(delivered.names.includes('IncumbencyOpened'), true)
-  assert.equal(delivered.bytes.includes('Delivered'), false)
+const confirm = (work, effect) => {
+  const reply = work.execute(`confirm-${effect.id}`, { type: 'Confirm', effectId: effect.id, outcome: 'Sent' })
+  assert.equal(reply.status, 'Applied', reply.reason)
+}
+
+test('WHAT[work-013] clearing the ledger writes the relay pair and an advance does not retire', () => {
+  const work = new Work('work-13')
+  assert.equal(review(work, 'r1', 'Manager', [{ key: 'job', value: 'do' }]).result.kind, 'Reviewed')
+  const relayed = review(work, 'r2', 'Manager', [{ key: 'job', value: null }])
+  assert.equal(relayed.result.kind, 'Relayed')
+  const pair = work.history().at(-1).events
+  assert.deepEqual(pair.map((event) => event.type), ['IncumbencyRetired', 'ContextBarrier', 'IncumbencyOpened', 'PromptObliged'])
+  assert.equal(pair[0].outcome, 'Relayed')
+  assert.equal(pair.some((event) => event.outcome === 'Delivered'), false)
+  confirm(work, relayed.result.effect)
+  const advanced = review(work, 'r3', 'Manager', [])
+  assert.equal(advanced.result.kind, 'Advanced')
+  assert.deepEqual(work.history().at(-1).events.map((event) => event.type), ['MilestoneAdvanced', 'PromptObliged'])
+  const before = work.records()
+  assert.throws(() => work.execute('deliver', { type: 'Deliver', incumbencyId: 'x' }), /Unknown work command/)
+  assert.deepEqual(work.records(), before)
 })
-test('WHAT[work-013] S4 退休载荷出现 retirementCursor 必须被拒', () => {
-  const s4 = surface.encodeOpening('S4', 'work-cursor', '/repo', 4n)
-  const reviewed = surface.reviewProbe(s4, incumbencyIdOf(s4), 'Promoted')
-  const delivered = surface.deliverProbe(s4 + reviewed.bytes, 'run-c', 'call-c', 5n)
-  assert.equal(delivered.decision, 'Write')
-  assert.equal(delivered.detail, 'Delivered')
-  const frame = JSON.parse(delivered.bytes)
-  const event = frame.events.find((item) => item.type === 'IncumbencyRetired')
-  event.retirementCursor = 6
-  const mutated = `${canonical(frame)}\n`
-  const read = surface.readProbe(s4 + reviewed.bytes + mutated)
-  assert.equal(read.ok, false)
-  assert.equal(read.opened, false)
-  assert.equal(read.names, '')
-  assert.equal(read.activeId, '')
-  assert.match(read.reason, /Unknown field: retirementCursor|Execution retirement has plan-only fields/)
-  assert.notEqual(read.next, 'Done')
-})
-test('WHAT[work-013] 缺期望推进值的已落盘 Delivered 不得被读成 Done', () => {
-  const plan = opening()
-  const relayed = surface.deliverProbe(plan, 'run-d', 'call-d', 9n)
-  const frame = JSON.parse(relayed.bytes)
-  const event = frame.events.find((item) => item.type === 'IncumbencyRetired')
-  event.outcome = 'Delivered'
-  delete event.expectedAdvance
-  const mutated = `${canonical(frame)}\n`
-  const read = surface.readProbe(plan + mutated)
-  assert.equal(read.ok, false)
-  assert.equal(read.names, '')
-  assert.equal(read.activeId, '')
-  assert.match(read.reason, /Missing field: expectedAdvance/)
-  assert.notEqual(read.next, 'Done')
-})
-test('WHAT[work-013] 无活跃任期时调用方不得追加 IncumbencyOpened', () => {
-  const opened = opening()
-  const probe = surface.detachedOpeningProbe(opened)
-  assert.equal(probe.decision, 'Refuse')
-  assert.equal(probe.names, '')
+
+test('WHAT[work-013] a half pair, an extra field, or a lone opening is not history', () => {
+  const work = new Work('work-13-pair')
+  review(work, 'r1', 'Plan', [{ key: 'need', value: 'scope' }])
+  review(work, 'r2', 'Plan', [{ key: 'need', value: null }])
+  const frame = JSON.parse(work.records().at(-1))
+  const retirement = frame.events.find((event) => event.type === 'IncumbencyRetired')
+  assert.throws(() => new Work('work-13-pair', [canonical({ ...frame, events: [retirement] })]), /Illegal lifecycle transaction/)
+  retirement.retirementCursor = 6
+  assert.throws(() => new Work('work-13-pair', [canonical(frame)]), /Unknown field: retirementCursor/)
+  retirement.outcome = 'Delivered'
+  delete retirement.retirementCursor
+  assert.throws(() => new Work('work-13-pair', [canonical(frame)]), /Unknown value: Delivered/)
+  const opened = JSON.parse(work.records()[0])
+  const lone = opened.events.find((event) => event.type === 'IncumbencyOpened')
+  assert.throws(() => new Work('work-13-lone', [canonical({ ...opened, events: [lone] })]), /Work is not open/)
 })

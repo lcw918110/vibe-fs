@@ -154,7 +154,7 @@ deliver 门禁按所属会话的程序名字及真实状态查询；暂停程序
 
 ## [032] 按名字恢复原现场
 
-唯一公开恢复入口是新命名控制程序内的 `this.unpark(name, value?)`。预算只来自控制请求顶层 planB 在准入时确定的期限。恢复直接定位原对象，继续 SDK 排空、原命令等待或显式 park，不重新编译、重建沙箱、扫描工作区或重发操作。只有显式 park（含 where）接收 value，call 取得原命令真实结果。目标及继续唤醒的目标共用控制请求期限；到期仍活动的控制者和目标均暂停。后续恢复控制者只推进其自身、领取已有回执，不隐式再次唤醒目标。终态返回原回执，未知现场明确报告，权限拒绝不消费现场；目标 name/state/effects 不被外层 return 覆盖。
+唯一公开恢复入口是新命名控制程序内的 `this.unpark(name, value?)`。预算只来自控制请求顶层 intent 在准入时确定的期限。恢复直接定位原对象，继续 SDK 排空、原命令等待或显式 park，不重新编译、重建沙箱、扫描工作区或重发操作。只有显式 park（含 where）接收 value，call 取得原命令真实结果。目标及继续唤醒的目标共用控制请求期限；到期仍活动的控制者和目标均暂停。后续恢复控制者只推进其自身、领取已有回执，不隐式再次唤醒目标。终态返回原回执，未知现场明确报告，权限拒绝不消费现场；目标 name/state/effects 不被外层 return 覆盖。
 
 ## [033] 调用重放与迟到消息
 
@@ -178,11 +178,11 @@ parked 回执沿既有 Synthetic TOML 和宿主渲染边界呈现 name、state�
 
 ## [038] 生命周期成员的生成面
 
-每个基类都有 park(payload)、unpark(name,value?)、abandon(name)，只读角色同样能管理本会话程序，但不扩权或绕过业务门禁；它们不进入能力列表。Exec 投影 call(command)、signal(name,signal)、send(name,input)。预算仅由工具顶层必填 planB 声明，成员不能动态续期。教学采用新命名控制程序、目标名字、共享期限及显式恢复；委派 resume 不是生命周期别名。
+每个基类都有 park(payload)、unpark(name,value?)、abandon(name)，只读角色同样能管理本会话程序，但不扩权或绕过业务门禁；它们不进入能力列表。Exec 投影 call(command)、signal(name,signal)、send(name,input)。预算仅由工具顶层必填 intent 声明，成员不能动态续期。教学采用新命名控制程序、目标名字、共享期限及显式恢复；委派 resume 不是生命周期别名。
 
 ## [039] 状态所有权与两包边界
 
-wanxiangli/program 拥有 Session 名称登记、Run 程序状态、计算预算规则、请求准入期限、恢复关系、私有代际、控制及收尾，以及独立 join 的等待接线。Work、权限、评审、Ownership、Journal 各自拥有业务事实。wanxiangli/runtime 拥有独立进程、隔离、文件与锚点、原子写和版本检查、命令、终端、输入输出、信号、输出外存及物理时钟；不解释 planB、不拥有程序生命周期、不认识角色或 deliver。program → runtime 是明确的单向公开依赖。旧 programming/sandbox/fs/process/pty/spool/time/wait 的真实消费者全部切换，旧入口、owner、计时路径及兼容别名退出；两包不是转发壳，主仓不继续拥有程序状态。
+wanxiangli/program 拥有 Session 名称登记、Run 程序状态、计算预算规则、请求准入期限、恢复关系、私有代际、控制及收尾，以及独立 join 的等待接线。Work、权限、评审、Ownership、Journal 各自拥有业务事实。wanxiangli/runtime 拥有独立进程、隔离、文件与锚点、原子写和版本检查、命令、终端、输入输出、信号、输出外存及物理时钟；不解释 intent、不拥有程序生命周期、不认识角色或 deliver。program → runtime 是明确的单向公开依赖。旧 programming/sandbox/fs/process/pty/spool/time/wait 的真实消费者全部切换，旧入口、owner、计时路径及兼容别名退出；两包不是转发壳，主仓不继续拥有程序状态。
 
 ## [040] rm/mv：Move/Remove 编程面与 as-is 落盘
 
@@ -224,7 +224,7 @@ rm/mv 相关稳定失败码（`DIRECTORY_NOT_EMPTY`、`CROSS_DEVICE_MOVE`、`INV
 
 ## [047] 原语组合与教学资源
 
-编辑由 cat、字面 where/whereAll、slice 和一次 write 组合，枚举与内容搜索用 rg(argv)，保持既有路径、权限、读版本和 as-is 语义，不改变 [007]–[027] 普通文件及错误合同。header、成员说明、示例、配方、生命周期资源 en/zh-CN 成对且语义一致；先声明必填 name/program/planB，再教授授权原语及名字控制。清除自动名字、单 program 顶层、成员预算、单参 signal/send、handle、编程内 join/dag 和 all-or-nothing 过期教学；保留 WARNING 与精确锚点纪律。
+编辑由 cat、字面 where/whereAll、slice 和一次 write 组合，枚举与内容搜索用 rg(argv)，保持既有路径、权限、读版本和 as-is 语义，不改变 [007]–[027] 普通文件及错误合同。header、成员说明、示例、配方、生命周期资源 en/zh-CN 成对且语义一致；先声明必填 name/program/intent，再教授授权原语及名字控制。清除自动名字、单 program 顶层、成员预算、单参 signal/send、handle、编程内 join/dag 和 all-or-nothing 过期教学；保留 WARNING 与精确锚点纪律。
 
 ## [048] 暂停源码与恢复值分离
 
@@ -232,7 +232,7 @@ rm/mv 相关稳定失败码（`DIRECTORY_NOT_EMPTY`、`CROSS_DEVICE_MOVE`、`INV
 
 ## [049] 三项必填的工具入口
 
-所有公开 todowrite-for-* ToolSpec 参数恰好为必填字符串 name、program、planB，JSON Schema required 仅含这三项。缺项、非字符串、空白 name/program、空字符串 planB 或未知顶层字段在程序启动前拒绝。名字由模型填写，不按 provider-run/tool-call 自动补名。没有顶层 unpark/abandon/handle。program 为 class Js extends JsProgram 与 async run()，说明首先展示三项参数与完整模板，角色不改变输入形状。
+所有公开 todowrite-for-* ToolSpec 参数恰好为必填字符串 name、program、intent，JSON Schema required 仅含这三项。缺项、非字符串、空白 name/program、空字符串 intent 或未知顶层字段在程序启动前拒绝。名字由模型填写，不按 provider-run/tool-call 自动补名。没有顶层 unpark/abandon/handle。program 为 class Js extends JsProgram 与 async run()，说明首先展示三项参数与完整模板，角色不改变输入形状。
 
 ## [050] call：先排空，再独占本程序
 
@@ -244,7 +244,7 @@ this.signal(name,signal)、this.send(name,input) 是与 call 平级的 Exec 成�
 
 ## [052] 准入期限、执行预算与物理时长
 
-参数及权限准入时一次计算 budgetMs = UTF8Bytes(planB) * 50、deadline = admissionTime + budgetMs。按 UTF-8 字节，不截短合法预算、不加秘密短上限。所有操作、SDK 排空、命令等待及本次唤醒目标共用该绝对期限；连续 call、unpark 和嵌套控制不能重置、叠加或续期。到期仍活动控制者与目标均暂停，恢复控制者不隐式再恢复目标。新工具请求可以取得新期限，原操作不重跑。执行预算只约束模型计算，等待停表，计算续用余量；命令时长只观察。期限、恢复和代际由 program 唯一拥有，runtime 只物理计量与唤醒，旧回调不影响新窗口。
+参数及权限准入时一次计算 budgetMs = UTF8Bytes(intent) * 50、deadline = admissionTime + budgetMs。按 UTF-8 字节，不截短合法预算、不加秘密短上限。所有操作、SDK 排空、命令等待及本次唤醒目标共用该绝对期限；连续 call、unpark 和嵌套控制不能重置、叠加或续期。到期仍活动控制者与目标均暂停，恢复控制者不隐式再恢复目标。新工具请求可以取得新期限，原操作不重跑。执行预算只约束模型计算，等待停表，计算续用余量；命令时长只观察。期限、恢复和代际由 program 唯一拥有，runtime 只物理计量与唤醒，旧回调不影响新窗口。
 
 ## [055] SDK 并行与 call 屏障
 
@@ -262,7 +262,7 @@ this.signal(name,signal)、this.send(name,input) 是与 call 平级的 Exec 成�
 - `resume(payload)`：续做既有道路，`payload` 必带 `name` 并携带本次 `charge`；复用该 participant 的完整历史与 binding，不重选绑定；目标正忙时 charge 作为忙碌提示追加到既有工作，不新建任务（`outcome` 为 `nudged`）。传 `calling` 一律拒绝。拒绝码：`name-required`/`charge-required`/`calling-not-allowed`/`warm-start-unavailable`/`context-unavailable`/`assessment-pending-for-devops`/`dispatch-closed`/`placement-failed`/`dispatch-uncertain`。
 - `commission(payload)`：委任既有角色的道路，`payload` 与 fork 同形（`{ charge, name?, calling? }`）；`calling` 省略时按角色推导，显式给出与推导不一致即拒绝。成功返回 `{ ok, name, agentId, outcome }`。拒绝码：`name-required`/`charge-required`/`unknown-calling`/`name-already-belongs`/`context-unavailable`/`placement-failed`/`dispatch-uncertain`。
 - `devops(intent)`：请求本调用 session 绑定的固定 DevOps 席位做一次工作；`intent` 是本次交给 DevOps 的意图文本（不像 fork/resume 那样承载 charge）。返回 `{ ok, kind, status, returned: [{ text }] }`；材料条目最终随结果统一渲染为 TOML。DevOps 绑定未就绪或已关闭时以 `assessment-pending-for-devops` 拒绝。
-- 独立宿主工具 `join()`（无参数，无 name/program/planB，不创建临时 JS 程序）：按本会话成员归属收拢，返回 `{ ok, records: [{ name, agentId, role, status, returned: [{ text }] }] }`，不重复输出 `byName` 索引；子智能体（Engineer/DevOps）以无未决调用的自然停机作为 proven terminal，其末轮 assistant 散文随 join 记录以 `# ...` 注释交回，`returned` 不再承载子智能体的完整视图；`status ∈ completed | failed | abandoned | voided`。执行已不可能（abort、cancel 或重启加载结算）的成员以 `voided` 进入 join 记录，`returned` 为空数组：作废结清该成员的未解除义务，join 关闭，报告一次后该成员退役。拒绝码：`context-unavailable`/`not-ready`/`nothing-to-join`/`join-in-progress`/`interrupted`/`abandoned`。
+- 独立宿主工具 `join()`（无参数，无 name/program/intent，不创建临时 JS 程序）：按本会话成员归属收拢，返回 `{ ok, records: [{ name, agentId, role, status, returned: [{ text }] }] }`，不重复输出 `byName` 索引；子智能体（Engineer/DevOps）以无未决调用的自然停机作为 proven terminal，其末轮 assistant 散文随 join 记录以 `# ...` 注释交回，`returned` 不再承载子智能体的完整视图；`status ∈ completed | failed | abandoned | voided`。执行已不可能（abort、cancel 或重启加载结算）的成员以 `voided` 进入 join 记录，`returned` 为空数组：作废结清该成员的未解除义务，join 关闭，报告一次后该成员退役。拒绝码：`context-unavailable`/`not-ready`/`nothing-to-join`/`join-in-progress`/`interrupted`/`abandoned`。
 - `fission({ charge, lanes })`：同身份多 lane 的任务分片执行（宿主负责 lane 绑定与收拢），返回 `{ ok, groupId, lanes: [{ index, sessionId }] }`；owner 的 `join()` 收拢本组 lane。拒绝码：`fission-unavailable`/`lane-start-failed`/`not-ready`/`context-unavailable`/`invalid-prompt`。
 - `horizon()`：返回在场名册的数据信封 `{ ok, agents: [{ label, status, target, workState, record, turnsUsed, turnsLeft, timeUsedMs, timeLeftMs }], ptys: [{ terminal }] }`；`status ∈ returned | still-away | did-not-return | voided`（`voided` 表示该成员已无法交付、已以作废结清而非完成，在 join 报告一次之前它仍显示为 `voided`），`workState ∈ latest | none | unavailable`，`record` 是最新帧正文原文（无则为 `""`）；四个校准数 `turnsUsed`/`turnsLeft`/`timeUsedMs`/`timeLeftMs` 只在委任者 estimate 与子会话起点两者都可读时给出，否则全为 `0`，不猜测。拒绝码：`horizon-unavailable`。
 - `advisor(intent)`：请求本调用 session 自己的顾问专席；intent 散文作为 `# ...` 注释头，连同调用方当前完整的 post-scope 视图（TOML `[[context]]` 表）作为单一请求文档投递给顾问。返回数据信封 `{ ok: true, advice }` 或 `{ ok: false, code: "advisor-unavailable", reason }`，其中 `advice` 为顾问自然停机时的末轮 assistant 散文。每次 consult 均把调用方当前最新 post-scope 视图作为背景送出。拒绝码：`advisor-unavailable`。
@@ -283,7 +283,7 @@ this.signal(name,signal)、this.send(name,input) 是与 call 平级的 Exec 成�
 
 ## [058] 交互与唯一命令执行面
 
-Host 原生 run 与 pty 工具继续退役。命令走 call(command)，交互走 send(name,input)、signal(name,signal)，恢复和放弃走 unpark(name,value?)、abandon(name)。控制由新命名程序及顶层 planB 准入，成员不能创建预算；无独立恢复工具、顶层恢复参数或命令 handle。delta 不消费最终结果；控制效果、命令退出不自行恢复续体，未知效果不变成重发许可。
+Host 原生 run 与 pty 工具继续退役。命令走 call(command)，交互走 send(name,input)、signal(name,signal)，恢复和放弃走 unpark(name,value?)、abandon(name)。控制由新命名程序及顶层 intent 准入，成员不能创建预算；无独立恢复工具、顶层恢复参数或命令 handle。delta 不消费最终结果；控制效果、命令退出不自行恢复续体，未知效果不变成重发许可。
 
 ## [060] "js" 机器词汇的终局
 
@@ -291,7 +291,7 @@ Host 原生 run 与 pty 工具继续退役。命令走 call(command)，交互走
 
 ## [064] 实际 schema 与唯一公开生命周期路径
 
-实际注册的 ToolSpec 及其 JSON Schema 转换结果严格为必填 { name:string, program:string, planB:string }，不能仅靠描述证明。绕过 schema 直调执行器也在启动前同样校验，无效输入没有程序或命令效果。源码为 class Js extends JsProgram 与 async run()。公开恢复/放弃只经成员；会话关闭复用内部收尾，不成为第二公开入口。真实宿主测试检查注册后工具与直接执行器。
+实际注册的 ToolSpec 及其 JSON Schema 转换结果严格为必填 { name:string, program:string, intent:string }，不能仅靠描述证明。绕过 schema 直调执行器也在启动前同样校验，无效输入没有程序或命令效果。源码为 class Js extends JsProgram 与 async run()。公开恢复/放弃只经成员；会话关闭复用内部收尾，不成为第二公开入口。真实宿主测试检查注册后工具与直接执行器。
 
 ## [065] 宿主并行派发与调用身份
 

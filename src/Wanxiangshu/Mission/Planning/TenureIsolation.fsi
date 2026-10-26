@@ -5,7 +5,9 @@ type ActiveTenureInfo =
       IncumbencyId: string
       Stage: string
       OpeningCursor: int64
-      IsFreshHandover: bool }
+      IsFreshHandover: bool
+      BarrierToolCallId: string option
+      SuccessorTenureId: string option }
 
 type TenureMessage =
     { Id: string option

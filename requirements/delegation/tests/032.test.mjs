@@ -68,7 +68,7 @@ test('WHAT[delegation-032] Manager fork refuses a DevOps calling at the role bou
           program:
             'class Js extends JsProgram { async run() { return await this.fork({ name: "devops", charge: "DEVOPS-CHARGE" }, { 1: null }); } }',
           name: 'fork-devops-before-review',
-          planB: 'Observe the role-bound delegation result without dispatching unauthorized work.'
+          intent: 'Observe the role-bound delegation result without dispatching unauthorized work.'
         },
         { sessionID: owner, agent: 'manager', callID: 'call-fork-devops-pending', messageID: 'msg-call-fork-devops-pending' },
       )
@@ -103,7 +103,7 @@ test('WHAT[delegation-032] Manager fork refuses a DevOps calling at the role bou
           program:
             'class Js extends JsProgram { async run() { return await this.fork({ name: "devops", charge: "DEVOPS-CHARGE" }, { 1: null }); } }',
           name: 'fork-devops-after-review',
-          planB: 'Observe the role-bound delegation result without dispatching unauthorized work.'
+          intent: 'Observe the role-bound delegation result without dispatching unauthorized work.'
         },
         { sessionID: owner, agent: 'manager', callID: 'call-fork-devops', messageID: 'msg-call-fork-devops' },
       )

@@ -478,7 +478,7 @@ test('WHAT[capability-enforcement-025] J13_delegation_members_forward_cleanly_wi
       }
     }`
 
-    const outcome = await execute(dir, 'manager', 'en', sessionId, { name: 'delegation', program, planB: 'Wait for the delegation business receipts without changing this request deadline.' }, 3000, Date.now() + 60_000, 1 << 20, null)
+    const outcome = await execute(dir, 'manager', 'en', sessionId, { name: 'delegation', program, intent: 'Wait for the delegation business receipts without changing this request deadline.' }, 3000, Date.now() + 60_000, 1 << 20, null)
     assert.equal(caseName(outcome), 'Succeeded', 'invalid carry is returned as data without failing the program')
 
     const doc = render(outcome)

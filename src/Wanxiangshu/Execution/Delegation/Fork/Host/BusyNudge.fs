@@ -67,6 +67,7 @@ module HostForkBusyNudge =
         (directory: string option)
         (prompt: string)
         (observer: ContinuationAcceptanceObserver option)
+        (awaitMode: PromptDispatcher.AwaitMode)
         =
         task {
             let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create j)
@@ -80,7 +81,7 @@ module HostForkBusyNudge =
                     PromptAuthority.ContinuationKind.BusyAgentNudge
                     profile
                     directory
-                    PromptDispatcher.AwaitMode.Detached
+                    awaitMode
                     observer
 
             return sendResult sent
@@ -98,7 +99,7 @@ module HostForkBusyNudge =
             match journal with
             | None ->
                 return Error "Busy nudge requires an AgentJournal: PROMPT-005 admits no sender outside the Dispatcher"
-            | Some j -> return! sendWithProfile sessions j childId profile directory prompt None
+            | Some j -> return! sendWithProfile sessions j childId profile directory prompt None PromptDispatcher.AwaitMode.Detached
         }
 
     /// Same durable busy-guidance send, with the Host PhysicalAccepted callback.
@@ -115,7 +116,23 @@ module HostForkBusyNudge =
         match journal with
         | None ->
             Task.FromResult(Error "Busy nudge requires AgentJournal; negotiation steer cannot bypass prompt authority")
-        | Some j -> sendWithProfile sessions j childId profile directory prompt (Some observer)
+        | Some j -> sendWithProfile sessions j childId profile directory prompt (Some observer) PromptDispatcher.AwaitMode.Detached
+
+    /// Advisor final steer may settle only after a real PhysicalAccepted receipt.
+    /// This is not the detached confirmation semantics of negotiate/busy guidance.
+    let sendObservedAwait
+        (sessions: ISessionHostPort)
+        (journal: AgentJournal option)
+        (childId: SessionId)
+        (profile: PromptAuthority.AuthorityExecutionProfile)
+        (directory: string option)
+        (prompt: string)
+        (observer: ContinuationAcceptanceObserver)
+        : Task<Result<unit, string>> =
+        match journal with
+        | None -> Task.FromResult(Error "Advisor steer needs a durable AgentJournal")
+        | Some j ->
+            sendWithProfile sessions j childId profile directory prompt (Some observer) PromptDispatcher.AwaitMode.Await
 
     let sender sessions journal (directoryOf: string -> string option) =
         fun (agentId: string) childId profile prompt ->

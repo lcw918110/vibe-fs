@@ -52,6 +52,9 @@ module PluginTransforms =
     [<Import("outboundViewStore", "wanxiangli/pair-hint")>]
     let private outboundViewStore: obj = jsNative
 
+    [<Import("scopeProgress", "wanxiangli/scope-progress")>]
+    let private scopeProgress: obj = jsNative
+
 
     // The real Host session contains ONLY its negotiation question. This
     // process-live view is what the model receives instead, reusing the last
@@ -145,13 +148,10 @@ module PluginTransforms =
         else
             Error(responseErrorReason r "startTemporary failed")
 
-    let consultationStartFrozen (tempId: string) (snapshot: obj) : Result<unit, string> =
-        let response = Surface.startTemporaryFromFrozen tempId snapshot
-
-        if not (isNull response?ok) && unbox<bool> response?ok then
-            Ok()
-        else
-            Error(responseErrorReason response "frozen consultation source unavailable")
+    let consultationStartPrevious (tempId: string) (sourceSessionId: string) (metadata: obj) : Result<unit, string> =
+        let response = Surface.startTemporaryPrevious tempId sourceSessionId metadata
+        if not (isNull response?ok) && unbox<bool> response?ok then Ok()
+        else Error(responseErrorReason response "previous Scope source is unavailable in latest provider view")
 
     let consultationModelForTemporary (tempId: string) : obj = Surface.modelForTemporary tempId
 
@@ -260,7 +260,7 @@ module PluginTransforms =
           FreezeProviderAttemptPlan: string option -> PhysicalUserMessageId option -> Task<unit>
           InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
           SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
-          SanitizeMessages: obj -> unit
+          SanitizeMessages: string option -> obj -> unit
           AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
           StopAfterDelivery:
               string option -> PhysicalUserMessageId option -> DeliveryAttemptLedger.Fence -> obj -> Task<unit> }
@@ -680,7 +680,9 @@ module PluginTransforms =
               IncumbencyId = incumbentId
               Stage = work.Stage
               OpeningCursor = work.OpeningCursor |> Option.defaultValue 0. |> int64
-              IsFreshHandover = not (PrefixEpochProjection.isTenureReanchored incumbentId epoch) }
+              IsFreshHandover = not (PrefixEpochProjection.isTenureReanchored incumbentId epoch)
+              BarrierToolCallId = work.BarrierToolCallId
+              SuccessorTenureId = work.SuccessorTenureId }
 
         // Plan milestones keep the committed barrier as the visibility cut.
         // Reanchor still advances the prefix epoch; it does not remove messages.
@@ -692,7 +694,9 @@ module PluginTransforms =
               IncumbencyId = work.ActiveId |> Option.defaultValue ""
               Stage = "已完成"
               OpeningCursor = work.LastRetirementCursor |> Option.defaultValue -1. |> int64 |> (+) 1L
-              IsFreshHandover = false }
+              IsFreshHandover = false
+              BarrierToolCallId = work.BarrierToolCallId
+              SuccessorTenureId = work.SuccessorTenureId }
 
         let isolatePlanTenure (tenure: Wanxiangshu.Mission.Planning.ActiveTenureInfo) (sid: string) (outObj: obj) =
             task {
@@ -1154,7 +1158,12 @@ module PluginTransforms =
                         let replaced = SyncDelegateBatching.applyReplacedResults currentMessages
                         HostMessageProjection.replaceMessagesInPlace outObj replaced
                 }
-          SanitizeMessages = fun outObj -> HostMessageProjection.sanitizeOutputMessages outObj
+          SanitizeMessages =
+            fun sidOpt outObj ->
+                match sidOpt with
+                | Some sid when ownerRole sid = Some Role.Advisor ->
+                    HostMessageProjection.sanitizeAdvisorOutputMessages outObj
+                | _ -> HostMessageProjection.sanitizeOutputMessages outObj
 
           // 条款 3：裁决只认真实交付事实——本次 attempt 存在一次已成立的
           // 交付，且登记时的物理输入仍是当前物理输入。view 声明、助手正文与
@@ -1457,13 +1466,14 @@ module PluginTransforms =
         let staged = Array.copy raw
         unbox<obj array> plan?hints |> Array.iter (applyNeutralHint staged)
         let selected = unbox<obj array> plan?slots |> Array.map (applyNeutralSlot staged)
-
-        if not (isNull plan?strong) then
-            openCodeScopeSteer selected (scopeText plan?strong) true
-        elif not (isNull plan?weak) then
-            openCodeScopeSteer selected (scopeText plan?weak) false
-        else
-            selected
+        let progress: obj = scopeProgress?status(sessionId)
+        if not (unbox<bool> plan?active) then selected
+        elif not (isNull plan?strong) then openCodeScopeSteer selected (scopeText plan?strong) true
+        elif not (isNull progress?resetDue) && unbox<bool> progress?resetDue then
+            openCodeScopeSteer selected "你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。" true
+        elif isNull progress?known || not (unbox<bool> progress?known) then
+            openCodeScopeSteer selected "当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中提交 remainingScopeTurnsEstimate。" true
+        else selected
 
     let private purgeAndSuffixSession (sessionId: string) (rawMessages: obj array) (outObj: obj) : unit =
         let sideRequest =
@@ -1526,6 +1536,13 @@ module PluginTransforms =
         (outObj: obj)
         : Task<unit> =
         task {
+            // One owner view: capture the exact transform input before any Scope purge.
+            // The paired output is published only after the real transform finishes.
+            let incomingMessages: obj array =
+                let raw = scopeField outObj "messages"
+                if isNull raw then [||]
+                else unbox (emitJsExpr raw "structuredClone($0)")
+
             // 预读：在 Relay 投影改写消息数组之前捕获原始物理用户消息 id。
             let physicalUserMessageId =
                 ProviderWireDecode.messagesFromTransformOutput outObj
@@ -1672,7 +1689,7 @@ module PluginTransforms =
                   { Name = "sanitize-output-messages"
                     Run =
                       fun frame ->
-                          caps.SanitizeMessages frame.OutObj
+                          caps.SanitizeMessages frame.SessionId frame.OutObj
                           Task.FromResult(Some frame) } ]
 
             let frame: TransformFrame =
@@ -1686,7 +1703,9 @@ module PluginTransforms =
             do! runOrdinaryStages stages frame
 
             projectionSessionIdOpt
-            |> Option.iter (fun sid -> negotiationRememberMessages sid outObj)
+            |> Option.iter (fun sid ->
+                let transformed = negotiationMessages outObj
+                if transformed.Length > 0 then Surface.rememberTransform sid incomingMessages transformed)
 
             outboundViewStore?recordMessages (outObj?messages) |> ignore
 

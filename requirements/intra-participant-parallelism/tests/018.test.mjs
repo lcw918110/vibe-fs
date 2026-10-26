@@ -57,7 +57,7 @@ test('WHAT[intra-participant-parallelism-018] fission forwards the payload alone
       engineerSession,
       {
         name: 'fission-payload',
-        planB: '等待裂变回执，保留原请求状态。',
+        intent: '等待裂变回执，保留原请求状态。',
         program: program(
           `    const arity = String(this.fission.length);
     const receipt = await this.fission({ charge: "explore three designs", lanes: 2 });
@@ -87,7 +87,7 @@ test('WHAT[intra-participant-parallelism-018] fission forwards the payload alone
       'Manager',
       'en',
       managerSession,
-      { name: 'fork-payload', planB: '等待两次派工回执，保留已发出的请求。', program: program(`    await this.fork("first call");
+      { name: 'fork-payload', intent: '等待两次派工回执，保留已发出的请求。', program: program(`    await this.fork("first call");
     await this.fork("second call");
     return { forkArity: String(this.fork.length) };`) },
       3000,

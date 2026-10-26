@@ -38,9 +38,12 @@ const storeOf = async (target) => workspaceEvents.acquire(await journalSurface.J
 let programSequence = 0
 const runManagerProgram = async (hooks, sessionID, body) =>
   await hooks.tool['todowrite-for-manager'].execute(
-    { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'devops-dispatch-test-' + (++programSequence),
-          planB: 'Wait for the actual manager dispatch receipt without extending the request window.'
-        },
+    {
+      program: `class Js extends JsProgram { async run() { ${body} } }`,
+      name: 'devops-dispatch-test-' + (++programSequence),
+      intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
+      remainingScopeTurnsEstimate: 3,
+    },
     { sessionID, agent: 'manager' },
   )
 
@@ -113,12 +116,23 @@ if (phase === 'produce') {
         assert.equal(outcomeOf(admitted), 'created', admitted)
 
         // 单笔接力交付落盘：后继进程必须读到后继任期已建立这一持久事实。
-        const store = await storeOf(directory)
-        await lifecycle.seedReview(store, ISOLATED_SESSION, 'Cleared')
-        const relayed = await lifecycle.seedDeliver(store, ISOLATED_SESSION, 'run-devops-isolation', 'call-devops-isolation', 2n)
-        assert.equal(relayed.ok, true, relayed.error)
-        const view = lifecycle.workView(store, ISOLATED_SESSION)
-        assert.equal(view.active, true, 'the producer relays to a successor tenure')
+        const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
+        const surface = lifecycle.LifecycleSurface ?? lifecycle
+        const relayed = await surface.submitReview(
+          commonDir,
+          ISOLATED_SESSION,
+          'relay-' + ISOLATED_SESSION,
+          'Manager',
+          'run-devops-isolation',
+          'call-devops-isolation',
+          [{ key: 'opened', value: null }],
+          [],
+          '',
+        )
+        assert.equal(relayed.kind, 'Relayed', relayed.reason)
+        const inspected = surface.inspected(commonDir, ISOLATED_SESSION)
+        assert.ok(inspected?.ActiveId, 'the producer relays to a successor tenure')
+        assert.equal(inspected.Delivered, false)
       })
       writeFileSync(
         join(directory, 'producer.json'),

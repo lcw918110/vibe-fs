@@ -31,7 +31,6 @@ module JsGeneratorSurface =
         | JsCapability.DevOps -> "DevOps"
         | JsCapability.Fission -> "Fission"
         | JsCapability.Horizon -> "Horizon"
-        | JsCapability.Advisor -> "Advisor"
         | JsCapability.Ask -> "Ask"
         | JsCapability.Review -> "Review"
         | JsCapability.Park -> "Park"

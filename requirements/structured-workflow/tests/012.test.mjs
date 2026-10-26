@@ -2418,7 +2418,7 @@ const {
   planImpactFromInventory,
   readImpactInventory,
 } = await import("../../../scripts/lib/owner-compile.mjs");
-const { determineBuildDecision, planBuild, runBuild } = await import("../../../scripts/build.mjs");
+const { determineBuildDecision, intentuild, runBuild } = await import("../../../scripts/build.mjs");
 const {
   MANIFEST_SCHEMA,
   collectArtifactInputs,
@@ -2869,7 +2869,7 @@ test('WHAT[structured-workflow-012] build mode decisions: plain fs changes plan 
     // Must plan focused mode and select ONLY Shard C (must NOT pull reverse consumers like Shard B).
     writeFileSync(join(srcDir, 'Source/ModC.fs'), 'namespace Core\nlet c = 2\n', 'utf8');
 
-    const planPlain = await planBuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
+    const planPlain = await intentuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
     assert.equal(planPlain.mode, 'focused', 'modifying plain non-signature .fs file must plan focused mode');
     assert.ok(planPlain.selectedShards.some((p) => p.endsWith('Wanxiangshu.Shard.C.fsproj')), 'must select Shard C');
     assert.equal(
@@ -2895,7 +2895,7 @@ test('WHAT[structured-workflow-012] build mode decisions: plain fs changes plan 
     writeFileSync(join(srcDir, 'Source/ModC.fs'), 'namespace Core\nlet c = 1\n', 'utf8'); // restore ModC
     writeFileSync(join(srcDir, 'Source/ModA.fs'), 'namespace Core\nlet a = 1\nlet inline helper x = x + 42\n', 'utf8');
 
-    const planInline = await planBuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
+    const planInline = await intentuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
     assert.equal(planInline.mode, 'focused', 'inline body change selecting 2/4 shards (50% < 60%) must plan focused mode');
     assert.ok(planInline.selectedShards.some((p) => p.endsWith('Wanxiangshu.Shard.A.fsproj')), 'must select provider Shard A');
     assert.ok(
@@ -2913,17 +2913,17 @@ test('WHAT[structured-workflow-012] build mode decisions: plain fs changes plan 
       changedPaths: [join(srcDir, 'Source/ModA.fs')],
       projectDirectory: srcDir,
     });
-    assert.equal(planInline.mode, runPlannerImpact.mode, 'planBuild mode must agree with planImpactCompile');
+    assert.equal(planInline.mode, runPlannerImpact.mode, 'intentuild mode must agree with planImpactCompile');
     assert.deepEqual(
       planInline.selectedShards.map((p) => resolve(p)).sort(),
       runPlannerImpact.projectPaths.map((p) => resolve(p)).sort(),
-      'planBuild selectedShards must agree with planImpactCompile projectPaths',
+      'intentuild selectedShards must agree with planImpactCompile projectPaths',
     );
 
     // Three shards of four is still three closures. Size never promotes the
     // plan to compiling the untouched fourth shard.
     writeFileSync(join(srcDir, 'Source/ModC.fs'), 'namespace Core\nlet c = 99\n', 'utf8');
-    const planThreshold = await planBuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
+    const planThreshold = await intentuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
     assert.equal(planThreshold.mode, 'focused', 'impact size must not promote a focused closure to the whole tree');
     assert.equal(planThreshold.selectedShards.some((p) => p.endsWith('Wanxiangshu.Shard.D.fsproj')), false);
 
@@ -2932,7 +2932,7 @@ test('WHAT[structured-workflow-012] build mode decisions: plain fs changes plan 
     writeFileSync(join(srcDir, 'Source/ModC.fs'), 'namespace Core\nlet c = 1\n', 'utf8');
     writeFileSync(join(fixtureRoot, 'Directory.Build.props'), '<Project><!-- updated --></Project>\n', 'utf8');
 
-    const planFull = await planBuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
+    const planFull = await intentuild({ targetRoot: fixtureRoot, currentToolchain: controlledToolIdentity });
     assert.equal(planFull.mode, 'focused');
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

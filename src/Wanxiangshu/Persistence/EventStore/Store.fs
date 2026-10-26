@@ -421,7 +421,8 @@ module EventStore =
                 { envelope with
                     Payloads = inlinePayloads }
 
-        let reloadFromDisk () = integrator.ReloadLocal commonDir
+        let reloadFromDisk () =
+            integrator.ReloadLocal commonDir
 
         match reloadFromDisk () with
         | Error error -> failwith ("local EventStore boot failed: " + error)

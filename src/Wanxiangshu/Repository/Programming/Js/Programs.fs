@@ -1,5 +1,7 @@
 namespace Wanxiangshu.Repository.Programming.Js
 
+open System
+open System.Collections.Generic
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
@@ -16,6 +18,22 @@ module JsPrograms =
     let pendingNames (sessionId: string) : string list =
         let session = forSession sessionId
         unbox<string array> (session?pendingNames ()) |> Array.toList
+
+    let private callers = Dictionary<string, string>()
+
+    let private callerKey sessionId callId = sessionId + "\n" + callId
+
+    let noteCaller sessionId callId name =
+        if not (String.IsNullOrEmpty callId) && not (String.IsNullOrEmpty name) then
+            callers[callerKey sessionId callId] <- name
+
+    let clearCaller sessionId callId =
+        callers.Remove(callerKey sessionId callId) |> ignore
+
+    let callerName sessionId callId =
+        match callers.TryGetValue(callerKey sessionId callId) with
+        | true, name -> Some name
+        | _ -> None
 
     let deliveryBlockersWithChoicesForSession sessionId =
         pendingNames sessionId

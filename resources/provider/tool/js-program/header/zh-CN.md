@@ -1,6 +1,6 @@
-提交且只提交三个必填字符串参数：`name`、`program`、`planB`。每个新程序在本会话内选一个非空白的新名字，`planB` 必须非空。源码定义 `class Js extends JsProgram` 并实现 `async run()`。
+提交且只提交三个必填字符串参数：`name`、`program`、`intent`。每个新程序在本会话内选一个非空白的新名字，`intent` 必须非空。源码定义 `class Js extends JsProgram` 并实现 `async run()`。
 
-工具在准入时按 `UTF8Bytes(planB) × 50ms` 一次性确定整次请求的期限。所有操作及本次唤醒的目标共用剩余时间。程序内使用 `call(command)` 和 `unpark(name, value?)`，不能新建或续期预算。
+工具在准入时按 `UTF8Bytes(intent) × 50ms` 一次性确定整次请求的期限。所有操作及本次唤醒的目标共用剩余时间。程序内使用 `call(command)` 和 `unpark(name, value?)`，不能新建或续期预算。
 
 控制已有程序时提交新命名程序。到期时控制者和仍在活动的目标一同暂停；只恢复控制者，不会再次恢复它的目标。同一物理调用重放原回执，新调用占用已有名字时报 NAME_TAKEN。普通 return 不代替业务 deliver。
 

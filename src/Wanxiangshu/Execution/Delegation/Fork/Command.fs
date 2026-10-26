@@ -674,11 +674,7 @@ module ForkCommand =
 
             executeManagerExistingPerson host runtime request language handles existingByname
 
-    /// The one parked cell of the dispatch gate is the repair window: the review
-    /// landed Stayed with no confirmation yet. Before the review lands a new task
-    /// for the bound DevOps is closed, and it closes again once the tenure is
-    /// closing out — a Promoted review opens no new work, and a durable
-    /// confirmation means the tenure's remaining step is the close-out deliver.
+    /// A bound DevOps task waits until the active tenure has a substantive review.
     let private devopsDispatchRefusal (facts: ManagerCapabilityFacts) : string option =
         if not facts.HasAssessment then
             Some Path.Resume.AssessmentPendingForDevOps

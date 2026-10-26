@@ -68,7 +68,7 @@ module JsBookkeeperTool =
             | Ok result -> result
             | Error rendered -> rendered
 
-    let private runBookkeeperProgram language sessionId name planB callId txId program question answer : Task<string> =
+    let private runBookkeeperProgram language sessionId name intent callId txId program question answer : Task<string> =
         task {
             let staged = BookkeeperPolicy.newStaged ()
             let api = BookkeeperPolicy.createApi language question answer staged
@@ -88,7 +88,7 @@ module JsBookkeeperTool =
                 createObj
                     [ "name" ==> name
                       "program" ==> program
-                      "planB" ==> planB
+                      "intent" ==> intent
                       "callId" ==> callId
                       "baseClass" ==> BookkeeperPolicy.runtimeBaseClass
                       "api" ==> api
@@ -120,7 +120,7 @@ module JsBookkeeperTool =
                 language
                 (SessionId.value sessionId)
                 (args.Text "name")
-                (args.Text "planB")
+                (args.Text "intent")
                 callId
                 txId
                 program
@@ -144,7 +144,7 @@ module JsBookkeeperTool =
           Arguments =
             [ "name", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argNameProse ()) factory
               "program", ToolHostCodec.stringSchemaDescribed (prose language BookkeeperPolicy.Path.ArgProgram) factory
-              "planB", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argPlanBProse ()) factory ]
+              "intent", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argIntentProse ()) factory ]
           Execute =
             fun args ctx ->
                 let callId =

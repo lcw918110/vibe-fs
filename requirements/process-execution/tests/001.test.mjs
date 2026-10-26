@@ -637,7 +637,7 @@ test('WHAT[process-execution-001] PTY_TYPES_read_plans_cover_unknown_in_progress
   test('WHAT[process-execution-001] named command input and signal preserve the parked continuation', {timeout:12000}, async t=>{
     const h=fixture(t,'proc001','DevOps')
     const cmd=command(h,'interactive',"process.stdin.setEncoding('utf8');process.stdin.on('data',text=>{fs.writeFileSync(file('input'),text);process.stdout.write('ACK:'+text);});setInterval(()=>{},1000);")
-    assert.equal(caseName(await h.run('repl','return await this.call('+JSON.stringify(cmd)+');',{planB:'w'.repeat(20)})),'Parked')
+    assert.equal(caseName(await h.run('repl','return await this.call('+JSON.stringify(cmd)+');',{intent:'w'.repeat(20)})),'Parked')
     assert.equal(data(await h.run('send','return await this.send("repl","hello-interactive");')).sent,true)
     await until(()=>existsSync(h.file('input')))
     assert.equal(readFileSync(h.file('input'),'utf8'),'hello-interactive\n')

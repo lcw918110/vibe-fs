@@ -228,7 +228,7 @@ module XWire =
             let view = port.ReadView sessionId
 
             let blockers =
-                AttemptSettlement.retryPlanBlockers
+                AttemptSettlement.retryIntentlockers
                     (view.ActiveAuthorityProfile |> Option.isSome)
                     (view.ProviderFailureState |> Option.isSome)
 

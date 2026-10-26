@@ -1,4 +1,5 @@
 import { JournalHandle__get_Journal } from '../../../dist/Persistence/Journal/Surface.js'
+import { AdvisorSeat_consult } from '../../../dist/Execution/Delegation/Advisor/Seat.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWith } from '../../../dist/OpenCode/Host/ProviderSystemTransform.js'
@@ -9,14 +10,13 @@ import { SessionMessage, SessionToolPart, SnapshotToolPartState } from '../../..
 import { MessagePart } from '../../../dist/Foundation/HostMessage.js'
 import { ToolCallIdModule_create, HostToolPartIdModule_create, SessionIdModule_create } from '../../../dist/Foundation/Identity.js'
 import { outboundViewStore } from 'wanxiangli/pair-hint'
+import { scopeProgress } from 'wanxiangli/scope-progress'
 import { AgentJournalModule_snapshot } from '../../../dist/Persistence/Journal/AgentJournal.js'
 import { AgentProjection_tryFind } from '../../../dist/Composition/Durable/Projection.js'
 import { filterSnapshot } from '../../../dist/Context/Scope/SnapshotScope.js'
-import * as manager052 from '../../../dist/Mission/Manager/Workflow.js'
 import * as lifecycle052 from '../../../dist/Mission/Lifecycle/Surface.js'
 import * as journal052 from '../../../dist/Persistence/Journal/Surface.js'
-import * as workStore052 from '../../../dist/OpenCode/Host/WorkspaceEventStoreSurface.js'
-import { withExecutablePlugin, acceptAuthorityRoot, openIncumbency, lifecycleWorkView } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import { withExecutablePlugin, acceptAuthorityRoot, openIncumbency } from '../../verification-system/tests/support/plugin-fixture.mjs'
 
 const SEP = '\0\uFEFF'
 const user = (id, text, created) => ({ info: { id, role: 'user', time: { created } }, parts: [{ type: 'text', text }] })
@@ -50,7 +50,7 @@ async function outbound(sessionId, messages) {
   return out.messages
 }
 
-test('WHAT[context-compression-039] OpenCode adds a fresh strong initialization steer, leaving original user and tool bytes intact', async () => {
+test('WHAT[context-compression-039] OpenCode prompts for a first chargeable estimate without mutating actual user or tool bytes', async () => {
   const sid = 'ses_scope_039_initial'
   clearSessionState(sid)
   const raw = [user('u1', 'read this file', 1), assistant('a1', tool('c1', 'read', 'file body'))]
@@ -63,13 +63,13 @@ test('WHAT[context-compression-039] OpenCode adds a fresh strong initialization 
   assert.equal(copy.length,3)
   assert.equal(copy[2].attribution,'agent')
   assert.equal(copy[2].strong,true)
-  assert.match(copy[2].parts[0].text,/Then call resetScope immediately/)
+  assert.match(copy[2].parts[0].text,/remainingScopeTurnsEstimate/)
   assert.equal(original[0].parts[0].text, 'read this file')
   assert.equal(toolText(original[1]), 'file body')
   clearSessionState(sid)
 })
 
-test('WHAT[context-compression-039] OpenCode applies a reset, preserves only its call and later work, and reads the new budget', async () => {
+test('WHAT[context-compression-039] OpenCode applies a reset and preserves critical calls, later work and a new progress-baseline steer', async () => {
   const sid = 'ses_scope_039_reset'
   clearSessionState(sid)
   const operator = user('u1', 'scope initial', 100)
@@ -78,12 +78,14 @@ test('WHAT[context-compression-039] OpenCode applies a reset, preserves only its
   const raw = [operator, assistant('a1', tool('old', 'read', 'old')), assistant('a2', tool('reset', 'resetScope', 'Scope reset')), assistant('a3', tool('next', 'read', 'new'))]
   const original = [...raw]
   const copy = await outbound(sid, raw)
-  assert.equal(copy.length, 3)
+  assert.equal(copy.length, 4)
   assert.equal(copy[1].parts[0].tool, 'resetScope')
-  assert.equal(copy[1].parts[0].state.output, 'Scope reset' + SEP + '[Remaining turnBudget: 3]')
-  assert.equal(copy[2].parts[0].state.output, 'new' + SEP + '[Remaining turnBudget: 3]')
+  assert.equal(copy[1].parts[0].state.output, 'Scope reset')
+  assert.equal(copy[2].parts[0].state.output, 'new')
+  assert.equal(copy[3].attribution,'agent')
+  assert.equal(copy[3].strong,true)
+  assert.match(copy[3].parts[0].text,/remainingScopeTurnsEstimate/)
   assert.equal(original[3].parts[0].state.output, 'new', 'the original result object is not edited')
-  assert.equal(turnBudget(sid), 3)
   clearSessionState(sid)
 })
 
@@ -107,7 +109,7 @@ test('WHAT[context-compression-040] SnapshotScope keeps the result co-located wi
   ]
   const retained = filterSnapshot(ofArray(raw))
   assert.deepEqual(retained.map(m => m.id), ['u1', 'a1', 'a2'])
-  assert.deepEqual(retained[1].parts.map(p => p.id), ['r1', 'r1'], 'both halves of the older reset must survive')
+  assert.deepEqual(retained[1].parts.map(p => p.id), [undefined, 'r1', 'r1'], 'assistant prose and both halves of the older reset survive')
   assert.deepEqual(retained[2].parts.map(p => p.id), ['r2', 'r2'])
   assert.equal(raw[1].Parts.length, 5, 'the session snapshot remains unchanged')
 })
@@ -142,7 +144,7 @@ test('WHAT[context-compression-041] OpenCode session.deleted releases only its o
 })
 
 
-test('WHAT[prefix-stability-016] OpenCode provider transform preserves old completed output bytes after turnBudget decreases', async () => {
+test('WHAT[prefix-stability-016] OpenCode provider transform never adds retired countdown suffixes to old or new tool results', async () => {
   const sid = 'ses_scope_016_cache'
   clearSessionState(sid)
   const operator = user('user-016', 'do the work', 100)
@@ -152,13 +154,13 @@ test('WHAT[prefix-stability-016] OpenCode provider transform preserves old compl
   const rawResetText = reset.parts[0].state.output
   const first = await outbound(sid, [operator, reset])
   const firstRendered = JSON.stringify(first[1])
-  assert.match(first[1].parts[0].state.output, /Remaining turnBudget: 6/)
+  assert.equal(first[1].parts[0].state.output,'Scope reset')
 
   const read = assistant('asst-read-016', tool('read-016', 'read', 'new data'))
   const second = await outbound(sid, [operator, reset, read])
   assert.equal(JSON.stringify(second[1]), firstRendered,
     'the historical reset result must remain a verbatim prefix, including its old budget suffix')
-  assert.match(second[2].parts[0].state.output, /Remaining turnBudget: 5/)
+  assert.equal(second[2].parts[0].state.output,'new data')
   assert.equal(reset.parts[0].state.output, rawResetText,
     'raw Host history must remain untouched even though the outgoing array changed')
   clearSessionState(sid)
@@ -363,7 +365,7 @@ test('WHAT[delegation-negotiation-004] registered negotiate sends ephemeral BTW 
       return { data: { info: { role: 'assistant' }, parts: [{ type: 'text', text: 'Use the byte-preserving parser.' }] } }
     }
     const premature = await hooks.tool.resetScope.execute(
-      { newScopeObjective: 'too early', newScopeTurnBudget: 2 },
+      { newScopeObjective: 'too early' },
       { sessionID: child, agent: 'engineer', callID: 'premature-reset' },
     )
     assert.match(premature, /unavailable until the first negotiate/)
@@ -404,20 +406,18 @@ test('WHAT[delegation-negotiation-004] registered negotiate sends ephemeral BTW 
 })
 
 
-test('WHAT[delegation-negotiation-005] Advisor Host permissions expose its clarification and scope protocol tools', async () => {
+test('WHAT[delegation-negotiation-005] dedicated Advisor has no tools in Host config or execution policy', async () => {
   const { advisorAgentConfig } = await import('../../../dist/OpenCode/Tools/StaticTools.js')
   const { rolePredicate } = await import('../../../dist/OpenCode/Tools/ToolRegistrySurface.js')
   const agent = advisorAgentConfig('Advisor role law')
   const permission = agent.permission
   const allowed = Object.entries(permission).filter(([, status]) => status === 'allow').map(([name]) => name).sort()
-  assert.deepEqual(allowed, ['askPreviousScope', 'negotiate', 'resetScope'])
+  assert.deepEqual(allowed, [])
   assert.equal(permission.external_directory, 'deny', 'Advisor never receives broad external path permission')
-  for (const name of ['skill', 'assume', 'fetch', 'bash-honeypot', 'todowrite-for-engineer']) {
+  for (const name of ['skill', 'assume', 'fetch', 'bash-honeypot', 'todowrite-for-engineer', 'negotiate', 'resetScope', 'askPreviousScope']) {
     assert.equal(permission[name], 'deny', name + ' must be explicitly denied in Host agent config')
     assert.equal(rolePredicate(name, 'advisor'), false, name + ' must be denied at the product tool admission layer')
   }
-  assert.equal(rolePredicate('negotiate', 'advisor'), true)
-  assert.equal(rolePredicate('resetScope', 'advisor'), true)
 })
 
 test('WHAT[delegation-negotiation-006] user-facing root hides negotiate while a real managed child keeps it', async () => {
@@ -557,20 +557,28 @@ test('WHAT[context-compression-047] registered OpenCode reset archives physical 
     assert.equal(JSON.stringify(prefix), originalBytes, 'real raw Host message is untouched')
 
     const reset = await hooks.tool.resetScope.execute(
-      { newScopeObjective: 'verify new parser against previous evidence', newScopeTurnBudget: 8,
-        oldScopeVerboseVerbatimExperience: 'We chose parser A', kpiCompletion: 'partially_met' },
+      { newScopeObjective: 'verify new parser against previous evidence',
+        oldScopeVerboseVerbatimExperience: 'We chose parser A' },
       { sessionID: sid, agent: 'engineer', callID: 'reset-047', messageID: 'provider-reset-047' },
     )
     assert.match(String(reset), /Scope reset. Objective: verify new parser/)
     assert.equal(isPreviousScopePending(sid), false, 'the very first reset does not require a previous-Scope question')
-    assert.equal(turnBudget(sid), 8, 'ceil(8 × 0.90) is 8')
+    assert.equal(scopeProgress.status(sid).known,false,'new scope has no chargeable estimate yet')
     const resetReplay = await hooks.tool.resetScope.execute(
-      {newScopeObjective:'verify new parser against previous evidence', newScopeTurnBudget:8,
-       kpiCompletion:'partially_met'},
+      {newScopeObjective:'verify new parser against previous evidence'},
       {sessionID:sid,agent:'engineer',callID:'reset-047',messageID:'provider-reset-047'})
     assert.match(String(resetReplay),/Scope reset. Objective:/)
     assert.equal(isPreviousScopePending(sid),false,'the first reset replay cannot manufacture a mandatory previous-Scope question')
 
+    const currentRequest={messages:[
+      ...structuredClone(prefix),
+      {info:{id:'old-reset-047',role:'assistant',sessionID:sid},parts:[
+        {type:'tool',id:'reset-047',name:'resetScope',state:{status:'completed',output:'Scope reset'}}]},
+      {info:{id:'new-scope-047',role:'user',sessionID:sid},parts:[{type:'text',text:'PRIVATE_CURRENT_SCOPE_112358'}]},
+    ]}
+    await normalTransform(safeCaps(),sid,{},currentRequest)
+    // The latest physical source has advanced past reset; the consultation
+    // projects its immediately preceding scope when the ephemeral request runs.
     const session = runtime.client.session
     let providerAttempts = 0, toolVetoes = 0
     session.prompt = async args => {
@@ -585,7 +593,9 @@ test('WHAT[context-compression-047] registered OpenCode reset archives physical 
       }
       await hooks['experimental.chat.messages.transform']({ sessionID: tempId }, request)
       const projected = JSON.stringify(request.messages)
-      assert.match(projected, /Exact counterexample 37/, 'frozen old history actually reaches the temp provider')
+      assert.match(projected, /Exact counterexample 37/, 'the latest real provider history reveals old-Scope evidence')
+      assert.doesNotMatch(projected,/PRIVATE_CURRENT_SCOPE_112358/,'new Scope cannot leak into previous-Scope consultation')
+      assert.doesNotMatch(projected,/archived provider request|Ephemeral clarification|<btw>/,'no hidden orchestration is shown to the temporary model')
       if (providerAttempts === 1) {
         await assert.rejects(
           hooks['tool.execute.before']({ sessionID: tempId, tool: 'write', callID: 'forbidden-previous' }, { args: {} }),
@@ -640,28 +650,36 @@ test('WHAT[work-052] Delivered Manager work can durably Reopen as a distinct lat
     await acceptAuthorityRoot(runtime,session,'manager')
     await openIncumbency(runtime,session,undefined,'S4',session)
     const common=await journal052.JournalSurface_initializeStateRoot(directory)
-    const store=workStore052.acquire(common)
-    const originally=await lifecycleWorkView(runtime,session)
-    const originalIncumbency=lifecycle052.inspected(common,session)?.ActiveId
-    assert.ok(originally.found && originalIncumbency)
-    const reviewed=await lifecycle052.seedReviewAs(store,session,'Promoted','independent-reviewer')
-    assert.equal(reviewed.ok,true,JSON.stringify(reviewed))
-    const closed=await lifecycle052.seedDeliver(store,session,'run-first-final','call-first-final',10n)
-    assert.equal(closed.ok,true,JSON.stringify(closed))
-    assert.equal(closed.decision,'delivered',JSON.stringify(closed))
-    const ended=await lifecycleWorkView(runtime,session)
-    assert.ok(!ended.active,'original Manager tenure must be retired')
-    assert.equal(ended.delivered,true)
-    await manager052.ensureManagerWorkOpened(directory,20n,session)
-    const reentered=await lifecycleWorkView(runtime,session)
-    const reopenedIncumbency=lifecycle052.inspected(common,session)?.ActiveId
-    assert.ok(reentered.active && reopenedIncumbency && reopenedIncumbency!==originalIncumbency,
+    const surface=lifecycle052.LifecycleSurface ?? lifecycle052
+    const originalIncumbency=surface.inspected(common,session)?.ActiveId
+    assert.ok(originalIncumbency)
+    const review=(id, updates)=>surface.submitReview(common, session, id, 'Manager', 'run-'+id, 'call-'+id, updates, [], '')
+    assert.equal(review('fill', [{ key: 'opened', value: 'do' }]).kind, 'Reviewed')
+    assert.equal(review('relay', [{ key: 'opened', value: null }]).kind, 'Relayed')
+    const advanced=review('advance', [])
+    assert.equal(advanced.kind, 'Advanced', advanced.reason)
+    assert.equal(advanced.milestone, '收尾')
+    const closed=review('close', [])
+    assert.equal(closed.kind, 'Completed', closed.reason)
+    const ended=surface.inspected(common, session)
+    assert.equal(ended.ActiveId ?? null, null, 'original Manager tenure must be retired')
+    assert.equal(ended.Delivered, true)
+    const messageId='operator-052'
+    const reopened=surface.execute(common, session, 'operator-052', {
+      type: 'OperatorMessage', kind: 'Operator', messageId,
+    })
+    assert.equal(reopened.Status, 'Committed', reopened.Reason)
+    assert.equal(reopened.Kind, 'Reopened')
+    const after=surface.inspected(common, session)
+    assert.equal(after.Stage, '执行')
+    assert.ok(after.ActiveId && after.ActiveId !== originalIncumbency,
       'real durable reopen creates a distinct active Manager incumbency')
-    assert.equal(reentered.delivered,false)
-    assert.equal(lifecycle052.inspected(common,session)?.Stage,'S4')
-    await manager052.ensureManagerWorkOpened(directory,20n,session)
-    const replay=await lifecycleWorkView(runtime,session)
-    assert.equal(lifecycle052.inspected(common,session)?.ActiveId,reopenedIncumbency,'same later head must not start a third tenure')
+    assert.equal(after.Delivered, false)
+    const same=surface.execute(common, session, 'operator-052-again', {
+      type: 'OperatorMessage', kind: 'Operator', messageId,
+    })
+    assert.equal(same.Status, 'Observed')
+    assert.equal(surface.inspected(common, session)?.ActiveId, after.ActiveId, 'same later head must not start a third tenure')
   })
 })
 
@@ -681,8 +699,6 @@ test('WHAT[context-compression-050] real OpenCode first reset has no previous-sc
     }
     const resetArgs=objective=>({
       newScopeObjective:objective,
-      newScopeTurnBudget:6,
-      kpiCompletion:'met',
       oldScopeVerboseVerbatimExperience:'Work from the preceding scope.',
     })
     const resetCtx=id=>({sessionID:sid,agent:'engineer',callID:id,messageID:'run-'+id})
@@ -690,20 +706,20 @@ test('WHAT[context-compression-050] real OpenCode first reset has no previous-sc
     const first=await hooks.tool.resetScope.execute(resetArgs('first initialized scope'),resetCtx('reset-one-050'))
     assert.match(String(first),/Scope reset. Objective: first initialized scope/)
     assert.equal(isPreviousScopePending(sid),false,'first ever reset does not require a predecessor consultation')
-    assert.equal(turnBudget(sid),6)
+    assert.equal(scopeProgress.status(sid).known,false)
     const resumed=await outbound(sid,[
       user('original-050','original mission',101),
       assistant('rst-one',tool('reset-one-050','resetScope','Scope reset. Objective: first initialized scope')),
       user('later-050','new actual operator instruction',102),
     ])
-    assert.equal(resumed.at(-1).parts[0].text,'new actual operator instruction')
-    assert.equal(resumed.some(x=>x.strong===true),false,'later genuine operator message does not restart initialization')
-    assert.equal(turnBudget(sid),5,'one additional real provider turn debits budget exactly once')
+    assert.equal(resumed.find(x=>x.info?.id==='later-050').parts[0].text,'new actual operator instruction')
+    assert.match(resumed.at(-1).parts[0].text,/remainingScopeTurnsEstimate/, 'new scope needs first estimate, not another reset')
+    assert.doesNotMatch(resumed.at(-1).parts[0].text,/现在调用 resetScope/)
     await physicallyObserve(102)
     const second=await hooks.tool.resetScope.execute(resetArgs('second initialized scope'),resetCtx('reset-two-050'))
     assert.match(String(second),/Scope reset. Objective: second initialized scope/)
     assert.equal(isPreviousScopePending(sid),true,'second reset must request clarification of the preceding scope')
-    assert.equal(turnBudget(sid),6,'MUST ask freezes the second scope budget')
+    assert.equal(scopeProgress.status(sid).known,false,'second scope begins without a charged estimate')
     const pending=await outbound(sid,[
       user('original-050','original mission',101),
       assistant('rst-two',tool('reset-two-050','resetScope','Scope reset. Objective: second initialized scope')),
@@ -714,12 +730,12 @@ test('WHAT[context-compression-050] real OpenCode first reset has no previous-sc
     assert.equal(pending.at(-1).strong,true)
     assert.equal(pending.find(x=>x.info?.id==='later-051').parts[0].text,'real third instruction')
     assert.equal(pending.find(x=>x.info?.id==='normal-tool').parts[0].state.output,'ordinary result')
-    assert.equal(turnBudget(sid),6,'pending means no budget decrement')
+    assert.equal(scopeProgress.status(sid).known,false,'pending ask does not invent a new estimate')
     clearSessionState(sid)
   })
 })
 
-test('WHAT[context-compression-051] a cold OpenCode request with historical reset but no budget strongly requests reinitialization instead of forging a zero-budget suffix', async () => {
+test('WHAT[context-compression-051] a cold OpenCode request with historical reset requests its first chargeable estimate rather than inventing budget', async () => {
   const sid='scope-051-cold-budget'
   clearSessionState(sid)
   const source=[
@@ -732,16 +748,19 @@ test('WHAT[context-compression-051] a cold OpenCode request with historical rese
   const cold=await outbound(sid,structuredClone(source))
   assert.equal(cold.at(-1).attribution,'agent')
   assert.equal(cold.at(-1).strong,true)
-  assert.match(cold.at(-1).parts[0].text,/resetScope/,'strong steer is present in the actual provider language, not hardcoded English')
+  assert.match(cold.at(-1).parts[0].text,/remainingScopeTurnsEstimate/,'first report requirement is explicit in the request copy')
   assert.equal(cold.some(msg=>msg.weak===true),false)
   assert.equal(cold.find(msg=>msg.info?.id==='a-read-051')?.parts[0].state.output,'read data',
     'unknown budget cannot fake [Remaining turnBudget: 0]')
   assert.deepEqual(source,before,'outbound request-copy must not modify the original provider history')
   assert.equal(isScopeInitialized(sid),false)
-  resetScopeState(sid,4)
+  scopeProgress.reset(sid,'epoch-051')
+  assert.equal(scopeProgress.record(sid,'epoch-051','charged-051','todo-051',4).ok,true)
+  assert.equal(scopeProgress.settle(sid,'epoch-051','charged-051').estimate,4)
   const known=await outbound(sid,structuredClone(before))
-  assert.equal(known.some(msg=>msg.strong===true),false,'only a real new budget can suppress cold strong reminder')
-  assert.ok(known.find(msg=>msg.info?.id==='a-read-051')?.parts[0].state.output.includes('[Remaining turnBudget: 3]'))
+  assert.equal(known.some(msg=>msg.strong===true),false,'a real charged estimate suppresses first-baseline prompt')
+  assert.equal(known.find(msg=>msg.info?.id==='a-read-051')?.parts[0].state.output,'read data')
+  scopeProgress.clear(sid)
   clearSessionState(sid)
 })
 
@@ -761,8 +780,6 @@ test('WHAT[context-compression-043] OpenCode resetScope strictly refused when no
     const outcome = await hooks.tool.resetScope.execute(
       {
         newScopeObjective: 'attempt reset without outbound observation',
-        newScopeTurnBudget: 7,
-        kpiCompletion: 'met',
         oldScopeVerboseVerbatimExperience: 'None',
       },
       {
@@ -827,8 +844,6 @@ test('WHAT[context-compression-043] OpenCode resetScope commits durable archive 
     const outcome1 = await hooks.tool.resetScope.execute(
       {
         newScopeObjective: 'first verified scope objective',
-        newScopeTurnBudget: 8,
-        kpiCompletion: 'met',
         oldScopeVerboseVerbatimExperience: 'Observed evidence 43',
       },
       {
@@ -841,7 +856,8 @@ test('WHAT[context-compression-043] OpenCode resetScope commits durable archive 
 
     assert.equal(String(outcome1), 'Scope reset. Objective: first verified scope objective')
     assert.equal(isScopeInitialized(sid), true, 'scope is now initialized in memory')
-    assert.equal(turnBudget(sid), 8, 'budget is updated to 8')
+    assert.equal(scopeProgress.status(sid).known,false,'newly reset Scope awaits its first chargeable estimate')
+    assert.equal(scopeProgress.status(sid).resetDue,false)
 
     // 3. Verify durable commit in Journal: blob written and ScopeReanchored fact committed
     const snap1 = AgentJournalModule_snapshot(JournalHandle__get_Journal(runtime.journal))
@@ -858,8 +874,6 @@ test('WHAT[context-compression-043] OpenCode resetScope commits durable archive 
     const outcome2 = await hooks.tool.resetScope.execute(
       {
         newScopeObjective: 'second premature reset without new observation',
-        newScopeTurnBudget: 5,
-        kpiCompletion: 'met',
       },
       {
         sessionID: sid,
@@ -874,14 +888,13 @@ test('WHAT[context-compression-043] OpenCode resetScope commits durable archive 
       'resetScope failed: no sealed outbound view snapshot captured for this session.',
       'subsequent resetScope without new outbound observation must fail; drained snapshot cannot be reused',
     )
-    assert.equal(turnBudget(sid), 8, 'budget must remain 8; rejected reset does not overwrite memory')
+    assert.equal(scopeProgress.status(sid).known,false,'rejected reset must preserve the previous progress state')
+    assert.equal(scopeProgress.status(sid).epoch,'1','rejected reset must not advance the progress epoch')
 
     // 6. Idempotent replay with SAME callID returns previous success without error or second epoch
     const outcomeReplay = await hooks.tool.resetScope.execute(
       {
         newScopeObjective: 'first verified scope objective',
-        newScopeTurnBudget: 8,
-        kpiCompletion: 'met',
       },
       {
         sessionID: sid,
@@ -924,8 +937,6 @@ test('WHAT[context-compression-043] OpenCode resetScope write blob failure leave
       const outcome = await hooks.tool.resetScope.execute(
         {
           newScopeObjective: 'should fail to write archive blob',
-          newScopeTurnBudget: 6,
-          kpiCompletion: 'met',
         },
         {
           sessionID: sid,
@@ -987,8 +998,6 @@ test('WHAT[context-compression-043] OpenCode resetScope appendAgent failure prop
         hooks.tool.resetScope.execute(
           {
             newScopeObjective: 'should throw JournalAppendException',
-            newScopeTurnBudget: 6,
-            kpiCompletion: 'met',
           },
           {
             sessionID: sid,
@@ -1012,6 +1021,281 @@ test('WHAT[context-compression-043] OpenCode resetScope appendAgent failure prop
       assert.ok(sealedAfter, 'sealed snapshot must NOT be discarded when durable append fails')
     } finally {
       JournalHandle__get_Journal(runtime.journal).writer.Append = originalAppend
+    }
+  })
+})
+
+
+test('WHAT[host-boundary-011] physically registered Advisor provider hook excludes fictitious assistant dot from continuing consultation',async()=>{
+  await withExecutablePlugin(async(hooks,_directory,_created,runtime)=>{
+    const sid='ses_advisor_no_fake_dot_011'
+    const u1=user('a-user-011','What actually happened?',101)
+    const onlyReasoning=assistant('a-thought-011',{type:'reasoning',text:'No final prose in this run'})
+    const u2=user('a-user-012','Please provide the missing observation.',102)
+    await hooks['chat.message']({sessionID:sid,agent:'advisor',messageID:'a-user-012'},
+      {message:{...u2.info,sessionID:sid},parts:u2.parts})
+    const providerAssistant={info:{id:'assistant-provider-011',sessionID:sid,parentID:'a-user-012',
+      role:'assistant',agent:'advisor',providerID:'fixture',modelID:'advisor-model',time:{created:103}},parts:[]}
+    runtime.pushHostMessage(sid,providerAssistant)
+    await hooks.event({event:{type:'message.updated',properties:{info:providerAssistant.info}}})
+    const payload={messages:[u1,onlyReasoning,u2]}
+    const snapshot=structuredClone(payload.messages)
+    await hooks['experimental.chat.messages.transform']({sessionID:sid},payload)
+    assert.equal(payload.messages.filter(m=>m.info?.role==='assistant'
+      && m.parts?.some(p=>p.text==='.'||p.text==='...')).length,0,
+      'the real dedicated Advisor must never see a synthetic assistant answer')
+    assert.equal(payload.messages.some(m=>m.info?.id==='a-thought-011'),false,
+      'reasoning-only assistant run remains in original evidence, not as fake provider reply')
+    assert.deepEqual(snapshot,[u1,onlyReasoning,u2],
+      'the persisted/raw transcript is not rewritten by provider projection')
+  })
+})
+
+
+test('WHAT[advisor-031] a durable Advisor owner cannot create another Advisor seat or consume model capacity', async()=>{
+  await withExecutablePlugin(async (_hooks,_directory, createdIds,runtime)=>{
+    const caller='advisor-caller-031'
+    await acceptAuthorityRoot(runtime,caller,'advisor')
+    const before=createdIds.length
+    const deps={
+      Journal:JournalHandle__get_Journal(runtime.journal),
+      Snapshot:null,
+      Sessions:{
+        FamilyRootOf:()=>{throw Error('must not inspect or create Advisor child')},
+        ListChildren:()=>{throw Error('must not list Advisor children')},
+        CreateChildSession:()=>{throw Error('must not create Advisor child')},
+      },
+      Directory:runtime.directory,
+      Participant:'advisor',
+      BindDelegation:()=>{throw Error('must not bind nested Advisor')},
+    }
+    const result=await AdvisorSeat_consult(deps,caller,'consult a second Advisor')
+    assert.match(JSON.stringify(result),/dedicated Advisor cannot open another dedicated Advisor seat/)
+    assert.equal(createdIds.length,before,'no child session was dispatched')
+    assert.equal(runtime.prompts.length,0,'no physical root prompt nor provider admission was attempted')
+  })
+})
+
+
+test('WHAT[context-compression-052] one actual OpenCode provider run charges once and takes min across real registered todowrites',async()=>{
+  await withExecutablePlugin(async(hooks,_dir,_created,runtime)=>{
+    const estimateIntent='Observe this real LLM request and preserve existing work.'
+    const estimateProgram='class Js extends JsProgram { async run() { return { observed: true }; } }'
+    const estimateArgs=(name,remainingScopeTurnsEstimate)=>({name,program:estimateProgram,intent:estimateIntent,remainingScopeTurnsEstimate})
+    const sid='ses-progress-min-052'
+    scopeProgress.clear(sid)
+    await acceptAuthorityRoot(runtime,sid,'devops')
+    const tool=hooks.tool['todowrite-for-devops']
+    assert.ok(tool)
+    assert.equal(tool.args.remainingScopeTurnsEstimate.safeParse(undefined).success,false)
+    assert.equal(tool.args.remainingScopeTurnsEstimate.safeParse(-1).success,false)
+    assert.equal(tool.args.remainingScopeTurnsEstimate.safeParse(0).success,true)
+    const context=(callID,messageID)=>({sessionID:sid,agent:'devops',callID,messageID})
+    const [left,right]=await Promise.all([
+      tool.execute(estimateArgs('estimate-high',8),context('todo-high-052','physical-run-one-052')),
+      tool.execute(estimateArgs('estimate-low',4),context('todo-low-052','physical-run-one-052')),
+    ])
+    assert.match(String(left),/# ok/)
+    assert.match(String(right),/# ok/)
+    assert.equal(scopeProgress.status(sid).known,false,'recording individual calls cannot settle the round early')
+    const model={providerID:'fixture',modelID:'devops'}
+    await hooks['chat.params']({sessionID:sid,model},{})
+    assert.equal(scopeProgress.status(sid).estimate,4,'next actual provider request settles the preceding min')
+    assert.equal(scopeProgress.status(sid).resetDue,false)
+    const replay=await tool.execute(estimateArgs('estimate-low',4),context('todo-low-052','physical-run-one-052'))
+    assert.ok(typeof replay==='string')
+    await hooks['chat.params']({sessionID:sid,model},{})
+    assert.equal(scopeProgress.status(sid).estimate,4,'same run cannot double charge or invent advisor trigger')
+    const zero=await tool.execute(estimateArgs('scope-complete',0),context('todo-zero-052','physical-run-two-052'))
+    assert.match(String(zero),/# ok/)
+    await hooks['chat.params']({sessionID:sid,model},{})
+    assert.equal(scopeProgress.status(sid).estimate,0)
+    assert.equal(scopeProgress.status(sid).resetDue,true)
+    const input={sessionID:sid}
+    const output={messages:[{info:{id:'operator-052',role:'user',sessionID:sid,time:{created:1}},
+      parts:[{type:'text',text:'Continue the actual session'}]}]}
+    await normalTransform(safeCaps(),sid,input,output)
+    assert.equal(output.messages.at(-1).attribution,'agent')
+    assert.equal(output.messages.at(-1).strong,true)
+    assert.match(output.messages.at(-1).parts[0].text,/resetScope/)
+    scopeProgress.clear(sid)
+  })
+})
+
+
+test('WHAT[delegation-negotiation-035] temporary SDK chat admission is isolated from managed lease and retains the original tool schema', async () => {
+  const {
+    negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
+    negotiationStartTemporary, negotiationIsTemporary,
+    negotiationFinishTemporary, negotiationForgetSession,
+  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  const routing = await import('../../../dist/OpenCode/Host/ModelRoutingSurface.js')
+  await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
+    const parent = 'ses-ephemeral-source-035', temp = 'ses-ephemeral-child-035'
+    negotiationRememberSystem({sessionID:parent},{system:['System from the actual worker']})
+    negotiationRememberMessages(parent,{messages:[{info:{id:'parent-u',role:'user',sessionID:parent},
+      parts:[{type:'text',text:'Actual worker request'}]}]})
+    negotiationRememberModel({sessionID:parent,model:{providerID:'provider',modelID:'worker-model'}})
+    assert.equal(negotiationStartTemporary(temp,parent).tag,0)
+    assert.equal(negotiationIsTemporary(temp),true)
+    try {
+      const tools={read:true,negotiate:true,resetScope:true,askPreviousScope:true}
+      const before=structuredClone(tools)
+      const capacityBefore=routing.sharedCapacitySnapshot()
+      await hooks['chat.message'](
+        {sessionID:temp,agent:'devops',messageID:'msg-ephemeral-035'},
+        {message:{id:'msg-ephemeral-035',sessionID:temp,role:'user',agent:'devops',tools},
+          parts:[{type:'text',text:'Please explain the actual evidence'}]})
+      await hooks['chat.params']({
+        sessionID:temp,
+        message:{id:'msg-ephemeral-035',sessionID:temp,role:'user'},
+        agent:'devops',
+        model:{providerID:'provider',modelID:'worker-model'},
+      },{})
+      assert.deepEqual(tools,before,'a temporary request retains the native tool schema')
+      assert.deepEqual(routing.sharedCapacitySnapshot(),capacityBefore,
+        'a read-only ephemeral request must not allocate a managed chat lease')
+      await assert.rejects(
+        hooks['tool.execute.before']({sessionID:temp,tool:'read',callID:'forbidden-035'},{args:{}}),
+        /Ephemeral negotiation is read-only/)
+    } finally {
+      negotiationFinishTemporary(temp)
+      negotiationForgetSession(parent)
+    }
+  })
+})
+
+
+test('WHAT[delegation-negotiation-036] a temporary SDK lease rejection never becomes an invented incomplete-answer follow-up', async () => {
+  const { bindDelegation, clearSessionState } =
+    await import('../../../dist/Context/Scope/Surface.js')
+  const {
+    negotiationRememberSystem, negotiationRememberMessages,
+    negotiationRememberModel, negotiationForgetSession,
+  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  await withExecutablePlugin(async (hooks,_dir,_created,runtime) => {
+    const parent='ses-lease-error-parent-036', child='ses-lease-error-child-036'
+    await acceptAuthorityRoot(runtime,parent,'manager')
+    await acceptAuthorityRoot(runtime,child,'engineer')
+    clearSessionState(child)
+    bindDelegation(child,parent)
+    negotiationRememberSystem({sessionID:parent},{system:['Existing worker system']})
+    negotiationRememberMessages(parent,{messages:[
+      {info:{id:'actual-u-036',sessionID:parent,role:'user'},parts:[{type:'text',text:'Evidence 42'}]},
+    ]})
+    negotiationRememberModel({sessionID:parent,model:{providerID:'provider',modelID:'worker-model'}})
+    const session=runtime.client.session
+    const originalDelete=session.delete
+    let signal
+    const completed=new Promise(resolve=>signal=resolve)
+    session.delete=async args=>{try{return await originalDelete(args)}finally{signal()}}
+    const seen=[]
+    session.prompt=async args=>{
+      seen.push(args.body.parts[0].text)
+      return {error:{message:"PROMPT-006: managed provider run has no committed execution lease"}}
+    }
+    try {
+      const accepted=await hooks.tool.negotiate.execute(
+        {questions:'What evidence is reliable?'},
+        {sessionID:child,agent:'engineer',callID:'negotiate-lease-036'})
+      assert.match(String(accepted),/Questions accepted|问题已受理/)
+      await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('temporary cleanup not observed')),3000))])
+      assert.deepEqual(seen,['What evidence is reliable?'],
+        'an SDK protocol failure is not a blank LLM answer and must not generate another user prompt')
+      assert.equal(runtime.prompts.some(p=>JSON.stringify(p).includes('PROMPT-006')),false,
+        'the managed lease error must never be sent to the worker as a purported answer')
+    } finally {
+      session.delete=originalDelete
+      negotiationForgetSession(parent)
+      clearSessionState(child)
+    }
+  })
+})
+
+
+test('WHAT[delegation-negotiation-037] thrown temporary provider admission/capacity error stops without chat retry', async () => {
+  const { bindDelegation,clearSessionState } = await import('../../../dist/Context/Scope/Surface.js')
+  const { negotiationRememberSystem,negotiationRememberMessages,
+    negotiationRememberModel,negotiationForgetSession } =
+    await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  await withExecutablePlugin(async (hooks,_dir,_created,runtime)=>{
+    const parent='ses-capacity-parent-037', child='ses-capacity-child-037'
+    await acceptAuthorityRoot(runtime,parent,'manager')
+    await acceptAuthorityRoot(runtime,child,'engineer')
+    clearSessionState(child)
+    bindDelegation(child,parent)
+    negotiationRememberSystem({sessionID:parent},{system:['Observed worker system']})
+    negotiationRememberMessages(parent,{messages:[
+      {info:{id:'u-capacity-037',role:'user',sessionID:parent},parts:[{type:'text',text:'Original evidence 37'}]},
+    ]})
+    negotiationRememberModel({sessionID:parent,model:{providerID:'provider',modelID:'worker-model'}})
+    const session=runtime.client.session
+    const originalDelete=session.delete
+    let finish
+    const completed=new Promise(resolve=>finish=resolve)
+    session.delete=async arg=>{try{return await originalDelete(arg)}finally{finish()}}
+    const prompted=[]
+    session.prompt=async arg=>{
+      prompted.push(arg.body.parts[0].text)
+      throw new Error('TransactionStopped (CapacityQueueFull)')
+    }
+    try {
+      const receipt=await hooks.tool.negotiate.execute(
+        {questions:'What should the worker investigate next?'},
+        {sessionID:child,agent:'engineer',callID:'negotiate-037'})
+      assert.match(String(receipt),/Questions accepted|问题已受理/)
+      await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
+      assert.deepEqual(prompted,['What should the worker investigate next?'],
+        'transport capacity rejection cannot be confused with an incomplete assistant response')
+      assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('刚才的回答不完整')),false)
+    } finally {
+      session.delete=originalDelete
+      negotiationForgetSession(parent)
+      clearSessionState(child)
+    }
+  })
+})
+
+
+test('WHAT[delegation-negotiation-038] a normally completed empty SDK reply terminates without an invented second user request', async () => {
+  const { bindDelegation,clearSessionState } = await import('../../../dist/Context/Scope/Surface.js')
+  const { negotiationRememberSystem,negotiationRememberMessages,
+    negotiationRememberModel,negotiationForgetSession } =
+    await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  await withExecutablePlugin(async (hooks,_dir,_created,runtime)=>{
+    const parent='ses-empty-parent-038', child='ses-empty-child-038'
+    await acceptAuthorityRoot(runtime,parent,'manager')
+    await acceptAuthorityRoot(runtime,child,'engineer')
+    clearSessionState(child)
+    bindDelegation(child,parent)
+    negotiationRememberSystem({sessionID:parent},{system:['Observed worker system']})
+    negotiationRememberMessages(parent,{messages:[
+      {info:{id:'u-empty-038',role:'user',sessionID:parent},parts:[{type:'text',text:'Original evidence 38'}]},
+    ]})
+    negotiationRememberModel({sessionID:parent,model:{providerID:'provider',modelID:'worker-model'}})
+    const session=runtime.client.session
+    const originalDelete=session.delete
+    let finish
+    const completed=new Promise(resolve=>finish=resolve)
+    session.delete=async arg=>{try{return await originalDelete(arg)}finally{finish()}}
+    const prompted=[]
+    session.prompt=async arg=>{
+      prompted.push(arg.body.parts[0].text)
+      return {data:{info:{role:'assistant',finish:'stop'},parts:[]}}
+    }
+    try {
+      const receipt=await hooks.tool.negotiate.execute(
+        {questions:'What should the worker investigate next?'},
+        {sessionID:child,agent:'engineer',callID:'negotiate-038'})
+      assert.match(String(receipt),/Questions accepted|问题已受理/)
+      await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
+      assert.deepEqual(prompted,['What should the worker investigate next?'],
+        'a completed empty answer is an explicit host failure, not grounds for a fictional follow-up')
+      assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('刚才的回答不完整')),false)
+    } finally {
+      session.delete=originalDelete
+      negotiationForgetSession(parent)
+      clearSessionState(child)
     }
   })
 })

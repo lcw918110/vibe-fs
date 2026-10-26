@@ -10,6 +10,8 @@ open Wanxiangshu.Persistence.Journal.AgentJournal
 open Wanxiangshu.Context.Scope
 open Wanxiangshu.Context.Companion
 open Wanxiangshu.Context.Prefix
+open Wanxiangshu.Foundation.HostSession
+open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Composition.Durable
 open Fable.Core
 open Fable.Core.JsInterop
@@ -19,21 +21,77 @@ module ResetScopeTool =
     [<Import("outboundViewStore", "wanxiangli/pair-hint")>]
     let private outboundViewStore: obj = jsNative
 
+    [<Import("scopeProgress", "wanxiangli/scope-progress")>]
+    let private scopeProgress: obj = jsNative
+
+    [<Import("advisorProcessQueue", "wanxiangli/scope-progress")>]
+    let private advisorProcessQueue: obj = jsNative
+
     [<Emit("$0 == null")>]
     let private isNullOrUndefined (x: obj) : bool = jsNative
 
-    let private resolveBudget (args: HostToolArguments) : int =
-        match args.OptionalNonNegativeInteger "newScopeTurnBudget" with
-        | Ok(Some b) -> max 0 b
-        | _ ->
-            args.OptionalNumber "newScopeTurnBudget"
-            |> Option.map (fun num -> max 0 (int num))
-            |> Option.defaultValue 0
+    let private pendingChildHandles (journal: AgentJournal) (sessionId: SessionId) =
+        AgentProjection.tryFind sessionId (AgentJournal.snapshot journal).AgentProjections
+        |> Option.bind (fun session -> session.Handles)
+        |> Option.map (fun projection -> projection.Handles |> Map.toList |> List.map snd)
+        |> Option.defaultValue []
+        |> List.filter (fun handle -> handle.Lifecycle = Wanxiangshu.Execution.Delegation.HandleLifecycle.Active)
+        |> List.sortBy (fun handle -> handle.CreationOrder)
+
+    let private latestAcceptedPrompt (snapshot: ISessionSnapshotPort) (child: SessionId) : Task<string option> =
+        task {
+            let! fetched = snapshot.GetMessages child
+            return
+                fetched
+                |> Result.toOption
+                |> Option.bind (fun messages ->
+                    messages
+                    |> List.filter (fun message -> message.Role = "user" && message.PromptKey.IsSome)
+                    |> List.tryLast)
+                |> Option.map (fun message ->
+                    message.Parts
+                    |> Array.choose (function
+                        | MessagePart.Text text -> Some text
+                        | _ -> None)
+                    |> String.concat "\n")
+                |> Option.filter (String.IsNullOrWhiteSpace >> not)
+        }
+
+    let private outstandingPromptNotice (snapshotPort: ISessionSnapshotPort option) (handle: HandleRecord) : Task<string> =
+        task {
+            let! prompt =
+                snapshotPort
+                |> Option.map (fun snapshot -> latestAcceptedPrompt snapshot handle.ChildSessionId)
+                |> Option.defaultValue (Task.FromResult None)
+            let text =
+                prompt
+                |> Option.defaultValue "最近一次派出指令全文：Host 没有提供可验证的已接受提示词快照。"
+            return "## " + handle.Byname + " · " + SessionId.value handle.ChildSessionId
+                   + "\n" + text
+        }
+
+    let rec private collectOutstanding (snapshotPort: ISessionSnapshotPort option) handles : Task<string list> =
+        task {
+            match handles with
+            | [] -> return []
+            | head :: tail ->
+                let! current = outstandingPromptNotice snapshotPort head
+                let! remaining = collectOutstanding snapshotPort tail
+                return current :: remaining
+        }
+
+    let private outstandingReminder (journal: AgentJournal) (snapshotPort: ISessionSnapshotPort option) (sessionId: SessionId) : Task<string> =
+        task {
+            let pending = pendingChildHandles journal sessionId
+            let! notices = collectOutstanding snapshotPort pending
+            if List.isEmpty notices then return ""
+            else return "\n\n尚未归队的外派工作（最近一次已接受的指令全文）：\n" + String.concat "\n\n" notices
+        }
 
     let private commitArchivedScope
         (journalOpt: AgentJournal option)
+        (snapshotPort: ISessionSnapshotPort option)
         (ctx: HostToolContext)
-        (budget: int)
         (objective: string)
         (rawSnap: obj)
         : Task<string> =
@@ -80,13 +138,17 @@ module ResetScopeTool =
                     | Error failure -> raise (JournalAppendException failure)
 
                     outboundViewStore?discardSealed (ctx.SessionId) |> ignore
-                    Surface.resetScopeState ctx.SessionId budget
+                    Surface.resetScopeState ctx.SessionId 0
+                    let nextScopeNumber = Set.count epoch.ReanchoredScopes + 1
+                    scopeProgress?reset(ctx.SessionId, string nextScopeNumber) |> ignore
+                    advisorProcessQueue?reset(ctx.SessionId, string nextScopeNumber) |> ignore
 
                     if not (Set.isEmpty epoch.ReanchoredScopes) then
                         Surface.beginAskPreviousScope ctx.SessionId
 
                     Surface.setHasPreviousScope ctx.SessionId true
-                    return $"Scope reset. Objective: %s{objective}"
+                    let! outstanding = outstandingReminder journal snapshotPort sessionId
+                    return $"Scope reset. Objective: %s{objective}" + outstanding
                 }
 
             match blobResult with
@@ -96,22 +158,17 @@ module ResetScopeTool =
 
     let private executeCommitted
         (journalOpt: AgentJournal option)
+        (snapshotPort: ISessionSnapshotPort option)
         (args: HostToolArguments)
         (ctx: HostToolContext)
         : Task<string> =
         task {
             let objective = args.Text "newScopeObjective"
-
-            let budget =
-                Surface.adjustBudgetForKpi (resolveBudget args) (args.Text "kpiCompletion")
-
-            let _oldExperience = args.OptionalText "oldScopeVerboseVerbatimExperience"
-            let rawSnap: obj = outboundViewStore?tryGetSealed (ctx.SessionId)
-
+            let rawSnap: obj = outboundViewStore?tryGetSealed(ctx.SessionId)
             if isNullOrUndefined rawSnap then
                 return "resetScope failed: no sealed outbound view snapshot captured for this session."
             else
-                return! commitArchivedScope journalOpt ctx budget objective rawSnap
+                return! commitArchivedScope journalOpt snapshotPort ctx objective rawSnap
         }
 
     let private resetAlreadyCommitted (journalOpt: AgentJournal option) (ctx: HostToolContext) =
@@ -124,11 +181,7 @@ module ResetScopeTool =
             |> Option.exists (PrefixEpochProjection.isScopeReanchored (ToolCallId.value callId))
         | _ -> false
 
-    let private execute
-        (journalOpt: AgentJournal option)
-        (args: HostToolArguments)
-        (ctx: HostToolContext)
-        : Task<string> =
+    let private execute (journalOpt: AgentJournal option) (snapshotPort: ISessionSnapshotPort option) (args: HostToolArguments) (ctx: HostToolContext) : Task<string> =
         if resetAlreadyCommitted journalOpt ctx then
             Task.FromResult("Scope reset. Objective: " + args.Text "newScopeObjective")
         elif Surface.negotiationRequired ctx.SessionId then
@@ -140,12 +193,12 @@ module ResetScopeTool =
                 "resetScope is unavailable until askPreviousScope(questions) has been called to clarify questions with the previous scope. Call askPreviousScope now; ordinary tools remain available."
             )
         else
-            executeCommitted journalOpt args ctx
+            executeCommitted journalOpt snapshotPort args ctx
 
-    let spec (factory: HostToolFactory) (journal: AgentJournal option) : ToolSpec =
+    let spec (factory: HostToolFactory) (journal: AgentJournal option) (snapshotPort: ISessionSnapshotPort option) : ToolSpec =
         { Name = Surface.ResetScopeTool
           Description =
-            "Execution barrier and context garbage collector. Preserves operator messages and the complete historical call/result pairs for resetScope, assume, negotiate, askPreviousScope, and advisor across later resets. Other old-scope working context is removed from subsequent model requests. Requires a KPI completion level; the Host scales the proposed new scope turnBudget using that tier."
+            "End the current Scope, preserve operator and available assistant prose/reasoning plus critical consultation calls/results, and remove ordinary old tool process. Return accepted outstanding delegation prompts."
           Arguments =
             [ "oldScopeVerboseVerbatimExperience",
               ToolHostCodec.optionalStringSchemaDescribed
@@ -154,19 +207,5 @@ module ResetScopeTool =
               "newScopeObjective",
               ToolHostCodec.stringSchemaDescribed
                   "The objective for the new scope. The scope must form a self-contained state closed-loop (状态闭环)."
-                  factory
-              "newScopeTurnBudget",
-              ToolHostCodec.nonNegativeIntegerSchemaDescribed
-                  "Estimated number of LLM turns needed for the new scope (1 LLM request = 1 turn)."
-                  factory
-              "kpiCompletion",
-              ToolHostCodec.enumSchemaDescribed
-                  [ "not_started"
-                    "far_below"
-                    "partially_met"
-                    "met"
-                    "exceeded"
-                    "not_applicable" ]
-                  "Report the previous scope KPI achievement: not_started (0.50x), far_below (0.75x), partially_met (0.90x), met (1.00x), exceeded (1.25x), or not_applicable for first scope (1.00x). The host applies the factor to newScopeTurnBudget and rounds upward."
                   factory ]
-          Execute = execute journal }
+          Execute = execute journal snapshotPort }

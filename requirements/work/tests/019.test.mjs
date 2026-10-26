@@ -31,7 +31,8 @@ const runManagerProgram = async (hooks, sessionID, body) =>
     await hooks.tool['todowrite-for-manager'].execute(
       { program: `class Js extends JsProgram { async run() { ${body} } }`,
           name: 'manager-019-' + (++programSequence),
-          planB: 'Observe this manager business result within one request deadline.'
+          intent: 'Observe this manager business result within one request deadline.',
+          remainingScopeTurnsEstimate: 3,
         },
       { sessionID, agent: 'manager' },
     ),
@@ -59,9 +60,9 @@ test('WHAT[work-019] 没有任期时 review 与 deliver 在执行入口被拒绝
       sessionID,
       'return await this.review([]);',
     )
-    assert.match(reviewResult, /code = "tool\/review\/binding-unavailable"/)
-    const deliverResult = await hooks.tool.deliver.execute({}, { sessionID, agent: 'manager' })
-    assert.match(String(deliverResult), denied)
+    assert.match(reviewResult, /code = "tool\/review\/binding-unavailable"|review-unavailable/)
+    assert.equal(hooks.tool.deliver, undefined)
+    assert.equal(permissionOfToolName(manager, 'deliver') ?? null, null)
     assert.equal(createdIds.length, 0)
   })
 })
@@ -122,14 +123,8 @@ test('WHAT[work-019] 有任期且评审尚未接纳时只读与观察放行，�
       'return await this.resume({ name: "devops", charge: "look" }, []);',
     )
     assert.match(resumeDevops, devopsDispatchDenied)
-    // N-01: Review is an optional collaboration result, never a lifecycle precondition.
-    // An unreviewed delivery intent completes the work directly in one call.
     const before = lifecycle.workView(await storeOf(directory), sessionID)
-    // Unreviewed S4 cannot complete via nextOwner absence; deliver is refused and leaves the tenure active.
-    await assert.rejects(
-      () => hooks.tool.deliver.execute({}, bound(sessionID, 'call-unreviewed')),
-      /无法安全结束|finish-failed|unable to finish safely/i,
-    )
+    assert.equal(hooks.tool.deliver, undefined)
     const after = lifecycle.workView(await storeOf(directory), sessionID)
     assert.equal(after.delivered, false)
     assert.equal(after.active, before.active)
@@ -174,15 +169,9 @@ test('WHAT[work-019] 单笔交付无需确认仪式且不写下确认事实', as
 
 const permissionName = (value) => (value == null ? null : JSON.parse(JSON.stringify(value)))
 
-test('WHAT[work-019] 按角色解析 deliver，不是按列表顺序：Manager 得到 Finality，Plan 得到 Deliver，未知名字不得当成 deliver 放行', () => {
-  const managerDeliver = permissionName(permissionOfToolName(manager, 'deliver'))
-  const planDeliver = permissionName(permissionOfToolName(plan, 'deliver'))
-
-  assert.equal(managerDeliver, 'Finality')
-  assert.notEqual(managerDeliver, 'Deliver')
-  assert.equal(planDeliver, 'Deliver')
-  assert.notEqual(planDeliver, 'Finality')
-  assert.notEqual(managerDeliver, planDeliver)
+test('WHAT[work-019] deliver is not a lifecycle permission for Manager or Plan', () => {
+  assert.equal(permissionName(permissionOfToolName(manager, 'deliver')), null)
+  assert.equal(permissionName(permissionOfToolName(plan, 'deliver')), null)
 
   for (const role of [manager, plan]) {
     const unknown = permissionName(permissionOfToolName(role, 'not-a-deliver'))

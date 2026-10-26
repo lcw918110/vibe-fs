@@ -101,6 +101,18 @@ module PromptDispatcherSend =
             tools: Map<string, bool> option ->
                 Task<Result<PromptKey, string>>
 
+        member SendManagedAssignmentObserved:
+            port: IDispatchSessionPort ->
+            sessionId: SessionId ->
+            text: string ->
+            issueIdentitySeed: (unit -> Result<PromptAuthority.IdentitySeed, string>) ->
+            directory: string option ->
+            awaitMode: PromptDispatcher.AwaitMode ->
+            onAccepted: ContinuationAcceptanceObserver option ->
+            onSendObserved: (PromptDispatcher.PromptSendObservation -> unit) option ->
+            tools: Map<string, bool> option ->
+                Task<Result<PromptKey, string>>
+
         member internal SendIdleContinuation:
             port: IDispatchSessionPort ->
             sessionId: SessionId ->

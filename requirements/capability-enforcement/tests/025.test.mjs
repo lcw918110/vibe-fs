@@ -119,7 +119,7 @@ test('WHAT[capability-enforcement-025] P03_unaccepted_or_malformed_review_retain
     // 即为无效评审（standalone `review` 宿主工具已随编程面迁移退役）。
     const reviewResult = await hooks.tool['todowrite-for-manager'].execute(
       { name: 'manager-review', program: "class Js extends JsProgram { async run() { return await this.review('invalid-findings-malformed'); } }",
-          planB: 'Wait for the review validation receipt without renewing this deadline.'
+          intent: 'Wait for the review validation receipt without renewing this deadline.'
         },
       { sessionID, agent: 'manager', callID: 'call-p03-review', messageID: 'msg-p03-review' },
     )
@@ -216,7 +216,7 @@ const execute = async (hooks, sessionID, body, callID = 'call-review-' + (++prog
     {
       name: callID,
       program: 'class Js extends JsProgram { async run() { ' + body + ' } }',
-      planB: 'Wait for this manager operation and preserve its real outcome at the shared deadline.',
+      intent: 'Wait for this manager operation and preserve its real outcome at the shared deadline.',
     },
     { sessionID, agent: 'manager', callID, messageID: 'msg-' + callID },
   ),
@@ -334,7 +334,7 @@ test('WHAT[capability-enforcement-025] identity and cross-role denial remain ind
     assert.equal(Object.hasOwn(unknown, 'data'), false)
     const wrongRole = await hooks.tool['todowrite-for-devops'].execute(
       { program: 'class Js extends JsProgram { async run() { return 7; } }', name: 'devops-wrong',
-          planB: 'Observe the cross-role refusal before any program effect.'
+          intent: 'Observe the cross-role refusal before any program effect.'
         },
       { sessionID: 'ses-no-life', agent: 'manager' },
     )

@@ -18,7 +18,6 @@ type JsCapability =
     | DevOps
     | Fission
     | Horizon
-    | Advisor
     | Ask
     | Review
     /// A lifecycle capability, not a ToolPermission projection: `deliver`
@@ -66,7 +65,6 @@ module JsFragmentRegistry =
     val devops: JsCapabilityFragment
     val fission: JsCapabilityFragment
     val horizon: JsCapabilityFragment
-    val advisor: JsCapabilityFragment
     val ask: JsCapabilityFragment
     val review: JsCapabilityFragment
     val park: JsCapabilityFragment

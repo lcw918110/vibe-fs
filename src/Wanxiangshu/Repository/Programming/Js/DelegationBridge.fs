@@ -7,7 +7,6 @@ type JsDelegationHost =
     { Delegate: string -> obj -> Task<obj>
       Fission: obj -> Task<obj>
       Horizon: unit -> Task<obj>
-      Advisor: obj -> Task<obj>
       Review: obj -> Task<obj> } // (findings)
 
 module JsDelegationBridge =

@@ -178,7 +178,7 @@ test('WHAT[work-027] Engineer/DevOps natural stop completes cleanly without requ
 
       const program = 'class Js extends JsProgram { async run() { return 1; } }'
       const executed = await hooks.tool[`todowrite-for-${name}`].execute(
-        { name: `program-${run}`, program, planB: 'Observe this program result without treating it as a business delivery.' },
+        { name: `program-${run}`, program, intent: 'Observe this program result without treating it as a business delivery.' },
         { sessionID: session, agent: name, callID: `call-${session}`, messageID: run },
       )
       assert.match(String(executed), /# ok/)

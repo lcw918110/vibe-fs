@@ -14,6 +14,7 @@ open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.Mission.Work
 open Wanxiangshu.Foundation.HostSession
 open Wanxiangshu.Participant.Provider
+open Fable.Core.JsInterop
 open Wanxiangshu.Persistence.Journal
 
 module ManagerWorkflow =
@@ -146,28 +147,44 @@ module ManagerWorkflow =
         }
         :> Task
 
-    /// Algorithm H8 entry two: an S4 work whose open tenure has not been reviewed
-    /// yet starts from the successor prompt, and the last committed retirement is
-    /// the occasion: a Relayed retirement opened the successor itself, a Delivered
-    /// retirement is the cut Change handed the same Work over from after a machine
-    /// conflict or a rebase that invalidated the candidate
-    /// (change-integration-005/013). Either way the retirement id names the cut
-    /// and the committed retirement fence carries the provider run that made it;
-    /// no run identity is invented, and a work with no retirement (the first
-    /// tenure) gets its authority from the job's own prompt, not from here.
-    let private unreviewedS4Retirement (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
-        match work.Sequence, work.ActiveId, List.tryLast work.Retirements with
-        | [ "S4" ], Some _, Some retirement when not work.Reviewed ->
-            Some(retirement.RetirementId, retirement.Fence.ProviderRunId)
+    /// A relayed successor who has not yet recorded a review owes the successor
+    /// prompt. The retirement id names the cut. The provider run is the one on
+    /// the committed IncumbencyRetired fact.
+    let private unreviewedSuccessor (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
+        match work.ActiveId, work.SuccessorTenureId, List.tryLast work.Retirements, work.Obligations with
+        | Some activeId, Some successorId, Some retirement, obligations when
+            activeId = successorId
+            && retirement.Outcome = "Relayed"
+            && Array.isEmpty obligations ->
+            Some retirement.RetirementId
         | _ -> None
+
+    let private providerRunOfLastRetirement (commonDir: string) (workId: string) =
+        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.useWork commonDir workId (fun live ->
+            let frames: obj array = unbox (live?history ())
+
+            frames
+            |> Array.collect (fun frame -> unbox<obj array> frame?events)
+            |> Array.tryFindBack (fun event -> string event?``type`` = "IncumbencyRetired")
+            |> Option.map (fun event -> string event?providerRunId)
+            |> Option.defaultValue "")
 
     let private successorPromptContext
         (workspaceDirectory: string option)
         (sessionIdText: string)
         : Task<(string * string) option> =
         task {
-            let! workOpt = lifecycleWork workspaceDirectory sessionIdText
-            return workOpt |> Option.bind unreviewedS4Retirement
+            match workspaceDirectory with
+            | None -> return None
+            | Some workspace ->
+                let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
+
+                match
+                    Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir sessionIdText
+                    |> Option.bind unreviewedSuccessor
+                with
+                | None -> return None
+                | Some retirementId -> return Some(retirementId, providerRunOfLastRetirement commonDir sessionIdText)
         }
 
     /// Read-only probe (the `loopSignalOf` / `publishReviewOf` pattern): the

@@ -39,7 +39,6 @@ module JsRuntimeSurface =
                   JsCapability.DevOps
                   JsCapability.Fission
                   JsCapability.Horizon
-                  JsCapability.Advisor
                   JsCapability.Park ]
 
         let api =
@@ -69,14 +68,12 @@ module JsRuntimeSurface =
         (delegation: obj)
         (fission: obj)
         (horizon: obj)
-        (advisor: obj)
         : unit =
         JsDelegationBridge.install
             sessionId
             { Delegate = fun name payload -> unbox<Task<obj>> (emitJsExpr (delegation, name, payload) "$0($1,$2)")
               Fission = fun payload -> unbox<Task<obj>> (emitJsExpr (fission, payload) "$0($1)")
               Horizon = fun () -> unbox<Task<obj>> (emitJsExpr horizon "$0()")
-              Advisor = fun intent -> unbox<Task<obj>> (emitJsExpr (advisor, intent) "$0($1)")
               // The test hook installs no review host: `this.review` is a
               // production-only member wired in ToolRegistry. A program that
               // calls it under this hook gets the unavailable envelope.
@@ -211,7 +208,7 @@ module JsRuntimeSurface =
                     [ "name" ==> "run"
                       "program" ==> modelSource
                       "baseClass" ==> baseClassSource
-                      "planB"
+                      "intent"
                       ==> "Wait for this isolated verification program to finish and preserve its real result."
                       "api" ==> apiValue
                       "capabilities" ==> [| "Read"; "Write"; "Exec" |]

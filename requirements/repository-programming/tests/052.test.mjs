@@ -3,14 +3,14 @@ import {performance} from 'node:perf_hooks'
 import {execute} from '../../../dist/Repository/Programming/Js/WorkflowSurface.js'
 import {fixture,assert,data,caseName,failureCode,parkedPayload,render,source,barrier,stopped,until,delay,existsSync,readFileSync,writeFileSync} from './support/command-program.fixture.mjs'
 
-test('WHAT[repository-programming-052] top-level planB validates before effects and computed member budgets are rejected',async t=>{
+test('WHAT[repository-programming-052] top-level intent validates before effects and computed member budgets are rejected',async t=>{
   const h=fixture(t,'052-entry','DevOps')
-  for(const planB of [undefined,'',null,42]) {
-    const output=await execute(h.root,'DevOps','en',h.session,{name:'bad',program:source('this.write("bad","ran");return 1;'),planB},2000,Date.now()+60000,1<<20,null)
+  for(const intent of [undefined,'',null,42]) {
+    const output=await execute(h.root,'DevOps','en',h.session,{name:'bad',program:source('this.write("bad","ran");return 1;'),intent},2000,Date.now()+60000,1<<20,null)
     assert.equal(caseName(output),'Failed');assert.equal(failureCode(output),'INVALID_ARGUMENT')
     assert.equal(existsSync(h.file('bad')),false)
   }
-  const output=await h.run('bypass','const planB="x".repeat(48000);return await this.call("touch bypass",planB);')
+  const output=await h.run('bypass','const intent="x".repeat(48000);return await this.call("touch bypass",intent);')
   assert.equal(caseName(output),'Failed');assert.equal(failureCode(output),'INVALID_ARGUMENT')
   assert.equal(existsSync(h.file('bypass')),false)
 })
@@ -18,7 +18,7 @@ test('WHAT[repository-programming-052] top-level planB validates before effects 
 test('WHAT[repository-programming-052] consecutive calls spend the same admission window', {timeout:15000},async t=>{
   const h=fixture(t,'052-sequence','DevOps'),first=barrier(h,'first'),second=barrier(h,'second')
   const started=performance.now()
-  const pending=h.run('target','await this.call('+JSON.stringify(first)+');this.write("first.after","done");await this.call('+JSON.stringify(second)+');this.write("second.after","done");return "done";',{planB:'s'.repeat(40)})
+  const pending=h.run('target','await this.call('+JSON.stringify(first)+');this.write("first.after","done");await this.call('+JSON.stringify(second)+');this.write("second.after","done");return "done";',{intent:'s'.repeat(40)})
   await until(()=>existsSync(h.file('first.pid')))
   await delay(Math.max(0,started+1000-performance.now()))
   writeFileSync(h.file('first.release'),'release')
@@ -39,7 +39,7 @@ test('WHAT[repository-programming-052] controller and target share expiry; contr
   const h=fixture(t,'052-control','DevOps'),cmd=barrier(h,'target')
   assert.equal(caseName(await h.run('target','await this.park("ready");await this.call('+JSON.stringify(cmd)+');this.write("target.after","done");return "done";')),'Parked')
   const started=performance.now()
-  const controller=await h.run('controller','const r=await this.unpark("target");this.write("controller.after",r.state);return r;',{planB:'界'.repeat(8)})
+  const controller=await h.run('controller','const r=await this.unpark("target");this.write("controller.after",r.state);return r;',{intent:'界'.repeat(8)})
   assert.equal(caseName(controller),'Parked',render(controller))
   assert.ok(performance.now()-started>=1130,'UTF-8 byte budget was not used')
   writeFileSync(h.file('target.release'),'release');await stopped(h,'target')
