@@ -66,7 +66,7 @@ Office Library 遵循三轴分类：
 
 结对指引每回合重申当前会话绑定的语言、`resetScope` 上下文闭环与共同法一句口诀；不指示模型伪造 `<think>` 等内部推理格式，也不在常驻指引里复述带条件的初始化命令。思考与对外输出遵守所绑定的语言，不因外来的英文系统提示、引用代码或参数名自行换语种。
 
-**只有第一次成功 `resetScope` 之前**，`wanxiangli/pair-hint` 由于没有预算，每次正常 Provider 请求额外生成一条 `agent` 归属的强 steer 以促使模型首次初始化；绝对不在用户原文或工具结果尾巴注入这段提醒。首次委派 `negotiate` 尚未真实落地答复时改为强 steer 催协商。首次成功 reset 后，后续真人 user 消息和任何代理回答均不作废预算，不因新消息单独鼓励 reset；第二次及以后重置才有必须主动 `askPreviousScope` 的强 steer。原始用户／工具结果不变，历史已呈现的预算尾巴仍按 epoch 严格冻结。
+计费基线与 ResetDue 由 `wanxiangli/scope-progress` 拥有，不再靠 Pair Hint 的固定 turnBudget 倒计时决定初始化。正常 Provider 请求缺少可信估计或已经锁存 ResetDue 时，宿主只向请求副本追加 `agent` 归属的状态提醒；SQLite 结果 Unknown 不能冒充缺估计。首次委派 `negotiate` 尚未真实落地答复时，Pair Hint 仍强提醒协商；第二次及以后重置仍要求主动 `askPreviousScope`。原始用户／工具结果不变，不再生成或回写预算倒计时尾巴，普通真人输入与代理回答不重置计费基线。
 
 小步、不要吝啬、并发、笃定、内省等完整纪律仍归 World 共同法（[001]）；Pair Hint 不展开，只保留简短口诀。承载位置与重放遵循 prefix-stability-010，真实 `skill` 工具始终可用。
 
@@ -89,10 +89,10 @@ Pair Hint 不承载 `assume`、`defer`、`publish`、`todowrite` 等微原语的
 
 ## [018] 动态 Scope 提醒以宿主实见语言呈现
 
-唯一 `wanxiangli/pair-hint` ScopeSession owner 负责判断初始化、首次 `negotiate` 尚未真实送达、已初始化的零预算弱提醒与历史结果尾巴冻结，**不把任何一个已知状态条件写回永久 Provider 角色或系统提示**。其模型可见动态文字必须取自宿主当前真实的全局 ProviderLanguage（`en` 或 `zh-CN`），不因 Fable 默认值或先前英文会话而在简体中文请求中泄漏 `[System: ...]`、英文协商前缀或英文条件句。
+`wanxiangli/pair-hint` ScopeSession 拥有协商与 Scope 重置协议状态，`wanxiangli/scope-progress` 拥有真实计费估计与 ResetDue；宿主只按已确认状态选择并渲染动态提醒，**不把任何一个已知状态条件写回永久 Provider 角色或系统提示**。模型可见动态文字必须取自宿主当前真实的 ProviderLanguage（`en` 或 `zh-CN`），不因 Fable 默认值或先前英文会话而在简体中文请求中泄漏 `[System: ...]`、英文协商前缀或英文条件句。
 
-`planRequest` 和 `prepareNegotiationReply` 从唯一 HNI 绑定获取本次语言；领域判断和结果字段仍只有一个 owner。语言偏好改变只影响之后新生成的提示；同 prefix epoch 已呈现并按身份冻结的工具结果必须逐字重放，禁止二次本地化或改写持久工具结果。`[Remaining turnBudget: N]` 是既有 provider wire 精确协议标记，不是英语行为命令，不在此次改动中变形。未知语言值必须明确拒绝，不能静默按英文投射给中文会话。
+`planRequest` 和 `prepareNegotiationReply` 从 HNI 绑定获取本次语言；缺估计与 ResetDue 提醒从宿主双语资源取得。每份领域判断仍只有一个 owner。语言偏好改变只影响之后新生成的提示；已有用户消息与工具结果必须逐字重放，禁止二次本地化或改写持久工具结果。不再把 `[Remaining turnBudget: N]` 当作现行输出协议。未知语言值必须明确拒绝，不能静默按英文投射给中文会话。
 
-中文初始化指令、委派首次问答、协商回执 steer 前缀及零预算弱提醒分别验收；首次协商尚未答复时，非 reset 工具结果不推送 reset 初始化提醒。模型负责判断任务状态闭环何时真正完成，库只报告已用尽预算，不让模型自己猜该次是否已耗尽。host-boundary 的真实 OMP / OpenCode 请求副本不得修改历史或继承错误语言。
+中文估计提醒、委派首次问答与协商回执 steer 分别验收；首次协商尚未答复时，非 reset 工具结果不得推送重置初始化提醒。模型负责判断任务状态闭环何时真正完成，系统只报告已确认的进度状态。host-boundary 的真实 OMP / OpenCode 请求副本不得修改历史或继承错误语言。
 
-证明：`wanxiangli/src/pair-hint/tests/009.test.mjs`（中英文、无效 locale、重复/冻结反例），`tests/018.test.mjs`（真实 Host HNI 语言偏好和跨轮字节冻结），原 `context-compression` [034][038]、prefix-stability [010] 与 host-boundary 物理测试保持通过。
+证明：`tests/018.test.mjs` 经真实注册的 OpenCode Provider hook 验证中文／英文切换只改变新 steer，不改用户或工具原文，并验证中文首次协商的精确物理回执门；`host-boundary/tests/omp-scope-seam.test.mjs` 与 `scope-hni-physical.test.mjs` 验证两个宿主的请求副本。

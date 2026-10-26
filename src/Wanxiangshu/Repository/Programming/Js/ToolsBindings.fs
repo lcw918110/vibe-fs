@@ -122,10 +122,10 @@ module JsToolsBindings =
 
     let makeReviewMember (host: JsDelegationHost option) : (string * obj) =
         "review"
-        ==> fun (findings: obj) ->
+        ==> System.Func<obj, obj, obj>(fun (findings: obj) (note: obj) ->
             match host with
             | None -> box (task { return failureObj JsFailure.DelegationUnavailable })
-            | Some delegation -> box (delegation.Review findings)
+            | Some delegation -> box (delegation.Review findings note))
 
     let private makeDelegateMember (host: JsDelegationHost option) (name: string) =
         name

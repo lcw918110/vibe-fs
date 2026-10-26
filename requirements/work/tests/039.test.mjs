@@ -316,3 +316,57 @@ test('WHAT[work-039] blockers on a ready review do not retire the plan', async (
     assert.equal(host.inspect(root, workId).completed, false)
   })
 })
+
+// The programming-surface `this.review(findings, note)` carries the same note
+// as the `review` tool: an explicit note is the launched Manager's session
+// title and its draft verbatim, in place of the canonical saved draft.
+const withReadyPlanSurface = (body) => withExecutablePlugin(async (hooks, directory, createdIds, runtime) => {
+  const sessionID = 'ses-work-039-js-note'
+  await acceptAuthorityRoot(runtime, sessionID, 'plan', 'user-plan-root')
+  const commonDir = await JournalSurface_initializeStateRoot(directory)
+  await reachReady(commonDir, sessionID)
+  let sequence = 0
+  const runPlan = async (body) => {
+    sequence += 1
+    return String(await hooks.tool['todowrite-for-plan'].execute(
+      { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'plan-note-' + sequence,
+        intent: 'Launch the Manager from the ready plan and wait for the launch receipt.',
+        remainingScopeTurnsEstimate: 3 },
+      { sessionID, agent: 'plan', callID: 'call-039-note-' + sequence, messageID: 'run-039-note', providerRunID: 'run-039-note' },
+    ))
+  }
+  await body({ runPlan, createdIds, runtime, commonDir, sessionID })
+})
+
+test('WHAT[work-039] an explicit review note preserves leading whitespace and trailing line endings in the durable launch and physical draft', async () => {
+  await withReadyPlanSurface(async ({ runPlan, createdIds, runtime, commonDir, sessionID }) => {
+    const note = '\t # Ship the parser fix\r\n\r\nKeep the public API unchanged.\t\r\n'
+    const output = await runPlan(`return await this.review([], ${JSON.stringify(note)});`)
+    assert.match(output, /ok = true/, output)
+    assert.match(output, /kind = "Launched"/, output)
+    assert.equal(createdIds.length, 1, 'one Manager session is created')
+    const child = createdIds[0]
+    const created = (await runtime.client.session.get({ path: { id: child } })).data
+    assert.equal(created.title, note, 'the note is the Manager title')
+    assert.equal(created.agent, 'manager')
+    const drafts = runtime.prompts.filter((args) => (args?.path?.id ?? args?.sessionID) === child)
+    assert.equal(drafts.length, 1, 'one draft is sent to the Manager')
+    const text = (drafts[0]?.body?.parts ?? []).map((part) => part.text ?? '').join('')
+    assert.equal(text, note, 'the note is the Manager draft, verbatim')
+    assert.equal(text.includes('待执行'), false)
+    const launches = eventsOf(commonDir, sessionID).filter((event) => event.type === 'DeliveryRequested')
+    assert.equal(launches.length, 1)
+    assert.equal(launches[0].digest, note)
+  })
+})
+
+test('WHAT[work-039] a non-string this.review note is refused before any write or launch', async () => {
+  await withReadyPlanSurface(async ({ runPlan, createdIds, commonDir, sessionID }) => {
+    const before = eventsOf(commonDir, sessionID).length
+    const output = await runPlan('return await this.review([], { title: "not text" });')
+    assert.match(output, /ok = false/, output)
+    assert.match(output, /review note must be a string/, output)
+    assert.deepEqual(createdIds, [], 'a refused note opens no Manager')
+    assert.equal(eventsOf(commonDir, sessionID).length, before, 'a refused note writes nothing')
+  })
+})

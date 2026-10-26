@@ -186,7 +186,7 @@ module ResetScopeTool =
             Task.FromResult("Scope reset. Objective: " + args.Text "newScopeObjective")
         elif Surface.negotiationRequired ctx.SessionId then
             Task.FromResult(
-                "resetScope is unavailable until the first negotiate(questions) reply has arrived as a user steer. Ask the delegator clarifying questions now, and continue while the reply is pending."
+                "resetScope is unavailable until the first negotiate(questions) call has been accepted. Call negotiate now; once it is accepted, resetScope is available immediately. Do not wait for the delegator's answer."
             )
         elif Surface.isPreviousScopePending ctx.SessionId then
             Task.FromResult(

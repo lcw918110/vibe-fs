@@ -10,7 +10,7 @@ type JsDelegationHost =
     { Delegate: string -> obj -> Task<obj>
       Fission: obj -> Task<obj>
       Horizon: unit -> Task<obj>
-      Review: obj -> Task<obj> } // (findings)
+      Review: obj -> obj -> Task<obj> } // (findings, note)
 
 module JsDelegationBridge =
     val install: sessionId: string -> host: JsDelegationHost -> unit

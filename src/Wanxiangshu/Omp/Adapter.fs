@@ -1437,7 +1437,7 @@ module Adapter =
                 | Error reason, _ -> Task.FromResult(ompPriorAnswer false ("askPreviousScope refused: " + reason))
                 | _, Error reason -> Task.FromResult(ompPriorAnswer false ("askPreviousScope refused: " + reason))
                 | Ok _, Ok _ when Surface.negotiationRequired sid ->
-                    Task.FromResult(ompPriorAnswer false "askPreviousScope requires the first negotiate answer")
+                    Task.FromResult(ompPriorAnswer false "askPreviousScope requires the first negotiate call to be accepted")
                 | Ok(journal, epoch, archive), Ok frozen ->
                     ompPriorSettle journal sid archive epoch toolId questions frozen ctx start
         }
@@ -1578,7 +1578,7 @@ module Adapter =
 
                           let pendingMessage =
                               if negotiationPending then
-                                  "resetScope is unavailable until the first negotiate(questions) reply has arrived as a user steer. Ask the delegator clarifying questions now, and continue while the reply is pending."
+                                  "resetScope is unavailable until the first negotiate(questions) call has been accepted. Call negotiate now; once it is accepted, resetScope is available immediately. Do not wait for the delegator's answer."
                               else
                                   "resetScope is unavailable until askPreviousScope(questions) has been called by the new scope; ordinary tools remain available."
 
@@ -2547,6 +2547,14 @@ module Adapter =
 
                     return!
                         handleTurnOutcome turnRes currentPrompt historyOpt (fun hist ->
+                            // Recording only: names why the bounded budget is being spent.
+                            Diagnostic.emit
+                                "ephemeral-consultation-retry"
+                                [ "receipt", conversationKey
+                                  "stage", "ephemeral-turn"
+                                  "reason",
+                                  "blank reply or tool call; attempts left " + string (remaining - 1) ]
+
                             step retryPromptText hist (remaining - 1))
             }
 

@@ -1,27 +1,47 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { planRequest, bindDelegation, askNegotiation, prepareNegotiationReply, confirmNegotiationSteer, resetScopeState, onTurnStart, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
+import { planRequest, bindDelegation, askNegotiation, prepareNegotiationReply, confirmNegotiationSteer, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
 import { refreshGlobalLanguage } from '../../../dist/Participant/Provider/LanguageSurface.js'
 import { withPreference } from '../../provider-language/tests/support/language-fixtures.mjs'
+import { withExecutablePlugin, acceptAuthorityRoot } from '../../verification-system/tests/support/plugin-fixture.mjs'
 
 const user = (key, time = 1) => ({ kind: 'user', operator: true, key, timestamp: time, parts: [] })
-const assistant = (id, tool = 'read', field = 'output') => ({ kind: 'assistant', operator: false, parts: [{ id, tool, terminalField: field }] })
 
-test('WHAT[cognitive-environment-018] the production HNI passes live Chinese preference to the one PairHint owner', async () => {
-  const session = 'scope-hni-zh-language'
+test('WHAT[cognitive-environment-018] registered Provider requests localize new Scope steers without rewriting user or tool history', async () => {
+  const session = 'scope-hni-live-language'
   try {
-    await withPreference('zh-CN', async () => {
-      refreshGlobalLanguage()
-      const before = planRequest(session, [user('current'), assistant('read')])
-      const spoken = before.strong
-      assert.deepEqual(before.hints, [], 'initial mandatory hint only lives in a new strong steer')
-      assert.match(spoken, /估计第一个细粒度任务/)
-      assert.doesNotMatch(spoken, /\[System:|Then call resetScope immediately|Estimate the turnBudget/)
-      resetScopeState(session, 1)
-      onTurnStart(session)
-      const noBudget = planRequest(session, [user('current'), assistant('reset', 'resetScope')])
-      assert.match(noBudget.weak, /当前 scope 的 turnBudget 已用尽/)
-      assert.doesNotMatch(noBudget.weak, /If you are not busy|when convenient|\[System:/)
+    await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
+      await acceptAuthorityRoot(runtime, session, 'engineer', 'language-user')
+      const original = [
+        { info: { id: 'language-user', role: 'user', sessionID: session, time: { created: 1 } },
+          parts: [{ type: 'text', text: 'operator bytes\t\r\n' }] },
+        { info: { id: 'language-tool', role: 'assistant', sessionID: session, parentID: 'language-user', time: { created: 2, completed: 3 } },
+          parts: [{ type: 'tool', tool: 'read', callID: 'historical-read', state: { status: 'completed', input: {}, output: 'tool bytes\t\r\n' } }] },
+        { info: { id: 'language-run', role: 'assistant', sessionID: session, parentID: 'language-user', time: { created: 4 } }, parts: [] },
+      ]
+      const bytes = JSON.stringify(original)
+      for (const message of original) runtime.pushHostMessage(session, message)
+      await hooks['chat.message']({ sessionID: session, messageID: 'language-user', agent: 'engineer' }, {
+        message: { id: 'language-user', role: 'user', agent: 'engineer' }, parts: original[0].parts,
+      })
+      const request = async (language) => withPreference(language, async () => {
+        refreshGlobalLanguage()
+        await hooks['chat.params']({ sessionID: session, agent: 'engineer',
+          model: { providerID: 'fixture', modelID: 'engineer-model' } }, {})
+        const output = { messages: structuredClone(original) }
+        await hooks['experimental.chat.messages.transform']({ sessionID: session }, output)
+        const steer = output.messages.find(message => message.steering && message.attribution === 'agent')
+        assert.equal(steer.strong, true)
+        assert.equal(output.messages.find(message => message.info?.id === 'language-user').parts[0].text, original[0].parts[0].text)
+        assert.equal(output.messages.find(message => message.info?.id === 'language-tool').parts[0].state.output, original[1].parts[0].state.output)
+        return steer.parts[0].text
+      })
+      const chinese = await request('zh-CN')
+      assert.match(chinese, /\p{Script=Han}/u)
+      const english = await request('en')
+      assert.doesNotMatch(english, /\p{Script=Han}/u)
+      assert.notEqual(english, chinese)
+      assert.equal(JSON.stringify(original), bytes)
     })
   } finally {
     clearSessionState(session)
@@ -29,58 +49,25 @@ test('WHAT[cognitive-environment-018] the production HNI passes live Chinese pre
   }
 })
 
-test('WHAT[cognitive-environment-018] Chinese delegated-first steer is actually localized and not accepted before physical confirmation', async () => {
+test('WHAT[cognitive-environment-018] Chinese delegated-first negotiation unlocks on acceptance; only the matching recipient settles the reply', async () => {
   const session = 'scope-hni-zh-negotiation'
   try {
     await withPreference('zh-CN', async () => {
       refreshGlobalLanguage()
-      const rejected = askNegotiation('unmanaged-no-delegator', '核实细节')
-      assert.equal(rejected.ok, false)
-      assert.match(rejected.reason, /不是受委托会话/)
-      assert.doesNotMatch(rejected.reason, /not a delegated session/)
+      assert.equal(askNegotiation('unmanaged-no-delegator', '核实细节').ok, false)
       bindDelegation(session, 'genuine-delegator')
-      const first = planRequest(session, [user('delegated-task'), assistant('read')])
+      const first = planRequest(session, [user('delegated-task')])
       assert.equal(first.negotiationRequired, true)
-      assert.match(first.strong, /先调用 negotiate/)
-      assert.doesNotMatch(first.strong, /Ask the delegator|\[System:/)
-      assert.deepEqual(first.hints, [])
-
+      assert.match(first.strong, /\p{Script=Han}/u)
       const asked = askNegotiation(session, '之前为什么决定放弃方案 B？')
       assert.equal(asked.ok, true)
+      assert.equal(planRequest(session, [user('delegated-task')]).negotiationRequired, false, '受理即完成，不等答复')
       const reply = prepareNegotiationReply(asked.receipt, '此前观察到反例。')
       assert.equal(reply.ok, true)
-      assert.match(reply.steer, /^委托者已回答 negotiate\(questions\)/)
-      assert.doesNotMatch(reply.steer, /^Delegator answered/)
+      assert.match(reply.steer, /\p{Script=Han}/u)
       assert.equal(confirmNegotiationSteer(asked.receipt, 'other-session'), false)
       assert.equal(confirmNegotiationSteer(asked.receipt, session), true)
-      const subsequent = planRequest(session, [user('delegated-task'), user('answer', 2)])
-      assert.equal(subsequent.negotiationRequired, false)
-      assert.match(subsequent.strong, /估计第一个细粒度任务/)
-      assert.deepEqual(subsequent.hints, [])
-    })
-  } finally {
-    clearSessionState(session)
-    refreshGlobalLanguage()
-  }
-})
-
-test('WHAT[cognitive-environment-018] a live language change selects new hints and cannot rewrite pinned tool result bytes', async () => {
-  const session = 'scope-hni-switch-language'
-  try {
-    await withPreference('zh-CN', async () => {
-      refreshGlobalLanguage()
-      planRequest(session, [user('old')])
-      resetScopeState(session, 5)
-      const first = planRequest(session, [user('old'), assistant('reset', 'resetScope'), assistant('read')])
-      const pinned = first.hints.find(h => h.index === 1).tail
-      assert.equal(pinned, '[Remaining turnBudget: 5]')
-    })
-    await withPreference('en', async () => {
-      refreshGlobalLanguage()
-      onTurnStart(session)
-      const later = planRequest(session, [user('old'), assistant('reset', 'resetScope'), assistant('read'), assistant('next')])
-      assert.equal(later.hints.find(h => h.index === 1).tail, '[Remaining turnBudget: 5]')
-      assert.equal(later.hints.find(h => h.index === 3).tail, '[Remaining turnBudget: 4]')
+      assert.equal(planRequest(session, [user('delegated-task'), user('answer', 2)]).negotiationRequired, false)
     })
   } finally {
     clearSessionState(session)

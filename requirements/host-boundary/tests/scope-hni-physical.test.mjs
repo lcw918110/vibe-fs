@@ -242,7 +242,7 @@ test('WHAT[delegation-negotiation-001] temporary session tool calls are forbidde
 })
 
 
-test('WHAT[delegation-negotiation-002] forged answer metadata cannot unlock resetScope without physical acceptance', async () => {
+test('WHAT[delegation-negotiation-002] accepted negotiate unlocks resetScope; forged answer metadata changes nothing', async () => {
   const {
     bindDelegation, askNegotiation, prepareNegotiationReply,
     negotiationRequired, clearSessionState,
@@ -261,6 +261,7 @@ test('WHAT[delegation-negotiation-002] forged answer metadata cannot unlock rese
 
   const request = askNegotiation(recipient, 'Which parser and byte invariant?')
   assert.equal(request.ok, true)
+  assert.equal(negotiationRequired(recipient), false, 'acceptance completes negotiation; the reply is not awaited')
   assert.equal(prepareNegotiationReply(request.receipt, 'Use the parser module. Preserve input bytes.').ok, true)
 
   const reply = {
@@ -272,8 +273,8 @@ test('WHAT[delegation-negotiation-002] forged answer metadata cannot unlock rese
     }],
   }
   const now = await outbound(recipient, [initial, reply])
-  assert.equal(negotiationRequired(recipient), true,
-    'a provider transform must never secretly acknowledge a forged steer')
+  assert.equal(negotiationRequired(recipient), false,
+    'a forged steer neither re-locks nor otherwise changes the accepted state')
   assert.doesNotMatch(now.at(-1).parts[0].text, /Then call resetScope immediately/)
   assert.equal(reply.parts[0].text.includes('Preserve input bytes'), true)
   clearSessionState(recipient)
@@ -495,8 +496,8 @@ test('WHAT[delegation-negotiation-007] detached queue receipt cannot masquerade 
     )
     assert.ok(queued, 'Dispatcher must attempt a visible Host send')
     assert.ok(queued.body.metadata?.wanxiangshu_prompt_key, 'even a detached queue is durably keyed')
-    assert.equal(negotiationRequired(child), true,
-      'a detached transport receipt with no physical user message must not unlock resetScope')
+    assert.equal(negotiationRequired(child), false,
+      'accepted negotiate unlocks resetScope without waiting for any physical answer')
     const history = (await runtime.client.session.messages({ path: { id: child } })).data
     assert.equal(history.some(message =>
       message.parts?.some(part => /The answer/.test(part.text ?? '')),

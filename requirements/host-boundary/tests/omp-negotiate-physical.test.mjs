@@ -370,7 +370,7 @@ async function testBody() {
     assert.equal(earlyResetResult.details?.refused, true, 'resetScope must be refused while gate is locked')
     assert.match(
       earlyResetResult.content[0].text,
-      /resetScope is unavailable until the first negotiate\(questions\) reply has arrived/,
+      /resetScope is unavailable until the first negotiate\(questions\) call has been accepted/,
       'resetScope refusal message must guide to negotiate tool',
     )
 
@@ -411,13 +411,13 @@ async function testBody() {
     // Fact: Immediate acknowledgment returned synchronously before answer arrives
     assert.ok(immediateAck && immediateAck.content, 'negotiate returns immediate acknowledgement')
     const ackText = immediateAck.content[0].text
-    assert.match(ackText, /Clarification requested \(receipt ([^)]+)\)\. Awaiting delegator steer\./)
-    const receiptMatch = ackText.match(/Clarification requested \(receipt ([^)]+)\)\. Awaiting delegator steer\./)
+    assert.match(ackText, /Clarification requested \(receipt ([^)]+)\)\. Negotiation is complete/)
+    const receiptMatch = ackText.match(/Clarification requested \(receipt ([^)]+)\)\. Negotiation is complete/)
     assert.ok(receiptMatch, 'receipt must match')
     expectedReceipt = receiptMatch[1]
 
-    // Gate remains locked immediately upon negotiate return
-    assert.equal(negotiationRequired(childId), true, 'gate must remain locked before steer lands')
+    // Accepted negotiate completes the gate at once; the steer is not awaited
+    assert.equal(negotiationRequired(childId), false, 'accepted negotiate unlocks before the steer lands')
 
     // Wait for event latch with a 10s harness deadline
     const deadlinePromise = new Promise((_, reject) =>

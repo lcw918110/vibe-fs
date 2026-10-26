@@ -105,7 +105,7 @@ function createOmpTestEnvironment() {
                 }
               })()
             }
-            return { Text: 'Clarification requested (receipt ' + admitted.receipt + '). Awaiting delegator steer.', Truncated: false, IsError: false, Details: null }
+            return { Text: 'Clarification requested (receipt ' + admitted.receipt + '). Negotiation is complete and the timeline continues; resetScope is available now. Do not wait for an answer; if the delegator\'s answer is obtained, it may arrive later as a steer.', Truncated: false, IsError: false, Details: null }
           },
         }
         await ports.Tools.Register(ofArray([negotiateSpec]))
@@ -876,7 +876,8 @@ test('WHAT[delegation-034] End-to-end negotiate: immediate ack before answer, na
   // 1. Immediate acknowledgment before answer is delivered
   assert.ok(immediateAck && immediateAck.content, 'returns immediate outcome')
   assert.match(immediateAck.content[0].text, /Clarification requested \(receipt/)
-  assert.equal(negotiationRequired(childId), true, 'gate remains locked immediately upon tool return')
+  assert.match(immediateAck.content[0].text, /Negotiation is complete/)
+  assert.equal(negotiationRequired(childId), false, 'accepted negotiate unlocks immediately upon tool return')
 
   // 2. Ephemeral turn ran on delegator
   assert.equal(ephemeralTurnCalls.length, 1, 'ephemeral turn was called on delegator')
@@ -886,7 +887,7 @@ test('WHAT[delegation-034] End-to-end negotiate: immediate ack before answer, na
   await new Promise((r) => setTimeout(r, 50))
   assert.equal(steerCalls.length, 1, 'steer was sent to child')
   assert.match(steerCalls[0], /Use the fast JSON parser with zero copy/)
-  assert.equal(negotiationRequired(childId), false, 'first-reset gate is released after physical steer landing')
+  assert.equal(negotiationRequired(childId), false, 'gate stays released after the steer lands')
 
   // 4. resetScope is now admitted
   resetScopeState(childId, 3)
@@ -896,7 +897,7 @@ test('WHAT[delegation-034] End-to-end negotiate: immediate ack before answer, na
   clearSessionState(parentId)
 })
 
-test('WHAT[delegation-034] Stale or non-matching steer does not release gate; physical landing unlocks and subsequent negotiate does not re-lock', async () => {
+test('WHAT[delegation-034] Accepted negotiate releases gate; non-matching steer cannot settle the receipt and subsequent negotiate does not re-lock', async () => {
   const env = createOmpTestEnvironment()
   await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
   const childId = 'ses_omp_child_stale'
@@ -912,9 +913,9 @@ test('WHAT[delegation-034] Stale or non-matching steer does not release gate; ph
 
   assert.equal(prepareNegotiationReply(receipt, 'No telemetry').ok, true)
 
-  // Non-matching recipient fails confirmation and keeps gate locked
+  // Acceptance already released the gate; a non-matching recipient still cannot settle the reply receipt
+  assert.equal(negotiationRequired(childId), false, 'accepted negotiate releases the gate')
   assert.equal(confirmNegotiationSteer(receipt, 'unrelated_child'), false)
-  assert.equal(negotiationRequired(childId), true, 'gate stays locked on wrong recipient')
 
   // Matching confirmation releases gate
   assert.equal(confirmNegotiationSteer(receipt, childId), true)

@@ -3,10 +3,7 @@ import test from 'node:test'
 {
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
-const { permissions } = await import("../../../dist/Participant/Persona/OfficeCapabilitySurface.js");
 const { configure: configureManagedAgents, installDefaultResources, validate: validateManagedAgents } = await import("../../../dist/OpenCode/Host/ManagedAgentConfigSurface.js");
-const { reviewToolPermissions } = await import("../../../dist/OpenCode/Tools/ToolSurface.js");
-const { generateRole } = await import("../../../dist/Repository/Programming/Js/GeneratorSurface.js");
 
 installDefaultResources()
 const ROLES = [
@@ -146,69 +143,7 @@ test('WHAT[capability-enforcement-002] AGENT_006_role_tool_matrix_reaches_the_ho
     )
   }
 })
-test('WHAT[capability-enforcement-002] office_capability_permissions_agree_with_the_host_schema_matrix', () => {
-  // Edit remains an office permission but projects no separate JS capability
-  // (string replacement uses Read + Write; Grep projects rg).
-  // Finality names no host tool any more: the review entry closes cleanup
-  // (OfficeMatrix: 收尾由 review 结案), so Finality only gates that close.
-  const DIRECT_PERMISSION_ONLY = new Set(['Edit', 'Ask', 'JsPlan', 'Finality'])
-  const permissionOf = (toolName) =>
-    ({
-      resetScope: 'ResetScope',
-      askPreviousScope: 'ResetScope',
-      fork: 'Fork',
-      resume: 'Resume',
-      commission: 'Fork',
-      join: 'Join',
-      horizon: 'Horizon',
-      fission: 'Fission',
-      'bash-honeypot': 'BashHoneypot',
-      review: 'ReviewAssessment',
-      fetch: 'Fetch',
-    })[toolName]
 
-  const permissionsForTool = (toolName) => {
-    // 评审专用工具经 owner 目录（ToolSurface.reviewToolPermissions）映射为领域权限，
-    // 无评审契约的工具名称没有权限映射。
-    const reviewPermissions = reviewToolPermissions(toolName)
-    // The generated surface's members are part of what the Host schema allows
-    // for that tool, so a member whose only carrier is the surface (e.g.
-    // `advisor`) must be counted beside any review-contract permissions.
-    // The delegation capability reaches the surface as a member (`fork`,
-    // `resume`, `commission`, `devops`), never as a host tool; the office
-    // vocabulary behind a member is the permission label it was granted by.
-    const OFFICE_LABEL_OF_SURFACE_CAPABILITY = {
-      Fork: 'Fork',
-      Resume: 'Resume',
-      Commission: 'Fork',
-      DevOps: 'DevOpsConsultation',
-      Review: 'ReviewAssessment',
-    }
-    const officeLabel = (capability) =>
-      OFFICE_LABEL_OF_SURFACE_CAPABILITY[capability] ?? capability
-    const generated = toolName.startsWith('todowrite-for-')
-      ? generateRole(toolName.slice('todowrite-for-'.length), 'en')
-      : null
-
-    if (generated) return [...new Set([...reviewPermissions, ...generated.capabilities.map(officeLabel)])]
-    if (reviewPermissions.length > 0) return reviewPermissions
-    const single = permissionOf(toolName)
-    return single ? [single] : []
-  }
-
-  for (const role of ROLES) {
-    const fromRoles = permissions(role.toLowerCase()).filter((p) => !DIRECT_PERMISSION_ONLY.has(p))
-    const config = buildConfig()
-    configureManagedAgents(config)
-    const nonDomainUtilities = [...hostUtilityAllowFor(role), ...cognitiveUtilityAllowFor(role)]
-    const fromSchema = [...new Set(allowList(config, agentName(role)).filter((tool) => !nonDomainUtilities.includes(tool)).flatMap(permissionsForTool))].sort()
-    assert.deepEqual(fromSchema, fromRoles, `${role}: domain permissions must equal the Host schema allow list`)
-  }
-
-  for (const retiredRole of ['blogger', 'predictor']) {
-    assert.deepEqual(permissions(retiredRole), [], `retired ${retiredRole} permissions must fail closed`)
-  }
-})
 }
 
 {

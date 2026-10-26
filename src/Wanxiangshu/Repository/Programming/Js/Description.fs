@@ -583,8 +583,8 @@ class JsProgram {"""
                       []
               if present capabilities "review" then
                   fill
-                      """  async review(findings) {
-    return await this._api.review(findings);
+                      """  async review(findings, note) {
+    return await this._api.review(findings, note);
   }"""
                       []
               if present capabilities "fission" then

@@ -898,7 +898,26 @@ type ToolRuntimeScope
             let key = SessionId.value parentSessionId
             obtainWorkDevOpsTask parentSessionId key
 
+    /// Best-effort negotiate answer delivery: every failed step is recorded
+    /// (receipt, recipient, delegator, stage, reason). Recording only — no
+    /// decision reads it.
+    let negotiationDeliveryFailed
+        (receipt: string)
+        (recipient: string)
+        (delegator: string)
+        (stage: string)
+        (reason: string)
+        : unit =
+        Diagnostic.emit
+            "negotiate-delivery-failed"
+            [ "receipt", receipt
+              "recipient", recipient
+              "delegator", delegator
+              "stage", stage
+              "reason", (if String.IsNullOrWhiteSpace reason then "unspecified" else reason) ]
+
     let deliverNegotiationReply
+        (delegator: string)
         (receipt: string)
         (answer: string)
         (steer: string -> string -> string -> Task<Result<unit, string>>)
@@ -912,18 +931,31 @@ type ToolRuntimeScope
             if admitted then
                 // Only the real Host PhysicalAccepted observer may unlock the
                 // first scope. A detached queue receipt is not a landed steer.
-                let! _ = steer (string prepared?recipient) (string prepared?steer) receipt
+                let recipient = string prepared?recipient
+                let! sent = steer recipient (string prepared?steer) receipt
+
+                match sent with
+                | Ok() -> ()
+                | Error reason -> negotiationDeliveryFailed receipt recipient delegator "send-steer" reason
+
                 return ()
+            else
+                let reason = if isNull prepared?reason then "" else string prepared?reason
+                negotiationDeliveryFailed receipt "" delegator "prepare-reply" reason
         }
 
     let settleNegotiationAnswer
+        (delegator: string)
+        (recipient: string)
         (receipt: string)
         (steer: string -> string -> string -> Task<Result<unit, string>>)
         (result: Result<string, string>)
         : Task<unit> =
         match result with
-        | Ok answer -> deliverNegotiationReply receipt answer steer
-        | Error _ -> Task.FromResult()
+        | Ok answer -> deliverNegotiationReply delegator receipt answer steer
+        | Error reason ->
+            negotiationDeliveryFailed receipt recipient delegator "ask-delegator" reason
+            Task.FromResult()
 
     let dispatchNegotiation
         (delegator: string)
@@ -936,9 +968,9 @@ type ToolRuntimeScope
         task {
             try
                 let! result = ask delegator recipient questions
-                do! settleNegotiationAnswer receipt steer result
-            with _ ->
-                ()
+                do! settleNegotiationAnswer delegator recipient receipt steer result
+            with ex ->
+                negotiationDeliveryFailed receipt recipient delegator "exception" ex.Message
         }
 
     let tryDispatchNegotiation (delegator: string) (recipient: string) (questions: string) (receipt: string) =
@@ -946,7 +978,9 @@ type ToolRuntimeScope
         | Some ask, Some steer ->
             dispatchNegotiation delegator recipient questions receipt ask steer |> ignore
             true
-        | _ -> false
+        | _ ->
+            negotiationDeliveryFailed receipt recipient delegator "transport-unattached" "negotiate transport is not attached"
+            false
 
     let privateConsultationObserver
         (recipient: string)
@@ -1033,7 +1067,20 @@ type ToolRuntimeScope
         | Some _, None, None -> Task.FromResult(Error "Negotiation recipient has no previous managed authority profile")
 
     let sendNegotiationSteer (recipient: string) (answer: string) (receipt: string) =
-        sendConsultationSteer recipient answer receipt Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer false
+        let confirm (r: string) (owner: string) =
+            let confirmed = Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer r owner
+
+            if not confirmed then
+                negotiationDeliveryFailed
+                    r
+                    owner
+                    ""
+                    "confirm-steer"
+                    "physical steer observed but the receipt was not confirmed (unknown, settled or stale)"
+
+            confirmed
+
+        sendConsultationSteer recipient answer receipt confirm false
 
     let scopeArchive (sessionText: string) : Result<Wanxiangshu.Context.Prefix.ArchivedScope, string> =
         let current =
@@ -1323,7 +1370,7 @@ type ToolRuntimeScope
             | _, Error reason, _ -> return "askPreviousScope unavailable: " + reason
             | _, _, None -> return "askPreviousScope unavailable: no real read-only consultation transport"
             | Ok a, Ok frozen, Some ask when Wanxiangshu.Context.Scope.Surface.negotiationRequired recipient ->
-                return "askPreviousScope unavailable: first negotiate must be answered"
+                return "askPreviousScope unavailable: the first negotiate call must be accepted"
             | Ok a, Ok frozen, Some ask -> return! acceptPreviousScopeQuestion ctx questions a frozen ask
         }
 
@@ -1345,9 +1392,9 @@ type ToolRuntimeScope
 
         let acceptedText =
             if chinese then
-                "问题已受理并发送给委托者。继续工作，答复将随后作为 steer 到达。"
+                "问题已受理并发送给委托者，本次协商已完成，时序继续，可立即调用 resetScope。不必也不要等待答复；若取得委托者答复，可能随后作为 steer 补到。"
             else
-                "Questions accepted for delivery to delegator. Continue working; their answer will arrive as a steer."
+                "Questions accepted for delivery to delegator. Negotiation is complete and the timeline continues; resetScope is available now. Do not wait for an answer; if the delegator's answer is obtained, it may arrive later as a steer."
 
         let unavailableText =
             if chinese then

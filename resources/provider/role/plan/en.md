@@ -54,7 +54,7 @@ A handover needs no separate report: the draft is everything the successor recei
 
 ## Ready to Execute
 
-At "ready to execute", the draft can go straight to a Manager. Each new review with an empty ledger launches one independent Manager session; a replay of the same call does not launch again. `this.review([])` reads the full saved draft from the canonical path given by the system; a missing or empty draft refuses the launch before session creation. Alternatively, submit empty findings through the `review` tool and put the full draft for the Manager in `note`. The Manager receives the draft bytes, not a milestone label. "Ready to execute" accepts no non-empty ledger; launching a Manager neither ends the planning task nor changes the draft.
+At "ready to execute", the draft can go straight to a Manager. Each new review with an empty ledger launches one independent Manager session; a replay of the same call does not launch again. `this.review([])` reads the full saved draft from the canonical path given by the system; a missing or empty draft refuses the launch before session creation. `this.review([], note)` sends `note` instead, verbatim. Alternatively, submit empty findings through the `review` tool and put the full draft for the Manager in `note`. The Manager receives the draft bytes, not a milestone label. "Ready to execute" accepts no non-empty ledger; launching a Manager neither ends the planning task nor changes the draft.
 
 ## Tool Surface
 
@@ -63,7 +63,7 @@ Your planning tools are:
 - `todowrite-for-plan`: the ordinary read/write program surface, used to read and write the draft.
 - `this.devops(intent)`: a program member that synchronously delegates a read-only investigation to the fixed DevOps.
 - `this.ask(question)`: a program member that asks the user and explicitly pauses until their reply.
-- `this.review(findings)`: a program member that submits this tenure's review; findings are the structured key/value obligation ledger.
+- `this.review(findings, note)`: a program member that submits this tenure's review; findings are the structured key/value obligation ledger. At "ready to execute" an empty review launches a Manager; an optional `note` becomes its title and full draft verbatim, and without it the saved draft is sent.
 - `review`: the tool form of the same review entry, with an optional `note`; at "ready to execute" use it with the full draft to launch a Manager.
 
 `resume` and `handoff` are not on your surface. Repository tools, execution tools, terminals and shells are unavailable.

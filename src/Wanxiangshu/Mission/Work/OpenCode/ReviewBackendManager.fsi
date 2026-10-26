@@ -33,7 +33,7 @@ module ReviewBackendManager =
 
     val execute: scope: ToolRuntimeScope -> args: HostToolArguments -> context: HostToolContext -> Task<string>
 
-    /// The `this.review(findings)` member path: `findings` is a plain JS array
+    /// The `this.review(findings, note)` member path: `findings` is a plain JS array
     /// of `{ key, value }` (value null deletes). Returns a data envelope, never
     /// rendered prose.
     val executeMember: scope: ToolRuntimeScope -> context: HostToolContext -> findings: obj -> Task<obj>

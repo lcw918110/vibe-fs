@@ -454,9 +454,28 @@ module HostPlugin =
         let v: obj = Fable.Core.JsInterop.emitJsExpr (d, name) "$0[$1]"
         if isNull v then "" else string v
 
+    /// Best-effort negotiate answer delivery: every failed step is recorded
+    /// (receipt, recipient, delegator, stage, reason). Recording only — no
+    /// decision reads it.
+    let private negotiationDeliveryFailed
+        (receipt: string)
+        (recipient: string)
+        (delegator: string)
+        (stage: string)
+        (reason: string)
+        : unit =
+        Diagnostic.emit
+            "negotiate-delivery-failed"
+            [ "receipt", receipt
+              "recipient", recipient
+              "delegator", delegator
+              "stage", stage
+              "reason", (if String.IsNullOrWhiteSpace reason then "unspecified" else reason) ]
+
     let private processNegotiationDelivery
         (transport: INegotiationTransport)
         (sid: string)
+        (delegator: string)
         (readyReceipt: string)
         (reply: string)
         : Task<unit> =
@@ -471,9 +490,17 @@ module HostPlugin =
 
             match deliverRes with
             | Ok() ->
-                Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer readyReceipt sid
-                |> ignore
-            | Error _ -> ()
+                let confirmed =
+                    Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer readyReceipt sid
+
+                if not confirmed then
+                    negotiationDeliveryFailed
+                        readyReceipt
+                        sid
+                        delegator
+                        "confirm-steer"
+                        "steer delivered but the receipt was not confirmed (unknown, settled or stale)"
+            | Error reason -> negotiationDeliveryFailed readyReceipt sid delegator "deliver-steer" reason
         }
 
     let private launchNegotiationBackground
@@ -496,7 +523,9 @@ module HostPlugin =
                 let proseOpt =
                     match ephemeralRes with
                     | Ok prose -> Some prose
-                    | Error _ -> None
+                    | Error reason ->
+                        negotiationDeliveryFailed receipt sid delegator "ask-delegator" reason
+                        None
 
                 let prepOpt =
                     proseOpt
@@ -504,17 +533,29 @@ module HostPlugin =
                         let prep: obj =
                             Wanxiangshu.Context.Scope.Surface.prepareNegotiationReply receipt prose
 
-                        if isDynamicOk prep then Some prep else None)
+                        if isDynamicOk prep then
+                            Some prep
+                        else
+                            negotiationDeliveryFailed receipt sid delegator "prepare-reply" (dynamicField prep "reason")
+                            None)
 
                 match prepOpt with
                 | None -> ()
                 | Some prep ->
                     let readyReceipt = receipt
                     let reply = dynamicField prep "steer"
-                    do! processNegotiationDelivery transport sid readyReceipt reply
+                    do! processNegotiationDelivery transport sid delegator readyReceipt reply
             }
 
-        run () |> ignore
+        let guarded () =
+            task {
+                try
+                    do! run ()
+                with ex ->
+                    negotiationDeliveryFailed receipt sid delegator "exception" ex.Message
+            }
+
+        guarded () |> ignore
 
     let private evaluateNegotiation (transport: INegotiationTransport) (sid: string) (questions: string) : ToolOutcome =
         let admitted: obj = Wanxiangshu.Context.Scope.Surface.askNegotiation sid questions
@@ -527,10 +568,21 @@ module HostPlugin =
         if not isAdmitted then
             failureOutcome (if reason = "" then "negotiation refused" else reason)
         elif not canNegotiate then
+            negotiationDeliveryFailed
+                receipt
+                sid
+                delegator
+                "delegator-context"
+                "delegator context is not available for ephemeral turn"
+
             failureOutcome "Negotiation refused: delegator context is not available for ephemeral turn."
         else
             launchNegotiationBackground transport sid questions delegator receipt
-            successOutcome ("Clarification requested (receipt " + receipt + "). Awaiting delegator steer.")
+            successOutcome (
+                "Clarification requested (receipt "
+                + receipt
+                + "). Negotiation is complete and the timeline continues; resetScope is available now. Do not wait for an answer; if the delegator's answer is obtained, it may arrive later as a steer."
+            )
 
     /// The plugin value. `Activate` performs the durable product wiring and
     /// returns the product hooks for the second host.

@@ -78,7 +78,7 @@ module JsRuntimeSurface =
               // production-only member wired in ToolRegistry. A program that
               // calls it under this hook gets the unavailable envelope.
               Review =
-                fun _ ->
+                fun _ _ ->
                     task {
                         return
                             box

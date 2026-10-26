@@ -54,7 +54,7 @@ findings 是按键义务台账：字符串 value 新增或覆盖该键，`null` 
 
 ## 待执行
 
-进入「待执行」后，底稿已可直接交给 Manager 执行。每一次新的空台账 `review` 启动一个独立的 Manager 会话；同一次调用重放不会再启动。`this.review([])` 从系统告知的规范路径读取已保存的完整底稿；底稿缺失或为空时，在创建会话之前拒绝启动。也可以用 `review` 工具提交空 findings，并把底稿全文写进 `note`。Manager 收到的是底稿原文，不是里程碑名字。「待执行」不接受非空台账；启动 Manager 不结束规划任务，也不改变底稿。
+进入「待执行」后，底稿已可直接交给 Manager 执行。每一次新的空台账 `review` 启动一个独立的 Manager 会话；同一次调用重放不会再启动。`this.review([])` 从系统告知的规范路径读取已保存的完整底稿；底稿缺失或为空时，在创建会话之前拒绝启动。`this.review([], note)` 则原样发送 `note`。也可以用 `review` 工具提交空 findings，并把底稿全文写进 `note`。Manager 收到的是底稿原文，不是里程碑名字。「待执行」不接受非空台账；启动 Manager 不结束规划任务，也不改变底稿。
 
 ## 工具面
 
@@ -63,7 +63,7 @@ findings 是按键义务台账：字符串 value 新增或覆盖该键，`null` 
 - `todowrite-for-plan`：普通读写编程面，用于读写底稿。
 - `this.devops(intent)`：编程面成员，同步委派固定 DevOps 做只读调查。
 - `this.ask(question)`：编程面成员，明确向用户提问，暂停等待其回复。
-- `this.review(findings)`：编程面成员，提交本任的评审；findings 是结构化的键/值义务台账。
+- `this.review(findings, note)`：编程面成员，提交本任的评审；findings 是结构化的键/值义务台账。在「待执行」上空账评审会启动一个 Manager；可选的 `note` 原样作为它的标题与完整底稿，不传则发送已保存的底稿。
 - `review`：同一个评审入口的工具形式，可附 `note`；在「待执行」用它带上底稿全文启动 Manager。
 
 `resume` 与 `handoff` 不在你的工具面。仓库工具、执行工具、终端与 shell 一律不可用。

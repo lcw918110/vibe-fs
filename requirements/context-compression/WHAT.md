@@ -176,11 +176,11 @@ askPreviousScope(
    - 初始化时序不前进（`initialized` 保持为 `false`）；
    - 零预算弱提示（weak reminder）保持关闭。
 5. **resetScope 自身执行自拒**：在 pending 未解除期间，模型若再次尝试调用 `resetScope`，该工具自身直接拒绝执行，返回说明文字提示模型必须先完成当前首问义务。该拒绝由工具自身返回，不产生任何 durable 提交或 `ScopeReanchored` 事实，且不影响其他普通工具的正常调用。
-6. **对称性与解除条件分立**：
+6. **对称性与解除条件**：
    - **结构对称**：`negotiate` 与 `askPreviousScope` 遵循相同的时序冻结（无预算后缀、不递减、弱提示关闭）、相同的每请求强 steer 持续 MUST 提醒，以及相同的 `resetScope` 自拒行为。
-   - **解除条件分立**：
+   - **解除条件（均为首问受理即解除）**：
      * **`askPreviousScope` 的解除条件**：宿主入口成功登记首问有效调用的 receipt 事实后，pending 状态立即解除，预算递减与初始化时序恢复正常；不等待旧模型推理完成，不等待回答送达；
-     * **`negotiate` 的解除条件**：必须等待委托者的首次真实答复作为实体 user steer 物理送达接收方会话（`PhysicalAccepted` 确认）后，方可解除 pending 状态并激活 `resetScope` 初始化（见 `delegation` [034]）。
+     * **`negotiate` 的解除条件**：首次 `negotiate` 调用被受理即完成，立即解除 pending 状态并激活 `resetScope` 初始化；不管、也不等委托者答复 steer（见 `delegation` [034]）。
 7. **初始与后续重锚**：首次成功 `resetScope` 不建立回问 pending；从第二次成功重锚起，每个新 epoch 才建立一次首问 pending 与有效前任询问义务。首问 receipt 受理后，模型发起的后续追问属于普通咨询，不进入 pending 状态，不阻塞时序，不重复产生首问义务。
 
 

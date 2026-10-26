@@ -94,7 +94,7 @@ module ToolRegistry =
     let private reviewRefusal (code: string) (reason: string) : obj =
         createObj [ "ok" ==> false; "code" ==> code; "reason" ==> reason ]
 
-    let private reviewDraft root sessionId office =
+    let private savedReviewDraft root sessionId office =
         match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected root sessionId with
         | Some work when office = "Plan" && work.Stage = "待执行" ->
             Wanxiangshu.Mission.Planning.PlanTools.readAndValidatePlan (joinPath root "wanxiangshu") sessionId
@@ -102,18 +102,34 @@ module ToolRegistry =
             |> Result.defaultWith invalidOp
         | _ -> ""
 
-    /// The `this.review(findings)` member. Plan and Manager send one Review command.
-    let private reviewMember (runtime: ToolRuntimeScope) (ctx: HostToolContext) (findings: obj) : Task<obj> =
+    let private reviewDraft root sessionId office (note: string) =
+        if String.IsNullOrEmpty note then savedReviewDraft root sessionId office else note
+
+    /// The optional `note` of `this.review(findings, note)`. Absent or empty
+    /// leaves the draft to the canonical plan file.
+    let private reviewNote (note: obj) : Result<string, string> =
+        if isNullish note then Ok ""
+        elif isStringValue note then Ok(unbox<string> note)
+        else Error "review note must be a string"
+
+    /// The `this.review(findings, note)` member. Plan and Manager send one Review command.
+    let private reviewMember
+        (runtime: ToolRuntimeScope)
+        (ctx: HostToolContext)
+        (findings: obj)
+        (note: obj)
+        : Task<obj> =
         task {
-            match runtime.WorkspaceDirectory, ctx.ProviderRunId, ctx.ToolCallId with
-            | Some directory, Some providerRun, Some toolCallId when
+            match runtime.WorkspaceDirectory, ctx.ProviderRunId, ctx.ToolCallId, reviewNote note with
+            | _, _, _, Error reason -> return reviewRefusal "INVALID_ARGUMENT" reason
+            | Some directory, Some providerRun, Some toolCallId, Ok digest when
                 runtime.IsRole(ctx, Role.Plan) || runtime.IsRole(ctx, Role.Manager)
                 ->
                 let! gitCommonDir = RuntimePath.stateRoot directory
                 let office = if runtime.IsRole(ctx, Role.Plan) then "Plan" else "Manager"
                 let runId = ProviderRunIdentity.value providerRun
                 let callId = ToolCallId.value toolCallId
-                let draft = reviewDraft gitCommonDir ctx.SessionId office
+                let draft = reviewDraft gitCommonDir ctx.SessionId office digest
 
                 let selfName = JsPrograms.callerName ctx.SessionId (runId + ":" + callId)
 
@@ -801,7 +817,7 @@ module ToolRegistry =
                                             ))
                                             horizonContext
                                             ctx
-                                  Review = fun findings -> reviewMember runtime ctx findings }
+                                  Review = fun findings note -> reviewMember runtime ctx findings note }
 
                             JsDelegationBridge.install ctx.SessionId host
 
@@ -849,7 +865,7 @@ module ToolRegistry =
         let negotiateSpec: ToolSpec =
             { Name = "negotiate"
               Description =
-                "Ask your delegator clarifying questions. The first call is required before resetScope initialization; later calls are optional and can happen at any time. Pass all questions together in questions (plural). The call immediately acknowledges sending and does not wait for an answer. The answer later arrives as a user steer and does not block ongoing work."
+                "Ask your delegator clarifying questions. The first call is required before resetScope initialization; once it is accepted, negotiation is complete and resetScope is available immediately. Later calls are optional and can happen at any time. Pass all questions together in questions (plural). Acceptance completes the negotiation and the timeline continues; do not wait for an answer. If the delegator's answer is obtained, it may arrive later as a user steer; it never blocks resetScope or ongoing work."
               Arguments =
                 [ "questions",
                   ToolHostCodec.stringSchemaDescribed

@@ -67,7 +67,13 @@ module Diagnostic =
               "duration"
               // LOOP-010
               "weighted_distinct_token_count"
-              "detector_step" ]
+              "detector_step"
+              // negotiate answer delivery (negotiate-steer-delivery)
+              "receipt"
+              "recipient"
+              "delegator"
+              "stage"
+              "reason" ]
 
     /// An operation name is one non-blank line (moved from `ReliabilityDiagnostics`, CUT-34).
     let validateOperation (operation: string) =

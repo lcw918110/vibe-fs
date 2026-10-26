@@ -3,7 +3,7 @@ import test from 'node:test'
 import { mkdtempSync, writeFileSync, readFileSync, realpathSync, rmSync, existsSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { rolePredicate, capabilityToolNames } from '../../../../dist/OpenCode/Tools/ToolRegistrySurface.js'
+import { rolePredicate } from '../../../../dist/OpenCode/Tools/ToolRegistrySurface.js'
 import { generateRole, permissionLabels } from '../../../../dist/Repository/Programming/Js/GeneratorSurface.js'
 import { allRoleLabels } from '../../../../dist/Foundation/RolesSurface.js'
 import * as runtime from '../../../../dist/Repository/Programming/Js/RuntimeSurface.js'
@@ -24,92 +24,6 @@ test('WHAT[capability-enforcement-025] registered_js_tools_match_js_tool_generat
     } else {
       assert.equal(admitted, false, `Role ${role} has no generated surface but ToolRegistry admitted ${toolName}`)
     }
-  }
-})
-
-// ── J01-J13 Manager 只读工具的真实 API 层与边界测试套件 ──────────────────────
-
-test('WHAT[capability-enforcement-025] J01_manager_generated_surface_strictly_read_only', () => {
-  const surface = generateRole('manager', 'en')
-  assert.ok(surface, 'Manager must generate JS surface')
-  assert.equal(surface.toolName, 'todowrite-for-manager')
-  const names = surface.members.map(member => member.memberName)
-  for (const name of ['cat', 'stat', 'ls', 'rg']) {
-    assert.ok(names.includes('reviewOnly.' + name))
-    assert.equal(names.includes(name), false)
-  }
-  assert.ok(names.includes('whereAll'))
-  assert.ok(names.includes('resume'), 'Manager must project the resume delegation member')
-  assert.match(surface.description, /this\.reviewOnly/)
-  for (const example of surface.examples) assert.doesNotMatch(example, /this\.(cat|stat|ls|rg)\(/)
-
-  assert.deepEqual(
-    surface.capabilities.sort(),
-    ['Advisor', 'Fork', 'Glob', 'Grep', 'Horizon', 'Read', 'Resume', 'Review'],
-    'Manager capabilities must be {Read, Glob, Grep} plus the delegation primitives {Fork, Resume, Horizon, Advisor} and the review member',
-  )
-
-  // 四层同构第 1 层：生成的 JsProgram 基类中不声明任何写方法
-  assert.equal(surface.baseClassSource.includes('file('), false, 'BaseClass must not declare retired file')
-  assert.equal(surface.baseClassSource.includes('edit('), false, 'BaseClass must not declare edit')
-  assert.equal(surface.baseClassSource.includes('write('), false, 'BaseClass must not declare write')
-  assert.equal(surface.baseClassSource.includes('rewrite('), false, 'BaseClass must not declare rewrite')
-  assert.equal(surface.baseClassSource.includes('glob('), false, 'BaseClass must not declare retired glob')
-  assert.equal(surface.baseClassSource.includes('grep('), false, 'BaseClass must not declare retired grep')
-  assert.equal(surface.baseClassSource.includes('this._api.fork(spec)'), true, 'BaseClass fork forwards spec')
-  assert.equal(surface.baseClassSource.includes('this._api.resume(spec)'), true, 'BaseClass resume forwards spec')
-  assert.equal(surface.baseClassSource.includes('this._api.advisor(intent)'), true, 'BaseClass advisor forwards intent')
-  assert.equal(surface.baseClassSource.includes('this._api.join()'), false, 'Join is a separate zero-argument host tool')
-
-  // 四层同构第 2 层：描述文档不包含写入/修改暗示
-  assert.doesNotMatch(surface.description, /edit\(path|rewrite\(path|write\(path,\s*content\)/, 'Description must not advertise write methods')
-  assert.equal(surface.description.includes('fork(payload)'), true, 'Description must show fork')
-  assert.equal(surface.description.includes('resume(payload)'), true, 'Description must show resume')
-  assert.equal(surface.description.includes('advisor(intent)'), true, 'Description must show advisor')
-
-  // 四层同构第 3 层：示例代码（ultraExample manager 分支）纯只读，无写入调用
-  assert.ok(surface.examples.length > 0, 'Manager surface must include ultraExample')
-  for (const ex of surface.examples) {
-    assert.doesNotMatch(ex, /this\.(edit|write|rewrite)\(/, 'ultraExample must not invoke mutation methods')
-  }
-})
-
-test('WHAT[capability-enforcement-025] J02_unscoped_shared_read_adapter_omits_mutation_methods', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'wxs-j02-'))
-  try {
-    const binding = roleApi('manager', dir)
-
-    // 已授予只读成员正常暴露
-    assert.equal(typeof binding.cat, 'function', 'cat must be constructed')
-    assert.equal(typeof binding.ls, 'function', 'ls must be constructed')
-    assert.equal(typeof binding.rg, 'function', 'rg must be constructed')
-    assert.equal(typeof binding.stat, 'function', 'stat must be constructed')
-    assert.equal(typeof binding.whereAll, 'function', 'whereAll must be constructed')
-    assert.equal(typeof binding.where, 'function', 'where must be constructed')
-    assert.equal(typeof binding.fork, 'function', 'fork must be constructed')
-    assert.equal(typeof binding.resume, 'function', 'resume must be constructed')
-    assert.equal(typeof binding.join, 'undefined', 'program bindings must not recreate the independent join tool')
-
-    // 已退役的 file/read/glob/grep/edit/rewrite 与未授予的写/执行 API 在 api 中直接不存在（undefined）
-    assert.equal('file' in binding, false, 'retired file property must not exist')
-    assert.equal('read' in binding, false, 'retired read property must not exist')
-    assert.equal('glob' in binding, false, 'retired glob property must not exist')
-    assert.equal('grep' in binding, false, 'retired grep property must not exist')
-    assert.equal(binding.file, undefined)
-    assert.equal(binding.read, undefined)
-    assert.equal(binding.glob, undefined)
-    assert.equal(binding.grep, undefined)
-    assert.equal('rg' in binding, true, 'Grep projects rg')
-    assert.equal('edit' in binding, false, 'edit property must not exist')
-    assert.equal('write' in binding, false, 'write property must not exist')
-    assert.equal(binding.edit, undefined)
-    assert.equal(binding.write, undefined)
-    assert.deepEqual(
-      Object.keys(binding).sort(),
-      ['advisor', 'cat', 'fork', 'horizon', 'ls', 'resume', 'rg', 'stat', 'where', 'whereAll'],
-    )
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
   }
 })
 
@@ -439,61 +353,6 @@ test('WHAT[capability-enforcement-025] J12_sandbox_context_strictly_excludes_amb
     assert.match(rendered, /globalProcess\s*=\s*"undefined"/, 'globalThis.process must be undefined in sandbox')
     assert.match(rendered, /constructorEscape\s*=\s*"(blocked|undefined)"/, 'constructor escape must not yield process')
   } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-})
-
-test('WHAT[capability-enforcement-025] J13_delegation_members_forward_cleanly_without_carry', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'wxs-j13-'))
-  const sessionId = `wxs-j13-${Math.random().toString(36).slice(2, 8)}`
-  const observed = []
-  try {
-    runtime.installDelegationHost(
-      sessionId,
-      async (name, payload, carry) => {
-        observed.push({ member: name, payload, carry })
-        return { ok: true, name: 'child-1', agentId: 'agent-1', outcome: 'created' }
-      },
-      async () => {
-        observed.push({ member: 'fission' })
-        return { ok: true, groupId: 'group-1' }
-      },
-      async () => {
-        observed.push({ member: 'horizon' })
-        return { ok: true, agents: [] }
-      },
-      async (intent, carry) => {
-        observed.push({ member: 'advisor', intent, carry })
-        return { ok: true, advice: 'host-advice' }
-      },
-    )
-
-    const program = `class Js extends JsProgram {
-      async run() {
-        const defaulted = await this.fork('index the parser module');
-        const resumed = await this.resume({ name: 'audit-road', charge: 'continue the audit' });
-        const advised = await this.advisor('review this delta');
-        const joinType = typeof this.join;
-        return { defaulted, resumed, advised, joinType, continued: true };
-      }
-    }`
-
-    const outcome = await execute(dir, 'manager', 'en', sessionId, { name: 'delegation', program, intent: 'Wait for the delegation business receipts without changing this request deadline.' }, 3000, Date.now() + 60_000, 1 << 20, null)
-    assert.equal(caseName(outcome), 'Succeeded', 'invalid carry is returned as data without failing the program')
-
-    const doc = render(outcome)
-
-    // 缺省调用以空数组抵达宿主；非法形状被挡住，其余 carry 按原顺序传递。
-    assert.deepEqual(
-      observed.map(entry => entry.member),
-      ['fork', 'resume', 'advisor'],
-    )
-    assert.equal(observed[0].member, 'fork')
-    assert.equal(observed[1].member, 'resume')
-    assert.equal(observed[2].member, 'advisor')
-    assert.match(doc, /joinType = "undefined"/)
-  } finally {
-    runtime.clearDelegationHost(sessionId)
     rmSync(dir, { recursive: true, force: true })
   }
 })

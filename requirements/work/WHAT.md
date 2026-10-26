@@ -306,6 +306,7 @@ work lifecycle 的唯一 durable owner 是 wanxiangli：Work 负责规则和规�
   5. 创建结果未知的启动不发送底稿，也不另开 Manager。
 - 禁止后果：严禁根据底稿正文推测里程碑。严禁在恢复期间创建新任务、开启新任期、自动派发 DevOps 或自动重开。严禁把已完成的工作在恢复路径上重新激活。严禁把旧记录翻译成新事实。
 - 失败后果：视图损坏时 fail-closed，保留原始证据。一个坏 work 不挡住其他 work。
+- 已知边界：本仓库的崩溃惯例是重置到一个自洽态，不是崩溃后接续。「外部效果已执行、确认尚未落盘」窗口里崩溃，恢复按第 4 条以原持久身份再补一次，可能多出一次询问、提示或 Manager；这由重置后的自洽态承接，不靠效果身份（effect id）去重或重放接续。效果端口因此不携带 effect id，也不为此窗口建外部幂等键。
 
 ## [036] 入口：第一次 review 开 work
 
@@ -336,6 +337,7 @@ Plan 与 Manager 的评审都是同一个 review。updates 按键覆盖、新增
 待执行上的空 review 提交成功后，系统启动一个 Manager 执行会话来承接当时的底稿。这次启动不消耗待执行，也不退休 Plan。
 
 - 允许后果：只有首次 Committed 的 DeliveryRequested 才创建会话一次。顺序是持久预留、创建 Session、持久绑定 Session ID、发送底稿全文、确认真实受理。底稿字节在发送前再核对。受理写成 DeliveryAdmitted，不写成 Plan 退休。
+- 允许后果：底稿即这次 review 的 note。`review` 工具的 `note` 参数与编程面 `this.review(findings, note)` 的第二参是同一份 note，原样成为 Manager 的会话标题与发送的底稿；编程面缺省或空白时读取规范路径上已保存的底稿全文，缺失或为空则在创建会话前拒绝。非字符串 note 在写入前拒绝，不预留、不启动。
 - 禁止后果：Replayed、Observed、Unknown、NotWritten 与 Conflict 不得再次创建。创建结果未知时不得发送底稿。不得摘要或改写底稿。execSessionId 不得进入 provider 可见面。不得用异常本身证明没有启动。
 - 失败后果：确切的创建前拒绝写 DeliveryRejected。无法证明是否承接时保留原预留，恢复只观察该 operation。待执行保持可再次接受另一个有效调用。
 
