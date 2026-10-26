@@ -365,7 +365,7 @@ const { join } = await import("node:path");
 const change = await import('../../../dist/Change/Surface.js');
 
 const seedRepo = (repo) => {
-  execFileSync('git', ['init', '--quiet', repo])
+  execFileSync('git', ['init', '--quiet', '-b', 'main', repo])
   execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
   execFileSync('git', ['config', 'user.name', 'test'], { cwd: repo })
   writeFileSync(join(repo, 'seed.txt'), 'seed\n')
