@@ -48,8 +48,6 @@
     <Compile Include="Execution/Delegation/Fork/JoinGuard.fs"/>
     <Compile Include="Execution/Delegation/SyncDelegate/OpenCode/Observation.fsi"/>
     <Compile Include="Execution/Delegation/SyncDelegate/OpenCode/Observation.fs"/>
-    <Compile Include="Execution/Delegation/Handle/JoinWake.fsi"/>
-    <Compile Include="Execution/Delegation/Handle/JoinWake.fs"/>
     <Compile Include="Execution/Delegation/Fork/JoinResultRenderer.fsi"/>
     <Compile Include="Execution/Delegation/Fork/JoinResultRenderer.fs"/>
     <Compile Include="Host/Domain/CommandDeclaration.fsi"/>

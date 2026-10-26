@@ -1016,6 +1016,9 @@ test('WHAT[context-compression-049] OMP real native provider hook freezes old ca
         assert.equal(native.tool_choice,'auto')
         assert.doesNotMatch(native.messages.at(-1).content,/wanxiangshu-prior:/,'the internal marker must never be shown to the model')
         assert.match(native.messages.at(-1).content,/What precise evidence/)
+        assert.match(native.messages.at(-1).content,/严禁调用任何工具|strictly forbidden/,
+          'the snapshot dialogue carries the absolute tool prohibition')
+        assert.match(native.messages.at(-1).content,/正文|body text/)
         assert.equal(native.messages.some(x=>JSON.stringify(x).includes('PRIVATE_CURRENT_SCOPE_112358')),false,'only previous Scope messages may be projected')
         assert.equal(native.messages.some(x=>x.content==='NEW_WRONG_HISTORY'),false)
         return {replyText:'Historical observation 314159 rejects the new parser.',

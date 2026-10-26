@@ -6,6 +6,13 @@ open Wanxiangshu.Persistence.EventStore
 /// CASE-003/010 / KR-010: process-local Casebook session wiring.
 module CasebookLifecycle =
 
+    type CasebookObservationCollector =
+        new: unit -> CasebookObservationCollector
+        member Collect: sessionId: string * toolName: string * args: obj * output: string -> unit
+        member RecordFileRead: sessionId: string * path: string * output: string -> unit
+        member Drain: sessionId: string -> Observation list
+        member Count: sessionId: string -> int
+
     val collector: CasebookObservationCollector
 
     val setEnabled: workspaceRoot: string option -> unit

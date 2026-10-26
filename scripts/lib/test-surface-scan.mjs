@@ -118,14 +118,7 @@ export const SURFACE_MANIFEST = [
     representation: 'json',
     kind: 'pure',
   },
-  {
-    module: 'OpenCode/Host/ProviderAttemptStopFenceSurface.js',
-    owner: 'provider-attempt-recovery',
-    laws: ['PAR-022'],
-    source: 'src/Wanxiangshu/OpenCode/Host/ProviderAttemptStopFenceSurface.fs',
-    representation: 'opaque-capability',
-    kind: 'resource',
-  },
+
   {
     module: 'Participant/Persona/Surface.js',
     owner: 'participant-identity',

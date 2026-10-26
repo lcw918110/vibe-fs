@@ -14,9 +14,14 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Mission.Work
+open Fable.Core
+open Fable.Core.JsInterop
 
 /// Turn observation policy for one reconciled turn (STRENGTH / RECOVERY-FAMILY / TurnWorkflow).
 module HostTurnObserver =
+
+    [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
+    let private deliveryAttemptLedger: obj = jsNative
 
     let private isDurableFissionOwner (journal: AgentJournal option) (sessionId: SessionId) =
         journal
@@ -41,7 +46,10 @@ module HostTurnObserver =
             // 条款 4：「已发出」不等于「已观察到」。交付自己发起的那次中断
             // 也是本观察者自有任务，同样按精确 run 取；两者都未发出时不等待
             // （没有中断不得变成阻塞）。
-            let deliveryTask = DeliveryAttemptLedger.activeInterruptTask sessionId providerRun
+            let deliveryTask: Task option =
+                let taskOpt: obj option =
+                    deliveryAttemptLedger?activeInterruptTask(SessionId.value sessionId, ProviderRunIdentity.value providerRun)
+                taskOpt |> Option.map (fun t -> unbox<Task> t)
 
             match deliveryTask with
             | None -> return ()

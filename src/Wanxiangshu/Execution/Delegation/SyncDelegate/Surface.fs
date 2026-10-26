@@ -39,6 +39,8 @@ open Wanxiangshu.Persistence.Journal
 /// observe only invocation promises and child identities.
 [<RequireQualifiedAccess>]
 module SyncDelegateSurface =
+    [<Import("providerAttemptStopFence", "wanxiangli/failure")>]
+    let private providerAttemptStopFence: obj = jsNative
     [<RequireQualifiedAccess>]
     type private RetryHarnessMode =
         | Scripted
@@ -253,7 +255,7 @@ module SyncDelegateSurface =
 
             plugin
             |> Option.iter (fun scope ->
-                children |> Seq.iter ProviderAttemptStopFence.shared.Revoke
+                children |> Seq.iter (fun child -> providerAttemptStopFence?Revoke(SessionId.value child) |> ignore)
                 scope.Dispose())
 
             sessions.ClosePendingSends()
@@ -263,7 +265,7 @@ module SyncDelegateSurface =
         member _.CloseRecovery() : Task =
             task {
                 runtime.Dispose()
-                children |> Seq.iter ProviderAttemptStopFence.shared.Revoke
+                children |> Seq.iter (fun child -> providerAttemptStopFence?Revoke(SessionId.value child) |> ignore)
                 sessions.ClosePendingSends()
 
                 try
@@ -1530,7 +1532,7 @@ module SyncDelegateSurface =
 
         match harness.UsesProviderRecovery, child with
         | true, Some child when not (String.IsNullOrWhiteSpace providerRun) ->
-            ProviderAttemptStopFence.shared.Observe(child, ProviderRunIdentity.create providerRun)
+            providerAttemptStopFence?SignalStop(SessionId.value child, providerRun) |> ignore
             true
         | _ -> false
 
@@ -1540,12 +1542,12 @@ module SyncDelegateSurface =
         if not harness.UsesProviderRecovery then
             invalidArg "value" "Provider recovery requires its owned runtime harness"
 
-        let snapshot = ProviderAttemptStopFence.shared.Snapshot()
+        let rawSnap: obj = providerAttemptStopFence?Snapshot()
 
         box
-            {| stopped = snapshot.Stopped
-               waiting = snapshot.Waiting
-               denied = snapshot.Denied |}
+            {| stopped = unbox<int> rawSnap?stopped
+               waiting = unbox<int> rawSnap?waiting
+               denied = unbox<int> rawSnap?denied |}
 
     let terminalListenerCount (value: obj) : int =
         (unbox<Harness> value).Sessions.TerminalListenerCount

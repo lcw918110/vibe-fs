@@ -38,10 +38,6 @@ Foundation/HostSession.fsi
 Foundation/HostSession.fs
 OpenCode/Host/SessionQuiescenceGate.fsi
 OpenCode/Host/SessionQuiescenceGate.fs
-Execution/Routing/ProviderAttemptStopFence.fsi
-Execution/Routing/ProviderAttemptStopFence.fs
-OpenCode/Host/ProviderAttemptStopFenceSurface.fsi
-OpenCode/Host/ProviderAttemptStopFenceSurface.fs
 Context/Trace/Cursor.fsi
 Context/Trace/Cursor.fs
 Foundation/Roles.fsi
@@ -557,8 +553,6 @@ Execution/Delegation/Fork/HostJoinGuardJournalPort.fsi
 Execution/Delegation/Fork/HostJoinGuardJournalPort.fs
 Composition/Durable/DelegationJournalAdapter.fsi
 Composition/Durable/DelegationJournalAdapter.fs
-Mission/Work/DeliveryAttemptLedger.fsi
-Mission/Work/DeliveryAttemptLedger.fs
 Composition/Durable/SessionStartedAtJournalAdapter.fsi
 Composition/Durable/SessionStartedAtJournalAdapter.fs
 Composition/Durable/AgentJournalPortAdapter.fsi
@@ -601,8 +595,6 @@ Execution/Session/Wait/CompletionMailbox.fsi
 Execution/Session/Wait/CompletionMailbox.fs
 Execution/Delegation/Fork/RuntimeContract.fsi
 Execution/Delegation/Fork/RuntimeContract.fs
-Execution/Delegation/Handle/JoinInterruptRegistry.fsi
-Execution/Delegation/Handle/JoinInterruptRegistry.fs
 Execution/Session/Wait/Bridge.fsi
 Execution/Session/Wait/Bridge.fs
 Execution/Session/Wait/Registry.fsi
@@ -987,8 +979,6 @@ OpenCode/Host/SharedState.fsi
 OpenCode/Host/SharedState.fs
 OpenCode/Host/SharedStateSurface.fsi
 OpenCode/Host/SharedStateSurface.fs
-Execution/Delegation/Handle/JoinWake.fsi
-Execution/Delegation/Handle/JoinWake.fs
 OpenCode/Host/PluginSessionScope.fsi
 OpenCode/Host/PluginSessionScope.fs
 OpenCode/Host/PluginRecoveryScope.fsi
@@ -1120,8 +1110,6 @@ Repository/Knowledge/Casebook/Store.fsi
 Repository/Knowledge/Casebook/Store.fs
 Repository/Knowledge/Casebook/Replay.fsi
 Repository/Knowledge/Casebook/Replay.fs
-Repository/Knowledge/Casebook/ObservationCollector.fsi
-Repository/Knowledge/Casebook/ObservationCollector.fs
 Repository/Knowledge/Casebook/BookkeeperRuntime.fsi
 Repository/Knowledge/Casebook/BookkeeperRuntime.fs
 Repository/Knowledge/Casebook/BookkeeperPolicy.fsi

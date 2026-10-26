@@ -8,6 +8,9 @@ open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation.Identity
 
+module HostJoinAttemptFactory =
+    val create: unit -> obj
+
 /// Per-instance session registry state for one plugin instance (HOST-012):
 /// owned sessions, companions, verdicts, nudges,
 /// quiescence permits and join interrupts. Shared cross-worktree state stays
@@ -45,7 +48,7 @@ type PluginSessionScope =
     member Quiescence: SessionQuiescenceGate
 
     /// Per-instance join interrupt registry.
-    member JoinInterrupts: IJoinAttemptRegistry
+    member JoinInterrupts: obj
 
     /// Wakes the CURRENT active join attempt when a visible user message is
     /// accepted. The adapter-facing scope owns the call so the host boundary

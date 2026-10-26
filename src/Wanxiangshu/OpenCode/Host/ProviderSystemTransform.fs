@@ -263,8 +263,10 @@ module ProviderSystemTransform =
             | Some turn -> do! applyTurnSystem turn sid role system output
             | None -> ()
 
-            let scopeProtocol = ProviderProse.render lang "host/scope-protocol" Map.empty
-            injectScopeProtocol system scopeProtocol output
+            // Advisor is pure chat: no Scope protocol, no Pair Hint vocabulary.
+            if role sid <> Some Role.Advisor then
+                let scopeProtocol = ProviderProse.render lang "host/scope-protocol" Map.empty
+                injectScopeProtocol system scopeProtocol output
         }
 
     let createWithTurn

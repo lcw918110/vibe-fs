@@ -7,7 +7,6 @@
     <WanxiangshuOwnerLocalityKind>composition</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.work.mission-work-delivery-attempt-ledger.fsproj"/>
 
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.session-nudge.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.dispatch-runtime.fsproj"/>

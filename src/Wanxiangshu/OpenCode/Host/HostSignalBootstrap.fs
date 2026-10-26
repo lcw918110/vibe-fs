@@ -13,6 +13,7 @@ open Wanxiangshu.Foundation.TerminalSignal
 open System
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Turn
@@ -33,6 +34,9 @@ open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Process
 
 module HostSignalBootstrap =
+
+    [<Import("providerAttemptStopFence", "wanxiangli/failure")>]
+    let private providerAttemptStopFence: obj = jsNative
 
 
 
@@ -238,7 +242,7 @@ module HostSignalBootstrap =
                                     finalizeDelegate
                                     deletion
 
-                            ProviderAttemptStopFence.shared.Revoke sessionId
+                            providerAttemptStopFence?Revoke(SessionId.value sessionId) |> ignore
 
                             do!
                                 scope.SignalChatRecoverySession
@@ -328,7 +332,7 @@ module HostSignalBootstrap =
 
                 match observation.Outcome, ModelRouting.tryReadExecution key with
                 | HostProviderTerminalOutcome.Cancelled _, Some _ ->
-                    ProviderAttemptStopFence.shared.Observe(observation.SessionId, observation.ProviderRun)
+                    providerAttemptStopFence?SignalStop(SessionId.value observation.SessionId, ProviderRunIdentity.value observation.ProviderRun) |> ignore
                     scope.Sessions.Quiescence.RevokeCurrentAttempt(observation.SessionId)
 
                     FissionHost.routeAttemptAborted observation.SessionId ignore ignore
@@ -341,7 +345,7 @@ module HostSignalBootstrap =
                     // attempt-stop observation. A missing durable start fact must not
                     // suppress the fence or the failure wake, or the recovery
                     // dispatch would wait forever on a fence nothing observes.
-                    ProviderAttemptStopFence.shared.Observe(observation.SessionId, observation.ProviderRun)
+                    providerAttemptStopFence?SignalStop(SessionId.value observation.SessionId, ProviderRunIdentity.value observation.ProviderRun) |> ignore
 
                     reconciler.Kick(
                         observation.SessionId,

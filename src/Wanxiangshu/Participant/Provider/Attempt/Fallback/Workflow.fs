@@ -1,6 +1,8 @@
 namespace Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Execution.Failure
@@ -23,6 +25,9 @@ open Wanxiangshu.Persistence.Journal
 /// A later confirmed failure of that same provider blacklists it, then retries.
 /// Ambiguous acceptance is not a retry and not a success.
 module ProviderRecoveryWorkflow =
+
+    [<Import("providerAttemptStopFence", "wanxiangli/failure")>]
+    let private providerAttemptStopFence: obj = jsNative
 
     /// The request kind a confirmed failure continues with.
     ///
@@ -190,12 +195,15 @@ module ProviderRecoveryWorkflow =
             if not admitted then
                 settleFailedAttemptTarget durable input.Turn
 
-            let! hostStopped = ProviderAttemptStopFence.shared.AwaitStop(input.Turn.SessionId, input.Turn.ProviderRun)
+            let! hostStopped =
+                providerAttemptStopFence?WaitForStop(
+                    SessionId.value input.Turn.SessionId,
+                    ProviderRunIdentity.value input.Turn.ProviderRun,
+                    30000
+                )
 
-            match admitted, hostStopped with
-            | true, _
-            | false, false -> return RetryVerdict.Superseded
-            | false, true ->
+            match admitted, string hostStopped with
+            | false, "Stopped" ->
                 return!
                     continueSameProvider
                         sessionPort
@@ -206,6 +214,7 @@ module ProviderRecoveryWorkflow =
                         authorization
                         continuationPrompt
                         failureReason
+            | _ -> return RetryVerdict.Superseded
         }
 
     let private admitAuthorizedFailure

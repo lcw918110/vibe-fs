@@ -30,10 +30,6 @@
     <Compile Include="OpenCode/Host/SessionSnapshotSurface.fs"/>
     <Compile Include="OpenCode/Host/SessionQuiescenceGate.fsi"/>
     <Compile Include="OpenCode/Host/SessionQuiescenceGate.fs"/>
-    <Compile Include="Execution/Routing/ProviderAttemptStopFence.fsi"/>
-    <Compile Include="Execution/Routing/ProviderAttemptStopFence.fs"/>
-    <Compile Include="OpenCode/Host/ProviderAttemptStopFenceSurface.fsi"/>
-    <Compile Include="OpenCode/Host/ProviderAttemptStopFenceSurface.fs"/>
     <Compile Include="OpenCode/Host/QuiescenceSurface.fsi"/>
     <Compile Include="OpenCode/Host/QuiescenceSurface.fs"/>
     <Compile Include="OpenCode/Host/HostMessageProjection.fsi"/>

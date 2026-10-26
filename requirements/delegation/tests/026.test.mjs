@@ -124,6 +124,89 @@ test('WHAT[delegation-026] RESUME_synchronous_admission_with_async_work_and_join
     }
   })
 })
+test('WHAT[delegation-026] reused child completes after busy guidance and a fresh assignment', async () => {
+  const owner = 'manager-resume-after-guidance'
+  await withRealFork(owner, async ({ hooks, createdIds, runtime }) => {
+    const terminals = await observeTerminals(runtime)
+    try {
+      const first = await forkCall(hooks, owner, 'Ada', 'INITIAL-CHARGE')
+      const child = createdIds[0]
+      const agentId = agentIdOf(first)
+      await resumeCall(hooks, owner, 'Ada', 'GUIDANCE-WHILE-ACTIVE')
+      await childTurn(hooks, runtime, child, `run-${child}-1`, 'GUIDED ANSWER', null, terminals.awaitRun)
+      assert.match(await joinCall(hooks, owner), /GUIDED ANSWER/)
+
+      const send = runtime.client.session.promptAsync
+      let root
+      let overlap = true
+      runtime.client.session.promptAsync = async (args) => {
+        const result = await send(args)
+        if (overlap) {
+          overlap = false
+          root = physicalUserMessageOf(runtime, child).id
+          await resumeCall(hooks, owner, 'Ada', 'GUIDANCE-BEFORE-SEND-RETURNS')
+        }
+        return result
+      }
+      await resumeCall(hooks, owner, 'Ada', 'FRESH-CHARGE')
+      await childTurn(hooks, runtime, child, `run-${child}-2`, 'FRESH ANSWER', null, terminals.awaitRun)
+      assert.equal(workLifecycleOf(runtime, owner, agentId, child, root), 'CompletedAwaitingJoin')
+      assert.match(await joinCall(hooks, owner), /FRESH ANSWER/)
+    } finally {
+      terminals.dispose()
+    }
+  })
+})
+test('WHAT[delegation-021] queued guidance cannot restart completed work or interrupt a fresh assignment', async () => {
+  const owner = 'manager-late-guidance'
+  await withRealFork(owner, async ({ hooks, createdIds, runtime }) => {
+    const terminals = await observeTerminals(runtime)
+    try {
+      const receipt = await forkCall(hooks, owner, 'Ada', 'INITIAL-CHARGE')
+      const child = createdIds[0]
+      const agentId = agentIdOf(receipt)
+      const root = physicalUserMessageOf(runtime, child).id
+      const event = hooks.event
+      hooks.event = async (args) => {
+        if (args.event.type === 'message.updated') {
+          await resumeCall(hooks, owner, 'Ada', 'QUEUED-ASYNC-GUIDANCE')
+          await runtime.awaitIngress()
+        }
+        return event(args)
+      }
+      await childTurn(hooks, runtime, child, `run-${child}-1`, 'FINISHED ANSWER', null, terminals.awaitRun)
+      hooks.event = event
+      assert.equal(workLifecycleOf(runtime, owner, agentId, child, root), 'CompletedAwaitingJoin')
+      assert.match(await joinCall(hooks, owner), /FINISHED ANSWER/)
+
+      const history = await runtime.client.session.messages({ path: { id: child } })
+      const output = { messages: history.data.map(message => ({
+        ...message, info: { ...(message.info ?? message), sessionID: child },
+      })) }
+      const aborts = runtime.abortedIds.length
+      await hooks['experimental.chat.messages.transform']({ sessionID: child }, output)
+      assert.deepEqual(output.messages, [], 'the completed work must not reach the provider again')
+      assert.deepEqual(runtime.abortedIds.slice(aborts), [child], 'interrupt the stale continuation attempt')
+      const retained = await runtime.client.session.messages({ path: { id: child } })
+      assert.ok(retained.data.some(message => message.parts.some(part => /QUEUED-ASYNC-GUIDANCE/.test(part.text ?? ''))),
+        'the suppression changes only the request, not the stored guidance')
+
+      await resumeCall(hooks, owner, 'Ada', 'FRESH-CHARGE')
+      const beforeFresh = runtime.abortedIds.length
+      const transform = hooks['experimental.chat.messages.transform']
+      hooks['experimental.chat.messages.transform'] = async (input, request) => {
+        await transform(input, request)
+        assert.match(JSON.stringify(request.messages), /QUEUED-ASYNC-GUIDANCE/,
+          'the new task can still use guidance retained in the conversation')
+      }
+      await childTurn(hooks, runtime, child, `run-${child}-2`, 'FRESH ANSWER', null, terminals.awaitRun)
+      assert.equal(runtime.abortedIds.length, beforeFresh, 'do not interrupt the new assignment')
+      assert.match(await joinCall(hooks, owner), /FRESH ANSWER/)
+    } finally {
+      terminals.dispose()
+    }
+  })
+})
 test('WHAT[delegation-026] FORK_TOOL_acceptance_unknown_never_claims_charge_was_not_placed', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'wxs-fork-unknown-'))
   const owner = 'manager-unknown'

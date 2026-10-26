@@ -142,9 +142,9 @@ type ToolRuntimeScope =
     member AttachCurrentProcessJoinMode: mode: string -> unit
 
     /// EXEC-017: share PluginRuntimeScope.JoinAttempts with JoinTool.
-    member AttachJoinAttempts: registry: IJoinAttemptRegistry -> unit
+    member AttachJoinAttempts: registry: obj -> unit
 
-    member JoinAttempts: IJoinAttemptRegistry
+    member JoinAttempts: obj
 
     /// Process-local join admission: join / JoinPublishedAvailable require FamilyReady. Missing attach → FamilyBlocked.
     member RequireCurrentProcessJoin: root: SessionId -> Task<FamilyRecovery>

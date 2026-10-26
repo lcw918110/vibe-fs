@@ -5,9 +5,9 @@ open System.Threading.Tasks
 open Fable.Core.JsInterop
 open Wanxiangshu.Host
 open Wanxiangshu.Execution.Delegation
+open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Fork.Host
-open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Change
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session
@@ -72,7 +72,7 @@ module JoinTool =
         (context: HostToolContext)
         language
         (sessionId: SessionId)
-        (attempt: JoinAttemptLease)
+        (attempt: obj)
         =
         task {
             let joinDescriptor =
@@ -91,7 +91,7 @@ module JoinTool =
                 CausalAwait.awaitTask
                     scope.WaitObserver
                     joinDescriptor
-                    (host.JoinPublishedAvailable(JoinBatch.Max, attempt.Wait))
+                    (host.JoinPublishedAvailable(JoinBatch.Max, attempt?Wait))
 
             return renderOrchestratorOutcome language outcome
         }
@@ -190,13 +190,13 @@ module JoinTool =
         (context: HostToolContext)
         language
         (sessionId: SessionId)
-        (attempt: JoinAttemptLease)
+        (attempt: obj)
         (permit: FamilyRecoveryPermit)
         (runtime: HostForkRuntime)
         =
         task {
             let waitTask =
-                devopsOrPlainWait (JoinRun.appliesWaitBudget (scope.RoleFor context)) attempt.Wait
+                devopsOrPlainWait (JoinRun.appliesWaitBudget (scope.RoleFor context)) attempt?Wait
 
             let joinDescriptor =
                 DiagnosticWait.create
@@ -230,7 +230,7 @@ module JoinTool =
         (context: HostToolContext)
         language
         (sessionId: SessionId)
-        (attempt: JoinAttemptLease)
+        (attempt: obj)
         (permit: FamilyRecoveryPermit)
         =
         task {
@@ -245,7 +245,7 @@ module JoinTool =
         (context: HostToolContext)
         language
         (sessionId: SessionId)
-        (attempt: JoinAttemptLease)
+        (attempt: obj)
         (permit: FamilyRecoveryPermit)
         =
         // NEVER Cancel mailbox/runtime on user wake (EXEC-017); the attempt's
@@ -265,10 +265,12 @@ module JoinTool =
             // before the mailbox wait — so a user-message signal that lands while
             // join admission or setup is still running is recorded on THIS attempt's own
             // TCS. There is no session-level future latch; Dispose unregisters.
-            let attempt = scope.JoinAttempts.Begin(sessionId, context.ToolCallId)
-            let detachAbort = context.AttachAbort attempt.SignalOperatorAbort
+            let attempt: obj = scope.JoinAttempts?Begin(sessionId, context.ToolCallId)
+            let detachAbort = context.AttachAbort (fun () -> attempt?SignalOperatorAbort() |> ignore)
 
-            use _attempt = attempt
+            use _attempt =
+                { new IDisposable with
+                    member _.Dispose() = attempt?Dispose() |> ignore }
 
             use _cleanup =
                 { new IDisposable with

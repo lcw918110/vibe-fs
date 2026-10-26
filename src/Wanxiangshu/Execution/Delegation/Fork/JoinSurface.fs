@@ -3,12 +3,12 @@ namespace Wanxiangshu.Execution.Delegation.Fork
 open System
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Change
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Execution.Delegation.Fork.Host
-open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation.Outcome
@@ -313,29 +313,51 @@ module JoinSurface =
 
             box {| kind = "Error"; error = name |}
 
+    [<Import("JoinAttemptRegistry", "wanxiangli/handle-lifecycle")>]
+    let private joinAttemptRegistryClass: obj = jsNative
+
     let createVisibleInputRegistry () : obj =
-        let registry = JoinAttemptRegistry() :> IJoinAttemptRegistry
+        let registry: obj = emitJsExpr joinAttemptRegistryClass "new $0()"
+        let activeInterrupts = Dictionary<string, JoinInterrupt>()
+        let mutable attemptCounter = 0
 
         createObj
             [ "begin"
               ==> (fun (sessionId: string) ->
-                  let lease = registry.Begin(SessionId.create sessionId, None)
-
+                  attemptCounter <- attemptCounter + 1
+                  let attemptId = sprintf "test-attempt-%d" attemptCounter
+                  registry?acquire(sessionId, attemptId) |> ignore
+                  let completion = TaskCompletionSource<JoinInterruptReason>()
+                  let interrupt =
+                      { Wait = completion.Task
+                        Signal = fun reason -> AsyncSupport.trySetResult completion reason |> ignore }
+                  activeInterrupts.[sessionId] <- interrupt
                   createObj
                       [ "result"
                         ==> task {
-                            let! reason = lease.Wait
+                            let! reason = interrupt.Wait
                             return joinOutcomeObject (Ok(JoinWaitOutcome.Interrupted reason))
                         }
-                        "deadline" ==> (fun () -> lease.SignalDeadline())
-                        "abort" ==> (fun () -> lease.SignalOperatorAbort())
-                        "dispose" ==> (fun () -> (lease :> IDisposable).Dispose()) ])
+                        "deadline" ==> (fun () -> interrupt.Signal JoinInterruptReason.DeadlineExpired)
+                        "abort" ==> (fun () -> interrupt.Signal JoinInterruptReason.OperatorAbort)
+                        "dispose"
+                        ==> (fun () ->
+                            registry?release(sessionId, attemptId) |> ignore
+                            activeInterrupts.Remove sessionId |> ignore) ])
               "signal"
-              ==> (fun (sessionId: string, physicalId: string) ->
-                  registry.SignalVisibleUserMessage(
-                      SessionId.create sessionId,
-                      PhysicalUserMessageId.create physicalId
-                  )) ]
+              ==> (fun (arg1: obj, arg2: obj) ->
+                  let sid, mid =
+                      if emitJsExpr arg1 "Array.isArray($0)" then
+                          let arr = unbox<obj array> arg1
+                          string arr.[0], string arr.[1]
+                      else
+                          string arg1, string arg2
+                  let verdict: obj = registry?signalVisibleUserMessage(sid, mid)
+                  if not (isNull verdict) && unbox<bool> verdict?woken then
+                      match activeInterrupts.TryGetValue sid with
+                      | true, interrupt -> interrupt.Signal JoinInterruptReason.UserMessageArrived
+                      | false, _ -> ()
+              ) ]
 
     // Production JoinTool.renderJoined releases PTY ownership tracks once a
     // batch is delivered; the probe keeps the same discipline so PtyRuns

@@ -217,18 +217,10 @@ module TurnBinding =
                     |> Option.orElseWith (fun () -> inheritedBinding proj)
 
                 let mergeProjectedBinding (binding: ActiveRunBinding) (projected: ActiveRunBinding) =
-                    // An inherited (lane) root belongs to another session, so it
-                    // is authoritative for the lane: the lane's own promoted
-                    // physical is a continuation, never an authority root.
-                    let root =
-                        match projected.InheritedAuthorityOwner with
-                        | Some _ -> projected.AuthorityRootUserMessageId
-                        | None ->
-                            binding.AuthorityRootUserMessageId
-                            |> Option.orElse projected.AuthorityRootUserMessageId
-
+                    // Durable authority owns the root. Host registration can race
+                    // a continuation and promote its physical cursor by mistake.
                     { binding with
-                        AuthorityRootUserMessageId = root
+                        AuthorityRootUserMessageId = projected.AuthorityRootUserMessageId
                         PhysicalUserMessageId =
                             binding.PhysicalUserMessageId |> Option.orElse projected.PhysicalUserMessageId
                         ContinuationMessageIds = binding.ContinuationMessageIds + continuations

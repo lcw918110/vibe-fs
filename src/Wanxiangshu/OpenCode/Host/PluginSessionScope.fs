@@ -5,6 +5,8 @@ open Wanxiangshu.Execution.Routing
 open System
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
@@ -25,7 +27,6 @@ open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Host
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Context.Companion
-open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Session
@@ -37,6 +38,58 @@ open Wanxiangshu.Interaction.Repair
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt.Fallback
 open Wanxiangshu.Repository.Programming.Js
+
+module private JoinAttemptLibrary =
+    [<Import("joinAttemptRegistry", "wanxiangli/handle-lifecycle")>]
+    let joinAttemptRegistry: obj = jsNative
+
+open JoinAttemptLibrary
+
+[<AttachMembers>]
+type private HostJoinAttempt(interrupt: JoinInterrupt, unregister: unit -> unit) =
+    member _.Wait: Task<JoinInterruptReason> = interrupt.Wait
+    member _.SignalOperatorAbort() = interrupt.Signal JoinInterruptReason.OperatorAbort
+    member _.SignalUserMessage() = interrupt.Signal JoinInterruptReason.UserMessageArrived
+    member _.SignalDeadline() = interrupt.Signal JoinInterruptReason.DeadlineExpired
+    interface IDisposable with
+        member _.Dispose() = unregister ()
+
+[<AttachMembers>]
+type private HostJoinAttempts() =
+    let activeInterrupts = Dictionary<string, JoinInterrupt>()
+
+    member _.Begin(sessionId: SessionId, toolCallId: ToolCallId option) : obj =
+        let sid = SessionId.value sessionId
+        let aid =
+            match toolCallId with
+            | Some tid -> ToolCallId.value tid
+            | None -> Guid.NewGuid().ToString("N")
+        joinAttemptRegistry?acquire(sid, aid) |> ignore
+        let completion = TaskCompletionSource<JoinInterruptReason>()
+        let interrupt =
+            { Wait = completion.Task
+              Signal = fun reason -> AsyncSupport.trySetResult completion reason |> ignore }
+        activeInterrupts.[sid] <- interrupt
+        box (new HostJoinAttempt(interrupt, (fun () ->
+            joinAttemptRegistry?release(sid, aid) |> ignore
+            activeInterrupts.Remove sid |> ignore)))
+
+    member _.SignalVisibleUserMessage(sessionId: SessionId, messageId: PhysicalUserMessageId) =
+        let sid = SessionId.value sessionId
+        let mid = PhysicalUserMessageId.value messageId
+        let verdict: obj = joinAttemptRegistry?signalVisibleUserMessage(sid, mid)
+        if not (isNull verdict) && unbox<bool> verdict?woken then
+            match activeInterrupts.TryGetValue sid with
+            | true, interrupt -> interrupt.Signal JoinInterruptReason.UserMessageArrived
+            | false, _ -> ()
+
+    member _.ClearSession(sessionId: SessionId) =
+        let sid = SessionId.value sessionId
+        joinAttemptRegistry?clearSession(sid) |> ignore
+        activeInterrupts.Remove sid |> ignore
+
+module HostJoinAttemptFactory =
+    let create () : obj = box (new HostJoinAttempts())
 
 /// Per-instance session registry state for one plugin instance (HOST-012):
 /// owned sessions, companions, verdicts, nudges,
@@ -84,13 +137,18 @@ type PluginSessionScope
     /// signal only the CURRENT active JoinAttempt (UserMessageArrived), without
     /// cancelling mailbox/runtime and without a future latch (not journaled).
     // DSL-MUTABLE: resource — per-instance join interrupt registry.
-    member val JoinInterrupts: IJoinAttemptRegistry = JoinAttemptRegistry() :> IJoinAttemptRegistry
+    member val JoinInterrupts: obj = box (new HostJoinAttempts()) with get, set
 
     /// EXEC-017: a visible user message wakes the CURRENT active join attempt.
     /// The adapter-facing scope owns the call so the host boundary never opens
     /// the delegation handle namespace itself.
     member this.ObserveAcceptedMessage(evidence: AcceptedChatExecutionEvidence) =
-        JoinWake.observeAcceptedMessage this.JoinInterrupts evidence
+        match evidence.Origin with
+        | PromptOrigin.AuthorityRoot _
+        | PromptOrigin.Continuation _ ->
+            this.JoinInterrupts?SignalVisibleUserMessage(evidence.SessionId, evidence.PhysicalUserMessageId) |> ignore
+        | PromptOrigin.HostInternal
+        | PromptOrigin.UnknownOrigin -> ()
 
     member private _.SettleExecution(durable: AgentJournal, execution: ChatExecutionState) : Task =
         task {
@@ -276,7 +334,7 @@ type PluginSessionScope
             // HOST-004 Q-10: a deleted session's idle permits die forever.
             attemptSync (fun () -> this.Quiescence.DropSession sid)
             // SessionDeleted: drop join-interrupt waiters + one-shot user-message latch.
-            attemptSync (fun () -> this.JoinInterrupts.ClearSession sid)
+            attemptSync (fun () -> this.JoinInterrupts?ClearSession sid |> ignore)
 
             firstFailure |> Option.iter raise
         }

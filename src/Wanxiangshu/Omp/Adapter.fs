@@ -2508,17 +2508,17 @@ module Adapter =
         (result: obj)
         (promptText: string)
         (historyOpt: obj option)
-        (retry: obj option -> Task<Result<string, string>>)
+        (retry: bool -> obj option -> Task<Result<string, string>>)
         : Task<Result<string, string>> =
         let replyText = stringOf (fieldValue result "replyText")
         let assistantMsg = fieldValue result "assistantMessage"
+        let toolCalled = messageHasToolCall assistantMsg
 
-        let isBlankOrTool =
-            String.IsNullOrWhiteSpace replyText || messageHasToolCall assistantMsg
+        let isBlankOrTool = String.IsNullOrWhiteSpace replyText || toolCalled
 
         if isBlankOrTool then
             let historyArr = appendHistoryEntry historyOpt promptText assistantMsg
-            retry (Some(box historyArr))
+            retry toolCalled (Some(box historyArr))
         else
             Task.FromResult(Ok replyText)
 
@@ -2526,14 +2526,29 @@ module Adapter =
         (turnRes: Result<obj, string>)
         (promptText: string)
         (historyOpt: obj option)
-        (retry: obj option -> Task<Result<string, string>>)
+        (retry: bool -> obj option -> Task<Result<string, string>>)
         : Task<Result<string, string>> =
         match turnRes with
         | Error err -> Task.FromResult(Error err)
         | Ok result -> processTurnResult result promptText historyOpt retry
 
+    /// Temporary snapshot dialogue denial: a tool call earns the
+    /// bash-honeypot-class rebuke ahead of the restated question.
+    let private snapshotDenialText (sessionText: string) =
+        ProviderProse.render
+            (ProviderLanguageBinding.forSessionText sessionText)
+            "delegation/snapshot-dialogue/denial"
+            Map.empty
+
+    let private snapshotForbidText (sessionText: string) =
+        ProviderProse.render
+            (ProviderLanguageBinding.forSessionText sessionText)
+            "delegation/snapshot-dialogue/forbid"
+            Map.empty
+
     let private runEphemeralConsultation
         (delegatorCtx: obj)
+        (denialText: string)
         (promptText: string)
         (retryPromptText: string)
         (conversationKey: string)
@@ -2546,27 +2561,38 @@ module Adapter =
                     let! turnRes = executeEphemeralTurn delegatorCtx currentPrompt conversationKey historyOpt
 
                     return!
-                        handleTurnOutcome turnRes currentPrompt historyOpt (fun hist ->
+                        handleTurnOutcome turnRes currentPrompt historyOpt (fun toolCalled hist ->
                             // Recording only: names why the bounded budget is being spent.
                             Diagnostic.emit
                                 "ephemeral-consultation-retry"
                                 [ "receipt", conversationKey
                                   "stage", "ephemeral-turn"
                                   "reason",
-                                  "blank reply or tool call; attempts left " + string (remaining - 1) ]
+                                  (if toolCalled then "tool call" else "blank reply")
+                                  + "; attempts left "
+                                  + string (remaining - 1) ]
 
-                            step retryPromptText hist (remaining - 1))
+                            let next =
+                                if toolCalled then denialText + "\n\n" + retryPromptText else retryPromptText
+
+                            step next hist (remaining - 1))
             }
 
         step promptText None 3
 
     let private runEphemeralDelegatorQuestion
         (delegatorCtx: obj)
+        (delegator: string)
         (promptText: string)
         (retryPromptText: string)
         (receipt: string)
         =
-        runEphemeralConsultation delegatorCtx promptText retryPromptText ("negotiate:" + receipt)
+        runEphemeralConsultation
+            delegatorCtx
+            (snapshotDenialText delegator)
+            promptText
+            retryPromptText
+            ("negotiate:" + receipt)
 
     let private deliverArchivedSteer (pi: obj) (receipt: string) (sid: string) (target: PrefixEpochId) (text: string) =
         task {
@@ -2649,14 +2675,14 @@ module Adapter =
 
         latestProviderLeases[marker] <- lease
 
-        let prompt = questions + "\n请直接用文字回答，不调用工具。\n" + marker
+        let prompt = questions + "\n\n" + snapshotForbidText sid + "\n" + marker
 
-        let retry = "刚才的回答不完整。请直接用文字回答：\n" + questions + "\n" + marker
+        let retry = questions + "\n\n" + snapshotForbidText sid + "\n" + marker
 
         let guarded =
             task {
                 try
-                    return! runEphemeralConsultation ctx prompt retry ("previous-scope:" + receipt)
+                    return! runEphemeralConsultation ctx (snapshotDenialText sid) prompt retry ("previous-scope:" + receipt)
                 with ex ->
                     return Error ex.Message
             }
@@ -2743,7 +2769,12 @@ module Adapter =
                     | false, _ -> return Error("Delegator context not found for " + request.DelegatorSessionId)
                     | true, ctx ->
                         return!
-                            runEphemeralDelegatorQuestion ctx request.PromptText request.RetryPromptText request.Receipt
+                            runEphemeralDelegatorQuestion
+                                ctx
+                                request.DelegatorSessionId
+                                request.PromptText
+                                request.RetryPromptText
+                                request.Receipt
                 }
 
             member _.DeliverAndObserve(request: SteerDeliveryRequest) =
@@ -2936,7 +2967,7 @@ module Adapter =
                     | false, _ -> return refuse "OMP source Session has no active Provider context"
                     | true, ctx ->
                         let retry = ProviderProse.render (ProviderLanguageBinding.forSessionText sid) "host/advisor-seat/prose-retry" Map.empty
-                        let! result = runEphemeralConsultation ctx question
+                        let! result = runEphemeralConsultation ctx (snapshotDenialText sid) question
                                         (retry + "\n" + question)
                                         ("scope-worker:" + sid + ":" + Guid.NewGuid().ToString("N"))
                         return match result with | Ok prose -> answer prose | Error reason -> refuse reason

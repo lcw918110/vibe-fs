@@ -12,7 +12,6 @@
 /src/Wanxiangshu/OpenCode/Host/PairProgrammingCalibrationSurface.fs
 /src/Wanxiangshu/OpenCode/Plugin/PluginSessionWiring.fs
 /src/Wanxiangshu/OpenCode/Tools/ToolRuntimeScope.fs
-/src/Wanxiangshu/Mission/Work/DeliveryAttemptLedger.fs
 /src/Wanxiangshu/Participant/Persona/OfficeCapabilitySurface.fs
 /resources/provider/delegation/**
 /resources/provider/tool/fork/**

@@ -1,5 +1,7 @@
 # delegation 测试与证明范围
 
+2026-10-26：026 增加真实插件反例：同一 child 完成一次工作后，下一次 assignment 的发送尚未返回时先接纳一条指导，再自然停机。修复前无 Completed terminal，父 join 无结果；TurnBinding 改为以 durable authority 投影确定 Root，物理游标不再覆盖 Root。隔离 checkout（7f03d2ad8 加本修复）统一构建成功；026、host-boundary/005、managed-session-lifecycle/006、007 共 61 pass、0 fail、1 TODO。主工作树构建被既有迁移中的库 dispatch 与宿主文件编译错误阻断；此证据不代表运行中 OpenCode 已加载修复，也不证明所有现场未结算任务已恢复。
+
 2026-10-06 A2-R0/R1/R2有限验收完成：025以实际PluginScope、同一managed owner和隔离配置驱动retry及两类repair通过；旧/晚successor的16个业务红已修。typed source在effect前交给具体call，actual PhysicalAccepted才登记其successor；旧same-root+历史kind宽匹配已删除。每次注册有独立opaque lease，关闭只释放该call资源；相邻Unknown Root和Fork边界另取证。gen184相关246/246、1290pass/0fail、28skip/137TODO，原预算及并发保留，见[正式记录](../../../proposals/archive/2026-10-06/Sphinx真实恢复与资源前置-2026-10-06.md)。实际安装版Host、物理终止/OS crash、完整025/T111/GAP-153及Sphinx答案仍未闭合；下一施工从[08接手卡](../../../proposals/TODO施工分册-2026-10-03/08-Sphinx真实Host接手.md)开始。
 
 历史A2-D1证据：gen163六个真实业务红后，gen165定向004/007/009为36pass/0fail、1TODO；独立TCS、超时只释放自己，callback抛错仍广播exact Accepted并传播原异常。见[dispatch记录](../../../proposals/archive/2026-10-05/Sphinx确认等待隔离-2026-10-06.md)。D1本身不是025来源证明，本轮R0/R1/R2另取证，不重复施工底层确认。

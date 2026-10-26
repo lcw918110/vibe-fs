@@ -32,13 +32,20 @@ module PluginTransforms =
 
     /// 交付裁决（条款 4）：Continue = 仍需继续；Stop = 无需继续，本次请求在
     /// transform 钩子处被中断。
+    type DeliveryAttemptFence =
+        { SessionId: Wanxiangshu.Foundation.Identity.SessionId
+          ProviderRun: Wanxiangshu.Foundation.Identity.ProviderRunIdentity
+          CallId: Wanxiangshu.Foundation.Identity.ToolCallId }
+
     [<RequireQualifiedAccess>]
     type DeliveryAdjudication =
         | ContinueDelivery
-        | StopDelivery of DeliveryAttemptLedger.Fence
+        | StopDelivery of DeliveryAttemptFence
 
     type NormalTransformCapabilities =
         { BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
+          StopCompletedContinuation:
+              string option -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option -> obj -> Task<bool>
           BindSessionStartedAt: string option -> Task<DateTimeOffset option>
           ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
           ApplyTenureIsolation: string option -> obj -> Task<unit>
@@ -51,11 +58,13 @@ module PluginTransforms =
           InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
           SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
           SanitizeMessages: string option -> obj -> unit
+          /// Advisor is pure chat: no Pair Hint plan, steer or estimate request.
+          IsPureChatSession: string option -> bool
           AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
           StopAfterDelivery:
               string option
                   -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option
-                  -> DeliveryAttemptLedger.Fence
+                  -> DeliveryAttemptFence
                   -> obj
                   -> Task<unit> }
 

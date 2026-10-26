@@ -182,9 +182,28 @@ module PluginHooks =
         |> Array.map (fun part -> if isNull part?text then "" else string part?text)
         |> String.concat "\n"
 
-    let private negotiationPromptText (questions: string) = questions
+    /// Temporary snapshot dialogue: the harshest tool prohibition rides with
+    /// every question, and a tool call earns the bash-honeypot-class denial.
+    let private snapshotForbidText (sessionText: string) =
+        ProviderProse.render
+            (ProviderLanguageBinding.forSessionText sessionText)
+            "delegation/snapshot-dialogue/forbid"
+            Map.empty
 
-    let private previousScopePromptText (questions: string) = questions
+    let private snapshotDenialText (sessionText: string) =
+        ProviderProse.render
+            (ProviderLanguageBinding.forSessionText sessionText)
+            "delegation/snapshot-dialogue/denial"
+            Map.empty
+
+    let private snapshotPromptText (sessionText: string) (questions: string) =
+        questions.TrimEnd() + "\n\n" + snapshotForbidText sessionText
+
+    let private negotiationPromptText (delegator: string) (questions: string) =
+        snapshotPromptText delegator questions
+
+    let private previousScopePromptText (recipient: string) (questions: string) =
+        snapshotPromptText recipient questions
 
     [<RequireQualifiedAccess>]
     type private TemporaryAnswer =
@@ -261,8 +280,9 @@ module PluginHooks =
         (model: obj)
         (firstPrompt: string)
         : Task<Result<string, string>> =
-        let retryText =
-            "刚才的回答不完整。请直接用文字回答这个问题。"
+        // The temporary projection keeps only the latest user question, so the
+        // retry must restate it behind the denial.
+        let retryText = snapshotDenialText tempId + "\n\n" + firstPrompt
 
         let rec run attempt prose =
             if not (PluginTransforms.negotiationIsTemporary tempId) then
@@ -390,7 +410,7 @@ module PluginHooks =
                 (ConsultationOrigin.Delegator delegator)
                 recipient
                 (ManagedAgent.nameOf role)
-                (negotiationPromptText questions)
+                (negotiationPromptText delegator questions)
 
     let private consultPreviousBtw
         (client: obj)
@@ -410,7 +430,7 @@ module PluginHooks =
                 (ConsultationOrigin.Previous(recipient, snapshot))
                 recipient
                 (ManagedAgent.nameOf role)
-                (previousScopePromptText questions)
+                (previousScopePromptText recipient questions)
 
     let create
         (boot: PluginBoot.Boot)
@@ -1049,8 +1069,7 @@ module PluginHooks =
                     if PluginTransforms.negotiationIsTemporary sessionId then
                         PluginTransforms.negotiationRecordToolViolation sessionId
 
-                        invalidOp
-                            "Ephemeral negotiation is read-only: do not use tools. Reply in plain text to the delegation questions immediately."
+                        invalidOp (snapshotDenialText sessionId)
 
                     if
                         toolName = "negotiate"

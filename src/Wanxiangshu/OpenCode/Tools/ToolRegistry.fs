@@ -47,6 +47,9 @@ module ToolRegistry =
     [<Import("join", "node:path")>]
     let private joinPath (left: string) (right: string) : string = jsNative
 
+    [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
+    let private deliveryAttemptLedger: obj = jsNative
+
     /// An unanswered question refuses source writes. The ledger being empty does not admit them.
     let planSourceWriteAllowed (waitingForUser: bool) = not waitingForUser
 
@@ -421,11 +424,13 @@ module ToolRegistry =
                     // The durable witness is committed by now: the
                     // registration only records the committed attempt, so the
                     // transform hook's delivery adjudication can stop it.
-                    DeliveryAttemptLedger.recordEstablished
-                        { SessionId = witness.SessionId
-                          ProviderRun = witness.ProviderRun
-                          CallId = witness.ToolCallId }
-                        (Some witness.PhysicalUserMessageId))
+                    deliveryAttemptLedger?recordEstablished(
+                        createObj [
+                            "sessionId" ==> SessionId.value witness.SessionId
+                            "providerRun" ==> ProviderRunIdentity.value witness.ProviderRun
+                            "callId" ==> ToolCallId.value witness.ToolCallId
+                        ],
+                        box (PhysicalUserMessageId.value witness.PhysicalUserMessageId)) |> ignore)
             )
 
         /// The formal prose and the physical input of the assistant message

@@ -27,52 +27,51 @@ module private CasebookAccessLawInstance =
     let accessPaths (access: obj) : string array =
         unbox<string array> (law?accessPaths access)
 
-/// Access tracker for substantive file access collection.
+[<Import("AccessTracker", "wanxiangli/casebook-access")>]
+type private LibraryAccessTracker() =
+    member _.recordRead(path: string, contentHash: string) : unit = jsNative
+    member _.recordCreate(path: string) : unit = jsNative
+    member _.recordEdit(path: string) : unit = jsNative
+    member _.recordDelete(path: string) : unit = jsNative
+    member _.recordMove(source: string, destination: string) : unit = jsNative
+    member _.recordGrep(pattern: string, path: string) : unit = jsNative
+    member _.recordGlob(pattern: string) : unit = jsNative
+    member _.recordAttemptedMutation(path: string, committed: bool) : unit = jsNative
+    member _.getRelatedPaths() : string array = jsNative
+
+    member _.RecordRead(path: string, contentHash: string) : unit = jsNative
+    member _.RecordCreate(path: string) : unit = jsNative
+    member _.RecordEdit(path: string) : unit = jsNative
+    member _.RecordDelete(path: string) : unit = jsNative
+    member _.RecordMove(source: string, destination: string) : unit = jsNative
+    member _.RecordGrep(pattern: string, path: string) : unit = jsNative
+    member _.RecordGlob(pattern: string) : unit = jsNative
+    member _.RecordAttemptedMutation(path: string, committed: bool) : unit = jsNative
+    member _.GetRelatedPaths() : string array = jsNative
+
+/// Access tracker for substantive file access collection (thin proxy to wanxiangli/casebook-access).
 type AccessTracker() =
-    let paths = HashSet<string>()
+    let inner = LibraryAccessTracker()
 
-    let add (access: obj) =
-        for path in CasebookAccessLawInstance.accessPaths access do
-            paths.Add path |> ignore
+    member _.recordRead(path: string, contentHash: string) : unit = inner.RecordRead(path, contentHash)
+    member _.recordCreate(path: string) : unit = inner.RecordCreate(path)
+    member _.recordEdit(path: string) : unit = inner.RecordEdit(path)
+    member _.recordDelete(path: string) : unit = inner.RecordDelete(path)
+    member _.recordMove(source: string, destination: string) : unit = inner.RecordMove(source, destination)
+    member _.recordGrep(pattern: string, path: string) : unit = inner.RecordGrep(pattern, path)
+    member _.recordGlob(pattern: string) : unit = inner.RecordGlob(pattern)
+    member _.recordAttemptedMutation(path: string, committed: bool) : unit = inner.RecordAttemptedMutation(path, committed)
+    member _.getRelatedPaths() : string array = inner.GetRelatedPaths()
 
-    let ofPath (kind: string) (path: string) =
-        createObj [ "kind" ==> kind; "path" ==> path ]
-
-    member this.recordRead(path: string, contentHash: string) : unit = this.RecordRead(path, contentHash)
-    member this.recordCreate(path: string) : unit = this.RecordCreate(path)
-    member this.recordEdit(path: string) : unit = this.RecordEdit(path)
-    member this.recordDelete(path: string) : unit = this.RecordDelete(path)
-    member this.recordMove(source: string, destination: string) : unit = this.RecordMove(source, destination)
-    member this.recordGrep(pattern: string, path: string) : unit = this.RecordGrep(pattern, path)
-    member this.recordGlob(pattern: string) : unit = this.RecordGlob(pattern)
-
-    member this.recordAttemptedMutation(path: string, committed: bool) : unit =
-        this.RecordAttemptedMutation(path, committed)
-
-    member this.getRelatedPaths() : string array = this.GetRelatedPaths() |> List.toArray
-
-    member _.RecordRead(path: string, contentHash: string) : unit = add (ofPath "read" (string path))
-    member _.RecordCreate(path: string) : unit = add (ofPath "create" (string path))
-    member _.RecordEdit(path: string) : unit = add (ofPath "edit" (string path))
-    member _.RecordDelete(path: string) : unit = add (ofPath "delete" (string path))
-
-    member _.RecordMove(source: string, destination: string) : unit =
-        add (
-            createObj
-                [ "kind" ==> "move"
-                  "source" ==> string source
-                  "destination" ==> string destination ]
-        )
-
-    member _.RecordGrep(pattern: string, path: string) : unit = ()
-    member _.RecordGlob(pattern: string) : unit = ()
-
-    member _.RecordAttemptedMutation(path: string, committed: bool) : unit =
-        add (createObj [ "kind" ==> "mutation"; "path" ==> string path; "committed" ==> committed ])
-
-    member _.GetRelatedPaths() : string list =
-        unbox<string array> (CasebookAccessLawInstance.law?relatedPaths (Seq.toArray paths))
-        |> Array.toList
+    member _.RecordRead(path: string, contentHash: string) : unit = inner.RecordRead(path, contentHash)
+    member _.RecordCreate(path: string) : unit = inner.RecordCreate(path)
+    member _.RecordEdit(path: string) : unit = inner.RecordEdit(path)
+    member _.RecordDelete(path: string) : unit = inner.RecordDelete(path)
+    member _.RecordMove(source: string, destination: string) : unit = inner.RecordMove(source, destination)
+    member _.RecordGrep(pattern: string, path: string) : unit = inner.RecordGrep(pattern, path)
+    member _.RecordGlob(pattern: string) : unit = inner.RecordGlob(pattern)
+    member _.RecordAttemptedMutation(path: string, committed: bool) : unit = inner.RecordAttemptedMutation(path, committed)
+    member _.GetRelatedPaths() : string list = inner.GetRelatedPaths() |> Array.toList
 
 /// CASE-003 / KR-003 / KR-014: typed observation capture and substantive access.
 module CasebookCapture =

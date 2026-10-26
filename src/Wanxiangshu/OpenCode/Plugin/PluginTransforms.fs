@@ -52,6 +52,9 @@ module PluginTransforms =
     [<Import("outboundViewStore", "wanxiangli/pair-hint")>]
     let private outboundViewStore: obj = jsNative
 
+    [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
+    let private deliveryAttemptLedger: obj = jsNative
+
     [<Import("scopeProgress", "wanxiangli/scope-progress")>]
     let private scopeProgress: obj = jsNative
 
@@ -198,8 +201,22 @@ module PluginTransforms =
     let negotiationProjectMessages (sessionId: string) (outObj: obj) : bool =
         let questionOpt = latestTemporaryQuestion outObj
 
+        // The temporary turn's own steps after its question (a vetoed tool call
+        // and its denial) stay visible, so the model reads the rebuke.
+        let trailing =
+            let messages = negotiationMessages outObj
+
+            match questionOpt with
+            | Some question ->
+                match Array.tryFindIndexBack (fun m -> obj.ReferenceEquals(m, question)) messages with
+                | Some index -> messages[index + 1 ..]
+                | None -> [||]
+            | None -> [||]
+
         let projectedOpt =
-            questionOpt |> Option.bind (fun q -> Surface.projectMessages sessionId q)
+            questionOpt
+            |> Option.bind (fun q -> Surface.projectMessages sessionId q)
+            |> Option.map (fun projected -> Array.append projected trailing)
 
         match projectedOpt with
         | Some projected -> applyTemporaryQuestion outObj projected
@@ -241,15 +258,21 @@ module PluginTransforms =
           Current: XTraceProjectionState option
           Receipt: XTraceCaptureReceipt option }
 
+    type DeliveryAttemptFence =
+        { SessionId: SessionId
+          ProviderRun: ProviderRunIdentity
+          CallId: ToolCallId }
+
     /// 交付裁决（条款 4）：Continue = 仍需继续，本次请求照常放行；
     /// Stop = 无需继续，本次请求在 transform 钩子处被中断。
     [<RequireQualifiedAccess>]
     type DeliveryAdjudication =
         | ContinueDelivery
-        | StopDelivery of DeliveryAttemptLedger.Fence
+        | StopDelivery of DeliveryAttemptFence
 
     type NormalTransformCapabilities =
         { BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
+          StopCompletedContinuation: string option -> PhysicalUserMessageId option -> obj -> Task<bool>
           BindSessionStartedAt: string option -> Task<DateTimeOffset option>
           ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
           ApplyTenureIsolation: string option -> obj -> Task<unit>
@@ -261,9 +284,11 @@ module PluginTransforms =
           InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
           SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
           SanitizeMessages: string option -> obj -> unit
+          /// Advisor is pure chat: no Pair Hint plan, steer or estimate request.
+          IsPureChatSession: string option -> bool
           AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
           StopAfterDelivery:
-              string option -> PhysicalUserMessageId option -> DeliveryAttemptLedger.Fence -> obj -> Task<unit> }
+              string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit> }
 
     type TransformBranchCapabilities = { RegisterOwned: string -> unit }
 
@@ -786,6 +811,58 @@ module PluginTransforms =
                 |> Option.isSome
             | _ -> false
 
+        let isContinuation = function
+            | PromptAuthority.PromptOrigin.Continuation _ -> true
+            | _ -> false
+
+        let completedContinuation (sidOpt: string option) (physical: PhysicalUserMessageId option) =
+            match journal, sidOpt, physical with
+            | Some durable, Some sid, Some messageId ->
+                let sessionId = SessionId.create sid
+                let projections = (AgentJournal.snapshot durable).AgentProjections
+
+                let key: ChatExecutionKey =
+                    { SessionId = sessionId
+                      PhysicalUserMessageId = messageId }
+
+                projections.ChatExecutions
+                |> ChatExecutionProjection.byKey key
+                |> Option.exists (fun execution ->
+                    let accepted = execution.acceptedEvidence
+                    let successor =
+                        PromptAuthorityProjectionQueries.activeProfile sessionId projections
+                        |> Option.exists (fun active -> active.LogicalRunId <> accepted.LogicalRunId)
+
+                    let completedWork =
+                        PromptIdentitySeed.owner accepted.IdentitySeed
+                        |> Option.bind (fun (owner, _, _) -> Map.tryFind owner projections.Sessions)
+                        |> Option.bind (fun owner -> owner.Handles)
+                        |> Option.bind (fun handles ->
+                            projections.HandleByChildSession
+                            |> Map.tryFind sessionId
+                            |> Option.bind (fun handle ->
+                                Wanxiangshu.Execution.Delegation.HandleProjection.tryWork
+                                    { Handle = handle.Handle
+                                      ChildSessionId = sessionId
+                                      AuthorityRoot = accepted.AuthorityRootUserMessageId }
+                                    handles))
+                        |> Option.exists (fun work ->
+                            work.LogicalRunId = accepted.LogicalRunId
+                            && (work.LastCompletion
+                                |> Option.exists (fun completion ->
+                                    completion.Kind = Wanxiangshu.Execution.Delegation.HandleCompletionKind.Terminal))
+                            && (match work.Lifecycle with
+                                | Wanxiangshu.Execution.Delegation.CompletedAwaitingJoin _
+                                | Wanxiangshu.Execution.Delegation.Retired -> true
+                                | _ -> false))
+
+                    let closedRun =
+                        PromptAuthorityProjectionQueries.projectionFor sessionId projections
+                        |> Option.exists (fun authority -> Map.containsKey accepted.LogicalRunId authority.ClosedRuns)
+
+                    isContinuation accepted.Origin && not successor && (completedWork || closedRun))
+            | _ -> false
+
         /// 条款 3：本次 attempt 是否存在一次已成立的交付。判据只认真实交付
         /// 事实——交付登记时的物理输入必须仍是当前请求的物理输入，物理输入
         /// 已变就不再命中（不得误停新输入或后任）。view 声明、助手正文与
@@ -799,6 +876,13 @@ module PluginTransforms =
         /// 两个来源都查不到见证时本次请求照常放行：这不是「没交付过」的断言，
         /// 只是「无法证明成立」——条款 3 只认真实交付事实，无法证明成立就不能
         /// 当作已完成，所以这里既不停本次请求，也不把交付呈现为已完成。
+        let fenceObjOf (fence: DeliveryAttemptFence) : obj =
+            createObj [
+                "sessionId" ==> SessionId.value fence.SessionId
+                "providerRun" ==> ProviderRunIdentity.value fence.ProviderRun
+                "callId" ==> ToolCallId.value fence.CallId
+            ]
+
         let adjudicateDelivery (sessionText: string) (outObj: obj) : DeliveryAdjudication =
             let physical =
                 outObj
@@ -806,10 +890,50 @@ module PluginTransforms =
                 |> ProviderWireCapture.lastUserMessageId
 
             let sessionId = SessionId.create sessionText
+            let physicalStr = physical |> Option.map PhysicalUserMessageId.value
 
-            DeliveryAttemptLedger.tryFindEstablished sessionId physical
-            |> Option.map fst
-            |> Option.orElseWith (fun () -> DeliveryAttemptLedger.tryFindDurableEstablished journal sessionId physical)
+            let inMemory: DeliveryAttemptFence option =
+                let found: obj option =
+                    deliveryAttemptLedger?tryFindEstablished (SessionId.value sessionId, physicalStr)
+                found
+                |> Option.bind (fun res ->
+                    let fence = res?fence
+                    if isNull fence then None
+                    else
+                        Some
+                            { SessionId = SessionId.create (string fence?sessionId)
+                              ProviderRun = ProviderRunIdentity.create (string fence?providerRun)
+                              CallId = ToolCallId.create (string fence?callId) })
+
+            let durableConfirmed: DeliveryAttemptFence option =
+                match journal, physicalStr with
+                | Some durable, Some phys ->
+                    let deliveries =
+                        (AgentJournal.snapshot durable).AgentProjections.Deliveries
+                        |> Map.toList
+                        |> List.filter (fun ((s, _, _), _) -> s = sessionId)
+                        |> List.map (fun ((s, r, c), witness) ->
+                            createObj [
+                                "sessionId" ==> SessionId.value s
+                                "providerRun" ==> ProviderRunIdentity.value r
+                                "callId" ==> ToolCallId.value c
+                                "physicalUserMessageId" ==> PhysicalUserMessageId.value witness.Fence.PhysicalUserMessageId
+                            ])
+                        |> List.toArray
+                    let confirmed: obj option =
+                        deliveryAttemptLedger?tryFindDurableEstablished (deliveries, SessionId.value sessionId, phys)
+                    confirmed
+                    |> Option.bind (fun f ->
+                        if isNull f then None
+                        else
+                            Some
+                                { SessionId = SessionId.create (string f?sessionId)
+                                  ProviderRun = ProviderRunIdentity.create (string f?providerRun)
+                                  CallId = ToolCallId.create (string f?callId) })
+                | _ -> None
+
+            inMemory
+            |> Option.orElse durableConfirmed
             |> Option.map DeliveryAdjudication.StopDelivery
             |> Option.defaultValue DeliveryAdjudication.ContinueDelivery
 
@@ -834,21 +958,28 @@ module PluginTransforms =
         let issueDeliveryInterrupt
             (exactSessionId: SessionId)
             (sessionText: string)
-            (fence: DeliveryAttemptLedger.Fence)
+            (fence: DeliveryAttemptFence)
             : Task =
             task {
-                let facts = DeliveryAttemptLedger.interruptFacts fence
+                let fenceObj = fenceObjOf fence
+                let facts: obj = deliveryAttemptLedger?interruptFacts fenceObj
+                let issued: bool = facts?issued
 
-                match facts.Issued with
+                match issued with
                 | true -> ()
                 | false ->
                     let interrupt = requestRetiredAttemptInterrupt exactSessionId
 
-                    DeliveryAttemptLedger.recordInterruptIssued fence (interrupt :> Task)
+                    deliveryAttemptLedger?recordInterruptIssued (fenceObj, interrupt :> Task) |> ignore
 
                     let! outcome = interrupt
 
-                    DeliveryAttemptLedger.recordInterruptObserved fence outcome
+                    let outcomeObj =
+                        match outcome with
+                        | Ok() -> createObj [ "ok" ==> true ]
+                        | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
+
+                    deliveryAttemptLedger?recordInterruptObserved (fenceObj, outcomeObj) |> ignore
 
                     Diagnostic.emit
                         "delivery-interrupt-observed"
@@ -869,7 +1000,7 @@ module PluginTransforms =
         let retiredAttemptFence
             (sessionId: SessionId)
             (lifecycle: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option)
-            : DeliveryAttemptLedger.Fence option =
+            : DeliveryAttemptFence option =
             let retirement =
                 lifecycle
                 |> Option.bind (fun work ->
@@ -882,27 +1013,35 @@ module PluginTransforms =
                   ProviderRun = ProviderRunIdentity.create entry.Fence.ProviderRunId
                   CallId = ToolCallId.create entry.Fence.ToolCallId })
 
-        let recordRetiredInterruptIssued (fence: DeliveryAttemptLedger.Fence option) (issued: Task) =
+        let recordRetiredInterruptIssued (fence: DeliveryAttemptFence option) (issued: Task) =
             match fence with
-            | Some exact -> DeliveryAttemptLedger.recordInterruptIssued exact issued
+            | Some exact ->
+                deliveryAttemptLedger?recordInterruptIssued (fenceObjOf exact, issued) |> ignore
             | None -> ()
 
-        let recordRetiredInterruptObserved (fence: DeliveryAttemptLedger.Fence option) (outcome: Result<unit, string>) =
+        let recordRetiredInterruptObserved (fence: DeliveryAttemptFence option) (outcome: Result<unit, string>) =
             match fence with
-            | Some exact -> DeliveryAttemptLedger.recordInterruptObserved exact outcome
+            | Some exact ->
+                let outcomeObj =
+                    match outcome with
+                    | Ok() -> createObj [ "ok" ==> true ]
+                    | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
+                deliveryAttemptLedger?recordInterruptObserved (fenceObjOf exact, outcomeObj) |> ignore
             | None -> ()
 
         /// 本次退休 attempt 的中断是否已经发出过。同一退休 attempt 的第二次
         /// 请求不得再发一次旧任期的会话中止（条款 011 禁止后果）。
-        let retiredInterruptIssued (fence: DeliveryAttemptLedger.Fence option) =
+        let retiredInterruptIssued (fence: DeliveryAttemptFence option) =
             fence
-            |> Option.exists (fun exact -> (DeliveryAttemptLedger.interruptFacts exact).Issued)
+            |> Option.exists (fun exact ->
+                let facts: obj = deliveryAttemptLedger?interruptFacts (fenceObjOf exact)
+                facts?issued)
 
         /// 抑制下一次 provider step + 登记「已发出」。
         let releaseRetiredProviderStep
             (exactSessionId: SessionId)
             (physical: PhysicalUserMessageId)
-            (fence: DeliveryAttemptLedger.Fence option)
+            (fence: DeliveryAttemptFence option)
             (interrupt: Task)
             =
             ModelRouting.suppressProviderStep exactSessionId physical
@@ -924,7 +1063,7 @@ module PluginTransforms =
             (exactSessionId: SessionId)
             (sessionText: string)
             (physicalUserMessageId: PhysicalUserMessageId option)
-            (fence: DeliveryAttemptLedger.Fence option)
+            (fence: DeliveryAttemptFence option)
             : Task =
             task {
                 let alreadyIssued = retiredInterruptIssued fence
@@ -1012,6 +1151,24 @@ module PluginTransforms =
           BindSessionStartedAt =
             let port = journal |> Option.map AgentJournalPortAdapter.forSessionStartedAt
             SessionStartedAtLedger.bindSessionStartedAt port clock terminateSession Diagnostic.emit
+          StopCompletedContinuation =
+            fun sidOpt physical outObj ->
+                task {
+                    if completedContinuation sidOpt physical then
+                        let sid = SessionId.create (Option.get sidOpt)
+                        ModelRouting.suppressProviderStep sid (Option.get physical)
+                        RelayNarrativeTransform.clearRequestMessages outObj
+                        let! outcome = requestRetiredAttemptInterrupt sid
+
+                        Diagnostic.emit
+                            "completed-continuation-interrupt-observed"
+                            [ "session_id", SessionId.value sid
+                              "result", deliveryInterruptResultName outcome ]
+
+                        return true
+                    else
+                        return false
+                }
           ApplyRelayProjection =
             fun sidOpt outObj ->
                 task {
@@ -1164,6 +1321,11 @@ module PluginTransforms =
                 | Some sid when ownerRole sid = Some Role.Advisor ->
                     HostMessageProjection.sanitizeAdvisorOutputMessages outObj
                 | _ -> HostMessageProjection.sanitizeOutputMessages outObj
+          IsPureChatSession =
+            fun sidOpt ->
+                match sidOpt with
+                | Some sid when not (String.IsNullOrWhiteSpace sid) -> ownerRole sid = Some Role.Advisor
+                | _ -> false
 
           // 条款 3：裁决只认真实交付事实——本次 attempt 存在一次已成立的
           // 交付，且登记时的物理输入仍是当前物理输入。view 声明、助手正文与
@@ -1670,7 +1832,9 @@ module PluginTransforms =
                   { Name = "scope-purge"
                     Run =
                       fun frame ->
-                          applyScopePurgeAndSuffix frame.SessionId frame.OutObj
+                          if not (caps.IsPureChatSession frame.SessionId) then
+                              applyScopePurgeAndSuffix frame.SessionId frame.OutObj
+
                           Task.FromResult(Some frame) }
                   { Name = "current-auxiliaries"
                     Run =
@@ -1702,7 +1866,12 @@ module PluginTransforms =
                   SessionStartedAt = None
                   TracedXTrace = None }
 
-            do! runOrdinaryStages stages frame
+            let! stopped = caps.StopCompletedContinuation projectionSessionIdOpt physicalUserMessageId outObj
+
+            if not stopped then
+                do! runOrdinaryStages stages frame
+                let! _ = caps.StopCompletedContinuation projectionSessionIdOpt physicalUserMessageId outObj
+                ()
 
             projectionSessionIdOpt
             |> Option.iter (fun sid ->

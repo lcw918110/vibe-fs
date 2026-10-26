@@ -7,7 +7,6 @@
 /src/Wanxiangshu/Foundation/Identity.fs
 /src/Wanxiangshu/OpenCode/Host/HostSignalBootstrap.fs
 /src/Wanxiangshu/OpenCode/Tools/ToolRuntimeScope.fs
-/src/Wanxiangshu/Mission/Work/DeliveryAttemptLedger.fs
 /src/Wanxiangshu/Execution/Session/Recovery/Model.fs
 /src/Wanxiangshu/OpenCode/Host/SessionExecutionBinding.fs
 /src/Wanxiangshu/Interaction/Admission/ChatAdmissionIntent.fs

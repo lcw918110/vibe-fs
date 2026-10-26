@@ -406,7 +406,13 @@ module HostPlugin =
                 return! deliverToChildSession clock timer ports stateRoot root text childSession
         }
 
-    let private negotiatePromptText (questions: string) : string =
+    let private snapshotForbidText (sessionText: string) : string =
+        ProviderProse.render
+            (ProviderLanguageBinding.forSessionText sessionText)
+            "delegation/snapshot-dialogue/forbid"
+            Map.empty
+
+    let private negotiatePromptText (delegator: string) (questions: string) : string =
         let cleaned =
             if String.IsNullOrWhiteSpace questions then
                 "Please clarify your intent."
@@ -417,11 +423,10 @@ module HostPlugin =
         + "The assistant currently executing the task on your behalf requires clarification:\n"
         + cleaned
         + "\n\n"
-        + "Answer directly and concisely from this conversation context. "
-        + "Do not call tools. Do not ask follow-up questions. Output plain text only.\n"
-        + "</btw>"
+        + snapshotForbidText delegator
+        + "\n</btw>"
 
-    let negotiateRetryText (questions: string) : string =
+    let negotiateRetryText (delegator: string) (questions: string) : string =
         let cleaned =
             if String.IsNullOrWhiteSpace questions then
                 "Please clarify your intent."
@@ -429,12 +434,10 @@ module HostPlugin =
                 questions.Trim()
 
         "<btw>\n"
-        + "A tool call was attempted or the response was empty. "
-        + "Ephemeral clarification turns MUST NOT call tools. "
-        + "Please provide a plain text direct clarification answering:\n"
         + cleaned
-        + "\n"
-        + "</btw>"
+        + "\n\n"
+        + snapshotForbidText delegator
+        + "\n</btw>"
 
     let private extractQuestions (args: CanonicalJsonText) : string =
         let (CanonicalJsonText raw) = args
@@ -515,8 +518,8 @@ module HostPlugin =
                 let req =
                     { EphemeralTurnRequest.DelegatorSessionId = delegator
                       Receipt = receipt
-                      PromptText = negotiatePromptText questions
-                      RetryPromptText = negotiateRetryText questions }
+                      PromptText = negotiatePromptText delegator questions
+                      RetryPromptText = negotiateRetryText delegator questions }
 
                 let! ephemeralRes = transport.AskEphemeral req
 

@@ -28,6 +28,7 @@ function safeCaps() {
   const yes = async () => {}
   return {
     BeginPhysicalProviderAttempt: yes,
+    StopCompletedContinuation: async () => false,
     BindSessionStartedAt: async () => null,
     ApplyRelayProjection: async () => null,
     ApplyTenureIsolation: yes,
@@ -39,6 +40,7 @@ function safeCaps() {
     InjectPairGuideline: yes,
     SettleAndReplaceDeferredInspections: yes,
     SanitizeMessages: () => {},
+    IsPureChatSession: () => false,
     AdjudicateDelivery: async () => new DeliveryAdjudication(0, []),
     StopAfterDelivery: yes,
   }
@@ -212,6 +214,33 @@ test('WHAT[delegation-negotiation-001] the Host records only the question while 
   negotiationForgetSession(parent)
 })
 
+test('WHAT[delegation-negotiation-001] a vetoed temporary tool call keeps its denial visible to the next provider step', async () => {
+  const {
+    negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
+    negotiationStartTemporary, negotiationProjectMessages,
+    negotiationFinishTemporary, negotiationForgetSession,
+  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  const parent = 'ses-neg-trailing-parent', temporary = 'ses-neg-trailing-temp'
+  const prefix = [{ info: { id: 'pu', sessionID: parent, role: 'user' }, parts: [{ type: 'text', text: 'Parent task' }] }]
+  negotiationRememberSystem({ sessionID: parent }, { system: ['system'] })
+  negotiationRememberMessages(parent, { messages: prefix })
+  negotiationRememberModel({ sessionID: parent, model: { providerID: 'provider', modelID: 'deep-model' } })
+  assert.equal(negotiationStartTemporary(temporary, parent).tag, 0)
+  try {
+    const question = { info: { id: 'tq', sessionID: temporary, role: 'user' }, parts: [{ type: 'text', text: 'Which parser?' }] }
+    const attempt = { info: { id: 'ta', sessionID: temporary, role: 'assistant' },
+      parts: [{ type: 'tool', tool: 'read', callID: 'veto-1', state: { status: 'error', input: {}, error: 'DENIED. body text' } }] }
+    const outgoing = { messages: [question, attempt] }
+    assert.equal(negotiationProjectMessages(temporary, outgoing), true)
+    assert.equal(outgoing.messages[0].parts[0].text, 'Parent task')
+    assert.equal(outgoing.messages.at(-2).parts[0].text, 'Which parser?')
+    assert.equal(outgoing.messages.at(-1).info.id, 'ta', 'the vetoed attempt and its denial stay after the question')
+  } finally {
+    negotiationFinishTemporary(temporary)
+    negotiationForgetSession(parent)
+  }
+})
+
 test('WHAT[delegation-negotiation-001] temporary session tool calls are forbidden before execution', async () => {
   const {
     negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
@@ -231,7 +260,7 @@ test('WHAT[delegation-negotiation-001] temporary session tool calls are forbidde
           { sessionID: temp, tool: 'read', callID: 'forbidden-1', args: {} },
           {},
         )),
-        /Ephemeral negotiation is read-only/,
+        /DENIED\. [\s\S]*(正文|body text)/,
       )
       assert.equal(negotiationToolViolationCount(temp), 1, 'a vetoed tool call is recorded for retry')
     } finally {
@@ -358,7 +387,7 @@ test('WHAT[delegation-negotiation-004] registered negotiate sends ephemeral BTW 
       if (prompts === 1) {
         await assert.rejects(
           hooks['tool.execute.before']({ sessionID: tempId, tool: 'read', callID: 'btw-forbidden' }, { args: {} }),
-          /Ephemeral negotiation is read-only/,
+          /DENIED\. [\s\S]*(正文|body text)/,
         )
         blocked += 1
         throw new Error('tool call intercepted before execution')
@@ -600,7 +629,7 @@ test('WHAT[context-compression-047] registered OpenCode reset archives physical 
       if (providerAttempts === 1) {
         await assert.rejects(
           hooks['tool.execute.before']({ sessionID: tempId, tool: 'write', callID: 'forbidden-previous' }, { args: {} }),
-          /Ephemeral negotiation is read-only/,
+          /DENIED\. [\s\S]*(正文|body text)/,
         )
         toolVetoes += 1
         throw new Error('read-only veto before tool execution')
@@ -768,6 +797,37 @@ test('WHAT[context-compression-051] a cold OpenCode request with historical rese
     scopeProgress.clear(sid)
     clearSessionState(sid)
   })
+})
+
+
+test('WHAT[advisor-pure-chat] an Advisor session is pure chat: no Pair Hint steer, estimate request or Scope protocol', async () => {
+  const { Role } = await import('../../../dist/Foundation/Roles.js')
+  const advisorSid = 'pure-chat-advisor', workerSid = 'pure-chat-control-engineer'
+  const caps = { ...safeCaps(), IsPureChatSession: sid => sid === advisorSid }
+  const outgoing = async sid => {
+    clearSessionState(sid)
+    const out = { messages: [user('u-' + sid, 'Please think this through with me', 1)] }
+    await normalTransform(caps, sid, {}, out)
+    clearSessionState(sid)
+    scopeProgress.clear(sid)
+    return out.messages
+  }
+  const worker = await outgoing(workerSid)
+  assert.match(JSON.stringify(worker), /remainingScopeTurnsEstimate/, 'control: a worker still gets its estimate request')
+  const advisor = await outgoing(advisorSid)
+  assert.doesNotMatch(JSON.stringify(advisor), /remainingScopeTurnsEstimate/, 'Advisor is never asked for a Scope estimate')
+  assert.equal(advisor.length, 1, 'no Pair Hint steer reaches Advisor')
+  assert.equal(advisor[0].parts[0].text, 'Please think this through with me')
+
+  const roleOf = sid => (String(sid?.fields?.[0] ?? sid) === advisorSid ? Role.Advisor : Role.Engineer)
+  const transform = createWith(roleOf, async () => undefined)
+  const systemFor = async sid => {
+    const output = { system: ['Provider configuration'] }
+    await transform({ sessionID: sid })(output)
+    return JSON.stringify(output.system)
+  }
+  assert.match(await systemFor(workerSid), /resetScope/, 'control: a worker system carries the Scope protocol')
+  assert.doesNotMatch(await systemFor(advisorSid), /resetScope|turnBudget/, 'Advisor system carries no Scope protocol')
 })
 
 
@@ -1163,7 +1223,7 @@ test('WHAT[delegation-negotiation-035] temporary SDK chat admission is isolated 
         'a read-only ephemeral request must not allocate a managed chat lease')
       await assert.rejects(
         hooks['tool.execute.before']({sessionID:temp,tool:'read',callID:'forbidden-035'},{args:{}}),
-        /Ephemeral negotiation is read-only/)
+        /DENIED\. [\s\S]*(正文|body text)/)
     } finally {
       negotiationFinishTemporary(temp)
       negotiationForgetSession(parent)
@@ -1206,8 +1266,8 @@ test('WHAT[delegation-negotiation-036] a temporary SDK lease rejection never bec
         {sessionID:child,agent:'engineer',callID:'negotiate-lease-036'})
       assert.match(String(accepted),/Questions accepted|问题已受理/)
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('temporary cleanup not observed')),3000))])
-      assert.deepEqual(seen,['What evidence is reliable?'],
-        'an SDK protocol failure is not a blank LLM answer and must not generate another user prompt')
+      assert.equal(seen.length,1,'an SDK protocol failure is not a blank LLM answer and must not generate another user prompt')
+      assert.ok(seen[0].startsWith('What evidence is reliable?'))
       assert.equal(runtime.prompts.some(p=>JSON.stringify(p).includes('PROMPT-006')),false,
         'the managed lease error must never be sent to the worker as a purported answer')
     } finally {
@@ -1251,9 +1311,10 @@ test('WHAT[delegation-negotiation-037] thrown temporary provider admission/capac
         {sessionID:child,agent:'engineer',callID:'negotiate-037'})
       assert.match(String(receipt),/Questions accepted|问题已受理/)
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
-      assert.deepEqual(prompted,['What should the worker investigate next?'],
-        'transport capacity rejection cannot be confused with an incomplete assistant response')
-      assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('刚才的回答不完整')),false)
+      assert.equal(prompted.length,1,'transport capacity rejection cannot be confused with an incomplete assistant response')
+      assert.ok(prompted[0].startsWith('What should the worker investigate next?'))
+      assert.match(prompted[0],/严禁调用任何工具|strictly forbidden/)
+      assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('DENIED.')),false)
     } finally {
       session.delete=originalDelete
       negotiationForgetSession(parent)
@@ -1295,9 +1356,10 @@ test('WHAT[delegation-negotiation-038] a normally completed empty SDK reply term
         {sessionID:child,agent:'engineer',callID:'negotiate-038'})
       assert.match(String(receipt),/Questions accepted|问题已受理/)
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
-      assert.deepEqual(prompted,['What should the worker investigate next?'],
-        'a completed empty answer is an explicit host failure, not grounds for a fictional follow-up')
-      assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('刚才的回答不完整')),false)
+      assert.equal(prompted.length,1,'a completed empty answer is an explicit host failure, not grounds for a fictional follow-up')
+      assert.ok(prompted[0].startsWith('What should the worker investigate next?'))
+      assert.match(prompted[0],/严禁调用任何工具|strictly forbidden/)
+      assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('DENIED.')),false)
     } finally {
       session.delete=originalDelete
       negotiationForgetSession(parent)

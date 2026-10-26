@@ -1,12 +1,65 @@
 [GUIDE: Apply ASD-STE100 to source code. Use Mise-en-place for code design and reasoning: prepare complete, independent responsibilities, then compose them explicitly. Prefer flat dependencies and autonomous, message-oriented objects inspired by Smalltalk and the Actor Model, even without concurrency. Start with minimal complete parts; strengthen them independently in small, verified steps, using removable, decorator-inspired enhancements where they simplify the whole. Adapt Gall’s Law, Chesterton’s Fence, and Poka-yoke. Invoke Goodhart’s Law and Via Negativa when needed. Treat these principles as Wittgenstein’s Ladder. Build the real thing, not its imitation. Try to falsify it.] [For natural-language discussion, follow Fei Xiaotong’s plain precision and Kunihiko Kodaira’s quiet clarity. Avoid officialese, performative rhetoric, translationese, and textbook cadence. Let the subject shape the prose.]
 
-## AXIOM
+## 目的
 
-1. [使用者] 万象术从不涉及语义判断，也不怀疑用户与 LLM 的清醒：除最低限度的防呆外，从不阻拦形式合规的请求。在用户已明确授予的权限范围内，信任其决定，不重复请求同一授权，也不增加与目标无关的操作限制；防呆只校验真实误操作及其后果（身份、围栏、形状、可逆性与幂等），不审查内容、动机或结论。
-    - 理由：语义判断把实现者的偏好变成对使用者的否决；形式合规的请求若因内容被拦，系统就不再是工具。反复审批已决定的事同样打断工作。
+把 AI 当作配对编程里的搭档。说话是工作的一部分，但不是停下来等指示。
 
-2. [使用者、开发者] 代理之间的散文消息，父→子与子→父两个方向都渲染为文档顶部的 `# ...` 注释，而不是字段里的三引号字符串值：字段只承载材料，注释只承载指令、指导与报告。
-    - 理由：散文是发送者自己的话，接收者按话本身去理解，不能被当成数据去解析、匹配或按模板裁剪；材料（事实、结构化结果、可机读载荷）才进字段，保留机器可校验的结构。把散文塞成字段值会把「话」变成「数据」，把材料塞成注释又会丢掉结构。发送者自由决定说什么、怎么说，不设内容模板；可酌情附简短 FYI，不强制，也不堆积。
+按当前理解直接做。边做边说，或做完一段立刻说。使用者如果觉得方向不对，会打断。不要为了确认而主动停。
+
+多说的是：你怎么理解问题、排除了什么、选了什么、还不确定什么。少说的是：空的确认、事后才补的总结、以及“我先停下来问你要不要继续”。
+
+## 基本姿态
+
+- 你同时是 driver 和 navigator。默认先开键盘。
+- 有合理理解就往前走，不先征求许可。
+- 使用者打断、改方向、指出错误，都是正常协作。
+- 不确定的地方说出来，但说完继续按最合理的假设做，除非那个假设一旦错了代价极高。
+- 中间状态可以讲，不必等到干净结果才开口。
+
+## 说话规则
+
+### 1. 先按理解做，同时把理解说出来
+
+动手时或动手后立刻说明：
+
+- 你对问题的当前理解
+- 你正在做或刚做的选择，以及为什么
+- 你看到的主要风险、被排除的路径、或还不确定的点
+
+使用者看到后可以立刻打断。不要先把这段话说完再等回复。
+
+### 2. 把推理写在行动旁边
+
+不要只给最终结果。说明你走过的路径：
+
+- 看了哪些地方
+- 排除了哪些可能
+- 为什么选现在这条而不是另一条
+- 对这个选择的信心有多高
+
+有明显的替代方案就提一句，并说清你没选它的理由。提完继续按你选的做。
+
+### 3. 假设可以讲，但默认不为此停
+
+遇到歧义时，把你采用的假设说出来，然后按这个假设继续。
+
+只有在以下情况才主动停下来等：
+
+- 操作不可逆且代价高（删数据、改生产配置、推送有破坏性的提交等）
+- 使用者之前明确表示过这个点必须确认
+- 继续做下去会明显浪费双方时间，而停下来问一句就能避免
+
+其他情况，讲完假设就往前走。
+
+### 4. 中间状态直接讲
+
+正在探索、卡在某个地方、发现之前的假设不对，都可以直接说。不必等到“干净的结果”。
+
+说完之后按新的理解继续，除非使用者已经打断。
+
+### 5. 使用者打断时，先听
+
+如果使用者提出不同看法或新信息，先复述你听到的关键点，确认理解，然后按新方向继续。不要先辩护原来的计划。
 
 ## 工具调用纪律
 
@@ -688,6 +741,79 @@ CUT36_OMP_REAL_SMOKE=1 \
     - `architecture.mjs` 与 `adapter-thinness.mjs`：仅含既有基线已知红态 `Host/FissionPort.fs(.fsi)` namespace-tier 违规，无任何新增违例；
     - `owner-impact-corpus.json`：经核验已彻底清理，无任何 `OutboundViewCapture` 残留条目。
 - **状态台账与两仓主线对齐。** 本包完成 `OutboundViewCapture` 状态抽取，两仓分别完成精确暂存并推送到远端主线（库端 `main`，主仓 `master`）。本包使进程内出站请求视图暂存字典及其全部封存与单次排空行为彻底由库侧自治单例拥有，宿主不再保留任何旧状态容器与类型。
+
+### 6.15 CasebookObservationCollector 与 AccessTracker 状态抽取（2026-10-26）
+- **一份状态，一个自治 owner。** 原主仓 `ObservationCollector.fs/.fsi`（会话级观测缓冲 `buffers` 与会话访问跟踪器字典 `trackers`）及 `Capture.fs` 中的私有访问路径集合 `paths` 彻底迁入 `wanxiangli/casebook-access`。纯内存跟踪器 `AccessTracker`（独占持有私有 `paths: HashSet<string>`）和 `CasebookObservationCollector`（独占持有 `buffers` 与 `trackers` 字典）由库侧对象统一维护；宿主不再保留任何路径集合或观测缓冲容器。
+- **数据结构与去重归一化等价性。** 观测缓冲去除了冗余的 `kind` 字段（证伪其必要性：buffer 仅接收并存储文件读取），精简为 `{ path: string; contentHash: string }`；`Drain` 契约严格遵循宿主 `Observations.normalize` 语义，按 `"read:" + path + ":" + hash` 码元序升序排列并去重，返回原生数组快照；从 `buffers` 中物理移除该 session，但严格保留其 `AccessTracker`。`RecordFileRead` 在 path 或 output 为空白时不追加观测，tracker 忽略 contentHash。
+- **旧 owner 彻底退出与薄代理边界。** 物理删除主仓 `ObservationCollector.fs` 与 `ObservationCollector.fsi`，从 `Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-bookkeeper.fsproj` 及 `compile-order.txt` 移除编译条目；清理 `owner-impact-corpus.json` 中的 8 行条目。宿主 `Capture.fs` 中的 `AccessTracker` 与 `Lifecycle.fs` 中的 `CasebookObservationCollector` 均改为纯薄转发代理，宿主仅保留 `CasebookCapture.contentHash` 计算及 `Observation.FileRead` F# 联合类型薄编解码，全仓绝无第二份 paths 缓存。
+- **逐层验证事实。**
+  - 库侧：编写 `wanxiangli/src/casebook-access/tests/004.test.mjs`，包含 6 组完备反例（空输出不记录但 tracker 记录、Drain 清空 buffer 留 tracker、重复观测排序去重、会话隔离与多实例独立、Collect 只记变更不污染 buffer、全局单例可用性）。
+  - 导出契约：在 `Wanxiangli.CasebookAccess.fsproj` 中配置 `PackageExport`（导出 `AccessTracker`、`CasebookObservationCollector` 及单例 `casebookObservationCollector`），更新 `index.d.ts` 与库侧 `AGENTS.md`。
+- **待 DevOps 实跑验证事项。** 需由 DevOps 执行 `node wanxiangli/scripts/build.mjs casebook-access --force` 及 `node --test wanxiangli/src/casebook-access/tests/004.test.mjs`；在 `/tmp/wxs-build.lock` 保护下执行 `node scripts/build.mjs` 以及 `knowledge-reuse` 相关 WHAT 测试套件。
+
+### 6.17 DeliveryAttemptLedger 状态抽取（2026-10-26）
+- **一份状态，一个自治 owner。** 原主仓 `DeliveryAttemptLedger.fs/.fsi`（进程内交付 attempt 围栏字典 `records: Dictionary<Fence, Record>` 与自增序列号 `sequence`）及其全部领域判定行为已彻底迁入 `wanxiangli/dispatch` 的自治对象 `DeliveryAttemptLedger`（并导出全局单例 `deliveryAttemptLedger`，实现在 `wanxiangli/src/dispatch/DeliveryAttemptLedger.fs`）。交付成立登记（`recordEstablished`，保存首次物理用户消息围栏，已有物理围栏不被篡改覆写）、工具结果呈现（`recordPresented`）、最近交付查找（`tryFindEstablished`，按物理围栏精确匹配并取最新成立者）、进程内交付存在判定（`hasEstablished`）、中断发出与自有任务记录（`recordInterruptIssued`）、中断结算观察记录（`recordInterruptObserved`）、中断事实查询（`interruptFacts`）、自有中断任务读取（`activeInterruptTask`）、会话释放清空（`dropSession`）及全局清空（`clear`）完全由库侧对象维护，宿主不再保留任何私有围栏记录容器。
+- **内存快速路径与 Durable 见证分工原样保留。** 库侧 `tryFindDurableEstablished` 与 `hasDurableEstablished` 解耦了对 SQLite / AgentJournal 的底层依赖，接收中立纯数据见证数组作为输入；`confirmedFence` 严格执行 `PhysicalUserMessageId` 精确匹配（陈旧见证直接被拒返回 undefined）并在多条匹配时取最后一条（最新见证胜出）；`hasDurableEstablished` 在空见证输入或清空后判定为假。库对象不直接访问存储，也不把「见证存在」夸大为「投递成功」。
+- **旧 owner 彻底退出与现场消费者改接。** 现场全仓静态检索核实，交接手册点名的 `TaskDelivery.fs`、`DeliverTool.fs`、`DeliveryAttemptLedgerSurface.fs` 在代码树中不存在；真实消费者为 `OpenCode/Tools/ToolRegistry.fs`、`OpenCode/Host/HostTurnObserver.fs`、`OpenCode/Tools/ToolRuntimeScope.fs` 及 `OpenCode/Plugin/PluginTransforms.fs/.fsi`。宿主全部调用点统一改接为向 `wanxiangli/dispatch` 导出的单例 `deliveryAttemptLedger` 发送消息；`PluginTransforms.fs/.fsi` 内部的 `DeliveryAttemptLedger.Fence` 改为自包含的 `DeliveryAttemptFence`。物理删除 3 个旧文件（`DeliveryAttemptLedger.fs/.fsi` 与所属 `mission-work-delivery-attempt-ledger.fsproj`），从 `compile-order.txt`、3 个引用该 fsproj 的工程文件、3 个 `APPLIES-TO` 彻底清除，全仓不保留任何旧 facade 或别名。
+- **契约与反例设计事实。** 库侧在 `Wanxiangli.Dispatch.fsproj` 中将 `DeliveryAttemptLedger.fs` 编入 `Dispatch.fs` 之前（保持后者为最终编译项以固定 bundle 入口 `dist/dispatch/Dispatch.js`），配置 `PackageExport` 导出类与单例；更新 `index.d.ts` 与库侧 `AGENTS.md`；在 `wanxiangli/src/dispatch/tests/004.test.mjs` 中构建了 5 项核心反例测试：覆盖物理输入不匹配的陈旧见证被拒、最新匹配见证胜出、重复记录不重复完成（物理围栏防篡改）、清空后判定为假、不同 ToolCallId 互不影响、会话释放清空及独立实例与单例相互隔离。
+- **待 DevOps 实跑验证事项。**
+  1. 库侧构建：在 `/tmp/wxs-build.lock` 保护下执行 `node wanxiangli/scripts/build.mjs dispatch --force`；
+  2. 库侧单测：执行 `node --test wanxiangli/src/dispatch/tests/*.test.mjs`（核验 001..004 全绿）；
+  3. 导出门禁：执行 `node --test wanxiangli/scripts/tests/exports.test.mjs` 验证 SPEC[build-008] 全绿；
+  4. 产包独立消费：在独立干净临时目录下对 `npm pack` 生成的 tarball 执行 Node.js ESM、Bun ESM 动态执行及 TypeScript strict（`tsc --noEmit`）检查；
+  5. 宿主编译与核心套件：在 `/tmp/wxs-build.lock` 保护下执行 `node scripts/build.mjs`；运行相关套件（如 `work/027`, `028`, `managed-session-lifecycle/001`, `020`）；
+  6. 门禁比较：运行架构门禁与 pyramid 门禁，确认未新增任何违规条目。
+
+### 6.16 ProviderAttemptStopFence 状态抽取（2026-10-26）
+- **一份状态，一个自治 owner。** 原主仓 `ProviderAttemptStopFence.fs/.fsi`（进程内发送栅栏私有状态 `stopped: HashSet<string>`、`waiters: Dictionary<string, TaskCompletionSource<string>>`、`denied: HashSet<string>` 及并发锁 `gate`) 及其全部领域判定行为已彻底迁入 `wanxiangli/failure` 的自治对象 `ProviderAttemptStopFence`（并导出全局单例 `providerAttemptStopFence`，实现在 `wanxiangli/src/failure/ProviderAttemptStopFence.fs`）。登记判定（`Register`，若已停止返回 `AlreadyStopped`，否则 `Admitted`）、停止观察与唤醒（`SignalStop`，幂等）、异步超时等待（`WaitForStop`，返回 `Stopped` / `TimedOut` / `Denied`，支持调用方指定超时预算）、会话级中止与拒绝（`Revoke`，幂等且不污染后续 attempt）、会话与全量清空（`Clear` / `ClearAll`，幂等且重复清空不误伤新 attempt）以及诊断计数快照（`Snapshot`，返回 `stopped`/`waiting`/`denied` 计数）完全由库侧对象维护，宿主不再维护任何私有集合或 TaskCompletionSource 编排。
+- **旧 owner 彻底退出与现场消费者改接。** 现场全仓静态检索核实，交接手册草稿点名的 `PromptDispatcher.fs` 在实际代码树中并不存在，真实生产消费者为 `SyncDelegate/Surface.fs`（Revoke、SignalStop、Snapshot）、`Workflow.fs`（WaitForStop）与 `HostSignalBootstrap.fs`（Revoke、SignalStop）。宿主全部真实生产调用点均改接为通过 Fable 动态消息向 `wanxiangli/failure` 导出的单例 `providerAttemptStopFence` 发送消息；`ProviderAttemptStopFenceSurface.fs/.fsi` 经核实仅由 `requirements/provider-attempt-recovery/tests/022.test.mjs` 测试引用、并非宿主真实装配注册点，故一并彻底物理删除，`022.test.mjs` 改为直接对库对象断言。主仓物理删除 4 个旧文件（`ProviderAttemptStopFence.fs/.fsi` 与 `ProviderAttemptStopFenceSurface.fs/.fsi`），从 `compile-order.txt`（第 41–44 行）、`Wanxiangshu.Owner.host-boundary.opencode-host-sessionquiescencegate.fsproj` 编译条目以及 `owner-impact-corpus.json` 的 16 处全编译条目中彻底移除，全仓不保留任何旧 facade 或别名。
+- **契约与反例设计事实。** 库侧在 `Wanxiangli.Failure.fsproj` 中将 `ProviderAttemptStopFence.fs` 编入 `ExecutionFailurePolicy.fs` 之前（保持后者为末位编译项以固定 bundle 入口 `dist/failure/ExecutionFailurePolicy.js`），配置 `PackageExport` 导出类与单例；更新 `wanxiangli/src/failure/index.d.ts`（补充 TS 声明）与 `wanxiangli/src/failure/AGENTS.md`；在 `wanxiangli/src/failure/tests/002.test.mjs` 中构建了 9 项完整反例测试：覆盖先 SignalStop 后 Register 得 AlreadyStopped、先 Register 后 SignalStop 唤醒、无停止 WaitForStop 短超时得 TimedOut 且从 waiters 移除防泄漏、Clear 之后同一 attempt 可重新 Register、重复 SignalStop 幂等不重复唤醒、Revoke 只影响目标会话不污染后续 attempt、重复 Clear 幂等不误伤新 attempt、ClearAll 清除全部状态、全局单例可用性与隔离。
+- **逐层验证事实与待 DevOps 实跑事项。**
+  - 本包改动严格遵循无 bash 约束，手工完成两仓源码与工程配置修改。
+  - 待 DevOps 实跑验证清单：
+    1. 库侧 Fable 编译：在 `/tmp/wxs-build.lock` 保护下执行 `node wanxiangli/scripts/build.mjs failure --force`；
+    2. 库侧单测：执行 `node --test wanxiangli/src/failure/tests/*.test.mjs`（核验 001 与 002 全绿）；
+    3. 导出门禁：执行 `node --test wanxiangli/scripts/tests/exports.test.mjs` 验证 SPEC[build-008] 全绿；
+    4. 独立产包消费：在独立干净临时目录下对 `npm pack` 生成的 tarball 执行 Node.js ESM、Bun ESM 动态执行及 TypeScript strict（`tsc --noEmit`）静态类型检查；
+    5. 宿主编译与套件：在 `/tmp/wxs-build.lock` 保护下执行 `node scripts/build.mjs`，并运行 `node --test requirements/provider-attempt-recovery/tests/022.test.mjs`；
+    6. 门禁比较：运行架构门禁与 pyramid 门禁，确认未新增任何违规条目。
+- **未闭合边界与状态台账。** 本包完成 `ProviderAttemptStopFence` 状态抽取，使宿主彻底交出 process-local 发送栅栏的状态所有权。宿主中其他未迁状态包（如 P08 JoinAttemptRegistry、P11 DeliveryAttemptLedger 等）仍按各自 lane 独立推进，本包不虚构全仓抽空。
+
+### 6.18 JoinAttemptRegistry 与 JoinWake 状态抽取（2026-10-26）
+- **一份状态，一个自治 owner。** 原主仓 `JoinInterruptRegistry.fs/.fsi`（进程内 Join 租约字典 `active: Dictionary<string, ResizeArray<JoinAttemptLease>>` 与可见消息去重集合 `visibleMessages: Dictionary<string, HashSet<PhysicalUserMessageId>>`）及其全部领域判定行为已彻底迁入 `wanxiangli/handle-lifecycle` 的自治对象 `JoinAttemptRegistry`（并导出全局单例 `joinAttemptRegistry`，实现在 `wanxiangli/src/handle-lifecycle/JoinAttemptRegistry.fs`）。租约独占获取（`acquire`，已占用返回 `AlreadyAcquired` 冲突事实）、幂等释放（`release`）、可见消息去重与即时唤醒判定（`signalVisibleUserMessage`，无活跃租约时只记去重不入唤醒，有活跃租约立即产生 `UserMessageArrived` 唤醒事实，重复消息返回 `DuplicateMessage` 拒绝重复唤醒）、会话隔离排空（`clearSession`）、快照诊断（`snapshot`）与状态探查（`isAcquired` / `hasSeenMessage`）完全由库侧对象维护，宿主不再保留任何租约字典与消息去重集合。
+- **纯状态与异步基础设施严格正交（方式 A 裁决）。** 库侧属于纯领域状态自治，严禁引入 `Task`、`TaskCompletionSource`、`JoinInterrupt` 或取消令牌等宿主异步运行时设施。`JoinInterrupt`（`{ Wait: Task<JoinInterruptReason>; Signal: JoinInterruptReason -> unit }`）与 `JoinInterruptReason` 严格原样保留在其唯一权威定义处 `src/Wanxiangshu/Execution/Session/Wait/CausalWait.fs/.fsi`（所属 shard 为 `execution-session-wait-contract.fsproj`，从未隶属于待删除文件）；宿主在薄适配层（`Fork/JoinSurface.fs` 与 `PluginSessionScope.fs`）中持有 `JoinInterrupt` 句柄并将库侧判定的唤醒事实转换为异步完成。
+- **旧 owner 彻底退出与现场消费者改接。** 
+  - 物理删除 4 个旧文件：`src/Wanxiangshu/Execution/Delegation/Handle/JoinInterruptRegistry.fs`、`JoinInterruptRegistry.fsi`、`JoinWake.fs`、`JoinWake.fsi`。
+  - 物理删除退役的空 shard 工程文件：`src/Wanxiangshu/Wanxiangshu.Owner.delegation.join-attempt-registry.fsproj`（其仅包含已删除的两项源码，按 `compile-shards.mjs` 门禁若保留空 shard 将触发硬报错）。
+  - 更新 3 个引用工程文件：在 `toolruntimescope.fsproj` 与 `sharedstatesurface.fsproj` 中清理对 `join-attempt-registry.fsproj` 的 ProjectReference；在 `hostturnobservedsurface.fsproj` 中移除 `JoinWake.fsi/.fs` 的编译项。
+  - 清理 `compile-order.txt`：移除第 598–599 行（JoinInterruptRegistry 两项）与第 990–991 行（JoinWake 两项）。
+  - 清理 `owner-impact-corpus.json`：精准过滤移除全部指涉该 4 个已退出文件的 16 处全编译条目。
+  - 改接 4 处宿主消费者：
+    1. `Execution/Delegation/Fork/JoinSurface.fs`：移除 Handle 引用，`createVisibleInputRegistry` 改接库侧 `new JoinAttemptRegistry()` 动态实例，为 `requirements/delegation/tests/015.test.mjs` 维持完整的异步测试表面。
+    2. `OpenCode/Host/PluginSessionScope.fs/.fsi`：移除 Handle 引用，`JoinInterrupts` 签名收敛为 `obj`，使用薄 `HostJoinAttempts` 代理，在 `ObserveAcceptedMessage` 中逐字照抄原 `JoinWake` 的 `AuthorityRoot` / `Continuation` 来源过滤逻辑并分发至单例与本地等待句柄；在 `DropSession` 中隔离排空。
+    3. `OpenCode/Tools/ToolRuntimeScope.fs/.fsi`：移除 Handle 引用，`AttachJoinAttempts` 与 `JoinAttempts` 签名收敛为 `obj`。
+    4. `Execution/Delegation/Fork/OpenCode/JoinTool.fs`：移除 Handle 引用，入参类型收敛，`attempt?Wait` 与 `attempt?SignalOperatorAbort` 经由 Fable 动态调用完美接通。
+    5. 验证 `OpenCode/Host/PluginHostInterop.fs:507` 保持原样无缝连通。
+- **契约与反例设计事实。** 库侧在 `Wanxiangli.HandleLifecycle.fsproj` 中将 `JoinAttemptRegistry.fs` 编入 `HandleLifecycleLaw.fs` 之前（固定 bundle 入口文件名 `HandleLifecycleLaw.js` 严格对齐 `package.json`），配置 `PackageExport` 导出类与单例；更新 `index.d.ts` 与 `wanxiangli/src/handle-lifecycle/AGENTS.md`；在 `wanxiangli/src/handle-lifecycle/tests/002.test.mjs` 中构建了 6 项完整反例测试：
+  - `SPEC[join-attempt-1]`：首个 Acquire 成功授予，重复 Acquire 返回 `AlreadyAcquired` 冲突事实并携带已有 attemptId；不同 session 互不影响。
+  - `SPEC[join-attempt-2]`：Release 幂等注销，释放后同一 targetSession 允许再次 Acquire。
+  - `SPEC[join-attempt-3]`：无活跃租约时到达消息记入去重集合并返回 `NoActiveLease`，后继 Acquire 绝不被陈旧消息补发唤醒，后续同一消息被拒且不唤醒（严格保真原 `JoinInterruptRegistry.fs` 行为）。
+  - `SPEC[join-attempt-4]`：有活跃租约时新消息立即返回 `UserMessageArrived` 唤醒事实；重复收执直接被拒不重复唤醒；新租约不被老消息唤醒，仅由 fresh 消息唤醒。
+  - `SPEC[join-attempt-5]`：`clearSession` 干净排空指定会话的租约与去重消息，其他会话完全隔离不受波及。
+  - `SPEC[join-attempt-6]`：全局单例 `joinAttemptRegistry` 独立实例隔离与非法参数防御性拒绝。
+- **待 DevOps 实跑验证事项。**
+  1. 库侧构建：在 `/tmp/wxs-build.lock` 保护下执行 `node wanxiangli/scripts/build.mjs handle-lifecycle --force`；
+  2. 库侧单测：执行 `node --test wanxiangli/src/handle-lifecycle/tests/*.test.mjs`（核验 001 与 002 全绿）；
+  3. 导出门禁：执行 `node --test wanxiangli/scripts/tests/exports.test.mjs` 验证 SPEC[build-008] 全绿；
+  4. 产包独立消费：在独立干净临时目录下对 `npm pack` 生成的 tarball 执行 Node.js ESM、Bun ESM 动态执行及 TypeScript strict（`tsc --noEmit`）静态类型检查；
+  5. 宿主编译与套件：在 `/tmp/wxs-build.lock` 保护下执行 `node scripts/build.mjs`；并运行 `node --test requirements/delegation/tests/015.test.mjs`；
+  6. 全仓残根检索：执行 `git grep` 确认 `JoinInterruptRegistry`、`JoinWake` 在 `src/` 与 `scripts/` 中彻底清零；
+  7. 架构与门禁对照：运行 `architecture.mjs`、`adapter-thinness.mjs`、`fsharp-control-pyramid.mjs` 确认零新增违规；运行 `owner-impact-report.mjs` 确认基线稳定。
+
+### 6.26 Package-17 标的核查与阻断裁决（2026-10-26）
+- **标的不存在事实（NOT_IN_BRANCH）**：经全仓多维度检索实证，《交接.md》记载的待迁移源文件 `src/Wanxiangshu/Execution/Delegation/Fission/FissionLaneQuiescenceGate.fs(.fsi)` 在当前分支中**完全不存在**，亦无任何 `Execution/Delegation/Fission` 目录。全仓无 `FissionLaneQuiescenceGate` 或 `laneQuiescence` 符号，`compile-order.txt` 与 `owner-impact-corpus.json` 亦无任何相关历史条目。
+- **裁决与处置**：本包标的系已过期的过时描述，不存在真实的宿主状态所有权待迁出。遵照裁决，**不为不存在的宿主在库侧凭空制造孤儿组件**，已彻底清理库侧临时试探代码（删除未落地文件与测试，还原 `Wanxiangli.FissionGroup.fsproj`、`index.d.ts` 与局部 AGENTS.md），保持 `wanxiangli/fission-group` 纯洁。
+- **状态定性**：本包与 Package-13 同理，定性为 **NOT_IN_BRANCH / 标的不存在而阻断（BLOCKED）**，不记为完成，亦不记为失败。
 
 ## 7. 迁移来源文件全量清单与保留/删除边界
 

@@ -13,6 +13,32 @@ module CasebookLifecycle =
     [<Import("sessionDraftStore", "wanxiangli/casebook")>]
     let private sessionDraftStore: obj = jsNative
 
+    [<Import("CasebookObservationCollector", "wanxiangli/casebook-access")>]
+    type private LibraryObservationCollector() =
+        member _.Collect(sessionId: string, toolName: string, args: obj, output: string) : unit = jsNative
+        member _.RecordFileRead(sessionId: string, path: string, output: string, ?contentHash: string) : unit = jsNative
+        member _.Drain(sessionId: string) : obj array = jsNative
+        member _.Count(sessionId: string) : int = jsNative
+
+    type CasebookObservationCollector() =
+        let inner = LibraryObservationCollector()
+
+        member _.Collect(sessionId: string, toolName: string, args: obj, output: string) : unit =
+            inner.Collect(sessionId, toolName, args, output)
+
+        member _.RecordFileRead(sessionId: string, path: string, output: string) : unit =
+            let hash = CasebookCapture.contentHash output
+            inner.RecordFileRead(sessionId, path, output, hash)
+
+        member _.Drain(sessionId: string) : Observation list =
+            let items = inner.Drain(sessionId)
+            items
+            |> Array.toList
+            |> List.map (fun o -> Observation.FileRead(string o?path, string o?contentHash))
+
+        member _.Count(sessionId: string) : int =
+            inner.Count(sessionId)
+
     let collector = CasebookObservationCollector()
 
     let private stateGate = obj ()

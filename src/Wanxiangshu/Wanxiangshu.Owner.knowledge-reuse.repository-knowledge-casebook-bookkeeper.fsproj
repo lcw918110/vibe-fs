@@ -13,8 +13,6 @@
 
     <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-taskresult.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-model.fsproj"/>
-    <Compile Include="Repository/Knowledge/Casebook/ObservationCollector.fsi"/>
-    <Compile Include="Repository/Knowledge/Casebook/ObservationCollector.fs"/>
     <Compile Include="Repository/Knowledge/Casebook/SettlementOwner.fsi"/>
     <Compile Include="Repository/Knowledge/Casebook/SettlementOwner.fs"/>
     <Compile Include="Repository/Knowledge/Casebook/Bookkeeper.fsi"/>

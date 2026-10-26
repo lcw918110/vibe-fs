@@ -13,6 +13,7 @@ function safeCaps() {
   const yes = async () => {}
   return {
     BeginPhysicalProviderAttempt: yes,
+    StopCompletedContinuation: async () => false,
     BindSessionStartedAt: async () => null,
     ApplyRelayProjection: async () => null,
     ApplyTenureIsolation: yes,
@@ -24,6 +25,7 @@ function safeCaps() {
     InjectPairGuideline: yes,
     SettleAndReplaceDeferredInspections: yes,
     SanitizeMessages: () => {},
+    IsPureChatSession: () => false,
     AdjudicateDelivery: async () => new DeliveryAdjudication(0, []),
     StopAfterDelivery: yes,
   }

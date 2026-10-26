@@ -148,6 +148,10 @@ Bookkeeper 等内部角色由编排路径调用，不作为单独“安装角色
 
 Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）。精确权限见 `requirements/participant-identity` 与 `requirements/capability-enforcement`。
 
+异步指导可以先进入宿主队列。真正出站时，OpenCode 的 messages transform 会重读对应任务的完成事实：原任务已结束就清空本次请求并 interrupt，不再为旧指导调用模型。此操作不删除会话历史、不封禁会话；新的任务仍能读取先前落地的指导。
+
+迁移后的宿主适配对象通过实例成员调用库对象；Join 等待仍使用宿主的 `AsyncSupport.trySetResult` 完成异步句柄。库中的发送停止围栏一旦被撤销，迟到的停止信号不能重新授予该 attempt 的恢复许可。退役的宿主测试入口不再登记到产物清单。
+
 上下文边界不随角色变化：每个会话都使用 `resetScope(oldScopeVerboseVerbatimExperience?, newScopeObjective, newScopeTurnBudget)` 划定 scope，并在新 scope 上按 `[Remaining turnBudget: N]` 倒计时（预算耗尽只给弱提醒，不封锁动作）。父子之间不再由模型挑材料：父→子（fork/resume/commission/devops/dag/advisor）以 `#` 注释送指令散文、以 TOML `[[context]]` 送发送方完整的 post-scope 视图；Engineer 与 DevOps 没有 `deliver`，自然停机即把末轮 assistant 散文作为 `#` 注释返回父方；Manager 与 Plan 保留生命周期 `deliver`，一次调用即完成或接力。
 
 ### 运行时数据

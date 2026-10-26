@@ -19,6 +19,5 @@
 /src/Wanxiangshu/OpenCode/Host/SessionsSurface.fs
 /src/Wanxiangshu/OpenCode/Host/SessionsSurface.fsi
 /src/Wanxiangshu/OpenCode/Tools/ToolRuntimeScope.fs
-/src/Wanxiangshu/Mission/Work/DeliveryAttemptLedger.fs
 /src/Wanxiangshu/OpenCode/Plugin/PluginSessionWiring.fs
 /src/Wanxiangshu/Composition/Turn/Scheduler.fs

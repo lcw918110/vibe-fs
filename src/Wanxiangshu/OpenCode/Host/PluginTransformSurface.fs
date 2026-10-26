@@ -16,6 +16,7 @@ module PluginTransformSurface =
 
             let caps: PluginTransforms.NormalTransformCapabilities =
                 { BeginPhysicalProviderAttempt = fun _ _ -> complete "begin"
+                  StopCompletedContinuation = fun _ _ _ -> Task.FromResult false
                   BindSessionStartedAt =
                     fun _ ->
                         record "session-time"
@@ -43,6 +44,7 @@ module PluginTransformSurface =
                   InjectPairGuideline = fun _ _ _ -> complete "pair"
                   SettleAndReplaceDeferredInspections = fun _ _ -> complete "deferred"
                   SanitizeMessages = fun _ _ -> record "sanitize"
+                  IsPureChatSession = fun _ -> false
                   AdjudicateDelivery =
                     fun _ _ ->
                         record "adjudicate-delivery"

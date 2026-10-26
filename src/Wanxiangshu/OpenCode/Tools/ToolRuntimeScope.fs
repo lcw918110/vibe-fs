@@ -32,6 +32,13 @@ open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Process
 open Wanxiangshu.OpenCode.Host
+open Fable.Core
+
+module private DeliveryAttemptLibrary =
+    [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
+    let deliveryAttemptLedger: obj = jsNative
+
+open DeliveryAttemptLibrary
 
 
 /// The parentless manager execution spawn used by an authorized delivery.
@@ -186,8 +193,7 @@ type ToolRuntimeScope
 
     /// EXEC-017 attempt-scoped join interrupt registry (PluginRuntimeScope or local default).
     // DSL-MUTABLE: resource — join attempt registry attachment
-    let mutable joinAttempts: IJoinAttemptRegistry =
-        JoinAttemptRegistry() :> IJoinAttemptRegistry
+    let mutable joinAttempts: obj = HostJoinAttemptFactory.create ()
 
     let ownedWorkScopeId = "tool-owned-work-scope"
 
@@ -1742,26 +1748,45 @@ type ToolRuntimeScope
                 currentPhysicalUserMessage (SessionId.value sessionId)
                 |> Option.map PhysicalUserMessageId.create
 
-        DeliveryAttemptLedger.recordEstablished
-            { SessionId = sessionId
-              ProviderRun = providerRun
-              CallId = callId }
-            physical
+        deliveryAttemptLedger?recordEstablished(
+            createObj [
+                "sessionId" ==> SessionId.value sessionId
+                "providerRun" ==> ProviderRunIdentity.value providerRun
+                "callId" ==> ToolCallId.value callId
+            ],
+            physical |> Option.map PhysicalUserMessageId.value) |> ignore
 
     /// 呈现面登记：宿主已接受该交付的工具结果。呈现不改变提交面事实。
     member _.RecordDeliveryPresented(sessionId: SessionId, providerRun: ProviderRunIdentity, callId: ToolCallId) =
-        DeliveryAttemptLedger.recordPresented
-            { SessionId = sessionId
-              ProviderRun = providerRun
-              CallId = callId }
+        deliveryAttemptLedger?recordPresented(
+            createObj [
+                "sessionId" ==> SessionId.value sessionId
+                "providerRun" ==> ProviderRunIdentity.value providerRun
+                "callId" ==> ToolCallId.value callId
+            ]) |> ignore
 
     /// 本 session 是否存在一次已成立的交付（不绑定物理输入）。进程内台账是
     /// 快速路径，durable 交付见证是判据本身——进程重启后台账为空，见证仍在。
     member _.HasEstablishedDelivery(sessionId: string) =
         let sid = SessionId.create sessionId
+        let hasInMem: bool = deliveryAttemptLedger?hasEstablished(SessionId.value sid)
+        let hasDurable: bool =
+            match journal with
+            | Some durable ->
+                let deliveries =
+                    (AgentJournal.snapshot durable).AgentProjections.Deliveries
+                    |> Map.toList
+                    |> List.map (fun ((s, r, c), _) ->
+                        createObj [
+                            "sessionId" ==> SessionId.value s
+                            "providerRun" ==> ProviderRunIdentity.value r
+                            "callId" ==> ToolCallId.value c
+                        ])
+                    |> List.toArray
+                deliveryAttemptLedger?hasDurableEstablished(deliveries, SessionId.value sid)
+            | None -> false
 
-        DeliveryAttemptLedger.hasEstablished sid
-        || DeliveryAttemptLedger.hasDurableEstablished journal sid
+        hasInMem || hasDurable
 
     static member EstablishedDeliveryCallId(sessionId: string, physicalUserMessageId: string) : string option =
         let sid = SessionId.create sessionId
@@ -1770,10 +1795,16 @@ type ToolRuntimeScope
             if String.IsNullOrWhiteSpace physicalUserMessageId then
                 None
             else
-                Some(PhysicalUserMessageId.create physicalUserMessageId)
+                Some physicalUserMessageId
 
-        DeliveryAttemptLedger.tryFindEstablished sid physical
-        |> Option.map (fun (fence, _) -> ToolCallId.value fence.CallId)
+        let found: obj option =
+            deliveryAttemptLedger?tryFindEstablished(SessionId.value sid, physical)
+
+        found
+        |> Option.bind (fun res ->
+            let fence = res?fence
+            if isNull fence then None
+            else Some (string fence?callId))
 
     /// Run-started callback wired by plugin bootstrap for Host child reconciliation.
     member _.RunStarted = onStarted
@@ -2062,9 +2093,9 @@ type ToolRuntimeScope
             Task.FromResult recovery)
 
     /// EXEC-017: share PluginRuntimeScope.JoinAttempts with JoinTool.
-    member _.AttachJoinAttempts(registry: IJoinAttemptRegistry) = joinAttempts <- registry
+    member _.AttachJoinAttempts(registry: obj) = joinAttempts <- registry
 
-    member _.JoinAttempts = joinAttempts
+    member _.JoinAttempts: obj = joinAttempts
 
     /// Process-local join admission: join / JoinPublishedAvailable require FamilyReady. Missing attach → FamilyBlocked.
     member _.RequireCurrentProcessJoin(root: SessionId) : Task<FamilyRecovery> =
@@ -2211,7 +2242,7 @@ type ToolRuntimeScope
             |> Seq.toArray do
             questionInterrupts.Remove key |> ignore
 
-        DeliveryAttemptLedger.dropSession questionOwner
+        deliveryAttemptLedger?dropSession(SessionId.value questionOwner) |> ignore
 
         let forkRuntimes, orchestrator =
             lock gate (fun () ->
