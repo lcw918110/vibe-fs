@@ -2,6 +2,8 @@ namespace Wanxiangshu.Interaction.Dispatch
 
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Persistence.Journal
@@ -11,9 +13,11 @@ open Wanxiangshu.Persistence.Journal
 [<RequireQualifiedAccess>]
 module JoinGuardSurface =
 
+    [<Import("joinGuardReservationStore", "wanxiangli/delegate-batch")>]
+    let private reservationStore: obj = jsNative
+
     type private ReservationCapability() =
-        // DSL-MUTABLE: single-flight — nudge key reservation set
-        let keys = HashSet<string>()
+        let keys: HashSet<string> = unbox (reservationStore?createScope())
 
         member _.Keys = keys
 
@@ -68,7 +72,12 @@ module JoinGuardSurface =
                 else
                     Some((unbox<JournalHandle> handle).Journal)
 
-            let keys = (unbox<ReservationCapability> reservations).Keys
+            let keys: HashSet<string> =
+                if isNull reservations then
+                    unbox (reservationStore?createScope())
+                else
+                    (unbox<ReservationCapability> reservations).Keys
+
             let sessionId = SessionId.create session
 
             let! outcome =

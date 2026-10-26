@@ -1,6 +1,8 @@
 namespace Wanxiangshu.OpenCode.Host
 
 open System
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Execution.Session.ChatExecution
@@ -76,63 +78,49 @@ type ReliabilityCounterSnapshot =
       FallbackAdvances: int64
       StreamAborts: int64 }
 
+module private ReliabilityInterop =
+    [<Import("createReliabilityDiagnosticsStore", "wanxiangli/degeneration")>]
+    let createStore: unit -> obj = jsNative
+
+    let private recoveryKey (decision: DiagnosticRecoveryDecision) : string =
+        match decision with
+        | DiagnosticRecoveryDecision.ObserveOnly -> "recovery:observeOnly"
+        | DiagnosticRecoveryDecision.ResumeAdmission -> "recovery:resumeAdmission"
+        | DiagnosticRecoveryDecision.ReconcileStartedProvider -> "recovery:reconcileStartedProvider"
+        | DiagnosticRecoveryDecision.MarkTerminal -> "recovery:markTerminal"
+        | DiagnosticRecoveryDecision.FailClosed -> "recovery:failClosed"
+        | DiagnosticRecoveryDecision.ManualIntervention -> "recovery:manualIntervention"
+
+    let observationKey (observation: ReliabilityObservation) : string =
+        match observation with
+        | ReliabilityObservation.IdentityConflict -> "identityConflict"
+        | ReliabilityObservation.QueueFull -> "queueFull"
+        | ReliabilityObservation.FatalSettlement -> "fatalSettlement"
+        | ReliabilityObservation.Recovery decision -> recoveryKey decision
+        | ReliabilityObservation.HookFailure -> "hookFailure"
+        | ReliabilityObservation.FallbackAdvanced -> "fallbackAdvanced"
+        | ReliabilityObservation.StreamAbort -> "streamAbort"
+
 type ReliabilityCounters() =
-    let gate = obj ()
-    // DSL-MUTABLE: resource
-    let mutable identityConflicts = 0L
-    let mutable queueFull = 0L
-    // DSL-MUTABLE: resource
-    let mutable fatalSettlements = 0L
-    let mutable recoveryObserveOnly = 0L
-    // DSL-MUTABLE: resource
-    let mutable recoveryResumeAdmission = 0L
-    let mutable recoveryReconcileStartedProvider = 0L
-    // DSL-MUTABLE: resource
-    let mutable recoveryMarkTerminal = 0L
-    let mutable recoveryFailClosed = 0L
-    // DSL-MUTABLE: resource
-    let mutable recoveryManualIntervention = 0L
-    let mutable hookFailures = 0L
-    // DSL-MUTABLE: resource
-    let mutable fallbackAdvances = 0L
-    let mutable streamAborts = 0L
+    let store: obj = ReliabilityInterop.createStore ()
 
-    member _.Record(observation: ReliabilityObservation) =
-        lock gate (fun () ->
-            match observation with
-            | ReliabilityObservation.IdentityConflict -> identityConflicts <- identityConflicts + 1L
-            | ReliabilityObservation.QueueFull -> queueFull <- queueFull + 1L
-            | ReliabilityObservation.FatalSettlement -> fatalSettlements <- fatalSettlements + 1L
-            | ReliabilityObservation.Recovery DiagnosticRecoveryDecision.ObserveOnly ->
-                recoveryObserveOnly <- recoveryObserveOnly + 1L
-            | ReliabilityObservation.Recovery DiagnosticRecoveryDecision.ResumeAdmission ->
-                recoveryResumeAdmission <- recoveryResumeAdmission + 1L
-            | ReliabilityObservation.Recovery DiagnosticRecoveryDecision.ReconcileStartedProvider ->
-                recoveryReconcileStartedProvider <- recoveryReconcileStartedProvider + 1L
-            | ReliabilityObservation.Recovery DiagnosticRecoveryDecision.MarkTerminal ->
-                recoveryMarkTerminal <- recoveryMarkTerminal + 1L
-            | ReliabilityObservation.Recovery DiagnosticRecoveryDecision.FailClosed ->
-                recoveryFailClosed <- recoveryFailClosed + 1L
-            | ReliabilityObservation.Recovery DiagnosticRecoveryDecision.ManualIntervention ->
-                recoveryManualIntervention <- recoveryManualIntervention + 1L
-            | ReliabilityObservation.HookFailure -> hookFailures <- hookFailures + 1L
-            | ReliabilityObservation.FallbackAdvanced -> fallbackAdvances <- fallbackAdvances + 1L
-            | ReliabilityObservation.StreamAbort -> streamAborts <- streamAborts + 1L)
+    member _.Record(observation: ReliabilityObservation) : unit =
+        store?Record(ReliabilityInterop.observationKey observation)
 
-    member _.Snapshot() =
-        lock gate (fun () ->
-            { IdentityConflicts = identityConflicts
-              QueueFull = queueFull
-              FatalSettlements = fatalSettlements
-              RecoveryObserveOnly = recoveryObserveOnly
-              RecoveryResumeAdmission = recoveryResumeAdmission
-              RecoveryReconcileStartedProvider = recoveryReconcileStartedProvider
-              RecoveryMarkTerminal = recoveryMarkTerminal
-              RecoveryFailClosed = recoveryFailClosed
-              RecoveryManualIntervention = recoveryManualIntervention
-              HookFailures = hookFailures
-              FallbackAdvances = fallbackAdvances
-              StreamAborts = streamAborts })
+    member _.Snapshot() : ReliabilityCounterSnapshot =
+        let raw: obj = store?Snapshot()
+        { IdentityConflicts = unbox<int64> raw?identityConflicts
+          QueueFull = unbox<int64> raw?queueFull
+          FatalSettlements = unbox<int64> raw?fatalSettlements
+          RecoveryObserveOnly = unbox<int64> raw?recoveryObserveOnly
+          RecoveryResumeAdmission = unbox<int64> raw?recoveryResumeAdmission
+          RecoveryReconcileStartedProvider = unbox<int64> raw?recoveryReconcileStartedProvider
+          RecoveryMarkTerminal = unbox<int64> raw?recoveryMarkTerminal
+          RecoveryFailClosed = unbox<int64> raw?recoveryFailClosed
+          RecoveryManualIntervention = unbox<int64> raw?recoveryManualIntervention
+          HookFailures = unbox<int64> raw?hookFailures
+          FallbackAdvances = unbox<int64> raw?fallbackAdvances
+          StreamAborts = unbox<int64> raw?streamAborts }
 
 [<Struct>]
 type LogicalRunAttemptSnapshot =
@@ -181,6 +169,16 @@ type ReliabilitySnapshot =
 [<RequireQualifiedAccess>]
 module ReliabilityDiagnostics =
 
+    let private isAcceptedWithoutTerminal (source: ExecutionReliabilitySource) =
+        if source.Lifecycle = DurableExecutionLifecycle.AcceptedBeforeProvider then 1 else 0
+
+    let private isProviderStartedWithoutTerminal (source: ExecutionReliabilitySource) =
+        if source.Lifecycle = DurableExecutionLifecycle.ProviderStarted then 1 else 0
+
+    let private logicalRunAttempt (logicalRunId: LogicalRunId, attempts: int) =
+        { LogicalRunId = logicalRunId
+          PhysicalAttempts = attempts }
+
     let querySources
         (counters: ReliabilityCounters)
         (executions: ExecutionReliabilitySource seq)
@@ -192,26 +190,14 @@ module ReliabilityDiagnostics =
         { Counters = counters.Snapshot()
           Execution =
             { AcceptedWithoutTerminal =
-                projected
-                |> Array.sumBy (fun source ->
-                    if source.Lifecycle = DurableExecutionLifecycle.AcceptedBeforeProvider then
-                        1
-                    else
-                        0)
+                projected |> Array.sumBy isAcceptedWithoutTerminal
               ProviderStartedWithoutTerminal =
-                projected
-                |> Array.sumBy (fun source ->
-                    if source.Lifecycle = DurableExecutionLifecycle.ProviderStarted then
-                        1
-                    else
-                        0)
+                projected |> Array.sumBy isProviderStartedWithoutTerminal
               PhysicalAttemptsByLogicalRun =
                 projected
                 |> Array.countBy _.LogicalRunId
                 |> Array.sortBy (fst >> LogicalRunId.value)
-                |> Array.map (fun (logicalRunId, attempts) ->
-                    { LogicalRunId = logicalRunId
-                      PhysicalAttempts = attempts }) }
+                |> Array.map logicalRunAttempt }
           Capacity =
             { QueueDepth = capacity.QueueDepth
               ActiveLeases = capacity.ActiveLeases

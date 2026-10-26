@@ -2,6 +2,7 @@ namespace Wanxiangshu.OpenCode
 
 open System
 open System.Threading.Tasks
+open Fable.Core
 open Wanxiangshu.Foundation.TerminalSignal
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -22,14 +23,20 @@ module Events =
                 ()
         }
 
+    [<Fable.Core.Import("SignalBroadcaster", "wanxiangli/ownership")>]
+    let private signalBroadcasterClass: obj = jsNative
+
+    [<Fable.Core.Emit("new $0()")>]
+    let private createSignalBroadcaster (constructor: obj) : obj = jsNative
+
     /// HNI P-07: host-neutral signal source for OpenCode host events.
     type HostSignalSource() =
-        let listeners = ResizeArray<HostSignal -> Task>()
-        let syncRoot = obj ()
+        let broadcaster = createSignalBroadcaster signalBroadcasterClass
 
         member _.Publish(signal: HostSignal) : Task =
             task {
-                let snapshot = lock syncRoot (fun () -> listeners.ToArray())
+                let snapshot: (HostSignal -> Task) array =
+                    Fable.Core.JsInterop.(?) broadcaster "snapshot" ()
 
                 for listener in snapshot do
                     do! notifyOne listener signal
@@ -37,11 +44,10 @@ module Events =
 
         interface ISignalSource with
             member _.Subscribe(listener: HostSignal -> Task) : IDisposable =
-                lock syncRoot (fun () -> listeners.Add listener)
-
+                let subscription: obj = Fable.Core.JsInterop.(?) broadcaster "subscribe" listener
                 { new IDisposable with
                     member _.Dispose() =
-                        lock syncRoot (fun () -> listeners.Remove listener |> ignore) }
+                        Fable.Core.JsInterop.(?) subscription "dispose" () }
 
     /// The one event port.
     ///

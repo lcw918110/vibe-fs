@@ -73,10 +73,6 @@ module AttachmentLeaseCore =
         | AttachmentKind.SyncDevOps -> "sync-devops"
         | AttachmentKind.Bookkeeper transactionId -> "bookkeeper\u001f" + transactionId
 
-
-    let leaseKey (owner: SessionId) (kind: AttachmentKind) =
-        SessionId.value owner + "\u001f" + kindKey kind
-
     /// CUT-12 sub-loop 3: which child the kind's lease uses (reuse / conflict /
     /// replacement / ambiguity / create) and whether a fresh child is aborted on a
     /// failed close or link have one owner, wanxiangli/attachment-lease. This module
@@ -221,18 +217,11 @@ module AttachmentLeaseCore =
     let retire (operations: Operations) (owner: SessionId) : Task<Result<unit, string>> =
         operations.Close(SessionId.value owner)
 
-/// The single lifecycle owner's registry: which child each `(owner, AttachmentKind)`
-/// currently holds, and the in-flight ensure so concurrent first requests share one
-/// creation instead of racing into two children.
-type AttachmentLeaseRegistry() =
-    let gate = obj ()
-    // DSL-MUTABLE: resource — attached child identity by owner+kind
-    let bindings = Dictionary<string, AttachmentLeaseCore.Lease>()
-    // DSL-MUTABLE: resource — in-flight ensure by owner+kind
-    let flights = Dictionary<string, Task<Result<AttachmentLeaseCore.Lease, string>>>()
+module private RegistryMapping =
 
-    /// The kinds whose key is fully described by its rendered fragment. Bookkeeper
-    /// carries a transaction id in a further fragment, so it is parsed separately.
+    [<Import("AttachmentLeaseRegistry", "wanxiangli/attachment-lease")>]
+    let registryClass: obj = jsNative
+
     let fragmentKinds =
         [ AttachmentKind.Companion
           AttachmentKind.SyncInspector
@@ -240,84 +229,92 @@ type AttachmentLeaseRegistry() =
           AttachmentKind.SyncEngineer
           AttachmentKind.SyncDevOps ]
 
-
-    /// Re-parse one registry key back into `(owner, kind)`. The registry keeps only
-    /// the key, so a reverse lookup recovers the kind from the key's own rendering
-    /// instead of holding a second copy of every binding.
-    let parseKey (key: string) =
-        let parts = key.Split('\u001f')
-
-        if parts.Length < 2 then
-            None
-        elif parts.Length >= 3 && parts.[1] = "bookkeeper" then
-            Some(SessionId.create parts.[0], AttachmentKind.Bookkeeper parts.[2])
-        else
-            let rendered = parts.[1]
-
+    let parseKind (kindText: string) : AttachmentKind option =
+        match kindText.StartsWith("bookkeeper\u001f") with
+        | true ->
+            let txId = kindText.Substring("bookkeeper\u001f".Length)
+            Some(AttachmentKind.Bookkeeper txId)
+        | false ->
             fragmentKinds
-            |> List.tryFind (fun candidate -> AttachmentLeaseCore.kindKey candidate = rendered)
-            |> Option.map (fun kind -> SessionId.create parts.[0], kind)
+            |> List.tryFind (fun candidate -> AttachmentLeaseCore.kindKey candidate = kindText)
 
-    member _.Bind(owner: SessionId, kind: AttachmentKind, lease: AttachmentLeaseCore.Lease) =
-        lock gate (fun () -> bindings.[AttachmentLeaseCore.leaseKey owner kind] <- lease)
+    let decodeOrigin (originText: string) : AttachmentLeaseCore.Origin =
+        match originText with
+        | "Reused" -> AttachmentLeaseCore.Origin.Reused
+        | "Replacement" -> AttachmentLeaseCore.Origin.Replacement
+        | _ -> AttachmentLeaseCore.Origin.Created
+
+    let originToString (origin: AttachmentLeaseCore.Origin) : string =
+        match origin with
+        | AttachmentLeaseCore.Origin.Created -> "Created"
+        | AttachmentLeaseCore.Origin.Reused -> "Reused"
+        | AttachmentLeaseCore.Origin.Replacement -> "Replacement"
+
+    let encodeLease (lease: AttachmentLeaseCore.Lease) : obj =
+        createObj
+            [ "sessionId" ==> lease.SessionId
+              "origin" ==> originToString lease.Origin
+              "agent" ==> lease.Agent ]
+
+    let decodeLease (item: obj) : AttachmentLeaseCore.Lease =
+        { SessionId = unbox<string> item?sessionId
+          Origin = decodeOrigin (unbox<string> item?origin)
+          Agent = unbox<string> item?agent }
+
+    let decodeOwnerPair (item: obj) : (SessionId * AttachmentKind) option =
+        let ownerText = unbox<string> item?owner
+        let kindText = unbox<string> item?kind
+        parseKind kindText
+        |> Option.map (fun kind -> SessionId.create ownerText, kind)
+
+    let decodeOwnerPairs (items: obj array) : (SessionId * AttachmentKind) list =
+        items
+        |> Array.choose decodeOwnerPair
+        |> Array.toList
+
+open RegistryMapping
+
+/// The single lifecycle owner's registry: which child each `(owner, AttachmentKind)`
+/// currently holds, and the in-flight ensure so concurrent first requests share one
+/// creation instead of racing into two children.
+///
+/// Package-21: State ownership migrated to wanxiangli/attachment-lease (AttachmentLeaseRegistry).
+/// Host holds zero mutable collections and delegates 100% to library autonomous store.
+type AttachmentLeaseRegistry() =
+    let store: obj = emitJsExpr registryClass "new $0()"
+
+    member _.Bind(owner: SessionId, kind: AttachmentKind, lease: AttachmentLeaseCore.Lease) : unit =
+        store?bind(SessionId.value owner, AttachmentLeaseCore.kindKey kind, encodeLease lease)
 
     member _.TryFind(owner: SessionId, kind: AttachmentKind) : AttachmentLeaseCore.Lease option =
-        lock gate (fun () ->
-            match bindings.TryGetValue(AttachmentLeaseCore.leaseKey owner kind) with
-            | true, lease -> Some lease
-            | false, _ -> None)
+        let found: obj = store?tryFind(SessionId.value owner, AttachmentLeaseCore.kindKey kind)
+        match box found with
+        | null -> None
+        | _ -> Some(decodeLease found)
 
     member _.Remove(owner: SessionId, kind: AttachmentKind) : bool =
-        lock gate (fun () -> bindings.Remove(AttachmentLeaseCore.leaseKey owner kind))
+        unbox<bool> (store?remove(SessionId.value owner, AttachmentLeaseCore.kindKey kind))
 
-    /// Reverse lookup: which `(owner, kind)` currently holds this child. Used by
-    /// callers that are handed a child id and must find its owner (Sync's
-    /// scope-close and deleted-delegate paths).
     member _.TryFindByChild(child: SessionId) : (SessionId * AttachmentKind) list =
-        lock gate (fun () ->
-            bindings
-            |> Seq.choose (fun entry ->
-                if entry.Value.SessionId <> SessionId.value child then
-                    None
-                else
-                    parseKey entry.Key)
-            |> Seq.toList)
+        let items: obj array = store?tryFindByChild(SessionId.value child)
+        decodeOwnerPairs items
 
-    /// Every binding, for bulk reconciliation on owner/cascade teardown.
     member _.Snapshot() : (SessionId * AttachmentKind) list =
-        lock gate (fun () -> bindings |> Seq.choose (fun entry -> parseKey entry.Key) |> Seq.toList)
+        let items: obj array = store?snapshot()
+        decodeOwnerPairs items
 
-    /// The child itself is gone: drop whichever binding held it, so no owner keeps a
-    /// dead lease.
     member _.RemoveByChild(child: SessionId) : (SessionId * AttachmentKind) list =
-        lock gate (fun () ->
-            let doomed =
-                bindings
-                |> Seq.filter (fun entry -> entry.Value.SessionId = SessionId.value child)
-                |> Seq.toList
+        let items: obj array = store?removeByChild(SessionId.value child)
+        decodeOwnerPairs items
 
-            doomed |> List.iter (fun entry -> bindings.Remove entry.Key |> ignore)
-
-            doomed |> List.choose (fun entry -> parseKey entry.Key))
-
-    /// Share one in-flight ensure per `(owner, kind)`.
     member _.Ensure
         (owner: SessionId, kind: AttachmentKind, start: unit -> Task<Result<AttachmentLeaseCore.Lease, string>>)
         : Task<Result<AttachmentLeaseCore.Lease, string>> =
-        lock gate (fun () ->
-            let key = AttachmentLeaseCore.leaseKey owner kind
+        let inFlight: obj = store?ensure(SessionId.value owner, AttachmentLeaseCore.kindKey kind, start)
+        unbox<Task<Result<AttachmentLeaseCore.Lease, string>>> inFlight
 
-            match flights.TryGetValue key with
-            | true, inFlight -> inFlight
-            | false, _ ->
-                let inFlight = start ()
-                flights.[key] <- inFlight
-                inFlight)
+    member _.FinishEnsure(owner: SessionId, kind: AttachmentKind) : unit =
+        store?finishEnsure(SessionId.value owner, AttachmentLeaseCore.kindKey kind)
 
-    member _.FinishEnsure(owner: SessionId, kind: AttachmentKind) =
-        lock gate (fun () -> flights.Remove(AttachmentLeaseCore.leaseKey owner kind) |> ignore)
-
-    member _.Clear() =
-        lock gate (fun () ->
-            bindings.Clear()
-            flights.Clear())
+    member _.Clear() : unit =
+        store?clear()

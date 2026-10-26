@@ -3,6 +3,8 @@ namespace Wanxiangshu.Interaction.PairGuidance
 open System
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -39,25 +41,23 @@ type PairGuidanceLedger =
 [<RequireQualifiedAccess>]
 module PairGuidanceOccurrences =
 
-    let source = "pair-programming-auto-injected"
+    [<Import("pairGuidanceMemoryStore", "wanxiangli/pair-hint")>]
+    let private pairGuidanceMemoryStore: obj = jsNative
 
-    let private idPrefix = "pair-programming-auto-injected-"
+    [<Import("pairGuidanceSource", "wanxiangli/pair-hint")>]
+    let private pairGuidanceSourceVal: string = jsNative
+
+    let source = pairGuidanceSourceVal
 
     let private transcriptKey (sessionId: string option) : string = defaultArg sessionId ""
 
     let stableCallId (sessionId: string option) (ordinal: int64) : string =
-        let digest =
-            HostDigest.sha256Hex ((transcriptKey sessionId) + source + string ordinal)
-
-        idPrefix + digest.Substring(0, 24)
+        pairGuidanceMemoryStore?stableCallId (transcriptKey sessionId, ordinal)
 
     let skipRequested () : bool =
         match Environment.GetEnvironmentVariable "WANXIANGSHU_SKIP_AUTO_INJECTED" with
         | "1" -> true
         | _ -> false
-
-    /// Process-local ledger when no journal is available; append-only within the process.
-    let private memoryLedger = Dictionary<string, ResizeArray<PairGuidanceOccurrence>>()
 
     let private occurrenceOf (pair: PairProgrammingGuideline) : PairGuidanceOccurrence =
         { Ordinal = pair.Ordinal
@@ -100,23 +100,39 @@ module PairGuidanceOccurrences =
                 return Error(PairGuidanceAppendError.JournalRejected(JournalAppendFailure.describe failure))
         }
 
+    let private entryOrdinal (entry: obj) : int64 =
+        if isNull entry?ordinal then int64 (string entry?Ordinal) else int64 (string entry?ordinal)
+
+    let private entryCallId (entry: obj) : string =
+        if isNull entry?callId then string entry?CallId else string entry?callId
+
+    let private entryMarkerText (entry: obj) : string =
+        if isNull entry?markerText then string entry?MarkerText else string entry?markerText
+
+    let private unboxEntry (entry: obj) : PairGuidanceOccurrence option =
+        if isNull entry then None
+        elif not (isNull entry?raw) then Some(unbox<PairGuidanceOccurrence> entry?raw)
+        else
+            Some
+                { Ordinal = entryOrdinal entry
+                  CallId = entryCallId entry
+                  MarkerText = entryMarkerText entry
+                  CallGap = TranscriptGap.Start
+                  ResultGap = TranscriptGap.Start }
+
     let private readMemory (key: string) : PairGuidanceOccurrence list =
-        match memoryLedger.TryGetValue key with
-        | true, pairs -> pairs |> Seq.toList
-        | false, _ -> []
+        let entries: obj array = pairGuidanceMemoryStore?read (key)
+        entries
+        |> Option.ofObj
+        |> Option.defaultValue [||]
+        |> Array.choose unboxEntry
+        |> Array.toList
 
     let private appendMemory
         (key: string)
         (occurrence: PairGuidanceOccurrence)
         : Task<Result<unit, PairGuidanceAppendError>> =
-        match memoryLedger.TryGetValue key with
-        | true, pairs -> pairs.Add occurrence
-        | false, _ ->
-            // DSL-MUTABLE: algorithm-scratch — new pair list for dictionary insert
-            let pairs = ResizeArray<PairGuidanceOccurrence>()
-            pairs.Add occurrence
-            memoryLedger.[key] <- pairs
-
+        pairGuidanceMemoryStore?append (key, occurrence)
         Task.FromResult(Ok())
 
     let ledger (journal: AgentJournal option) (sessionId: string option) : PairGuidanceLedger =
@@ -156,27 +172,36 @@ module PairGuidanceOccurrences =
             || (sessionRole durable session |> Option.exists Roles.isInternal)
         | _ -> false
 
-    let private nextOrdinal (history: PairGuidanceOccurrence list) =
-        match history with
-        | [] -> 1L
-        | pairs -> (List.last pairs).Ordinal + 1L
+    let private gapKey (gap: TranscriptGap) : string =
+        match gap with
+        | TranscriptGap.Start -> "Start"
+        | TranscriptGap.Before addr -> "Before:" + TranscriptMessageAddress.value addr
+        | TranscriptGap.After addr -> "After:" + TranscriptMessageAddress.value addr
 
-    let private occupied (visible: PairGuidanceOccurrence list) (callGap: TranscriptGap) (resultGap: TranscriptGap) =
-        visible
-        |> List.exists (fun pair -> pair.CallGap = callGap && pair.ResultGap = resultGap)
+    let private occupiedEntry (pair: PairGuidanceOccurrence) : obj =
+        box {| callGapKey = gapKey pair.CallGap; resultGapKey = gapKey pair.ResultGap |}
+
+    let private nextOrdinal (history: PairGuidanceOccurrence list) : int64 =
+        let mapped = history |> List.toArray |> Array.map box
+        pairGuidanceMemoryStore?nextOrdinal (mapped)
+
+    let private occupied (visible: PairGuidanceOccurrence list) (callGap: TranscriptGap) (resultGap: TranscriptGap) : bool =
+        let mapped = visible |> List.map occupiedEntry |> List.toArray
+        pairGuidanceMemoryStore?isOccupied (mapped, gapKey callGap, gapKey resultGap)
+
+    let private formatOrphanError (orphaned: string list) : string =
+        sprintf
+            "synthetic messages without durable record (callId %s, HOST-013)"
+            (String.Join(", ", orphaned |> List.truncate 3))
 
     let private orphanCheck (ledger: PairGuidanceLedger) (transcript: PairGuidanceTranscript) =
-        let known = ledger.History |> List.map (fun pair -> pair.CallId) |> Set.ofList
-
-        let orphaned =
-            transcript.SyntheticCallIds
-            |> List.filter (fun callId -> not (Set.contains callId known))
-
-        Result.requireTrue
-            (sprintf
-                "synthetic messages without durable record (callId %s, HOST-013)"
-                (String.Join(", ", orphaned |> List.truncate 3)))
-            (List.isEmpty orphaned)
+        let hist = ledger.History |> List.toArray |> Array.map box
+        let syn = transcript.SyntheticCallIds |> List.toArray
+        let orphaned: string list =
+            pairGuidanceMemoryStore?findOrphanedCallIds (hist, syn)
+            |> unbox<string array>
+            |> Array.toList
+        Result.requireTrue (formatOrphanError orphaned) (List.isEmpty orphaned)
 
     /// The product's own prose about a failed append.
     let private describeAppendFailure (failure: PairGuidanceAppendError) =

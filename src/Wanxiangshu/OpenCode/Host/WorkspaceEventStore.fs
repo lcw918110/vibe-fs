@@ -1,21 +1,14 @@
 namespace Wanxiangshu.OpenCode
 
 open System
-open System.Collections.Generic
+open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Persistence.EventStore
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Sphinx.V2.Composition
 
-/// Process-local EventStore owners keyed by git common-dir.
-/// One acquired entry owns exactly one WriterId.ndjson and one CanonicalIntegrator.
-/// No GitRawStore is created on the runtime append/replay path.
 module WorkspaceEventStore =
 
-    /// The single host-wide store serves the workspace journal, casebook
-    /// lifecycle/fetch and js-transaction durability, so its history program is the journal spine plus exactly
-    /// those owning oracles. Registration order matches the historical full
-    /// program. Native Sphinx inquiries share this same writer and Current.
     let private hostProgram: IntegrationRule list =
         CanonicalIntegrator.baseRules
         @ Wanxiangshu.Sphinx.V2.Composition.Bind.rules
@@ -23,23 +16,17 @@ module WorkspaceEventStore =
         @ Wanxiangshu.Repository.Programming.Js.JsTransactionIntegrationRules.rules
         @ Wanxiangshu.Repository.Programming.Js.JsLifecycleIntegrationRules.rules
 
-    /// durable-events-019 registration-necessity seam: the production history
-    /// program with exactly one named registration removed. Every other
-    /// registration, including Sphinx v2, keeps production order. Removing
-    /// Structural or Journal is rejected by the canonical integrator's
-    /// fail-closed base-rule precondition; that construction refusal is the
-    /// observable form for those two spine registrations.
     let programWithoutRegistration (ruleName: string) : IntegrationRule list =
         hostProgram |> List.filter (fun rule -> rule.Name <> ruleName)
 
-    /// DSL-state-combination: physical — shared local writer + canonical Current.
-    type private SharedEntry =
-        { Store: IEventStore
-          mutable RefCount: int }
+    [<Import("sharedEventStorePool", "wanxiangli/work")>]
+    type private INativeEventStorePool =
+        abstract Acquire: commonDir: string * createStore: (string -> obj) -> obj
+        abstract TryCurrent: commonDir: string -> obj option
+        abstract Release: commonDir: string -> bool
 
-    let private gate = obj ()
-    // DSL-MUTABLE: resource — shared workspace event store refcount registry
-    let private shared = Dictionary<string, SharedEntry>()
+    [<Import("sharedEventStorePool", "wanxiangli/work")>]
+    let private sharedPool: INativeEventStorePool = jsNative
 
     let private deferredStore (commonDir: string) : IEventStore =
         let active =
@@ -66,57 +53,20 @@ module WorkspaceEventStore =
         emitJsStatement (box store, commonDir) "$0.gitCommonDir = $1"
 
     let acquire (commonDir: string) : IEventStore =
-        if String.IsNullOrWhiteSpace commonDir then
-            failwith "WorkspaceEventStore.acquire: commonDir is empty"
+        match String.IsNullOrWhiteSpace commonDir with
+        | true -> failwith "WorkspaceEventStore.acquire: commonDir is empty"
+        | false ->
+            let storeObj = sharedPool.Acquire(commonDir, fun dir -> box (deferredStore dir))
+            let store = unbox<IEventStore> storeObj
+            rememberCommonDir store commonDir
+            store
 
-        lock gate (fun () ->
-            match shared.TryGetValue commonDir with
-            | true, entry ->
-                entry.RefCount <- entry.RefCount + 1
-                rememberCommonDir entry.Store commonDir
-                entry.Store
-            | false, _ -> // durable-events-020: owning the workspace capability is not the
-                // same thing as consuming durable semantics. Canonical replay is
-                // deliberately behind the IEventStore methods so plugin load can
-                // finish without folding the entire workspace history.
-                let store = deferredStore commonDir
-
-                shared.[commonDir] <- { Store = store; RefCount = 1 }
-                rememberCommonDir store commonDir
-                store)
-
-    let private lookupCurrent commonDir : IEventStore option =
-        lock gate (fun () ->
-            match shared.TryGetValue commonDir with
-            | true, entry -> Some entry.Store
-            | false, _ -> None)
-
-    /// Borrow the already-owned process-local store without changing ownership.
     let tryCurrent (commonDir: string) : IEventStore option =
-        if String.IsNullOrWhiteSpace commonDir then
-            None
-        else
-            lookupCurrent commonDir
-
-    let private decrementEntry commonDir (entry: SharedEntry) =
-        let remaining = entry.RefCount - 1
-
-        if remaining <= 0 then
-            shared.Remove commonDir |> ignore
-        else
-            entry.RefCount <- remaining
-
-    let private releaseOwned commonDir =
-        lock gate (fun () ->
-            match shared.TryGetValue commonDir with
-            | true, entry -> decrementEntry commonDir entry
-            | false, _ -> ())
+        sharedPool.TryCurrent(commonDir)
+        |> Option.map unbox<IEventStore>
 
     let release (commonDir: string) =
-        if String.IsNullOrWhiteSpace commonDir then
-            ()
-        else
-            releaseOwned commonDir
+        sharedPool.Release(commonDir) |> ignore
 
     let bootPort (commonDir: string) : IJournalEventStoreBoot =
         let store = acquire commonDir

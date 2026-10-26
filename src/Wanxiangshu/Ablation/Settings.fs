@@ -1,74 +1,38 @@
 namespace Wanxiangshu.Ablation
 
 open System
+open Fable.Core
+open Fable.Core.JsInterop
 
 [<RequireQualifiedAccess>]
 module AblationSettings =
 
-    let private env (name: string) =
-        match Environment.GetEnvironmentVariable name with
-        | null -> None
-        | value when String.IsNullOrWhiteSpace value -> None
-        | value -> Some(value.Trim())
+    [<Import("ablationConfig", "wanxiangli/ablation")>]
+    let private config: obj = jsNative
 
-    let private profile () = env "WANXIANGSHU_ABLATION_PROFILE"
+    let private readEnv (name: string) : string =
+        Environment.GetEnvironmentVariable name
 
-    let private envNodeKey (AblationNodeId raw) =
-        let normalized = raw.Replace('.', '_').Replace('-', '_').ToLowerInvariant()
-        $"WANXIANGSHU_ABLATION_{normalized}"
+    let private toModePair (nodeId: string, modeWire: string) : AblationNodeId * AblationMode =
+        let mode = AblationMode.parse modeWire |> Option.defaultValue AblationMode.Active
+        AblationNodeId.create nodeId, mode
 
-    let private explicitOverrides (nodeIds: AblationNodeId list) =
-        // DSL-MUTABLE: algorithm-scratch — temporary error holding for overrides parsing
-        let mutable err = None
+    let private explicitOverrides (nodeIds: AblationNodeId list) : Result<Map<AblationNodeId, AblationMode>, AblationLoadError> =
+        let rawIds = nodeIds |> List.map AblationNodeId.value |> List.toArray
+        let outcome: obj = config?resolveOverrides (rawIds, readEnv)
 
-        let pairs =
-            nodeIds
-            |> List.choose (fun id ->
-                let rawOpt = env (envNodeKey id)
-
-                match rawOpt, Option.bind AblationMode.parse rawOpt with
-                | None, _ -> None
-                | Some _, Some mode -> Some(id, mode)
-                | Some raw, None ->
-                    err <- Some(InvalidMode(AblationNodeId.value id, raw))
-                    None)
-
-        match err with
-        | Some e -> Error e
-        | None -> Ok pairs
+        if unbox<bool> outcome?ok then
+            let pairs: (string * string)[] = outcome?pairs
+            pairs |> Array.map toModePair |> Map.ofArray |> Ok
+        else
+            Error(InvalidMode(unbox<string> outcome?node, unbox<string> outcome?raw))
 
     let load () : Result<AblationRegistry, AblationLoadError> =
+        let rawProfile: string = config?resolveProfile (readEnv)
+        let profileOpt = Option.ofObj rawProfile
+
         AblationManifest.loadNodes ()
         |> Result.bind (fun document ->
             explicitOverrides (AblationManifest.nodeIds document)
             |> Result.bind (fun overrides ->
-                AblationManifest.buildRegistry document (profile ()) (Map.ofList overrides)))
-
-    let private productionFallback () =
-        match AblationManifest.loadNodes () with
-        | Ok document ->
-            let modes =
-                document.Nodes
-                |> List.map (fun node -> AblationNodeId.create node.Id, AblationMode.Active)
-                |> Map.ofList
-
-            let nodeMap =
-                document.Nodes
-                |> List.map (fun node -> AblationNodeId.create node.Id, node)
-                |> Map.ofList
-
-            { Modes = modes
-              Audit =
-                { Profile = None
-                  ManifestVersion = document.Version
-                  ManifestFingerprint = AblationManifest.nodesFingerprint ()
-                  NodeCount = document.Nodes.Length }
-              Nodes = nodeMap }
-        | Error _ ->
-            { Modes = Map.empty
-              Audit =
-                { Profile = None
-                  ManifestVersion = "ablation-v1"
-                  ManifestFingerprint = "000000000000"
-                  NodeCount = 0 }
-              Nodes = Map.empty }
+                AblationManifest.buildRegistry document profileOpt overrides))

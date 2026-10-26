@@ -27,6 +27,8 @@ D：把 prose3 发给同一 Advisor，由其给出 prose4，作为 agent-attribu
 
 Dedicated Advisor 的 Host AgentConfig、Provider 请求工具目录和产品工具执行门禁一律无工具。执行前仍独立拒绝所有工具。工作者的临时咨询则保持原始 provider 工具 schema 不变，在执行层拒绝，不得为了禁工具破坏来源前缀。Advisor 建议没有操作员身份，不更改当前 Scope 估计或 ResetDue。只有真实物理接纳证据才算 steer 送达；发送前和接纳回执时都必须校验源 Scope。
 
+Advisor 的双语 system prompt 只使用自身的聊天指引，不继承工作者 Common Law 中的交付与执行协议。提示词不提 `deliver`、`negotiate` 或 `resetScope`，不规定固定的回答分类；缺少事实时直接用自然语言提问。验收必须检查真实组装并经过 Provider transform 的完整提示词，而不只检查额外注入。
+
 ## [006] 废除旧成员
 
 `wanxiangli/program`、JS 工具绑定、Host ToolRegistry 和模型可见双语模板不得再暴露 `this.advisor`。仅凭伪造 `Advisor` 能力标签不能重新注册它，模型从旧代码调用该函数也不得抵达专席或外部模型。

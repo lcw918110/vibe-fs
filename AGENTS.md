@@ -815,6 +815,22 @@ CUT36_OMP_REAL_SMOKE=1 \
 - **裁决与处置**：本包标的系已过期的过时描述，不存在真实的宿主状态所有权待迁出。遵照裁决，**不为不存在的宿主在库侧凭空制造孤儿组件**，已彻底清理库侧临时试探代码（删除未落地文件与测试，还原 `Wanxiangli.FissionGroup.fsproj`、`index.d.ts` 与局部 AGENTS.md），保持 `wanxiangli/fission-group` 纯洁。
 - **状态定性**：本包与 Package-13 同理，定性为 **NOT_IN_BRANCH / 标的不存在而阻断（BLOCKED）**，不记为完成，亦不记为失败。
 
+### 6.27 Package-24 标的核查与阻断裁决（2026-10-26）
+- **标的无待迁状态所有权事实（NOT_IN_BRANCH）**：经全仓与 Sphinx 目录只读检视实证，《交接.md》与任务假设中提及的 `src/Wanxiangshu/Sphinx/V2/Runtime/Registry.fs(.fsi)` 实际全为纯函数（`toLockEntry`、`ordered`、`bind`、`lockOf`、`compatible`），其调用点 `Surface.inspectRegistryBinding` 即时消费并丢弃返回值，全链路不存在任何进程内或会话级的可变注册表字典或跨调用状态容器；`V2/Composition/Commands.fs` 中的 `RuntimeHandle.delivered: HashSet<EventId>` 属于绑定底层 `EventStoreHandle` 的持久化切段故障去重防护，并非运行时注册表状态。
+- **契约约束与职责边界**：
+  1. 依据《共同法》与迁移总则，每包必须迁走程序状态，只搬函数或无状态类型而不迁走实际状态所有权不构成迁移包，严禁保留/伪造 facade 与 shim；
+  2. `wanxiangli/ordinal` 严格限定为序数似然纯数值原语（`Pairwise.fs`、`Ranking.fs`、`OrdinalLaw.fs`），且 CUT-31 已明确裁定 `Sphinx` 的 `Questionnaire / Core / Runtime` 为主仓保留（`RETAINED`）。强行将插件拓扑排序塞入 `ordinal` 会直接污染子包职责边界。
+- **裁决与处置**：遵照裁决，**不为不存在的待迁状态在库侧凭空制造空壳组件或兼容转发垫片**，保持 `wanxiangli/src/ordinal/` 与主仓 `src/Wanxiangshu/Sphinx/` 源码零改动，保持两仓职责纯洁。
+- **状态定性**：本包定性为 **标的假设过时 / 无待迁状态所有权而阻断（NOT_IN_BRANCH / BLOCKED）**，不记为完成，亦不记为失败。
+
+### 6.28 停止任务最小集成收口（2026-10-26）
+
+- 合并当前两仓待提交的状态迁移：Ablation 配置与缓存、TurnBinding、AttachmentLeaseRegistry、Casebook settlement/fetch flight、SessionQuiescenceGate、可靠性计数、JoinGuard、交付材料游标、PendingRunStore、共享 workspace/journal pool、PairGuidance memory、Program caller、ProviderLanguage、LargeGate、SessionTopology/SignalBroadcaster 与 MessageVisibilityHub。各包只证明声明的状态职责迁出，不表示宿主已全部抽空。
+- 修复停止时留下的 F# 作用域、私有身份访问、构造器导入与导出问题；补齐公开实例方法，消除 RootWorkspaceCell 的同名 JS 重载覆盖，修复 LargeGate 的原生 Promise 方法和 SignalBroadcaster 的 dispose 契约。原始 witness 历史散文保持 carry provenance，不冒充本轮 body。删除重复的 LargeGate 临时测试，保留编号 006 正式回归。
+- 标准 `flock /tmp/wxs-build.lock node scripts/build.mjs` 成功，最终 generation 275，150 surfaces、771 emitted modules linked。相关库家族与 exports 共 476 pass / 0 fail。宿主首组 141 pass / 10 fail / 9 TODO；追加共享存储、消融、进程与 Casebook 套件 84 pass / 0 fail / 3 skipped / 3 TODO。Advisor 与代理答复不追加 Pair Hint 的集成回归另行 2 pass。
+- 10 条 delegation-025 红态均为 retry/repair fixture 在模拟物理接纳前等待 Await 任务，最终接纳确认超时。未修改 HEAD 源码隔离编译后，两类代表用例复现相同失败；该证明只覆盖两类代表，不宣称已修复全部既有红态。未放宽超时、修改生产接纳语义或删验收。
+- 实际 npm tarball 在独立目录安装，Node、Bun 动态消费及 TypeScript strict 检查通过；独立 PendingRunStore smoke 验证精确 token、单次结算与移除。architecture 与 adapter-thinness 为零违规；pyramid 全仓 45 项中本次 Advisor 新增嵌套已拉平，其余未修改路径红态保留，不冒称全仓静态全绿。未执行商业 Provider canary，未部署运行中的宿主。
+
 ## 7. 迁移来源文件全量清单与保留/删除边界
 
 迁移指南已合入本文件，保留既有协作规则，不再维护独立指南；正式需求仍按各自合同维护。

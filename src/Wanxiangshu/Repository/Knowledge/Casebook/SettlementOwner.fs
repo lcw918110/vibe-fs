@@ -1,8 +1,37 @@
 namespace Wanxiangshu.Repository.Knowledge.Casebook
 
-open System.Collections.Generic
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Persistence.EventStore
+
+module private SettlementInterop =
+    [<Import("CasebookSettlementOwner", "wanxiangli/casebook-maintenance")>]
+    let settlementOwnerCtor: obj = jsNative
+
+    [<Emit("new $0($1)")>]
+    let createOwner (ctor: obj) (onConflict: obj -> unit) : obj = jsNative
+
+    let eventKey (eventId: EventId) : string = EventId.value eventId
+
+    let decodeOutcome (tag: string) : CasebookSettlementOutcome =
+        match tag with
+        | "LogScopeFailure" -> CasebookSettlementOutcome.LogScopeFailure
+        | "CaseUnavailable" -> CasebookSettlementOutcome.CaseUnavailable
+        | "CaseUnavailableKnown" -> CasebookSettlementOutcome.CaseUnavailableKnown
+        | _ -> CasebookSettlementOutcome.Unscoped
+
+    let classifySemantic (failure: CasebookAppendFailure) : string * string * obj =
+        match CasebookSemanticCutIncident.tryFromSettlement failure with
+        | None -> "", "Unscoped", null
+        | Some candidate -> eventKey candidate.Failure.EventId, "SemanticCut", box candidate
+
+    let classifyFailure (failure: CasebookAppendFailure) : string * string * obj =
+        match failure.Error with
+        | AppendError.StorageInvalid _ ->
+            let incident = CasebookSemanticCutIncident.OfFailure failure
+            eventKey incident.Failure.EventId, "StorageInvalid", box incident
+        | _ -> classifySemantic failure
 
 /// Owner of the Casebook settlement outcomes.
 ///
@@ -13,70 +42,21 @@ open Wanxiangshu.Persistence.EventStore
 /// its own scope: appends to that log stop and the failure stays a failure.
 [<Sealed>]
 type CasebookSettlementOwner(onConflict: CasebookSemanticCutIncident -> unit) =
-    let gate = obj ()
-    // DSL-MUTABLE: resource — settlement ledger for the conflicts this owner saw.
-    let conflicts = Dictionary<EventId, CasebookSemanticCutIncident>()
-
     do
         if isNull (box onConflict) then
             nullArg "onConflict"
 
-    let claim (candidate: CasebookSemanticCutIncident) =
-        lock gate (fun () ->
-            match conflicts.TryGetValue candidate.Failure.EventId with
-            | true, existing -> existing, false
-            | false, _ ->
-                conflicts.Add(candidate.Failure.EventId, candidate)
-                candidate, true)
-
-    /// A reporting capability that fails must not change the settlement the
-    /// caller receives: the conflict itself is already recorded.
-    let report (incident: CasebookSemanticCutIncident) =
-        try
-            onConflict incident
-        with _ ->
-            ()
-
-    let settleStorageInvalid (failure: CasebookAppendFailure) =
-        // The shared log's own integrity is broken. Appends to it stop at
-        // the store; this owner reports the scope and never claims the
-        // case was written.
-        let incident, firstDelivery = claim (CasebookSemanticCutIncident.OfFailure failure)
-
-        if firstDelivery then
-            report incident
-
-        CasebookSettlementOutcome.LogScopeFailure
-
-    let settleCandidate (candidate: CasebookSemanticCutIncident) =
-        let _, firstDelivery = claim candidate
-
-        if firstDelivery then
-            report candidate
-            CasebookSettlementOutcome.CaseUnavailable
-        else
-            CasebookSettlementOutcome.CaseUnavailableKnown
-
-    let settleSemantic (failure: CasebookAppendFailure) =
-        match CasebookSemanticCutIncident.tryFromSettlement failure with
-        | None -> CasebookSettlementOutcome.Unscoped
-        | Some candidate -> settleCandidate candidate
+    let inner =
+        SettlementInterop.createOwner
+            SettlementInterop.settlementOwnerCtor
+            (fun raw -> onConflict (unbox<CasebookSemanticCutIncident> raw))
 
     member _.Observe(failure: CasebookAppendFailure) : CasebookSettlementOutcome =
-        match failure.Error with
-        | AppendError.StorageInvalid _ -> settleStorageInvalid failure
-        | _ -> settleSemantic failure
+        let eventId, kind, incident = SettlementInterop.classifyFailure failure
+        let tag: string = inner?Observe(eventId, kind, incident)
+        SettlementInterop.decodeOutcome tag
 
-    /// Re-observe an incident this owner already settled: no new notification
-    /// and no new archive.
     member _.Redeliver(incident: CasebookSemanticCutIncident) : CasebookSettlementOutcome =
-        let owned =
-            lock gate (fun () ->
-                match conflicts.TryGetValue incident.Failure.EventId with
-                | true, existing -> obj.ReferenceEquals(existing, incident)
-                | false, _ -> false)
-
-        if not owned then
-            invalidArg "incident" "A Casebook incident must come from its original settled owner"
-
-        CasebookSettlementOutcome.CaseUnavailableKnown
+        let eventId = SettlementInterop.eventKey incident.Failure.EventId
+        let tag: string = inner?Redeliver(eventId, box incident)
+        SettlementInterop.decodeOutcome tag

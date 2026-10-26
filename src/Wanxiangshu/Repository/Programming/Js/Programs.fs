@@ -1,7 +1,6 @@
 namespace Wanxiangshu.Repository.Programming.Js
 
 open System
-open System.Collections.Generic
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
@@ -11,6 +10,9 @@ module JsPrograms =
     [<Import("Program", "wanxiangli/program")>]
     let private create: unit -> obj = jsNative
 
+    [<Import("programCallers", "wanxiangli/program")>]
+    let private callers: obj = jsNative
+
     let private owner = create ()
 
     let forSession (sessionId: string) : obj = owner?session (sessionId)
@@ -19,20 +21,15 @@ module JsPrograms =
         let session = forSession sessionId
         unbox<string array> (session?pendingNames ()) |> Array.toList
 
-    let private callers = Dictionary<string, string>()
+    let noteCaller (sessionId: string) (callId: string) (name: string) : unit =
+        callers?noteCaller (sessionId, callId, name) |> ignore
 
-    let private callerKey sessionId callId = sessionId + "\n" + callId
+    let clearCaller (sessionId: string) (callId: string) : unit =
+        callers?clearCaller (sessionId, callId) |> ignore
 
-    let noteCaller sessionId callId name =
-        if not (String.IsNullOrEmpty callId) && not (String.IsNullOrEmpty name) then
-            callers[callerKey sessionId callId] <- name
-
-    let clearCaller sessionId callId =
-        callers.Remove(callerKey sessionId callId) |> ignore
-
-    let callerName sessionId callId =
-        match callers.TryGetValue(callerKey sessionId callId) with
-        | true, name -> Some name
+    let callerName (sessionId: string) (callId: string) : string option =
+        match box (callers?callerName (sessionId, callId)) with
+        | :? string as name when not (String.IsNullOrEmpty name) -> Some name
         | _ -> None
 
     let deliveryBlockersWithChoicesForSession sessionId =
@@ -43,11 +40,11 @@ module JsPrograms =
         task {
             let names = pendingNames sessionId
             let! result = unbox<Task<obj>> (owner?close (sessionId))
+            callers?clearSession (sessionId) |> ignore
 
-            if string result?state <> "closed" then
-                return failwith ("program cleanup is incomplete: " + JS.JSON.stringify result)
-            else
-                return names
+            match string result?state with
+            | "closed" -> return names
+            | _ -> return failwith ("program cleanup is incomplete: " + JS.JSON.stringify result)
         }
 
     let closeAll () : Task<unit> =
@@ -57,4 +54,6 @@ module JsPrograms =
             for session in sessions do
                 let! _ = closeSession (string session?sessionId)
                 ()
+
+            callers?clearAll () |> ignore
         }

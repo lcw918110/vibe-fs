@@ -2,6 +2,8 @@ namespace Wanxiangshu.Execution.Delegation.Fork
 
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Outcome
@@ -15,6 +17,9 @@ open Wanxiangshu.Persistence.Journal
 /// EXEC-016: join-capable roles must join outstanding work before terminal idle.
 module HostJoinGuard =
 
+    [<Import("joinGuardReservationStore", "wanxiangli/delegate-batch")>]
+    let private reservationStore: obj = jsNative
+
     [<RequireQualifiedAccess>]
     type JoinGuardNudgeOutcome =
         | Sent of PromptKey
@@ -23,9 +28,6 @@ module HostJoinGuard =
         | Superseded
         | NotSent
         | Failed of reason: string
-
-    // DSL-MUTABLE: single-flight — one nudge per key across process
-    let private processNudgeKeys = HashSet<string>()
 
     let private hasOutstandingJoinClaimOnJournal
         (journal: AgentJournal)
@@ -57,28 +59,26 @@ module HostJoinGuard =
 
     /// One reservation per exact terminal occasion. A fresh ProviderRun is a
     /// fresh reminder opportunity while outstanding work still exists.
-    let private nudgeKey (targetSessionId: SessionId) (terminalProviderRun: ProviderRunIdentity) =
-        sprintf "join-guard:%s:%s" (SessionId.value targetSessionId) (ProviderRunIdentity.value terminalProviderRun)
+    let private nudgeKey (targetSessionId: SessionId) (terminalProviderRun: ProviderRunIdentity) : string =
+        unbox<string> (
+            reservationStore?nudgeKey (SessionId.value targetSessionId, ProviderRunIdentity.value terminalProviderRun)
+        )
 
-    let private reserveNudge
+    let private tryReserveNudge
         (port: HostJoinGuardJournalPort option)
         (journal: AgentJournal option)
         (nudgeKeys: HashSet<string>)
         (sessionId: SessionId)
         (terminalProviderRun: ProviderRunIdentity)
-        (key: string)
-        : bool =
-        lock processNudgeKeys (fun () ->
-            if
-                hasOutstandingJoinClaim port journal sessionId terminalProviderRun
-                || nudgeKeys.Contains key
-                || processNudgeKeys.Contains key
-            then
-                false
-            else
-                nudgeKeys.Add key |> ignore
-                processNudgeKeys.Add key |> ignore
-                true)
+        : string option =
+        let sid = SessionId.value sessionId
+        let run = ProviderRunIdentity.value terminalProviderRun
+        let hasClaim () = hasOutstandingJoinClaim port journal sessionId terminalProviderRun
+        let reserved: obj = reservationStore?tryReserve (nudgeKeys, sid, run, hasClaim)
+        if isNull reserved then None else Some(unbox<string> reserved)
+
+    let private releaseNudgeKey (nudgeKeys: HashSet<string>) (key: string) : unit =
+        reservationStore?release (nudgeKeys, key) |> ignore
 
     let private sendReservedNudge
         (sessionPort: ISessionHostPort)
@@ -93,10 +93,7 @@ module HostJoinGuard =
         (directory: string option)
         : Task<JoinGuardNudgeOutcome> =
         task {
-            let releaseKey () =
-                lock processNudgeKeys (fun () ->
-                    nudgeKeys.Remove key |> ignore
-                    processNudgeKeys.Remove key |> ignore)
+            let releaseKey () = releaseNudgeKey nudgeKeys key
 
             let! sent =
                 HostSessionNudge.trySendGateContinuationWithAdmission
@@ -144,14 +141,12 @@ module HostJoinGuard =
         (directory: string option)
         : Task<JoinGuardNudgeOutcome> =
         task {
-            let key = nudgeKey sessionId terminalProviderRun
-
             let reserved =
-                reserveNudge port (Some durable) nudgeKeys sessionId terminalProviderRun key
+                tryReserveNudge port (Some durable) nudgeKeys sessionId terminalProviderRun
 
-            if not reserved then
-                return JoinGuardNudgeOutcome.AlreadyOutstanding
-            else
+            match reserved with
+            | None -> return JoinGuardNudgeOutcome.AlreadyOutstanding
+            | Some key ->
                 return!
                     sendReservedNudge
                         sessionPort

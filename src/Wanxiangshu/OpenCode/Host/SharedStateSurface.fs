@@ -1,5 +1,6 @@
 namespace Wanxiangshu.OpenCode
 
+open Fable.Core
 open Wanxiangshu.Foundation.HostSession
 
 /// JS-native boundary for host-boundary-010 shared cross-instance state and
@@ -11,16 +12,18 @@ open Wanxiangshu.Foundation.HostSession
 /// shared across plugin instances (root + worktree), not per-instance copies.
 module SharedStateSurface =
 
+    [<Fable.Core.Import("sessionTopologyStore", "wanxiangli/ownership")>]
+    let private topologyStore: obj = jsNative
+
     /// SessionParents: cross-instance parent registry.
     let putSessionParent (childId: string) (parentId: string) : unit =
-        SharedState.SessionParents.[childId] <- parentId
+        Fable.Core.JsInterop.(?) topologyStore "putParent" (childId, parentId)
 
     let getSessionParent (childId: string) : string =
-        match SharedState.SessionParents.TryGetValue(childId) with
-        | true, v -> v
-        | false, _ -> null
+        Fable.Core.JsInterop.(?) topologyStore "getParent" childId
 
-    let clearSessionParents () : unit = SharedState.SessionParents.Clear()
+    let clearSessionParents () : unit =
+        Fable.Core.JsInterop.(?) topologyStore "clearParents" ()
 
     let tryBindRootWorkspace (path: string) : bool =
         (RootWorkspaceProcess.local ()).Binder.TryBind(Option.ofObj path)

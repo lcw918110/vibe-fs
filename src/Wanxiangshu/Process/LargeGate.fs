@@ -1,75 +1,54 @@
 namespace Wanxiangshu.Process
 
 open System
-open System.Collections.Generic
 open System.Threading
 open System.Threading.Tasks
-open Wanxiangshu.Foundation
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.AsyncSupport
 
-/// Single-holder large-process gate with cancelable FIFO waiters.
+/// Single-holder large-process gate delegated to wanxiangli/runtime.
 module LargeGate =
 
-    type private Waiter(ct: CancellationToken) =
+    [<Import("largeGate", "wanxiangli/runtime")>]
+    let private gate: obj = jsNative
+
+    let getCount () : int =
+        unbox<int> (gate?getCount())
+
+    let private disposeReg (reg: IDisposable) : unit =
+        if not (isNull reg) then
+            reg.Dispose()
+
+    let private createCanceledTask () : Task =
         let tcs = TaskCompletionSource<unit>()
-        // DSL-MUTABLE: cancellation — cancel-observed latch for the waiter
-        let mutable canceled = ct.IsCancellationRequested
+        trySetCanceled tcs |> ignore
+        tcs.Task :> Task
 
-        do
-            if canceled then
-                trySetCanceled tcs |> ignore
-            else
-                ct.Register(fun () ->
-                    canceled <- true
-                    trySetCanceled tcs |> ignore)
-                |> ignore
+    let private enqueueWaiter (ct: CancellationToken) : Task =
+        let tcs = TaskCompletionSource<unit>()
+        let mutable reg : IDisposable = null
+        let onGrant () =
+            disposeReg reg
+            trySetResult tcs () |> ignore
+        let cancel : unit -> unit = unbox (gate?enqueue(onGrant))
+        let onCancel () =
+            cancel ()
+            trySetCanceled tcs |> ignore
+        reg <- ct.Register(onCancel)
+        tcs.Task :> Task
 
-        member _.Task = tcs.Task
-        member _.IsCanceled = canceled
-
-        member _.TryGrant() =
-            if canceled then
-                false
-            else
-                trySetResult tcs () |> ignore
-                true
-
-    let private waiters = Queue<Waiter>()
-    // DSL-MUTABLE: resource — single-holder permit flag for the large-process gate
-    let mutable private held = false
-    let private gate = obj ()
-
-    let getCount () =
-        lock gate (fun () -> if held then 0 else 1)
-
-    let private grantWaiter (waiter: Waiter) =
-        if waiter.TryGrant() then
-            held <- true
-
-    let private pumpUnlocked () =
-        while waiters.Count > 0 && not held do
-            let waiter = waiters.Dequeue()
-            grantWaiter waiter
-
-    let private acquireUnlocked ct =
-        if not held && waiters.Count = 0 then
-            held <- true
+    let private acquireActive (ct: CancellationToken) : Task =
+        if unbox<bool> (gate?tryAcquire()) then
             Task.FromResult() :> Task
         else
-            let waiter = Waiter ct
-            waiters.Enqueue waiter
-            pumpUnlocked ()
-            waiter.Task
+            enqueueWaiter ct
 
     let acquire (ct: CancellationToken) : Task =
         if ct.IsCancellationRequested then
-            let tcs = TaskCompletionSource<unit>()
-            trySetCanceled tcs |> ignore
-            tcs.Task
+            createCanceledTask ()
         else
-            lock gate (fun () -> acquireUnlocked ct)
+            acquireActive ct
 
     let release () : unit =
-        lock gate (fun () ->
-            held <- false
-            pumpUnlocked ())
+        gate?release() |> ignore

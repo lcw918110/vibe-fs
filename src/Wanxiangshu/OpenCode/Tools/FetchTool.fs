@@ -1,6 +1,8 @@
 namespace Wanxiangshu.OpenCode
 
 open System
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Host
 open Wanxiangshu.Foundation
 open Wanxiangshu.Participant.Provider
@@ -34,10 +36,8 @@ module FetchTool =
         [<Literal>]
         let ShelfmarkRequired = "tool/fetch/shelfmark-required"
 
-    let private fetchGate = obj ()
-
-    let private fetchInFlight =
-        System.Collections.Generic.Dictionary<string * string, IEventStore * System.Threading.Tasks.Task<string>>()
+    [<Import("fetchFlightRegistry", "wanxiangli/casebook")>]
+    let private fetchFlightRegistry: obj = jsNative
 
     let private lang (ctx: HostToolContext) =
         ProviderLanguageBinding.forSessionText ctx.SessionId
@@ -119,26 +119,16 @@ module FetchTool =
             | Ok(Some case) -> return! handleResolvedCase owner language workspaceRoot store case
         }
 
-    let private createFlightWork key owner language workspaceRoot store shelfmark =
-        task {
-            try
-                return! runFetch owner language workspaceRoot store shelfmark
-            finally
-                lock fetchGate (fun () -> fetchInFlight.Remove key |> ignore)
-        }
-
-    let private getOrCreateFlightWork owner language workspaceRoot store shelfmark =
-        let key = workspaceRoot, shelfmark
-
-        lock fetchGate (fun () ->
-            match fetchInFlight.TryGetValue key with
-            | true, (boundStore, existing) when obj.ReferenceEquals(boundStore, store) -> existing
-            | true, _ -> invalidOp "Casebook fetch flight store binding mismatch"
-            | false, _ ->
-                let work = createFlightWork key owner language workspaceRoot store shelfmark
-                fetchInFlight.[key] <- store, work
-                work)
-
+    let private getOrCreateFlightWork
+        (owner: CasebookSettlementOwner)
+        (language: ProviderLanguage)
+        (workspaceRoot: string)
+        (store: IEventStore)
+        (shelfmark: string)
+        : System.Threading.Tasks.Task<string> =
+        let factory = fun () -> box (runFetch owner language workspaceRoot store shelfmark)
+        let promise = fetchFlightRegistry?getOrCreate (workspaceRoot, shelfmark, box store, factory)
+        unbox<System.Threading.Tasks.Task<string>> promise
 
     let spec
         (factory: HostToolFactory)

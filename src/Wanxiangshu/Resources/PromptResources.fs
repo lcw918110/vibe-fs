@@ -33,17 +33,18 @@ module PromptResources =
         |> List.map (fun text -> text.Trim())
 
     let instructionTextsForRole (lang: ProviderLanguage) (role: Role) =
-        let common = ProviderResources.readText lang "world/common-law"
         let law = ProviderResources.readText lang (roleSemanticPath role)
-        let inherited = libraryPaths role
 
-        if List.isEmpty inherited then
-            composeInstructions [ common; law ]
-        else
+        match role, libraryPaths role with
+        | Role.Advisor, _ -> composeInstructions [ law ]
+        | _, [] -> composeInstructions [ ProviderResources.readText lang "world/common-law"; law ]
+        | _, inherited ->
             let books = inherited |> List.map (ProviderResources.readText lang)
 
             composeInstructions (
-                [ common; law; ProviderResources.readText lang "library/ingress" ]
+                [ ProviderResources.readText lang "world/common-law"
+                  law
+                  ProviderResources.readText lang "library/ingress" ]
                 @ books
                 @ [ ProviderResources.readText lang "library/closing" ]
             )

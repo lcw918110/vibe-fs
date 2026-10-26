@@ -1,114 +1,71 @@
 namespace Wanxiangshu.Persistence.Journal
 
 open System
-open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Composition.Durable
 
-/// Process-local shared AgentJournal owners.
-///
-/// OpenCode loads the plugin once for the root workspace and again for each
-/// manager worktree. ReviewGuard, ProviderFailure and Authority facts must remain ONE
-/// projection per git common-dir runtime path — two projections over the same
-/// facts is the split-brain that provider-attempt-recovery-003 and REVIEW-003 both depend on not
-/// happening.
 module SharedAgentJournal =
 
-    /// DSL-state-combination: physical — shared journal owner refcount resource
-    type private SharedJournal =
-        { Ready: Task<Result<AgentJournal, FoldRejection>>
-          mutable Instance: AgentJournal option
-          mutable RefCount: int }
+    [<Import("sharedAsyncJournalPool", "wanxiangli/work")>]
+    type private INativeAsyncJournalPool =
+        abstract AcquireOrStart: directory: string * startReady: (unit -> obj) -> obj * bool
+        abstract SettleSuccess: directory: string * readyTask: obj * instance: obj -> unit
+        abstract SettleFailure: directory: string * readyTask: obj -> unit
+        abstract ReleaseTarget: target: obj -> obj option
 
-    let private gate = obj ()
-    // DSL-MUTABLE: resource — shared journal owner registry by directory
-    let private shared = Dictionary<string, SharedJournal>()
+    [<Import("sharedAsyncJournalPool", "wanxiangli/work")>]
+    let private sharedPool: INativeAsyncJournalPool = jsNative
 
-    let private registerInstance
-        (directory: string)
-        (ready: Task<Result<AgentJournal, FoldRejection>>)
-        (journal: AgentJournal)
-        =
-        lock gate (fun () ->
-            match shared.TryGetValue directory with
-            | true, entry when obj.ReferenceEquals(entry.Ready, ready) -> entry.Instance <- Some journal
-            | _ -> ())
+    module private Helpers =
+        let settleOutcome
+            (pool: INativeAsyncJournalPool)
+            (directory: string)
+            (readyObj: obj)
+            (outcome: Result<AgentJournal, FoldRejection>)
+            =
+            match outcome with
+            | Ok journal ->
+                pool.SettleSuccess(directory, readyObj, box journal)
+                Ok journal
+            | Error err ->
+                pool.SettleFailure(directory, readyObj)
+                Error err
 
-    let private removeOpening (directory: string) (ready: Task<Result<AgentJournal, FoldRejection>>) =
-        lock gate (fun () ->
-            match shared.TryGetValue directory with
-            | true, entry when obj.ReferenceEquals(entry.Ready, ready) -> shared.Remove directory |> ignore
-            | _ -> ())
+        let handleReleaseTarget (instOpt: obj option) : Task =
+            match instOpt with
+            | Some inst ->
+                let target = unbox<AgentJournal> inst
+                task { do! (target :> IAsyncDisposable).DisposeAsync() } :> Task
+            | None ->
+                Task.FromResult(()) :> Task
 
-    let private releaseExisting (directory: string) (entry: SharedJournal) =
-        let remaining = entry.RefCount - 1
-
-        if remaining <= 0 then
-            shared.Remove directory |> ignore
-            true
-        else
-            entry.RefCount <- remaining
-            false
-
-    let private releaseEntry (directory: string) (entry: SharedJournal) (target: AgentJournal) =
-        match entry.Instance with
-        | Some instance when obj.ReferenceEquals(instance, target) -> releaseExisting directory entry
-        | _ -> false
-
-    let private releaseTarget (target: AgentJournal) =
-        lock gate (fun () ->
-            shared
-            |> Seq.toList
-            |> List.exists (fun (KeyValue(directory, entry)) -> releaseEntry directory entry target))
-
-    /// PERSIST-004: an unfoldable journal stops startup.
-    ///
-    /// Returns the rejection instead of throwing, so the composition root decides
-    /// how to fail closed — it is the only layer that knows how to report a
-    /// startup refusal to the Host.
-    ///
-    /// `openJournal` is supplied by the composition root (EventStore boot port +
-    /// `AgentJournal.createFromProjection`). This module stays free of
-    /// local EventStore construction tokens.
     let acquire
         (directory: string)
         (processId: int)
         (startedAt: DateTimeOffset)
         (openJournal: RuntimeId -> int -> DateTimeOffset -> Task<Result<AgentJournal, FoldRejection>>)
         : Task<Result<AgentJournal, FoldRejection>> =
-        let ready =
-            lock gate (fun () ->
-                match shared.TryGetValue directory with
-                | true, entry ->
-                    entry.RefCount <- entry.RefCount + 1
-                    entry.Ready
-                | false, _ ->
-                    let runtimeId = RuntimeId.create (Guid.NewGuid().ToString("N").Substring(0, 12))
-                    let opening = openJournal runtimeId processId startedAt
+        let openThunk () =
+            let runtimeId = RuntimeId.create (Guid.NewGuid().ToString("N").Substring(0, 12))
+            box (openJournal runtimeId processId startedAt)
 
-                    shared.[directory] <-
-                        { Ready = opening
-                          Instance = None
-                          RefCount = 1 }
-
-                    opening)
+        let readyObj, _isNew = sharedPool.AcquireOrStart(directory, openThunk)
+        let ready = unbox<Task<Result<AgentJournal, FoldRejection>>> readyObj
 
         task {
-            match! ready with
-            | Ok journal ->
-                registerInstance directory ready journal
-                return Ok journal
-            | Error err ->
-                removeOpening directory ready
-                return Error err
+            let! outcome = ready
+            return Helpers.settleOutcome sharedPool directory readyObj outcome
         }
 
     let releaseAsync (journal: AgentJournal option) : Task =
         match journal with
-        | None -> Task.FromResult(()) :> Task
-        | Some target when releaseTarget target -> task { do! (target :> IAsyncDisposable).DisposeAsync() } :> Task
-        | Some _ -> Task.FromResult(()) :> Task
+        | Some target ->
+            let released = sharedPool.ReleaseTarget(box target)
+            Helpers.handleReleaseTarget released
+        | None ->
+            Task.FromResult(()) :> Task
 
     let release (journal: AgentJournal option) = releaseAsync journal |> ignore

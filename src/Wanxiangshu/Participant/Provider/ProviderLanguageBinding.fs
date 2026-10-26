@@ -14,27 +14,33 @@ open Wanxiangshu.Participant.Provider
 [<RequireQualifiedAccess>]
 module ProviderLanguageBinding =
 
-    // DSL-MUTABLE: resource — cached host configuration preference injected at startup
-    let mutable private hostConfigPreference: string option = None
-
     let setHostConfigPreference (raw: string) : unit =
-        if not (isNull (box raw)) then
-            hostConfigPreference <- Some raw
+        GlobalProviderLanguage.setHostConfigPreference raw
 
-    let clearHostConfigPreferenceForTests () : unit = hostConfigPreference <- None
+    let clearHostConfigPreferenceForTests () : unit =
+        GlobalProviderLanguage.clearHostConfigPreference ()
 
-    let private valueOrRaise =
-        function
+    let private unwrapOrRaise (result: Result<ProviderLanguage, string>) : ProviderLanguage =
+        match result with
         | Ok value -> value
         | Error error -> raise (InvalidOperationException error)
 
     [<Emit("typeof Intl !== 'undefined' && Intl.DateTimeFormat ? (Intl.DateTimeFormat().resolvedOptions().locale || '') : ''")>]
     let private jsIntlLocale () : string = jsNative
 
+    let private readIntlLocale () : string option =
+        try
+            let loc = jsIntlLocale ()
+            if String.IsNullOrEmpty loc then None else Some loc
+        with _ ->
+            None
+
     let readGlobalPreference () : ProviderLanguage =
         let explicit =
             Environment.GetEnvironmentVariable "WANXIANGSHU_PROVIDER_LANGUAGE"
             |> Option.ofObj
+
+        let hostConfig = GlobalProviderLanguage.hostConfigPreference ()
 
         let vscodeNls =
             Environment.GetEnvironmentVariable "VSCODE_NLS_CONFIG" |> Option.ofObj
@@ -45,15 +51,10 @@ module ProviderLanguageBinding =
             |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable "LC_MESSAGES" |> Option.ofObj)
             |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable "LANG" |> Option.ofObj)
 
-        let intlLocale =
-            try
-                let loc = jsIntlLocale ()
-                if String.IsNullOrEmpty loc then None else Some loc
-            with _ ->
-                None
+        let intlLocale = readIntlLocale ()
 
-        ProviderLanguage.fromObservationLadder explicit hostConfigPreference vscodeNls posixLocale intlLocale
-        |> valueOrRaise
+        ProviderLanguage.fromObservationLadder explicit hostConfig vscodeNls posixLocale intlLocale
+        |> unwrapOrRaise
 
     /// Publish the currently observed preference into the global language
     /// holder. Called at startup, on host config change and in tests that

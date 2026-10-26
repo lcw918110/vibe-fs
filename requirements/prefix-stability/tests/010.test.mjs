@@ -722,6 +722,30 @@ test('WHAT[prefix-stability-010] HOST-013 scope weak steer has no durable addres
   }
 })
 
+test('WHAT[prefix-stability-010] physical agent answers never acquire Pair Hint across repeated requests', async () => {
+  const assert = (await import('node:assert/strict')).default
+  for (const location of ['message', 'info']) {
+    const session = 'physical-scope-answer-' + location
+    const answer = realMessage('answer-' + location, 'user', '# 前一 Scope 的答复：\n已确认原实现。')
+    if (location === 'message') answer.attribution = 'agent'
+    else answer.info.attribution = 'agent'
+    const original = structuredClone(answer)
+    let messages = [realMessage('operator', 'user', 'continue'), answer]
+    for (let request = 0; request < 3; request++) {
+      const result = await pair.tryInject(session, 'Pair Hint ' + request, messages)
+      assert.equal(result.ok, true, result.error)
+      assert.deepEqual(result.value, messages)
+      assert.deepEqual(result.value.at(-1), original)
+      messages = result.value
+    }
+    const operator = realMessage('next-operator', 'user', 'continue')
+    const control = await pair.tryInject(session, 'Pair Hint', [...messages, operator])
+    assert.equal(control.ok, true, control.error)
+    assert.match(control.value.at(-1).parts[0].text, /Pair Hint/)
+    assert.deepEqual(answer, original)
+  }
+})
+
 test('WHAT[prefix-stability-010] HOST-013 generated weak steers preserve anchors across random transcript shapes', async () => {
   const scenario = fc.record({
     history: fc.array(fc.constantFrom('user', 'assistant', 'terminal'), { maxLength: 12 }),

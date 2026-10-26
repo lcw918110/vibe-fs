@@ -677,7 +677,12 @@ module PairProgrammingThoughtTransform =
 
     let private messageCarriesGuidance (rawMsg: obj) : bool =
         if messageRole rawMsg = "user" then
-            Surface.userCanCarryHint rawMsg
+            let attribution =
+                tryUnboxString rawMsg?attribution
+                |> Option.orElseWith (fun () ->
+                    messageInfo rawMsg |> Option.bind (fun info -> tryUnboxString info?attribution))
+
+            attribution <> Some "agent" && Surface.userCanCarryHint rawMsg
         else
             Surface.toolCanCarryHint rawMsg
 

@@ -41,6 +41,8 @@ open Wanxiangshu.Persistence.Journal
 module SyncDelegateSurface =
     [<Import("providerAttemptStopFence", "wanxiangli/failure")>]
     let private providerAttemptStopFence: obj = jsNative
+    [<Import("joinGuardReservationStore", "wanxiangli/delegate-batch")>]
+    let private joinGuardStore: obj = jsNative
     [<RequireQualifiedAccess>]
     type private RetryHarnessMode =
         | Scripted
@@ -232,7 +234,7 @@ module SyncDelegateSurface =
             eventPort: IEventObservationPort
         ) =
         let nudgeSent = HashSet<string>()
-        let joinGuardNudges = HashSet<string>()
+        let joinGuardNudges: HashSet<string> = unbox (joinGuardStore?createScope())
         member _.Journal = journal
         member _.Dispatcher = dispatcher
         member _.Runtime = runtime

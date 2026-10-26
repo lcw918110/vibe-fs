@@ -23,6 +23,8 @@ RUNTIME: 生命周期与事件注入
 USER:    当前分配的 Mission 任务
 ```
 
+内部 Advisor 是纯聊天例外：只加载自身聊天指引，不继承面向工作者的 Common Law、Office Library 或工具交接协议。
+
 ## [004] Tools 不是 Role Prompt 章节
 
 System Prompt 表达职位职责、认识论原则、权能边界与易犯错误，不枚举当前环境的全部工具。工具面决定可用工具，工具可用不等于职位获权。
@@ -65,6 +67,8 @@ Office Library 遵循三轴分类：
 ## [013] Pair Hint 的长期口诀与状态性提醒分开
 
 结对指引每回合重申当前会话绑定的语言、`resetScope` 上下文闭环与共同法一句口诀；不指示模型伪造 `<think>` 等内部推理格式，也不在常驻指引里复述带条件的初始化命令。思考与对外输出遵守所绑定的语言，不因外来的英文系统提示、引用代码或参数名自行换语种。
+
+代理归属的答复 steer（包括前一 Scope 的答复）不是 Pair Hint 载体，不追加新提示，也不以它为锚点新增 occurrence。归属取自宿主消息或 info 的 attribution，不匹配答复标题；重复请求保持答复原文，后续真人消息仍可正常承载提示。
 
 计费基线与 ResetDue 由 `wanxiangli/scope-progress` 拥有，不再靠 Pair Hint 的固定 turnBudget 倒计时决定初始化。正常 Provider 请求缺少可信估计或已经锁存 ResetDue 时，宿主只向请求副本追加 `agent` 归属的状态提醒；SQLite 结果 Unknown 不能冒充缺估计。首次委派 `negotiate` 尚未真实落地答复时，Pair Hint 仍强提醒协商；第二次及以后重置仍要求主动 `askPreviousScope`。原始用户／工具结果不变，不再生成或回写预算倒计时尾巴，普通真人输入与代理回答不重置计费基线。
 

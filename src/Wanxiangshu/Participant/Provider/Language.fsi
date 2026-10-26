@@ -34,3 +34,7 @@ module GlobalProviderLanguage =
     /// The live global preference. The single language authority: every Class A
     /// render reads this, so a setting change takes effect on the next request.
     val current: unit -> ProviderLanguage
+
+    val setHostConfigPreference: raw: string -> unit
+    val clearHostConfigPreference: unit -> unit
+    val hostConfigPreference: unit -> string option

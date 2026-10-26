@@ -15,18 +15,8 @@ type ProviderLanguage =
 [<AutoOpen>]
 module private ProviderLanguageLibrary =
 
-    [<Import("Resources", "wanxiangli/resources")>]
-    let private resourcesClass: obj = jsNative
-
-    // 0.7.0 起语言原语是 Resources 实例成员；惰性构造一次，共享包内资源根。
-    // DSL-MUTABLE: resource — lazily created library binding to this package root
-    let mutable private instance: obj = null
-
-    let library () : obj =
-        if isNull instance then
-            instance <- emitJsExpr resourcesClass "new $0()"
-
-        instance
+    [<Import("providerLanguageStore", "wanxiangli/resources")>]
+    let providerLanguageStore: obj = jsNative
 
 [<RequireQualifiedAccess>]
 module ProviderLanguage =
@@ -66,7 +56,7 @@ module ProviderLanguage =
             ProviderLanguage.English
 
     let tryParse (raw: string) : ProviderLanguage option =
-        let lib = library ()
+        let lib = providerLanguageStore
         let found: obj = lib?tryParseLanguage (raw)
 
         if isNull found then
@@ -75,7 +65,7 @@ module ProviderLanguage =
             Some(ofExternalName (unbox<string> found))
 
     let parse (raw: string) : ProviderLanguage =
-        let lib = library ()
+        let lib = providerLanguageStore
         ofExternalName (unbox<string> (lib?parseLanguage raw))
 
     let private observation (value: string option) : obj =
@@ -89,15 +79,17 @@ module ProviderLanguage =
         else
             Error(unbox<string> resolved?error)
 
+    let private resolvePreferenceObservation (raw: string) : Result<ProviderLanguage, string> =
+        let lib = providerLanguageStore
+        let resolved: obj = lib?resolvePreference (raw, null, null, null, null)
+        decodePreferenceResult resolved
+
     /// The sole policy for interpreting the raw provider-language preference.
     let fromPreferenceObservation (observation: string option) : Result<ProviderLanguage, string> =
         match observation with
         | None -> Ok ProviderLanguage.English
         | Some raw when String.IsNullOrWhiteSpace raw -> Ok ProviderLanguage.English
-        | Some raw ->
-            let lib = library ()
-            let resolved: obj = lib?resolvePreference (raw, null, null, null, null)
-            decodePreferenceResult resolved
+        | Some raw -> resolvePreferenceObservation raw
 
     /// Resolves global preference through the normative preference ladder:
     /// 1. Explicit environment variable (WANXIANGSHU_PROVIDER_LANGUAGE)
@@ -111,7 +103,7 @@ module ProviderLanguage =
         (posixLocale: string option)
         (intlLocale: string option)
         : Result<ProviderLanguage, string> =
-        let lib = library ()
+        let lib = providerLanguageStore
 
         let resolved: obj =
             lib?resolvePreference (
@@ -134,14 +126,28 @@ module GlobalProviderLanguage =
     /// Every Class A render reads it, so changing the setting changes the
     /// language of the next request even mid-session.
     let refresh (resolve: unit -> ProviderLanguage) : unit =
-        let lib = library ()
-        lib?refreshGlobalLanguage (fun () -> ProviderLanguage.externalName (resolve ()))
+        let lib = providerLanguageStore
+        lib?refresh (fun () -> ProviderLanguage.externalName (resolve ()))
+        |> ignore
 
     let current () : ProviderLanguage =
-        let lib = library ()
-        let name: string = lib?currentGlobalLanguage ()
+        let lib = providerLanguageStore
+        let name: string = lib?current ()
 
         if name = "SimplifiedChinese" then
             ProviderLanguage.SimplifiedChinese
         else
             ProviderLanguage.English
+
+    let setHostConfigPreference (raw: string) : unit =
+        let lib = providerLanguageStore
+        lib?setHostConfigPreference raw
+
+    let clearHostConfigPreference () : unit =
+        let lib = providerLanguageStore
+        lib?clearHostConfigPreference ()
+
+    let hostConfigPreference () : string option =
+        let lib = providerLanguageStore
+        let v: obj = lib?hostConfigPreference ()
+        if isNull v then None else Some(unbox<string> v)

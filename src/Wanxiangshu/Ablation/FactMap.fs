@@ -1,24 +1,21 @@
 namespace Wanxiangshu.Ablation
 
+open Fable.Core
+open Fable.Core.JsInterop
+
 [<RequireQualifiedAccess>]
 module AblationFactMap =
 
-    // DSL-MUTABLE: resource — memoized ablation fact map
-    let mutable private cached: Map<string, AblationNodeId> option = None
+    [<Import("ablationFactMapStore", "wanxiangli/ablation")>]
+    let private store: obj = jsNative
 
-    let private load () =
+    let private loadEntries () : (string * string)[] =
         match AblationManifest.loadFactMap () with
-        | Ok document -> document.Facts |> Map.map (fun _ value -> AblationNodeId.create value)
-        | Error _ -> Map.empty
+        | Ok document -> document.Facts |> Map.toArray
+        | Error _ -> [||]
 
-    let private map () =
-        match cached with
-        | Some value -> value
-        | None ->
-            let value = load ()
-            cached <- Some value
-            value
+    let resetCache () : unit = store?resetCache () |> ignore
 
-    let resetCache () = cached <- None
-
-    let tryNode (factTag: string) = map () |> Map.tryFind factTag
+    let tryNode (factTag: string) : AblationNodeId option =
+        let found: string = store?tryNode (factTag, loadEntries)
+        found |> Option.ofObj |> Option.map AblationNodeId.create

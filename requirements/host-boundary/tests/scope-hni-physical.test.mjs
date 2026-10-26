@@ -821,13 +821,19 @@ test('WHAT[advisor-pure-chat] an Advisor session is pure chat: no Pair Hint stee
 
   const roleOf = sid => (String(sid?.fields?.[0] ?? sid) === advisorSid ? Role.Advisor : Role.Engineer)
   const transform = createWith(roleOf, async () => undefined)
-  const systemFor = async sid => {
-    const output = { system: ['Provider configuration'] }
+  const { systemForRole, runtimeInstallFromPackage } = await import('../../../dist/Resources/PromptSurface.js')
+  runtimeInstallFromPackage()
+  const systemFor = async (sid, language) => {
+    const role = sid === advisorSid ? 'advisor' : 'engineer'
+    const output = { system: [systemForRole(language, role)] }
     await transform({ sessionID: sid })(output)
     return JSON.stringify(output.system)
   }
-  assert.match(await systemFor(workerSid), /resetScope/, 'control: a worker system carries the Scope protocol')
-  assert.doesNotMatch(await systemFor(advisorSid), /resetScope|turnBudget/, 'Advisor system carries no Scope protocol')
+  for (const language of ['English', 'SimplifiedChinese']) {
+    assert.match(await systemFor(workerSid, language), /resetScope/, 'control: a worker system carries the Scope protocol')
+    assert.doesNotMatch(await systemFor(advisorSid, language), /\b(?:deliver|negotiate|resetScope|turnBudget)\b|`view`/,
+      'the complete Advisor system carries no tool or delivery protocol')
+  }
 })
 
 
