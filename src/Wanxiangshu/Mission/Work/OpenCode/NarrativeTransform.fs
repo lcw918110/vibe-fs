@@ -243,27 +243,6 @@ module RelayNarrativeTransform =
                     Some(indexes |> Array.map (fun index -> messages.[index]))
             | _ -> None
 
-    /// Read the committed barrier and return the messages the model may see.
-    /// The caller's array is not modified. No barrier for the active tenure
-    /// returns the same reference. An unreadable journal leaves the array as it is.
-    let visibleMessages (stateRoot: string) (sessionId: string) (messages: obj) : obj =
-        if
-            String.IsNullOrWhiteSpace stateRoot
-            || String.IsNullOrWhiteSpace sessionId
-            || isNull messages
-            || not (emitJsExpr messages "Array.isArray($0)")
-        then
-            messages
-        else
-            try
-                match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected stateRoot sessionId with
-                | None -> messages
-                | Some work ->
-                    match cutVisible (unbox<obj array> messages) (Some work) with
-                    | None -> messages
-                    | Some kept -> box kept
-            with _ ->
-                messages
 
     let private cutRequest (outObj: obj) work =
         let messages = ProviderWireDecode.messagesFromTransformOutput outObj |> Array.ofList

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { withExecutablePlugin, acceptAuthorityRoot, openIncumbency, lifecycleWorkView } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import { withExecutablePlugin, acceptAuthorityRoot } from '../../verification-system/tests/support/plugin-fixture.mjs'
 import { userQuestionObservation } from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
+import { inspected } from '../../../dist/Mission/Lifecycle/Surface.js'
+import { JournalSurface_initializeStateRoot } from '../../../dist/Persistence/Journal/Surface.js'
 
 const program = body => 'class Js extends JsProgram { async run() { ' + body + ' } }'
 const call = (session, id) => ({ sessionID: session, agent: 'manager', callID: id, messageID: 'run-' + id })
@@ -20,24 +22,25 @@ const completed = async (hooks,session,id) => hooks.event({event:{
   }
 }})
 
-test('WHAT[work-051] first S4 Manager empty review asks the user once, without writing Reviewed or closing authority',async()=>{
-  await withExecutablePlugin(async (hooks,_dir,_ids,runtime)=>{
+test('WHAT[work-051] a fresh Manager empty review asks once and the real answer resumes the same tenure',async()=>{
+  await withExecutablePlugin(async (hooks,directory,_ids,runtime)=>{
     const session='manager-first-empty-051'
     await acceptAuthorityRoot(runtime,session,'manager','user-root')
     await input(hooks,runtime,session,'user-root','Please proceed.')
-    await openIncumbency(runtime,session)
+    const root=await JournalSurface_initializeStateRoot(directory)
     const notice=[]
     runtime.client.tui={showToast:async ({body})=>{notice.push(body);return {}}}
     const output=await hooks.tool['todowrite-for-manager'].execute(
       {name:'initial-empty',program:program('return await this.review([]);'),
-        intent:'Record the real ask receipt; do not fabricate a complete review.'},
+        intent:'Record the real ask receipt; do not fabricate a complete review.',
+        remainingScopeTurnsEstimate:3},
       call(session,'first-empty'))
-    assert.match(String(output),/WaitingForUser|awaitingUser|询问|waiting/)
+    assert.match(String(output),/kind = "Asked"/)
     assert.equal(notice.length,1,'the Host presents the actual question to the human')
     const asked=userQuestionObservation(runtime.journal,session)
     assert.equal(asked.length,1,'one durable UserQuestionAsked is recorded')
-    const work=await lifecycleWorkView(runtime,session)
-    assert.ok(!work.reviewed,'no fake Reviewed while human question is pending')
+    const work=inspected(root,session)
+    assert.equal(work.Reviewed,false,'no fake Reviewed while human question is pending')
     const was=runtime.abortedIds.length
     await completed(hooks,session,'first-empty')
     assert.equal(runtime.abortedIds.length,was+1,'only the physical completed tool call interrupts the attempt')
@@ -45,12 +48,14 @@ test('WHAT[work-051] first S4 Manager empty review asks the user once, without w
     assert.equal(runtime.abortedIds.length,was+1,'duplicate completed event cannot interrupt twice')
     await input(hooks,runtime,session,'reply-051','Finish exactly the user-specified mission.')
     const done=await hooks.tool['todowrite-for-manager'].execute(
-      {name:'review-after-answer',program:program('return await this.review([]);'),
-        intent:'Review after the same logical run received the human answer.'},
+      {name:'review-after-answer',program:program('return await this.review([{key:"mission",value:"Finish exactly the user-specified mission."}]);'),
+        intent:'Review after the same logical run received the human answer.',
+        remainingScopeTurnsEstimate:3},
       call(session,'review-after-answer'))
-    assert.match(String(done),/Promoted|firstReview|outcome|review/)
+    assert.match(String(done),/kind = "Reviewed"/)
     assert.equal(notice.length,1,'answer does not cause a second synthetic question')
-    const after=await lifecycleWorkView(runtime,session)
-    assert.ok(after.reviewed,'real answer unlocks ordinary Manager assessment')
+    const after=inspected(root,session)
+    assert.equal(after.Reviewed,true,'nonempty obligations establish ordinary Manager work')
+    assert.equal(after.ActiveId,work.ActiveId,'answer does not open a second tenure')
   })
 })

@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import test from 'node:test'
 import { SqliteJournal } from 'wanxiangli/eventstore'
 import * as hostModule from '../../../dist/Mission/Lifecycle/DurableWorkHost.js'
+import { withExecutablePlugin, acceptAuthorityRoot } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import { JournalSurface_initializeStateRoot } from '../../../dist/Persistence/Journal/Surface.js'
 
 const host = hostModule.DurableWorkHost ?? hostModule
 
@@ -66,6 +68,44 @@ const reachReady = async (root, workId) => {
 
 const launch = (root, workId, requestId, call, digest, effects, blockers = null) =>
   host.submitReview(root, workId, requestId, 'Plan', 'run', call, [], blockers, digest, effects)
+
+test('WHAT[work-039] the real review member launches with the canonical draft bytes, not the milestone name', async () => {
+  await withExecutablePlugin(async (hooks, directory, created, runtime) => {
+    const session = 'plan-member-draft-039'
+    await acceptAuthorityRoot(runtime, session, 'plan')
+    const root = await JournalSurface_initializeStateRoot(directory)
+    await reachReady(root, session)
+    const planDir = join(root, 'wanxiangshu', 'plan', session)
+    mkdirSync(planDir, { recursive: true })
+    const content = '# Execute this exact draft\n\n保留中文、制表符\t和末尾换行。\n'
+    writeFileSync(join(planDir, 'plan.md'), content)
+    const result = await hooks.tool['todowrite-for-plan'].execute({
+      name: 'launch-with-draft', intent: 'Launch the Manager with the saved, canonical planning draft.',
+      remainingScopeTurnsEstimate: 0,
+      program: 'class Js extends JsProgram { async run() { return await this.review([]); } }',
+    }, { sessionID: session, agent: 'plan', callID: 'launch-draft', messageID: 'launch-run' })
+    assert.match(String(result), /kind = "Launched"/)
+    assert.equal(created.length, 1)
+    const sent = runtime.prompts.find(prompt => prompt.path?.id === created[0])
+    assert.equal(sent?.body?.parts?.[0]?.text, content)
+  })
+})
+
+test('WHAT[work-039] a missing draft refuses the real review member before creating a Manager', async () => {
+  await withExecutablePlugin(async (hooks, directory, created, runtime) => {
+    const session = 'plan-member-missing-039'
+    await acceptAuthorityRoot(runtime, session, 'plan')
+    const root = await JournalSurface_initializeStateRoot(directory)
+    await reachReady(root, session)
+    await hooks.tool['todowrite-for-plan'].execute({
+      name: 'missing-draft', intent: 'Refuse a launch with no draft instead of creating an empty Manager.',
+      remainingScopeTurnsEstimate: 1,
+      program: 'class Js extends JsProgram { async run() { return await this.review([]); } }',
+    }, { sessionID: session, agent: 'plan', callID: 'missing-draft', messageID: 'missing-run' })
+    assert.deepEqual(created, [])
+    assert.deepEqual(host.inspect(root, session).launches, [])
+  })
+})
 
 test('WHAT[work-039] a committed ready review opens one manager, sends the draft bytes, and a replay does not open again', async () => {
   await withRoot(async (root) => {

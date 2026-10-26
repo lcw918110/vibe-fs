@@ -98,7 +98,7 @@ const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 //   `fork` / `resume` / `commission` 仍留在目录里（ToolSpec 构造器保留，委派线
 //   协议仍在），只有 `devops` 离开了权限目录。
 const ROLE_ALLOW = {
-  Manager: ['fork', 'resume', 'join', 'horizon', 'deliver', 'review', 'todowrite-for-manager'],
+  Manager: ['fork', 'resume', 'join', 'horizon', 'review', 'todowrite-for-manager'],
   Orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
   Engineer: ['bash-honeypot', 'fetch', 'fission', 'todowrite-for-engineer'],
   DevOps: [
@@ -240,7 +240,7 @@ test('WHAT[capability-enforcement-006] AUTOINJ_active_empty_skill_call_is_denied
     assert.equal(real.parts[0].state.output, 'real skill output')
     const steer = transformed.messages.find(message => message.steering && message.strong)
     assert.ok(steer, '首次初始化通过独立强提醒呈现，不改写已有工具结果')
-    assert.match(steer.parts[0].text, /resetScope/)
+    assert.match(steer.parts[0].text, /remainingScopeTurnsEstimate/, 'the first strong steer asks for the first chargeable estimate')
     assert.equal(rawRealToolState.output, 'real skill output',
       'the original Host-owned completed tool state remains byte-identical')
   })

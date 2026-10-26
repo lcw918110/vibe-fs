@@ -119,12 +119,12 @@ test('WHAT[capability-enforcement-025] P03_unaccepted_or_malformed_review_retain
     // 即为无效评审（standalone `review` 宿主工具已随编程面迁移退役）。
     const reviewResult = await hooks.tool['todowrite-for-manager'].execute(
       { name: 'manager-review', program: "class Js extends JsProgram { async run() { return await this.review('invalid-findings-malformed'); } }",
-          intent: 'Wait for the review validation receipt without renewing this deadline.'
+          intent: 'Wait for the review validation receipt without renewing this deadline.', remainingScopeTurnsEstimate: 3
         },
       { sessionID, agent: 'manager', callID: 'call-p03-review', messageID: 'msg-p03-review' },
     )
     // 评审未被接纳（返回数据信封 ok = false + 稳定 code 或拒绝提示）
-    assert.match(String(reviewResult), /false|invalid|missing|有效评分|valid ratings/i)
+    assert.match(String(reviewResult), /false|invalid|missing|Expected an array|有效评分|valid ratings/i)
 
     // 评审未被接纳前，todowrite-for-manager 专用只读工具仍准入，不得误封
     const beforeOutput = {
@@ -216,7 +216,7 @@ const execute = async (hooks, sessionID, body, callID = 'call-review-' + (++prog
     {
       name: callID,
       program: 'class Js extends JsProgram { async run() { ' + body + ' } }',
-      intent: 'Wait for this manager operation and preserve its real outcome at the shared deadline.',
+      intent: 'Wait for this manager operation and preserve its real outcome at the shared deadline.', remainingScopeTurnsEstimate: 3,
     },
     { sessionID, agent: 'manager', callID, messageID: 'msg-' + callID },
   ),
@@ -328,13 +328,14 @@ test('WHAT[capability-enforcement-025] identity and cross-role denial remain ind
   await withExecutablePlugin(async (hooks, _directory, _ids, runtime) => {
     await acceptAuthorityRoot(runtime, 'ses-no-life', 'manager')
     assert.equal((await execute(hooks, 'ses-no-life', 'return 7;')).data, 7)
-    // An unadmitted session with no active incumbency receives no read permissions.
-    assert.equal((await execute(hooks, 'ses-no-life', reads[0])).code, 'REVIEW_ONLY')
+    // No Work is open yet: the first tenure may observe read-only, and its first
+    // review opens the Work (work WHAT: 尚未开立 Work 时，首任可只读观察).
+    assert.notEqual((await execute(hooks, 'ses-no-life', reads[0])).code, 'REVIEW_ONLY')
     const unknown = await execute(hooks, 'ses-unknown', 'return 7;')
     assert.equal(Object.hasOwn(unknown, 'data'), false)
     const wrongRole = await hooks.tool['todowrite-for-devops'].execute(
       { program: 'class Js extends JsProgram { async run() { return 7; } }', name: 'devops-wrong',
-          intent: 'Observe the cross-role refusal before any program effect.'
+          intent: 'Observe the cross-role refusal before any program effect.', remainingScopeTurnsEstimate: 3
         },
       { sessionID: 'ses-no-life', agent: 'manager' },
     )

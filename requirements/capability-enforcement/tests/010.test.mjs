@@ -98,7 +98,7 @@ const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 //   `fork` / `resume` / `commission` 仍留在目录里（ToolSpec 构造器保留，委派线
 //   协议仍在），只有 `devops` 离开了权限目录。
 const ROLE_ALLOW = {
-  Manager: ['fork', 'resume', 'join', 'horizon', 'deliver', 'review', 'todowrite-for-manager'],
+  Manager: ['fork', 'resume', 'join', 'horizon', 'review', 'todowrite-for-manager'],
   Orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
   Engineer: ['bash-honeypot', 'fetch', 'fission', 'todowrite-for-engineer'],
   DevOps: [
@@ -195,9 +195,11 @@ test('WHAT[capability-enforcement-010] FORK_delegation_verbs_are_no_longer_host_
   // the Host registry carries no such tool at all. The authority refusal they
   // used to raise belongs to the member call surface, not to a host tool.
   await withPlugin(async (hooks) => {
-    for (const tool of ['fork', 'resume', 'commission', 'devops', 'review']) {
+    for (const tool of ['fork', 'resume', 'commission', 'devops']) {
       assert.equal(hooks.tool[tool], undefined, `${tool} must not be a host-registered tool`)
     }
+    // review is not a delegation verb: it is the one lifecycle entry (work-053).
+    assert.equal(typeof hooks.tool.review?.execute, 'function', 'review is the host-registered lifecycle entry')
   })
 })
 }
@@ -327,7 +329,7 @@ const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops']
 const COGNITIVE_TOOLS = []
 const ALLOWED = {
   orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator', 'assume', ...COGNITIVE_TOOLS],
-  manager: ['fork', 'resume', 'join', 'horizon', 'review', 'deliver', 'todowrite-for-manager', 'assume', ...COGNITIVE_TOOLS],
+  manager: ['fork', 'resume', 'join', 'horizon', 'review', 'todowrite-for-manager', 'assume', ...COGNITIVE_TOOLS],
   engineer: ['fission', 'fetch', 'bash-honeypot', 'todowrite-for-engineer', 'assume', ...COGNITIVE_TOOLS],
   devops: [
     'join', 'horizon', 'todowrite-for-devops',

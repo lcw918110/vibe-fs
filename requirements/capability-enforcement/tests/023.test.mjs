@@ -107,7 +107,7 @@ const hostUtilityAllowFor = (_role) => HOST_UTILITY_ALLOW
 const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 
 const ROLE_ALLOW = {
-  Manager: ['fork', 'resume', 'join', 'horizon', 'deliver', 'review', 'todowrite-for-manager'],
+  Manager: ['fork', 'resume', 'join', 'horizon', 'review', 'todowrite-for-manager'],
   Orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
   Engineer: ['bash-honeypot', 'fetch', 'fission', 'todowrite-for-engineer'],
   DevOps: [
@@ -130,7 +130,7 @@ test('WHAT[capability-enforcement-023] devops_host_schema_contains_direct_mutati
   assert.equal(surface.toolName, 'todowrite-for-devops')
   assert.deepEqual(
     surface.capabilities.slice().sort(),
-    ['Advisor', 'Exec', 'Glob', 'Grep', 'Horizon', 'Move', 'Read', 'Remove', 'Write'],
+    ['Exec', 'Glob', 'Grep', 'Horizon', 'Move', 'Read', 'Remove', 'Write'],
   )
   const memberNames = surface.members.map((m) => m.memberName)
   for (const member of ['cat', 'ls', 'rg', 'stat', 'where', 'whereAll', 'mkdir', 'write', 'mv', 'rm', 'call', 'signal', 'send']) {

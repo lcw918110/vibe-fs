@@ -701,6 +701,41 @@ module HostSignalBootstrap =
                 | Ok() -> ()
                 | Error reason -> invalidOp ("Could not settle the user question: " + reason)
 
+            let workHumanInputCommand (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option) answered messageId =
+                match work with
+                | Some current when answered && current.Wait = "AwaitOperatorAnswer" ->
+                    Some("OperatorAnswer", [ "messageId", box messageId ])
+                | Some current when current.Delivered ->
+                    Some("OperatorMessage", [ "kind", box "Operator"; "messageId", box messageId ])
+                | _ -> None
+
+            let commitWorkHumanInput root sessionId messageId (kind, fields) =
+                let receipt =
+                    Wanxiangshu.Mission.Lifecycle.DurableWorkHost.execute
+                        root
+                        sessionId
+                        ("human-input:" + messageId)
+                        (Wanxiangshu.Mission.Lifecycle.DurableWorkHost.command kind fields)
+
+                match receipt.Status with
+                | "Committed" | "Replayed" | "Observed" -> ()
+                | _ -> invalidOp ("Could not settle lifecycle human input: " + receipt.Reason)
+
+            let settleWorkHumanInputAt (key: ChatExecutionKey) (answered: bool) workspace =
+                task {
+                    let! root = RuntimePath.stateRoot workspace
+                    let sessionId = SessionId.value key.SessionId
+                    let messageId = PhysicalUserMessageId.value key.PhysicalUserMessageId
+                    let work = Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected root sessionId
+                    workHumanInputCommand work answered messageId
+                    |> Option.iter (commitWorkHumanInput root sessionId messageId)
+                }
+
+            let settleWorkHumanInput key answered =
+                match workspaceDirectory with
+                | None -> Task.FromResult()
+                | Some workspace -> settleWorkHumanInputAt key answered workspace
+
 
             let continueManagedChatMessage intent output =
                 match intent with
@@ -749,10 +784,19 @@ module HostSignalBootstrap =
                         | _ -> None
 
                     for durable, key in Option.toList maybePair do
+                        let pending = UserQuestionJournal.pending durable key.SessionId
                         let! resumed =
                             UserQuestionJournal.observeHumanInput durable key.SessionId key.PhysicalUserMessageId
 
                         resumed |> requireQuestionSettled
+                        let answered =
+                            pending
+                            |> Option.bind (fun question ->
+                                UserQuestionJournal.tryFind durable key.SessionId question.ToolCallId)
+                            |> Option.bind (fun question -> question.Answer)
+                            |> Option.exists ((=) key.PhysicalUserMessageId)
+
+                        do! settleWorkHumanInput key answered
 
                     do! requireDurabilityActivation ()
                 }

@@ -54,7 +54,7 @@ A handover needs no separate report: the draft is everything the successor recei
 
 ## Ready to Execute
 
-At "ready to execute", the draft can go straight to a Manager. Each new review with an empty ledger launches one independent Manager session; a replay of the same call does not launch again. To launch, submit empty findings through the `review` tool and put the full draft for the Manager in `note`: the Manager receives exactly that text. "Ready to execute" accepts no non-empty ledger; launching a Manager neither ends the planning task nor changes the draft.
+At "ready to execute", the draft can go straight to a Manager. Each new review with an empty ledger launches one independent Manager session; a replay of the same call does not launch again. `this.review([])` reads the full saved draft from the canonical path given by the system; a missing or empty draft refuses the launch before session creation. Alternatively, submit empty findings through the `review` tool and put the full draft for the Manager in `note`. The Manager receives the draft bytes, not a milestone label. "Ready to execute" accepts no non-empty ledger; launching a Manager neither ends the planning task nor changes the draft.
 
 ## Tool Surface
 

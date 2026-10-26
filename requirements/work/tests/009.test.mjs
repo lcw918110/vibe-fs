@@ -85,6 +85,12 @@ test('WHAT[work-009] deliver reports the live blocker instead of reporting an en
     assert.equal(advanced.milestone, '收尾')
     const before = life.inspected(commonDir, session)
     const beforeRetirements = Array.from(before.Retirements ?? [])
+    const standalone = await hooks.tool.review.execute(
+      { findings: [] },
+      { sessionID: session, agent: 'manager', callID: 'standalone-close', messageID: 'standalone-run' },
+    )
+    assert.match(String(standalone), /Blocked/,
+      'the registered review tool must observe the same live child as the program member')
     // 收尾的空 review 遇到仍在运行的 fork，记为 Blocked，不写退休。
     const blocked = await execute([], { call: 'close-call', run: 'close-run' })
     assert.match(String(blocked), /Blocked/)
@@ -152,6 +158,22 @@ test('WHAT[work-009] ToolRuntimeScope ownership tracks tool-owned-work and PTY l
   // Ending engineer PTY clears the remaining tenure blocker while DevOps PTY survives
   assert.deepEqual(res.blockersAfterEngineerPtyEnded, [])
   assert.deepEqual(res.devopsPtysSurviving, ['devops-pty-1'])
+})
+
+test('WHAT[work-009] the standalone review can complete cleanup when no owned resource remains', async () => {
+  await withReview(async ({ hooks, runtime, session, directory }) => {
+    const review = async (id, findings) => String(await hooks.tool.review.execute(
+      { findings },
+      { sessionID: session, agent: 'manager', callID: id, messageID: `run-${id}` },
+    ))
+    assert.match(await review('clear', [{ key: 'target-gap', value: null }]), /kind = "Relayed"/)
+    assert.match(await review('advance', []), /kind = "Advanced"/)
+    const before = runtime.abortedIds.filter(id => id === session).length
+    assert.match(await review('finish', []), /kind = "Completed"/)
+    assert.equal(runtime.abortedIds.filter(id => id === session).length, before + 1)
+    const root = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    assert.equal(life.inspected(root, session).Delivered, true)
+  }, { session: 'standalone-cleanup-009' })
 })
 
 test('WHAT[work-009] durable ownership host commits Reserve before granting start permission and retains blockers across Cancel and Drain', () => {

@@ -21,8 +21,6 @@ module RelayNarrativeTransform =
         work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option ->
             obj array option
 
-    /// Model-visible messages for one committed work. The input array stays intact.
-    val visibleMessages: stateRoot: string -> sessionId: string -> messages: obj -> obj
 
     val apply:
         journal: AgentJournal option ->

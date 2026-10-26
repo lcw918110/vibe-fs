@@ -44,6 +44,9 @@ type ToolRegistration =
 
 module ToolRegistry =
 
+    [<Import("join", "node:path")>]
+    let private joinPath (left: string) (right: string) : string = jsNative
+
     /// An unanswered question refuses source writes. The ledger being empty does not admit them.
     let planSourceWriteAllowed (waitingForUser: bool) = not waitingForUser
 
@@ -91,6 +94,14 @@ module ToolRegistry =
     let private reviewRefusal (code: string) (reason: string) : obj =
         createObj [ "ok" ==> false; "code" ==> code; "reason" ==> reason ]
 
+    let private reviewDraft root sessionId office =
+        match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected root sessionId with
+        | Some work when office = "Plan" && work.Stage = "待执行" ->
+            Wanxiangshu.Mission.Planning.PlanTools.readAndValidatePlan (joinPath root "wanxiangshu") sessionId
+            |> Result.map (fun (content, _, _) -> content)
+            |> Result.defaultWith invalidOp
+        | _ -> ""
+
     /// The `this.review(findings)` member. Plan and Manager send one Review command.
     let private reviewMember (runtime: ToolRuntimeScope) (ctx: HostToolContext) (findings: obj) : Task<obj> =
         task {
@@ -102,6 +113,7 @@ module ToolRegistry =
                 let office = if runtime.IsRole(ctx, Role.Plan) then "Plan" else "Manager"
                 let runId = ProviderRunIdentity.value providerRun
                 let callId = ToolCallId.value toolCallId
+                let draft = reviewDraft gitCommonDir ctx.SessionId office
 
                 let selfName = JsPrograms.callerName ctx.SessionId (runId + ":" + callId)
 
@@ -126,7 +138,7 @@ module ToolRegistry =
                         callId
                         findings
                         blockers
-                        ""
+                        draft
                         (runtime.ReviewPorts ctx)
 
                 let! reply =

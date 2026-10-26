@@ -430,6 +430,7 @@ module PluginHooks =
             let eventPort = host.EventPort
             let chatParams = ChatParamsHook.createWith journal
 
+            // DSL-MUTABLE: resource — durable progress journal factory resolved once at activation
             let mutable progressJournalFactory: obj option = None
 
             // The JS todowrite port is synchronous. Resolve the physical store once
@@ -487,6 +488,11 @@ module PluginHooks =
                 | "流程与伪代码", Some _ -> Some "planning/s3"
                 | _ -> None
 
+            let planStagePath root sessionId =
+                match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected root sessionId with
+                | None -> Some "planning/s1"
+                | Some work -> stagePathFor work.Stage work.ActiveId
+
             let planStageFor (sessionId: SessionId) : Task<(string * string) option> =
                 task {
                     match roleFor sessionId, workspaceDirectory with
@@ -494,21 +500,15 @@ module PluginHooks =
                         let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
 
                         return
-                            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected
-                                commonDir
-                                (SessionId.value sessionId)
-                            |> Option.bind (fun work ->
-                                stagePathFor work.Stage work.ActiveId
-                                |> Option.map (fun stagePath ->
-                                    let draftPath =
-                                        Wanxiangshu.Mission.Planning.PlanPath.resolvePlanPath
-                                            workspace
-                                            (SessionId.value sessionId)
-                                        |> Result.defaultValue (
-                                            workspace + "/plan/" + SessionId.value sessionId + "/plan.md"
-                                        )
+                            planStagePath commonDir (SessionId.value sessionId)
+                            |> Option.map (fun stagePath ->
+                                let draftPath =
+                                    Wanxiangshu.Mission.Planning.PlanPath.resolvePlanPath
+                                        (joinPath commonDir "wanxiangshu")
+                                        (SessionId.value sessionId)
+                                    |> Result.defaultWith invalidOp
 
-                                    (stagePath, draftPath)))
+                                (stagePath, draftPath))
                     | _ -> return None
                 }
 

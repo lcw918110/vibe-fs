@@ -22,7 +22,7 @@ Host 侧展示给模型的工具 Schema 与运行时执行拦截 Gate 读同一 
 
 ## [006] internal-only participants/actions 不进无资格 participant 的工具面
 
-内部专用工具（如 Bookkeeper 的 `todowrite-for-bookkeeper`）仅向对应内部角色开放，普通角色不可见亦不可执行；已废弃的 `chronicle` 工具与 `todowrite-for-blogger` 不再注册。认知与交互效用工具（如 `assume` 等）及 Host 工具（如 `skill`）不属于领域业务权限，不进入 `Roles.permissions`，亦不得借此扩大角色的领域权能。**Advisor 是严格例外**：`OfficeCapability.admitsUtility` 必须拒绝 Advisor 的 `skill` 和 `assume`；Advisor 仅有 `negotiate(questions: string)` 与 `resetScope` 这两个非授权性协议工具，不得借 Host utility、外部目录权限或普通工具调用突破此边界。实际 `permissionObj`、provider 请求工具地图与执行 admission 必须同时拒绝其余工具。
+内部专用工具（如 Bookkeeper 的 `todowrite-for-bookkeeper`）仅向对应内部角色开放，普通角色不可见亦不可执行；已废弃的 `chronicle` 工具与 `todowrite-for-blogger` 不再注册。认知与交互效用工具（如 `assume` 等）及 Host 工具（如 `skill`）不属于领域业务权限，不进入 `Roles.permissions`，亦不得借此扩大角色的领域权能。**Advisor 是严格例外**：`OfficeCapability.admitsUtility` 必须拒绝 Advisor 的 `skill` 和 `assume`；专席 Advisor 一律无工具（`tools:false`），协议工具 `negotiate` 与 `resetScope` 同样不向其准入，不得借 Host utility、外部目录权限或普通工具调用突破此边界。实际 `permissionObj`、provider 请求工具地图与执行 admission 必须同时拒绝全部工具。
 
 ## [007] Host-native/MCP/plugin 等不同技术来源的 actions 服从同一 semantic capability policy
 

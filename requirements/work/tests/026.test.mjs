@@ -174,6 +174,8 @@ test('WHAT[work-026] a following operator message is not stopped by the previous
       message: newInput,
       parts: [{ type: 'text', text: 'Continue from here.' }],
     })
+    assert.equal(life.inspected(commonDir, sessionID).Stage, '执行',
+      'physical human admission must reopen Work without a test issuing the command')
     runtime.pushHostMessage(sessionID, {
       info: {
         id: 'run-new-input',
@@ -201,7 +203,7 @@ test('WHAT[work-026] a following operator message is not stopped by the previous
       kind: 'Operator',
       messageId: 'user-new-input',
     })
-    assert.equal(reopened.Status, 'Committed', reopened.Reason)
+    assert.equal(reopened.Status, 'Observed', reopened.Reason)
     assert.equal(reopened.Kind, 'Reopened')
     assert.equal(life.inspected(commonDir, sessionID).Stage, '执行')
     const same = life.execute(commonDir, sessionID, 'operator-2', {

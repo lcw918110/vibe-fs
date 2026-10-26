@@ -736,32 +736,37 @@ test('WHAT[context-compression-050] real OpenCode first reset has no previous-sc
 })
 
 test('WHAT[context-compression-051] a cold OpenCode request with historical reset requests its first chargeable estimate rather than inventing budget', async () => {
-  const sid='scope-051-cold-budget'
-  clearSessionState(sid)
-  const source=[
-    user('u-cold-051','Continue work after process restart',1),
-    assistant('a-reset-051',tool('historical-reset-051','resetScope','historical reset output')),
-    user('u-later-051','Actual operator follow-up',2),
-    assistant('a-read-051',tool('ordinary-read-051','read','read data')),
-  ]
-  const before=structuredClone(source)
-  const cold=await outbound(sid,structuredClone(source))
-  assert.equal(cold.at(-1).attribution,'agent')
-  assert.equal(cold.at(-1).strong,true)
-  assert.match(cold.at(-1).parts[0].text,/remainingScopeTurnsEstimate/,'first report requirement is explicit in the request copy')
-  assert.equal(cold.some(msg=>msg.weak===true),false)
-  assert.equal(cold.find(msg=>msg.info?.id==='a-read-051')?.parts[0].state.output,'read data',
-    'unknown budget cannot fake [Remaining turnBudget: 0]')
-  assert.deepEqual(source,before,'outbound request-copy must not modify the original provider history')
-  assert.equal(isScopeInitialized(sid),false)
-  scopeProgress.reset(sid,'epoch-051')
-  assert.equal(scopeProgress.record(sid,'epoch-051','charged-051','todo-051',4).ok,true)
-  assert.equal(scopeProgress.settle(sid,'epoch-051','charged-051').estimate,4)
-  const known=await outbound(sid,structuredClone(before))
-  assert.equal(known.some(msg=>msg.strong===true),false,'a real charged estimate suppresses first-baseline prompt')
-  assert.equal(known.find(msg=>msg.info?.id==='a-read-051')?.parts[0].state.output,'read data')
-  scopeProgress.clear(sid)
-  clearSessionState(sid)
+  await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
+    const sid='scope-051-cold-budget'
+    await acceptAuthorityRoot(runtime, sid, 'engineer')
+    await hooks['chat.params']({ sessionID: sid, agent: 'engineer',
+      model: { providerID: 'fixture', modelID: 'engineer-model' } }, {})
+    clearSessionState(sid)
+    const source=[
+      user('u-cold-051','Continue work after process restart',1),
+      assistant('a-reset-051',tool('historical-reset-051','resetScope','historical reset output')),
+      user('u-later-051','Actual operator follow-up',2),
+      assistant('a-read-051',tool('ordinary-read-051','read','read data')),
+    ]
+    const before=structuredClone(source)
+    const cold=await outbound(sid,structuredClone(source))
+    assert.equal(cold.at(-1).attribution,'agent')
+    assert.equal(cold.at(-1).strong,true)
+    assert.match(cold.at(-1).parts[0].text,/remainingScopeTurnsEstimate/,'first report requirement is explicit in the request copy')
+    assert.equal(cold.some(msg=>msg.weak===true),false)
+    assert.equal(cold.find(msg=>msg.info?.id==='a-read-051')?.parts[0].state.output,'read data',
+      'unknown budget cannot fake [Remaining turnBudget: 0]')
+    assert.deepEqual(source,before,'outbound request-copy must not modify the original provider history')
+    assert.equal(isScopeInitialized(sid),false)
+    scopeProgress.reset(sid,'epoch-051')
+    assert.equal(scopeProgress.record(sid,'epoch-051','charged-051','todo-051',4).ok,true)
+    assert.equal(scopeProgress.settle(sid,'epoch-051','charged-051').estimate,4)
+    const known=await outbound(sid,structuredClone(before))
+    assert.equal(known.some(msg=>msg.strong===true),false,'a real charged estimate suppresses first-baseline prompt')
+    assert.equal(known.find(msg=>msg.info?.id==='a-read-051')?.parts[0].state.output,'read data')
+    scopeProgress.clear(sid)
+    clearSessionState(sid)
+  })
 })
 
 

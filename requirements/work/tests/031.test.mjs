@@ -25,7 +25,7 @@ const guidanceFor = (milestone, draftPath) => {
 }
 
 const draftPathFor = (directory, session) =>
-  `${directory.replace(/\\/g, '/').replace(/\/$/, '')}/plan/${session}/plan.md`
+  `${directory.replace(/\\/g, '/').replace(/\/$/, '')}/.Herdchestra/wanxiangshu/plan/${session}/plan.md`
 
 test('WHAT[work-031] the prompt catalog carries a localized PlanSystemPrompt for real system transform wiring', () => {
   for (const languageName of ['en', 'zh-CN']) {
@@ -50,6 +50,12 @@ test('WHAT[work-031] the registered plan system transform appends each milestone
       await acceptAuthorityRoot(runtime, session, 'plan', 'user-root-031')
       const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
       const draftPath = draftPathFor(directory, session)
+      const initial = { system: ['host preface'] }
+      await hooks['experimental.chat.system.transform']({ sessionID: session }, initial)
+      assert.equal(initial.system.some(text => text.includes(draftPath)), true,
+        'a fresh Plan must know its canonical draft path before its first review')
+      assert.equal(surface.inspected(commonDir, session) ?? null, null,
+        'showing the initial method does not open Work')
       const review = (id, updates) =>
         surface.submitReview(commonDir, session, id, 'Plan', `run-${id}`, `call-${id}`, updates, null, '')
 

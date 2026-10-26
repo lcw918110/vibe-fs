@@ -1472,9 +1472,9 @@ module PluginTransforms =
         elif not (isNull plan?strong) then openCodeScopeSteer selected (scopeText plan?strong) true
         elif progressUnknown then selected
         elif not (isNull progress?resetDue) && unbox<bool> progress?resetDue then
-            openCodeScopeSteer selected "你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。" true
+            openCodeScopeSteer selected (ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) "host/scope-steer/reset-due" Map.empty) true
         elif isNull progress?known || not (unbox<bool> progress?known) then
-            openCodeScopeSteer selected "当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中提交 remainingScopeTurnsEstimate。" true
+            openCodeScopeSteer selected (ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) "host/scope-steer/missing-estimate" Map.empty) true
         else selected
 
     let private purgeAndSuffixSession (sessionId: string) (rawMessages: obj array) (outObj: obj) : unit =

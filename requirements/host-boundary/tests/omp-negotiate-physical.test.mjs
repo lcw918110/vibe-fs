@@ -648,11 +648,11 @@ test('WHAT[scope-progress-018] true Bun/OMP SDK SSE Provider serves four Advisor
     }
     const dedicatedFinal = phases.find(item=>item.phase===4)
     const dedicatedContext = JSON.stringify(dedicatedFinal.payload.messages)
-    assert.match(dedicatedContext,/Earlier exchanges from our continuing discussion/,
+    assert.match(dedicatedContext,/Earlier exchanges from our continuing discussion|我们此前的讨论/,
       'the dedicated seat must carry its own previously confirmed exchange')
-    assert.match(dedicatedContext,/Previously you were asked/,
+    assert.match(dedicatedContext,/Previously you were asked|之前问你的是/,
       'the previous dedicated question must survive as original prose')
-    assert.match(dedicatedContext,/You answered/,
+    assert.match(dedicatedContext,/You answered|你的回答是/,
       'the previous dedicated answer must be attributed to the same seat')
     await session.waitForIdle()
     await session.prompt('Consume the pending source-scoped agent advice, if any.')

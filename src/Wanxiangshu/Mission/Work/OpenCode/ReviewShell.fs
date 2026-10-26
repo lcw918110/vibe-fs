@@ -63,12 +63,16 @@ module ReviewShell =
             let note: obj = raw?note
             if isNull note then "" else string note
 
-    let private blockersOf (sessionId: string) (callId: string) : obj =
+    let private blockersOf (scope: ToolRuntimeScope) (sessionId: string) (callId: string) : obj =
         let selfName = JsPrograms.callerName sessionId callId
 
-        JsPrograms.deliveryBlockersWithChoicesForSession sessionId
-        |> List.map fst
-        |> List.filter (fun name -> selfName <> Some name)
+        let programs =
+            JsPrograms.deliveryBlockersWithChoicesForSession sessionId
+            |> List.map fst
+            |> List.filter (fun name -> selfName <> Some name)
+
+        programs @ scope.RetirementBlockersFor sessionId
+        |> List.distinct
         |> Array.ofList
         |> box
 
@@ -109,7 +113,7 @@ module ReviewShell =
                     providerRunId
                     toolCallId
                     (updatesOf findings)
-                    (blockersOf context.SessionId (providerRunId + ":" + toolCallId))
+                    (blockersOf scope context.SessionId (providerRunId + ":" + toolCallId))
                     (digestOf args.Raw)
                     (scope.ReviewPorts context)
 
