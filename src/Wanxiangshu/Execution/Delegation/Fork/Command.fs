@@ -3,6 +3,9 @@ namespace Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Persistence.Journal.JournalOutcome
 open System
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
+
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Change
 open Wanxiangshu.Execution.Delegation
@@ -22,6 +25,23 @@ open Wanxiangshu.Persistence.Journal
 /// the three delegation commands, host-neutral. A host reaches them through
 /// `DelegationEnvironment` and renders the `DelegationReply` itself.
 module ForkCommand =
+
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
+    [<Emit("$0 === undefined")>]
+    let private isUndefined (_v: obj) : bool = jsNative
+
+    let private tryFissionLane (sessionIdText: string) : FissionLaneBinding option =
+        if String.IsNullOrWhiteSpace sessionIdText then None
+        else
+            let r: obj = fissionRuntime?tryLane sessionIdText
+            if isNull r || isUndefined r then None
+            else
+                Some
+                    { GroupId = unbox<string> r?GroupId
+                      OwnerSessionId = SessionId.create (unbox<string> r?OwnerSessionId)
+                      LaneIndex = unbox<int> r?LaneIndex
+                      LaneCount = unbox<int> r?LaneCount }
 
     [<RequireQualifiedAccess>]
     module Path =
@@ -325,7 +345,7 @@ module ForkCommand =
         }
 
     let private bindFissionAffinity (host: DelegationEnvironment) handleId =
-        match FissionRuntime.tryLane (SessionId.create (callerText host)), host.Journal with
+        match tryFissionLane (callerText host), host.Journal with
         | Some lane, Some durable -> appendFissionAffinity durable host lane handleId
         | _ -> Task.FromResult(Ok())
 

@@ -79,7 +79,7 @@
 ### 长程委托的连续性
 
 - 公理：使用者委托的是目标的完成，不是一条回复的结束。目标尚未完成时，长程工作不能静默停止；有下一步就继续，遇到阻塞就明确呈现，不能靠用户再次催促维持推进。
-- 推论：provider 的自然 stop、空输出和进度小结都是物理回合的边界，不是业务完成证据。所有承担任务的角色（Manager、Orchestrator、Engineer、DevOps、Plan）必须通过既有 `deliver` 形成有效交接或完成；否则自然停机应触发当前任务的 nudge，并说明尚未解除的义务。internal 末梢 Advisor/Bookkeeper 不走公开 deliver，沿各自的专用提交事实收敛，不以一段内部散文解除外层目标义务。
+- 推论：provider 的自然 stop、空输出和进度小结都是物理回合的边界，不是业务完成证据。所有承担任务的角色（Manager、Orchestrator、Engineer、DevOps、Plan）均须按当前职责取得真实完成或交接证据；Plan 与 Manager 的生命周期由 `review` 及义务账推进，Engineer 与 DevOps 的正常完成依其自然终态及交还材料证明。无正文且无工具调用的空终止对任何角色都须 nudge，且不设次数上限；其他未完成义务亦不能凭自然停机消失。internal 末梢 Advisor/Bookkeeper 沿各自专用提交事实收敛。
 - 显式等待：Plan 真正缺少用户决定或信息时使用 `ask(question)`（Manager 禁用 `ask`）。工具只返回询问已发出的占位回执，系统中断本次 attempt、保留未完成委托；新的真实用户输入到来后接续。`devops(intent)` 负责原 Plan 的固定 DevOps 调查，`join` 负责 Manager 临时等待后台工作，二者都不证明任务结束。
 - 边界：禁止模型自行放弃，不等于禁止用户取消、强迫重试基础设施故障或复活已退休者。用户明确取消、已证明的交接/完成、显式提问等待和可见的运行故障分别处理；不能把失败或未知伪造成成功，也不能把 `ask` 的暂停当作逻辑运行关闭。
 
@@ -241,7 +241,7 @@
 2. **DevOps 身份与模型目标分离**：宿主分别暴露 `DevOpsId` 与 `DevOpsTarget`。目标从已验证历史的 `DevOpsBound` 事实取得；恢复路由只使用 `DevOpsTarget`，严禁将身份字符串直接交给模型路由器。
 3. **逐 work 恢复隔离 (Per-Work Recovery Boundary)**：首次读历史与异步恢复过程具备逐 work 错误隔离边界。记录损坏时仅在该 work 上保留 workId 和诊断原因报错，其他合法独立 work 继续恢复，单个坏 work 绝不阻断其他工作。
 4. **交付、资源与发现边界**：状态流转严格遵循 `DeliveryRequested` → `DeliverySessionBound` → `Accepted`；正常交付在首 prompt 返回后重新读取资源；发现请求最多取两条候选，满页或模糊匹配严禁判定为“唯一执行者”。
-5. **集成与交付残留清理**：authority 推进彻底删除对未使用的旧 `WorkspaceEventStore` 的前置调用；工具清单杜绝重复注册 deliver；严格以十四个 Journal 切片核验。
+5. **集成与交付残留清理**：authority 推进彻底删除对未使用的旧 `WorkspaceEventStore` 的前置调用；工具清单只登记真实现存的生命周期入口；严格以十四个 Journal 切片核验。
 6. **验收器输出边界与 IPC 权威通道**：在测试 worker 内，子进程诊断全部转发至 stderr，stdout 纯净留给原生结果协议；配合管道与增量 UTF-8 解码，IPC 保持为唯一权威结果通道，杜绝反序列化截断导致结果误判。
 *环境基线*：Node.js 最低版本统一为 **22.13.0**。
 

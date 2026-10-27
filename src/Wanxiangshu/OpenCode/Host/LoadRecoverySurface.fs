@@ -1,6 +1,9 @@
 namespace Wanxiangshu.OpenCode.Host
 
 open System
+open Fable.Core
+open Fable.Core.JsInterop
+
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Durable.Fact
@@ -14,6 +17,11 @@ open Wanxiangshu.Foundation.HostSession
 open Wanxiangshu.Persistence.Journal
 
 module LoadRecoverySurface =
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
+    [<Emit("$0 === undefined")>]
+    let private isUndefined (_v: obj) : bool = jsNative
+
     type private State =
         // DSL-MUTABLE: resource — opaque fixture projection read by the actual durable resolver.
         { mutable Projection: ProjectionSet }
@@ -111,24 +119,32 @@ module LoadRecoverySurface =
         let projections () =
             (stateOf state).Projection.AgentProjections
 
-        FissionRuntime.installDurableLaneEvidence (fun session ->
-            SessionBindingRecovery.fissionLaneFor (projections ()) session)
+        fissionRuntime?installDurableLaneEvidence (fun (laneSessionIdStr: string) ->
+            SessionBindingRecovery.fissionLaneFor (projections ()) (SessionId.create laneSessionIdStr)
+            |> Option.map (fun binding ->
+                {| GroupId = binding.GroupId
+                   OwnerSessionId = SessionId.value binding.OwnerSessionId
+                   LaneIndex = binding.LaneIndex
+                   LaneCount = binding.LaneCount |}
+                |> box)
+            |> Option.toObj)
 
     let clearResolvers () : unit =
-        FissionRuntime.installDurableLaneEvidence (fun _ -> None)
+        fissionRuntime?installDurableLaneEvidence (fun _ -> null)
 
     let lane (session: string) : obj =
-        FissionRuntime.tryLane (SessionId.create session)
-        |> Option.map (fun binding ->
+        let r: obj = fissionRuntime?tryLane session
+        if isNull r || isUndefined r then
+            null
+        else
             box
-                {| group = binding.GroupId
-                   owner = SessionId.value binding.OwnerSessionId
-                   index = binding.LaneIndex
-                   count = binding.LaneCount |})
-        |> Option.defaultValue null
+                {| group = unbox<string> r?GroupId
+                   owner = unbox<string> r?OwnerSessionId
+                   index = unbox<int> r?LaneIndex
+                   count = unbox<int> r?LaneCount |}
 
     let clearLane (session: string) : unit =
-        FissionRuntime.unbindLane (SessionId.create session)
+        fissionRuntime?unbindLane session |> ignore
 
     let drainCompletions (state: obj) (parent: string) (maxCount: int) (completedAt: string) : Task<obj> =
         task {

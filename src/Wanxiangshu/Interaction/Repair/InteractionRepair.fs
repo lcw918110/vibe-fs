@@ -1,5 +1,8 @@
 namespace Wanxiangshu.Interaction.Repair
 
+open Fable.Core
+open Fable.Core.JsInterop
+
 open System.Threading.Tasks
 open Wanxiangshu.Foundation.HostSession
 open Wanxiangshu.Foundation.HostSession
@@ -22,6 +25,9 @@ open Wanxiangshu.Persistence.Journal
 /// HOST-004 admission: no idle permit, or a permit that no longer holds at send
 /// time → zero physical prompt, zero claim, zero terminal.
 module InteractionRepairWorkflow =
+
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
 
     let private observeAdmittedRepairAcceptance
         (journal: AgentJournal option)
@@ -249,7 +255,7 @@ module InteractionRepairWorkflow =
             hasDurableTerminal
 
     let private isFissionReplaced (journal: AgentJournal option) (sessionId: SessionId) : bool =
-        FissionRuntime.isSilentInterrupt sessionId
+        fissionRuntime?isSilentInterrupt (SessionId.value sessionId)
         || (journal
             |> Option.exists (fun durable ->
                 FissionProjection.tryActiveForOwner sessionId (AgentJournal.snapshot durable).AgentProjections.Fission
@@ -275,21 +281,11 @@ module InteractionRepairWorkflow =
         let fissionReplaced =
             match observation with
             | Some obs ->
-                FissionRuntime.isSilentInterrupt context.Turn.SessionId
+                fissionRuntime?isSilentInterrupt (SessionId.value context.Turn.SessionId)
                 || obs.IsFissionActive context.Turn.SessionId
             | None -> isFissionReplaced journal context.Turn.SessionId
 
-        let exemptRole =
-            match context.Turn.Role with
-            | Some Role.Engineer
-            | Some Role.DevOps -> true
-            | _ -> false
-
-        if
-            exemptRole
-            || fissionReplaced
-            || retryAttemptSuppressesRepair journal observation context.Turn
-        then
+        if fissionReplaced || retryAttemptSuppressesRepair journal observation context.Turn then
             AsyncSupport.completedTask ()
         else
             repairDefect
@@ -320,7 +316,7 @@ module InteractionRepairWorkflow =
         let fissionReplaced =
             match observation with
             | Some obs ->
-                FissionRuntime.isSilentInterrupt turn.SessionId
+                fissionRuntime?isSilentInterrupt (SessionId.value turn.SessionId)
                 || obs.IsFissionActive turn.SessionId
             | None -> isFissionReplaced journal turn.SessionId
 

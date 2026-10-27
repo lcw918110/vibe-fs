@@ -20,3 +20,7 @@ module RuntimeNudge =
 
     /// Interaction repair that continues an in-progress turn.
     let InteractionContinue = "runtime/interaction-continue"
+
+    /// Latency watchdog: the request far exceeded this session's normal
+    /// request duration and was interrupted; continue from where it stopped.
+    let LatencyDegeneration = "runtime/latency-degeneration"

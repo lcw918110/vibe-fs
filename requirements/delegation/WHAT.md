@@ -102,7 +102,7 @@ fork 首 prompt typed 渲染的正文**只有本次 Assignment 指令**，不再
 
 `this.fission(payload)` 是同身份换道，无条件继承本对话衣钵。独立 `join()`（无参数）与程序内 `this.horizon()` 是拉取动作；编程内 join/dag 已退出，依赖顺序由模型显式安排。
 
-同步调用等待自己完成，返回被委托方末轮的 assistant 散文（渲染为 `# ...` 注释）。异步 fork/resume 按 [026] 完成 admission/dispatch 即返回 Byname 承接后果，不等待 completion，不直接返回该材料。完成结果只经 join/horizon 拉取。子到父的返回只来自子代理自然停机那一轮的 assistant 散文，不再捕获其 post-scope 视图。子代理（Engineer/DevOps）已彻底移除 `this.deliver` 成员；无未决调用的自然停机即作为证明的终态（proven terminal，见 [025]）完成该 work unit。
+同步调用等待自己完成，返回被委托方末轮的 assistant 散文（渲染为 `# ...` 注释）。异步 fork/resume 按 [026] 完成 admission/dispatch 即返回 Byname 承接后果，不等待 completion，不直接返回该材料。完成结果只经 join/horizon 拉取。子到父的返回只来自子代理自然停机那一轮的 assistant 散文，不再捕获其 post-scope 视图。子代理（Engineer/DevOps）凭有正文、无未决工具调用的自然终态（proven terminal，见 [025]）完成该 work unit；无正文无工具的停机只获 nudge。
 
 当 abort、cancel 或重启加载结算已经使完成不再可能（无存活执行可以继续运行），系统**必须**追加 `ChildWorkVoided` 作废该工作，不得让父方继续等待一个不会到来的完成。作废**不是完成**：它不产生完成交付（既不写完成正文，也不把已有视图当作完成凭据），`status` 不是 `completed`。但作废**结清父方的未解除义务**：join 以 `voided` 状态把它报告一次（join 状态只有 `completed | failed | abandoned | voided`），报告之后该工作从名册退役（durable），重启不重复报告。作废在报告之前仍是可见的在场后果，父方据此得知该子工作已被结清，而不是任其消失。已被 abort 的子工作绝不写成 `completed`。S1/S2/S3/S4 接力不再主动清除上下文。
 
@@ -158,11 +158,11 @@ Engineer 完成工作或到达需 Manager 决定的边界即返回，不自行�
 
 ## [033] 自然停机终态与完成结算
 
-子代理（Engineer、DevOps）无 `this.deliver` 成员，以无未决工具调用的自然停机作为完成依据。当子代理自然停机时，宿主把该终态轮次的 assistant 散文（正文散文、空 carry）原子结算为 `completed` 终态并发布给父会话的 `join`，在 join 边界渲染为 `# ...` 注释；不捕获子代理完整的 post-scope LLM 可见视图，也不返回 `[[session]]` 表。
+子代理（Engineer、DevOps）以带有效正文且没有未决工具调用的自然停机作为完成依据。当子代理自然停机时，宿主把该终态轮次的 assistant 散文（正文散文、空 carry）原子结算为 `completed` 终态并发布给父会话的 `join`，在 join 边界渲染为 `# ...` 注释；不捕获子代理完整的 post-scope LLM 可见视图，也不返回 `[[session]]` 表。
 
 - 允许后果：子代理正常结束输出时，终态为 `completed`，父方收到的完成材料就是该子代理的末轮 assistant 散文，以 `# ...` 注释呈现，不承载子代理的完整视图；
 - 禁止后果：严禁要求子代理调用交付工具；不得向已停止输出的子代理发送完成催促（nudge）；不得因子代理没有特定的交付调用而扣留完成或报告未完成；
-- 边界：Manager / Plan 的生命周期 deliver（见 work [025]–[026]）没有父 join，本条只约束有 handle 链接的子会话。
+- 边界：Manager / Plan 的生命周期由 review（见 work [025]–[026]）处理，不经过父 join；本条只约束有 handle 链接的子会话。
 
 
 ## [034] 首轮协商代替全文上下文传输

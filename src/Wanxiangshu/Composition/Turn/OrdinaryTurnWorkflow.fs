@@ -1,5 +1,8 @@
 namespace Wanxiangshu.Composition.Turn
 
+open Fable.Core
+open Fable.Core.JsInterop
+
 open System.Collections.Generic
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable
@@ -26,6 +29,9 @@ open Wanxiangshu.Resources
 
 /// Ordinary turn observation policy (INTERACTION-REPAIR / PROVIDER-RECOVERY / TERMINAL-REPORT).
 module OrdinaryTurnWorkflow =
+
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
 
     type private LongWorkGate =
         | Ordinary
@@ -163,7 +169,16 @@ module OrdinaryTurnWorkflow =
                     |> Map.tryFind turn.SessionId
                     |> Option.bind (fun session -> session.PromptAuthority))
 
-            if not hasRole then
+            let emptyStopped =
+                turn.Observation.IsNone
+                && (turn.Finish |> Option.exists (fun finish ->
+                    System.String.Equals(finish, "stop", System.StringComparison.OrdinalIgnoreCase)))
+                && System.String.IsNullOrWhiteSpace(CompletedTurnClassifier.partsText turn.Parts)
+                && not (CompletedTurnClassifier.hasToolCallPart turn.Parts)
+
+            if emptyStopped then
+                return Ordinary
+            elif not hasRole then
                 return Ordinary
             elif isExplicitWaitOrOldTurn (authority ()) turn then
                 return Wait
@@ -277,7 +292,7 @@ module OrdinaryTurnWorkflow =
         (observer: ContinuationAcceptanceObserver option)
         : Task =
         let isFissionReplaced =
-            FissionRuntime.isSilentInterrupt context.Turn.SessionId
+            fissionRuntime?isSilentInterrupt (SessionId.value context.Turn.SessionId)
             || (observation
                 |> Option.exists (fun port -> port.IsFissionActive context.Turn.SessionId))
 
@@ -600,7 +615,7 @@ module OrdinaryTurnWorkflow =
         let turn = context.Turn
 
         let isFissionReplaced =
-            FissionRuntime.isSilentInterrupt turn.SessionId
+            fissionRuntime?isSilentInterrupt (SessionId.value turn.SessionId)
             || (observation |> Option.exists (fun port -> port.IsFissionActive turn.SessionId))
 
         if isFissionReplaced then

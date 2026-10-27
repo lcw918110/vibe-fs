@@ -6,3 +6,4 @@ module RuntimeNudge =
     val BackgroundJoin: string
     val MissingClosingReport: string
     val InteractionContinue: string
+    val LatencyDegeneration: string

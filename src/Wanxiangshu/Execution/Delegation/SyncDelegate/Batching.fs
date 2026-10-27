@@ -3,6 +3,7 @@ namespace Wanxiangshu.Execution.Delegation.SyncDelegate
 open System.Collections.Generic
 open System.Threading.Tasks
 open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation.HostSession
@@ -129,8 +130,12 @@ module SyncDelegateBatchRules =
           Keywords: string
           Estimate: int option }
 
-    let private pendingInspections = Dictionary<string, ResizeArray<DeferredCall>>()
-    let private durableReplacedResults = Dictionary<string, string>()
+    module private SyncDelegateDeferredInterop =
+        [<Emit("$0 === null || $0 === undefined")>]
+        let isAbsent (_value: obj) : bool = jsNative
+
+        [<Import("deferredInspectionStore", "wanxiangli/delegate-batch")>]
+        let deferredStore: obj = jsNative
 
     [<Emit("Promise.all($0)")>]
     let private promiseAll (promises: Task<'T> array) : Task<'T array> = jsNative
@@ -147,15 +152,6 @@ module SyncDelegateBatchRules =
         | Ok(SyncDelegateInvocationResult.MergedInto canonicalCall) -> mergedInstruction language canonicalCall
         | Error err -> sprintf "Engineer charge failed: %s" err
 
-    let private resolvePendingInspection (sessionId: string) : DeferredCall list option =
-        lock pendingInspections (fun () ->
-            match pendingInspections.TryGetValue sessionId with
-            | true, list when list.Count > 0 ->
-                let copy = list |> Seq.toList
-                pendingInspections.Remove sessionId |> ignore
-                Some copy
-            | _ -> None)
-
     let stageDeferredInspection
         (sessionId: string)
         (callId: ToolCallId)
@@ -163,28 +159,52 @@ module SyncDelegateBatchRules =
         (keywords: string)
         (estimate: int option)
         : string =
-        lock pendingInspections (fun () ->
-            let list =
-                match pendingInspections.TryGetValue sessionId with
-                | true, existing -> existing
-                | false, _ ->
-                    let created = ResizeArray<DeferredCall>()
-                    pendingInspections.[sessionId] <- created
-                    created
+        let estObj: obj =
+            match estimate with
+            | Some e -> box e
+            | None -> null
 
-            list.Add
-                { CallId = callId
-                  Charge = charge
-                  Keywords = keywords
-                  Estimate = estimate }
+        let res: obj =
+            SyncDelegateDeferredInterop.deferredStore?stage(
+                sessionId,
+                ToolCallId.value callId,
+                charge,
+                keywords,
+                estObj
+            )
 
-            sprintf "Engineer charge accepted and deferred for batch execution: %s" charge)
+        let isOk =
+            not (SyncDelegateDeferredInterop.isAbsent res)
+            && unbox<bool> res?ok
+
+        if not isOk then
+            let reason =
+                if SyncDelegateDeferredInterop.isAbsent res then "unknown"
+                else string res?reason
+            failwith (sprintf "Failed to stage deferred inspection: %s" reason)
+        else
+            sprintf "Engineer charge accepted and deferred for batch execution: %s" charge
 
     let settleDeferredInspections (runtime: SyncDelegateRuntime) (sessionId: string) : Task<unit> =
         task {
-            match resolvePendingInspection sessionId with
-            | None -> ()
-            | Some calls ->
+            let items: obj array =
+                unbox<obj array> (SyncDelegateDeferredInterop.deferredStore?takePending sessionId)
+
+            if items.Length > 0 then
+                let calls =
+                    items
+                    |> Array.map (fun item ->
+                        let est =
+                            if SyncDelegateDeferredInterop.isAbsent item?estimate then
+                                None
+                            else
+                                Some (unbox<int> item?estimate)
+                        { CallId = ToolCallId.create (unbox<string> item?callId)
+                          Charge = unbox<string> item?charge
+                          Keywords = unbox<string> item?keywords
+                          Estimate = est })
+                    |> Array.toList
+
                 let callOrder = calls |> List.map (fun c -> c.CallId)
                 let combinedCharge = calls |> List.map (fun c -> c.Charge) |> String.concat "\n"
 
@@ -210,19 +230,27 @@ module SyncDelegateBatchRules =
                 let! results = promiseAll (List.toArray tasks)
                 let lang = ProviderLanguageBinding.forSessionText sessionId
 
-                lock durableReplacedResults (fun () ->
-                    List.iteri
-                        (fun i call ->
-                            durableReplacedResults.[ToolCallId.value call.CallId] <-
-                                renderInvocationOutput lang results.[i])
-                        calls)
+                for i in 0 .. calls.Length - 1 do
+                    let rendered = renderInvocationOutput lang results.[i]
+                    SyncDelegateDeferredInterop.deferredStore?recordReplacedResult(
+                        ToolCallId.value calls.[i].CallId,
+                        rendered,
+                        sessionId
+                    ) |> ignore
         }
 
-    let hasReplacedResults () =
-        lock durableReplacedResults (fun () -> durableReplacedResults.Count > 0)
+    let hasReplacedResults () : bool =
+        unbox<bool> (SyncDelegateDeferredInterop.deferredStore?hasReplacedResults())
 
-    let tryReplacedResult (callId: string) =
-        lock durableReplacedResults (fun () ->
-            match durableReplacedResults.TryGetValue callId with
-            | true, replacement -> Some replacement
-            | false, _ -> None)
+    let tryReplacedResult (callId: string) : string option =
+        let repObj: obj = SyncDelegateDeferredInterop.deferredStore?tryReplacedResult callId
+        if isNull repObj || SyncDelegateDeferredInterop.isAbsent repObj then
+            None
+        else
+            Some (unbox<string> repObj)
+
+    let clearSession (sessionId: string) : unit =
+        SyncDelegateDeferredInterop.deferredStore?clearSession sessionId |> ignore
+
+    let clearAll () : unit =
+        SyncDelegateDeferredInterop.deferredStore?clearAll() |> ignore

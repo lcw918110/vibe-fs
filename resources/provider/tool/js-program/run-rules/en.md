@@ -14,4 +14,4 @@ Only explicit park, including where ambiguity, receives value. A resumed call re
 
 abandon requests cancellation and cleanup. Report abandoned only after resource settlement; report incomplete or forced cleanup as observed. Native finally runs when normal unwinding is possible; forced termination cannot prove it ran. Applied writes remain.
 
-Pause delta contains new output and does not consume final CallResult. Preserve actual exit code or signal, retained output and explicit truncation. Do not rerun an operation whose effects are unknown. Program return, command exit, tool response and business deliver remain separate facts.
+Pause delta contains new output and does not consume final CallResult. Preserve actual exit code or signal, retained output and explicit truncation. Do not rerun an operation whose effects are unknown. Program return, command exit, tool response and Work lifecycle decisions remain separate facts.

@@ -141,10 +141,10 @@ Bookkeeper 等内部角色由编排路径调用，不作为单独“安装角色
 | 角色 | 典型工具面 | 说明 |
 |------|------------|------|
 | Orchestrator | `commission`, `join`, `horizon` | 顶层战役战略统筹与独立道路委任 |
-| Manager | `fork`, `resume`, `join`, `horizon`, `review`, `deliver` | 独立评估、任务分解与推进未尽账本；通过 fork 派发 Engineer，通过 resume 续做固定 DevOps（无 Fission） |
+| Manager | `fork`, `resume`, `join`, `horizon`, `review` | 独立评估、任务分解与推进未尽账本；通过 fork 派发 Engineer，通过 resume 续做固定 DevOps（无 Fission） |
 | Engineer | `read`, `write`, `edit`, `glob`, `grep`, `mv`, `rm`, `fetch`, `js-engineer`, `bash-honeypot`, `fission` | 本地事实调查与源码读写实现（不执行真实命令，不差遣 DevOps）；独占 Fission 权能 |
 | DevOps | `read`, `write`, `edit`, `glob`, `grep`, `mv`, `rm`, `js-devops`, `run`, `open-terminal`, `send-terminal`, `read-terminal`, `signal-terminal`, `join`, `horizon` | 真实命令执行、终端与进程管理；具备角色固有的非架构级自修授权（无 Fission） |
-| Plan | `js-plan`, `ask`, `review`, `deliver` | 接力式规划跑者，负责产出保姆级底稿 P；review 晋级、deliver 接力或交付、任期隔离与崩溃恢复 |
+| Plan | `js-plan`, `ask`, `review` | 接力式规划跑者，负责产出完整底稿 P；review 按义务账完成接力、晋级与就绪启动，保留任期隔离和崩溃恢复 |
 
 Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）。精确权限见 `requirements/participant-identity` 与 `requirements/capability-enforcement`。
 
@@ -152,7 +152,7 @@ Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）
 
 迁移后的宿主适配对象通过实例成员调用库对象；Join 等待仍使用宿主的 `AsyncSupport.trySetResult` 完成异步句柄。库中的发送停止围栏一旦被撤销，迟到的停止信号不能重新授予该 attempt 的恢复许可。退役的宿主测试入口不再登记到产物清单。
 
-上下文边界不随角色变化：每个会话都使用 `resetScope(oldScopeVerboseVerbatimExperience?, newScopeObjective, newScopeTurnBudget)` 划定 scope，并在新 scope 上按 `[Remaining turnBudget: N]` 倒计时（预算耗尽只给弱提醒，不封锁动作）。父子之间不再由模型挑材料：父→子（fork/resume/commission/devops/dag/advisor）以 `#` 注释送指令散文、以 TOML `[[context]]` 送发送方完整的 post-scope 视图；Engineer 与 DevOps 没有 `deliver`，自然停机即把末轮 assistant 散文作为 `#` 注释返回父方；Manager 与 Plan 保留生命周期 `deliver`，一次调用即完成或接力。
+上下文边界不随角色变化：每个会话由 `resetScope(oldScopeVerboseVerbatimExperience?, newScopeObjective)` 显式开启新 Scope；`todowrite` 的剩余计费回合估计由独立 ScopeProgress 记录。父到子委派仅传本次指令和确切参考材料，不隐式复制发送方的整份对话。Engineer 与 DevOps 以有正文、无未决工具调用的自然终态交回末轮 assistant 散文；所有角色没有正文也没有工具调用时必须 nudge。Manager 与 Plan 的任期接力、晋级和结案由唯一 `review` 入口根据义务账推进。
 
 ### 运行时数据
 
@@ -249,7 +249,7 @@ npm run verify:release      # 发布验证
 
 规范是万象术的语义根：每条行为命题有稳定 ID、测试落点和 owner 包。规范不跟踪实现进度，只定义正确性。
 
-- **规范**：`requirements/<package>/`（48 个活跃包，另 1 个历史包 epistemic-reasoning；必备 WHY.md、WHAT.md 与 tests/；WHAT 命题 ID 稳定寻址，条款与测试文件一一映射，覆盖缺口见 [requirements/GAP.md](requirements/GAP.md)；Plan 角色的接力式规划归 `work` 包 work-020 起：review 晋级、deliver 接力、任期隔离、崩溃恢复）。
+- **规范**：`requirements/<package>/`（48 个活跃包，另 1 个历史包 epistemic-reasoning；必备 WHY.md、WHAT.md 与 tests/；WHAT 命题 ID 稳定寻址，条款与测试文件一一映射，覆盖缺口见 [requirements/GAP.md](requirements/GAP.md)；Plan 角色的接力式规划归 `work` 包 work-020 起：review 晋级接力、任期隔离、崩溃恢复）。
 - **历史 Clause 与变更记录**：2026-08-14 cutover 已归档（含 Kolmogorov 工程纪律与 completed change 考古；git 历史可回溯）。
 - 测试全部包自有（`requirements/<package>/tests/`），直接引用 WHAT 命题 ID。规范不跟踪实现进度。
 

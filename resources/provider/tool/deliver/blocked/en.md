@@ -1,1 +1,1 @@
-Finishing is blocked only by the live resources listed below. Close or join exactly those resources, then call deliver again. Do not start new work.
+The current review cannot complete while the listed execution resources remain live. Close or join only those resources, then submit the review again. Do not start unrelated work.

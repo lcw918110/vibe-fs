@@ -22,6 +22,8 @@ module HostTurnObserver =
 
     [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
     let private deliveryAttemptLedger: obj = jsNative
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
 
     let private isDurableFissionOwner (journal: AgentJournal option) (sessionId: SessionId) =
         journal
@@ -30,7 +32,7 @@ module HostTurnObserver =
             |> Option.isSome)
 
     let private isFissionOwnerSession (journal: AgentJournal option) (sessionId: SessionId) =
-        FissionRuntime.isSilentInterrupt sessionId
+        fissionRuntime?isSilentInterrupt (SessionId.value sessionId)
         || isDurableFissionOwner journal sessionId
 
     /// Settle the owned interrupt task before admitting later continuation/

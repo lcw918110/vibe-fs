@@ -89,7 +89,7 @@
 | Package | 一句话 WHY |
 |---|---|
 | `obligation-ledger` | 待办消极边界：宿主原生 `todowrite` 退役，待办推进归各角色编程面 `todowrite-for-<role>`；原视图声明与 compression checkpoint 退役，插件不维护第二份待办真相。 |
-| `work` | Work 与 Plan 生命周期只有一套事件：S1–S3 晋级接力与 S4 交付；接力不主动清除上下文，由 `resetScope` 协议管理；Engineer 与 DevOps 免除 nudge 且自然停机完成，Manager 与 Plan 保持长程连续性与生命周期 deliver。Plan 编程面、devops 调查、任期隔离、review 与交付同属本包。 |
+| `work` | Work 与 Plan 生命周期只有一套事件：S1–S3 晋级接力与 S4 交付；接力不主动清除上下文，由 `resetScope` 协议管理；Engineer 与 DevOps 以有正文的真实自然终态交回工作，所有角色的无正文无工具终止须 nudge；Manager 与 Plan 只通过 review 处理生命周期。Plan 编程面、devops 调查、任期隔离、review 与交付同属本包。 |
 
 
 
@@ -150,14 +150,14 @@
 | 25 | `durable-events` | 28 | durable-events-001 ~ 028 |
 | 26 | `effect-accounting` | 11 | effect-accounting-001 ~ 008、010、012、013（交付成功不是效果） |
 | 27 | `durable-convergence` | 11 | durable-convergence-001 ~ 011 |
-| 28 | `delegation` | 31 | delegation-001 ~ 015、017、019 ~ 033（021 只读背景由完整 post-scope 视图承载；033 子智能体自然停机完成与结算，末轮散文以 `#` 注释交回，无 deliver/nudge） |
+| 28 | `delegation` | 31 | delegation-001 ~ 015、017、019 ~ 033（021 只读背景由完整 post-scope 视图承载；033 子智能体自然停机完成与结算，末轮有效散文以 `#` 注释交回，空终止仍须 nudge） |
 | 58 | `advisor` | 6 | advisor-001 ~ 006（专席归属与家族根父级、002 单一请求文档与 post-scope 全视图、003 自然停机返回顾问末轮散文、004 无工具、005 无授权副作用、006 this.advisor(intent) 编程面成员返回 { ok, advice }） |
 | 29 | `intra-participant-parallelism` | 17 | intra-participant-parallelism-001 ~ 015、017 ~ 018 |
 | 30 | `process-execution` | 17 | process-execution-001 ~ 017；通用工具结果边界归 host-boundary |
 | 31 | `change-integration` | 14 | change-integration-001 ~ 009、011、013 ~ 015、017 |
 | 32 | `semantic-trace` | 13 | semantic-trace-001 ~ 010、semantic-trace-011（Fission keyed convergence 与多 Present 轨迹归并）、semantic-trace-012（独立 Invocation 范围与 Resume 边界）、semantic-trace-013（交付见证是可重放的语义事实） |
 
-| 34 | `context-compression` | 35 | context-compression-001 ~ 030（001 不推导容量/向模型披露 turnBudget 与常数、002 不预测溢出、003 废除独立 Y 轴、030 assume 调用活跃 scope 内保留）、033（resetScope 屏障与原文保留）、034（turnBudget 递减/后缀与用户提醒）、035（ScopeReanchored 冷前缀边界）、036（跨会话 full post-scope view 的 TOML 承载）、037（子会话自然停机终态与免除 nudge/deliver） |
+| 34 | `context-compression` | 35 | context-compression-001 ~ 030（001 不推导容量/向模型披露 turnBudget 与常数、002 不预测溢出、003 废除独立 Y 轴、030 assume 调用活跃 scope 内保留）、033（resetScope 屏障与原文保留）、034（turnBudget 递减/后缀与用户提醒）、035（ScopeReanchored 冷前缀边界）、036（跨会话 full post-scope view 的 TOML 承载）、037（子会话有效自然终态与空终止修复） |
 | 35 | `prefix-stability` | 15 | prefix-stability-001 ~ 015（001 同 epoch 前缀追加律、002 ScopeReanchored/ContextReanchored/TenureReanchored 冷边界推进 epoch、006 Scope 重置收容、010 工具结果 turnBudget 后缀与用户提醒） |
 | 36 | `execution-failure-policy` | 14 | execution-failure-policy-001 ~ 014 |
 | 37 | `provider-attempt-recovery` | 24 | provider-attempt-recovery-001 ~ 023、provider-attempt-recovery-024（已接受但未启动的执行必须定夺） |

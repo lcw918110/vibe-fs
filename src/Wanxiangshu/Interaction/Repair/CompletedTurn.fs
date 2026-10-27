@@ -35,20 +35,8 @@ module CompletedTurnClassifier =
         | AwaitRepairTerminal
         | NoRepair
 
-    let private supportsInteractionRepair =
-        function
-        | Some Role.Manager
-        | Some Role.Orchestrator
-        | Some Role.Engineer
-        | Some Role.Coder
-        | Some Role.Inspector
-        | Some Role.DevOps
-        | Some Role.Browser
-        | Some Role.Inquiry
-        | Some Role.Plan -> true
-        | Some Role.Distiller
-        | Some Role.Advisor
-        | None -> false
+    // Every role can produce a textless, tool-free terminal, and none may close on it.
+    let private supportsInteractionRepair (_role: Role option) = true
 
     /// Formal visible assistant text only (no reasoning/thinking).
     /// Used for empty/XML-only repair classification and finish=stop emptiness.
@@ -100,14 +88,17 @@ module CompletedTurnClassifier =
     /// CTX-004: stop is completed only when formal text passes the shared
     /// terminal validity gate; otherwise the turn earns interaction repair.
     let private classifyStopped (parts: MessagePart array) : obj =
-        match TerminalValidity.check (partsText parts) with
-        | Ok() -> box ReconcileProgram.TurnCompleted
-        | Error rejection ->
-            box (
-                ReconcileProgram.TurnNeedsContinuation(
-                    sprintf "assistant stop with %s" (TerminalValidity.describe rejection)
+        if hasToolCallPart parts then
+            box ReconcileProgram.TurnCompleted
+        else
+            match TerminalValidity.check (partsText parts) with
+            | Ok() -> box ReconcileProgram.TurnCompleted
+            | Error rejection ->
+                box (
+                    ReconcileProgram.TurnNeedsContinuation(
+                        sprintf "assistant stop with %s" (TerminalValidity.describe rejection)
+                    )
                 )
-            )
 
     /// Content validity alone cannot prove a provider failure.
     let formalContentUnusable (parts: MessagePart array) : bool =

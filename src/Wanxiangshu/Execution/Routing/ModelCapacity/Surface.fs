@@ -20,14 +20,25 @@ type internal ExecutionPermitLibrary =
     abstract lifecycle: permit: obj * fence: float -> obj
     abstract committed: sessionId: string * physicalUserMessageId: string -> obj
 
+type internal SessionLeaseHandlesLibrary =
+    abstract handleFor: sessionId: string * permit: obj * createHandle: Func<float, float, obj> -> obj
+    abstract tryGetMatching: sessionId: string * permit: obj -> obj
+
 module internal ExecutionPermitBinding =
     [<Import("ExecutionPermits", "wanxiangli/permit")>]
     let private permitsClass: obj = jsNative
 
-    [<Emit("new $0()")>]
-    let private construct (cls: obj) : ExecutionPermitLibrary = jsNative
+    [<Import("SessionLeaseHandles", "wanxiangli/permit")>]
+    let private sessionLeaseHandlesClass: obj = jsNative
 
-    let create () = construct permitsClass
+    [<Emit("new $0()")>]
+    let private constructPermits (cls: obj) : ExecutionPermitLibrary = jsNative
+
+    [<Emit("new $0()")>]
+    let private constructHandles (cls: obj) : SessionLeaseHandlesLibrary = jsNative
+
+    let create () = constructPermits permitsClass
+    let createHandles () = constructHandles sessionLeaseHandlesClass
 
     let identity (value: ExecutionAdmissionExactIdentity) : obj =
         createObj
@@ -66,13 +77,15 @@ module internal ExecutionPermitBinding =
         else
             Error(rejection (unbox<string> value?rejection))
 
+    [<Emit("{ tag: 0, fields: [BigInt($0)] }")>]
+    let leaseIdFromNumber (value: float) : CapacityLeaseId = jsNative
+
+    [<Emit("{ tag: 0, fields: [BigInt($0)] }")>]
+    let fenceFromNumber (value: float) : CapacityFence = jsNative
+
 type internal ExecutionCapacityOwner(counters: CapacityTransitionCounters) =
     let permits = ExecutionPermitBinding.create ()
-    // The F# handle of each session's current permit; Owner is the library permit.
-    let leaseBySession = Dictionary<string, ExecutionAdmissionLease>()
-    // DSL-MUTABLE: resource — host handle identity, kept in step with the library permit
-    let mutable nextLeaseId = CapacityLeaseId.initial
-    let mutable nextFence = CapacityFence.initial
+    let sessionLeases = ExecutionPermitBinding.createHandles ()
 
     let permitOf (lease: ExecutionAdmissionLease) : obj =
         if isNull (box lease) then null else lease.Owner
@@ -86,25 +99,22 @@ type internal ExecutionCapacityOwner(counters: CapacityTransitionCounters) =
     let record (outcome: string) =
         outcome |> ExecutionPermitBinding.outcome |> counters.Record
 
-    let handleFor (identity: ExecutionAdmissionExactIdentity) (capacityCredit: CapacityCreditId) (permit: obj) =
-        match leaseBySession.TryGetValue identity.SessionId with
-        | true, lease when obj.ReferenceEquals(lease.Owner, permit) -> lease
-        | _ ->
-            nextLeaseId <- CapacityLeaseId.next nextLeaseId
-            nextFence <- CapacityFence.next nextFence
-
-            if float (CapacityFence.value nextFence) <> unbox<float> permit?fence then
-                invalidOp "execution-model-routing: host lease fence diverged from the exact permit owner"
-
-            let lease =
-                ExecutionAdmissionLease.Create(permit, capacityCredit, nextLeaseId, nextFence, identity)
-
-            leaseBySession.[identity.SessionId] <- lease
-            lease
+    let createHandle (identity: ExecutionAdmissionExactIdentity) (capacityCredit: CapacityCreditId) (permit: obj) =
+        Func<float, float, obj>(fun leaseId fence ->
+            let lid = ExecutionPermitBinding.leaseIdFromNumber leaseId
+            let f = ExecutionPermitBinding.fenceFromNumber fence
+            ExecutionAdmissionLease.Create(permit, capacityCredit, lid, f, identity) :> obj)
 
     member _.Issue(identity: ExecutionAdmissionExactIdentity, capacityCredit: CapacityCreditId) =
-        permits.issue (ExecutionPermitBinding.identity identity, float (CapacityCreditId.value capacityCredit))
-        |> handleFor identity capacityCredit
+        let permit =
+            permits.issue (ExecutionPermitBinding.identity identity, float (CapacityCreditId.value capacityCredit))
+
+        sessionLeases.handleFor (
+            identity.SessionId,
+            permit,
+            createHandle identity capacityCredit permit
+        )
+        |> unbox<ExecutionAdmissionLease>
 
     member _.Target(lease: ExecutionAdmissionLease) =
         permits.target (permitOf lease, fenceOf lease)
@@ -131,10 +141,9 @@ type internal ExecutionCapacityOwner(counters: CapacityTransitionCounters) =
     /// absent or wrong-physical lease is not an executable resource.
     member _.TryReadCommittedLease(sessionId: string, physicalUserMessageId: string) =
         let permit = permits.committed (sessionId, physicalUserMessageId)
+        let handle = sessionLeases.tryGetMatching (sessionId, permit)
 
-        if isNull permit then
-            None
-        else
-            match leaseBySession.TryGetValue sessionId with
-            | true, lease when obj.ReferenceEquals(lease.Owner, permit) -> Some lease
-            | _ -> invalidOp "execution-model-routing: committed permit has no host lease handle"
+        match isNull permit, isNull handle with
+        | true, _ -> None
+        | false, true -> invalidOp "execution-model-routing: committed permit has no host lease handle"
+        | false, false -> Some (unbox<ExecutionAdmissionLease> handle)

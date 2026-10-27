@@ -1,5 +1,14 @@
 namespace Wanxiangshu.Execution.Fission
 
+open Wanxiangshu.Foundation.Identity
+
+[<CLIMutable>]
+type FissionLaneBinding =
+    { GroupId: string
+      OwnerSessionId: SessionId
+      LaneIndex: int
+      LaneCount: int }
+
 [<RequireQualifiedAccess>]
 type FissionRejectReason =
     | AlreadyFissioned

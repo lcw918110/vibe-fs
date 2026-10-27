@@ -14,5 +14,5 @@ async park(payload) {
   }
 
   async run() {
-    // 返回 JSON 兼容数据；return 不代替业务 deliver。
+    // 返回 JSON 兼容数据；return 只结束本次程序调用。
   }

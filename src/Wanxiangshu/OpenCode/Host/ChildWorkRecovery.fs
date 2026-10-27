@@ -1,5 +1,8 @@
 namespace Wanxiangshu.OpenCode.Host
 
+open Fable.Core
+open Fable.Core.JsInterop
+
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Composition.Durable
@@ -17,6 +20,9 @@ open Wanxiangshu.Persistence.Journal
 /// void: the work becomes Abandoned(Voided) — reported once by join, then
 /// retired. Fission groups are settled as failed.
 module ChildWorkRecovery =
+
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
 
     /// Reason recorded when a fresh process settles a Fission group the previous
     /// runtime left Open.
@@ -69,7 +75,7 @@ module ChildWorkRecovery =
                         (AgentFact.Fission(fissionSettlementFact group))
                         journal
                 with
-                | Ok _ -> FissionRuntime.clearOwner group.OwnerSessionId
+                | Ok _ -> fissionRuntime?clearOwner (SessionId.value group.OwnerSessionId) |> ignore
                 | Error failure -> raise (JournalAppendException failure)
 
             return ()

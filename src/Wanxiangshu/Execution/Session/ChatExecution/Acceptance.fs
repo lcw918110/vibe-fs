@@ -10,6 +10,8 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Interaction.Authority
+open Fable.Core
+open Fable.Core.JsInterop
 
 /// Proof that the exact execution acceptance is present in the durable projection.
 type ManagedChatAcceptanceWitness =
@@ -94,50 +96,64 @@ type ManagedChatProviderLifecyclePersistence =
     { ReadExact: ChatExecutionKey -> ChatExecutionState option
       AppendFact: ProviderStartedEvidence -> ChatExecutionFactCases -> Task<Result<unit, JournalAppendFailure>> }
 
-[<RequireQualifiedAccess>]
-module internal ManagedChatExecutionFlight =
+module private FlightInterop =
+    [<Import("ManagedChatExecutionFlight", "wanxiangli/chat-execution")>]
+    let flightCtor: obj = jsNative
 
-    let private gate = obj ()
-    let private inFlight = Dictionary<RuntimeId * ChatExecutionKey, Task>()
+    let create () : obj =
+        createNew flightCtor [||]
 
-    let private preceding (flightKey: RuntimeId * ChatExecutionKey) : Task =
-        match inFlight.TryGetValue flightKey with
-        | true, existing -> existing
-        | false, _ -> AsyncSupport.completedTask ()
+type internal ManagedChatExecutionFlight() =
+    let inner: obj = FlightInterop.create ()
 
-    let private removeIfCurrent (flightKey: RuntimeId * ChatExecutionKey) (marker: Task) =
-        lock gate (fun () ->
-            match inFlight.TryGetValue flightKey with
-            | true, current when Object.ReferenceEquals(current, marker) -> inFlight.Remove flightKey |> ignore
-            | _ -> ())
+    member _.BeginFlight(runtimeId: string, sessionId: string, physicalUserMessageId: string, work: obj) : unit =
+        inner?beginFlight(runtimeId, sessionId, physicalUserMessageId, work)
 
-    let private start
-        (flightKey: RuntimeId * ChatExecutionKey)
-        (precedingFlight: Task)
-        (operation: unit -> Task<'value>)
-        : Task<'value> =
+    member _.Finish(runtimeId: string, sessionId: string, physicalUserMessageId: string) : bool =
+        inner?finish(runtimeId, sessionId, physicalUserMessageId)
+
+    member _.TryGet(runtimeId: string, sessionId: string, physicalUserMessageId: string) : obj option =
+        let res: obj = inner?get(runtimeId, sessionId, physicalUserMessageId)
+        if isNull res then None else Some res
+
+    member _.Clear() : unit =
+        inner?clear()
+
+    member _.Run(runtimeId: RuntimeId, key: ChatExecutionKey, operation: unit -> Task<'value>) : Task<'value> =
+        let rid = RuntimeId.value runtimeId
+        let sid = SessionId.value key.SessionId
+        let msgId = PhysicalUserMessageId.value key.PhysicalUserMessageId
+
+        let preceding : Task =
+            let existing: obj = inner?get(rid, sid, msgId)
+            if isNull existing then AsyncSupport.completedTask () else unbox<Task> existing
+
         // DSL-MUTABLE: single-flight
         let mutable marker: Task = null
 
         let started =
             Defer.defer (fun () ->
                 task {
-                    do! precedingFlight
+                    do! preceding
 
                     try
                         return! operation ()
                     finally
-                        removeIfCurrent flightKey marker
+                        let cur: obj = inner?get(rid, sid, msgId)
+                        if Object.ReferenceEquals(cur, marker) then
+                            inner?finish(rid, sid, msgId) |> ignore
                 })
 
         marker <- started :> Task
-        inFlight.[flightKey] <- marker
+        inner?beginFlight(rid, sid, msgId, marker)
         started
 
+[<RequireQualifiedAccess>]
+module internal ManagedChatExecutionFlight =
+    let private instance = ManagedChatExecutionFlight()
+
     let run (runtimeId: RuntimeId) (key: ChatExecutionKey) (operation: unit -> Task<'value>) : Task<'value> =
-        lock gate (fun () ->
-            let flightKey = runtimeId, key
-            start flightKey (preceding flightKey) operation)
+        instance.Run(runtimeId, key, operation)
 
 module JournalAppendOutcome =
 

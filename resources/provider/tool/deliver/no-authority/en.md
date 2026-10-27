@@ -1,1 +1,1 @@
-deliver requires an established Manager authority
+This review requires a verified active Manager or Plan authority.

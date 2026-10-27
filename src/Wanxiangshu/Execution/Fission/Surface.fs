@@ -13,6 +13,9 @@ open Wanxiangshu.OpenCode
 /// state cross as plain JS data only.
 module FissionSurface =
 
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
+
     [<Emit("$0==null")>]
     let private isNullish (value: obj) : bool = jsNative
 
@@ -453,16 +456,16 @@ module FissionSurface =
         FissionAdmission.release runtime (SessionId.create ownerSessionId)
 
     let markSilentInterrupt (ownerSessionId: string) : unit =
-        FissionRuntime.markSilentInterrupt (SessionId.create ownerSessionId)
+        fissionRuntime?markSilentInterrupt ownerSessionId
 
     let isSilentInterrupt (ownerSessionId: string) : bool =
-        FissionRuntime.isSilentInterrupt (SessionId.create ownerSessionId)
+        fissionRuntime?isSilentInterrupt ownerSessionId
 
     let tryConsumeSilentInterrupt (ownerSessionId: string) : bool =
-        FissionRuntime.tryConsumeSilentInterrupt (SessionId.create ownerSessionId)
+        fissionRuntime?tryConsumeSilentInterrupt ownerSessionId
 
     let clearSilentInterrupt (ownerSessionId: string) : unit =
-        FissionRuntime.clearSilentInterrupt (SessionId.create ownerSessionId)
+        fissionRuntime?clearSilentInterrupt ownerSessionId
 
     let clearOwner (ownerSessionId: string) : unit =
-        FissionRuntime.clearOwner (SessionId.create ownerSessionId)
+        fissionRuntime?clearOwner ownerSessionId |> ignore

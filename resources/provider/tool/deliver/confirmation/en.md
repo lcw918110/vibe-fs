@@ -1,1 +1,1 @@
-This is the first end-of-work confirmation. It records that you confirmed the end of this work and does not end it. Call deliver again to end the work.
+Review records the current obligation ledger and decides the next lifecycle action. There is no separate confirmation call. Follow the review result.

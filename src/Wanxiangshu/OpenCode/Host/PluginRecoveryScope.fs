@@ -1,8 +1,9 @@
 namespace Wanxiangshu.OpenCode
 
 open System
-open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
 open Wanxiangshu.Context.Prefix
@@ -84,89 +85,26 @@ module PendingAttemptPlanAdmission =
 type TransformAttemptIntentindingError =
     | PendingAttemptPlanMissing of SessionId * PhysicalUserMessageId * ProviderRunIdentity
 
+module private RecoveryStoreInterop =
+    [<Import("RecoveryAttemptPlanStore", "wanxiangli/failure")>]
+    let recoveryAttemptPlanStoreClass: obj = jsNative
+
+    [<Emit("new $0()")>]
+    let createRecoveryAttemptPlanStore (cls: obj) : obj = jsNative
+
+    [<Emit("$0 === null || $0 === undefined")>]
+    let isAbsent (x: obj) : bool = jsNative
+
 /// Family recovery coordination (PROMPT-011 + C5 + RECOVERY-FAMILY) and
 /// attempt planning state for one plugin instance: recovery ports attachment,
 /// and per-provider-run attempt plans.
 ///
-/// Owning recovery CE holds the permits internally; Host callbacks are only
-/// rendezvous/observation adapters that deliver typed observations. Physical
-/// identity (SessionId / ProviderRunIdentity) is the typed capability key;
-/// no stringly-typed TryGet/Clear drives business branching (structured-workflow-017, structured-workflow-009, provider-attempt-recovery-011).
+/// All attempt planning and intervention state is 100% owned by wanxiangli/failure (RecoveryAttemptPlanStore).
+/// PluginRecoveryScope holds an autonomous store instance process-locally.
 type PluginRecoveryScope(journal: AgentJournal option) =
 
-    // Owning CE internal single-flight channels — process-local, crash-zero.
-    /// Pre-inference attempt plans, keyed by exact physical user identity. They
-    /// become ordinary provider-run keyed AttemptPlans only after Host exposes
-    /// the assistant run.
-    /// DSL-cross-callback-proof: physical single-flight — transform freezes one
-    /// immutable plan under exact (SessionId, PhysicalUserMessageId); the first
-    /// later Host observation carrying that same physical parent plus the exact
-    /// ProviderRunIdentity consumes it and rekeys it to the provider-run channel.
-    /// Mismatched physical material cannot probe/clear it; session deletion is
-    /// the only non-bind cleanup. No durable workflow PC is reconstructed here.
-    /// DSL-cross-callback-proof: physical
-    // DSL-MUTABLE: single-flight — pre-inference attempt plan awaiting exact provider run binding
-    let pendingAttemptPlans = Dictionary<string, PendingAttemptPlan>()
-
-    /// DSL-cross-callback-proof: physical single-flight — opaque frozen attempt plan channel.
-    /// Owning recovery CE (XWire.reconcileAttempt) consumes via ConsumeAttemptPlan on terminal;
-    /// the transform adapter binds via TryBindAttemptPlan.
-    /// No stringly-typed TryGet/Clear drives business branching (structured-workflow-017②, structured-workflow-009, provider-attempt-recovery-011).
-    // DSL-MUTABLE: single-flight — per-provider-run attempt plan channel (frozen decision, typed handle)
-    let attemptPlans = Dictionary<string, AttemptPlan>()
-
-    /// DSL-cross-callback-proof: physical resource — crash-zero typed recovery-request ownership projection.
-    let manualChatInterventions =
-        Dictionary<ChatExecutionKey, ManualInterventionRequest>()
-
-    let physicalPlanKey (sessionId: SessionId) (physicalUserMessageId: PhysicalUserMessageId) =
-        SessionId.value sessionId
-        + "\u001f"
-        + PhysicalUserMessageId.value physicalUserMessageId
-
-    let providerPlanKey (sessionId: SessionId) (providerRun: ProviderRunIdentity) =
-        SessionId.value sessionId + "\u001f" + ProviderRunIdentity.value providerRun
-
-    let admitOrdinaryUnderKey (key: string) (ordinaryPlan: PendingAttemptPlan) : PendingAttemptPlanAdmission =
-        match pendingAttemptPlans.TryGetValue key with
-        | true, existing when PendingAttemptPlanAdmission.areSemanticallyEqual existing ordinaryPlan ->
-            PendingAttemptPlanAdmission.ReplayedExisting existing
-        | true, existing -> PendingAttemptPlanAdmission.PlanConflict(existing, ordinaryPlan)
-        | false, _ ->
-            pendingAttemptPlans.[key] <- ordinaryPlan
-            PendingAttemptPlanAdmission.Admitted ordinaryPlan
-
-    let bindProviderRunUnderKey
-        (key: string)
-        (providerRun: ProviderRunIdentity)
-        (physicalUserMessageId: PhysicalUserMessageId)
-        (plan: AttemptPlan)
-        : AttemptPlan =
-        match attemptPlans.TryGetValue key with
-        | true, established when established.Profile.PhysicalUserMessageId = physicalUserMessageId -> established
-        | true, _ ->
-            invalidOp (
-                sprintf
-                    "HOST-BOUNDARY-008: cannot re-bind provider run %A to different physical user message %A"
-                    providerRun
-                    physicalUserMessageId
-            )
-        | false, _ ->
-            attemptPlans.[key] <- plan
-            plan
-
-    let installOrdinaryPendingPlan
-        (sessionId: SessionId)
-        (physicalUserMessageId: PhysicalUserMessageId)
-        (ordinaryPlan: PendingAttemptPlan)
-        : PendingAttemptPlanAdmission =
-        if
-            ordinaryPlan.Authority.SessionId <> sessionId
-            || ordinaryPlan.PhysicalUserMessageId <> physicalUserMessageId
-        then
-            PendingAttemptPlanAdmission.IdentityMismatch(sessionId, physicalUserMessageId, ordinaryPlan)
-        else
-            admitOrdinaryUnderKey (physicalPlanKey sessionId physicalUserMessageId) ordinaryPlan
+    let store: obj =
+        RecoveryStoreInterop.createRecoveryAttemptPlanStore RecoveryStoreInterop.recoveryAttemptPlanStoreClass
 
     /// Ordinary business entry never performs cross-process recovery. The permit
     /// only admits this process's join attempt and intentionally carries no old
@@ -184,30 +122,40 @@ type PluginRecoveryScope(journal: AgentJournal option) =
         (sessionId: SessionId)
         (physicalUserMessageId: PhysicalUserMessageId)
         (plan: PendingAttemptPlan)
-        =
-        installOrdinaryPendingPlan sessionId physicalUserMessageId plan
+        : PendingAttemptPlanAdmission =
+        let s = SessionId.value sessionId
+        let p = PhysicalUserMessageId.value physicalUserMessageId
+        let ps = SessionId.value plan.Authority.SessionId
+        let pp = PhysicalUserMessageId.value plan.PhysicalUserMessageId
+        let isEqual (a: obj) (b: obj) =
+            PendingAttemptPlanAdmission.areSemanticallyEqual (unbox<PendingAttemptPlan> a) (unbox<PendingAttemptPlan> b)
+
+        let res: obj = store?FreezePending(s, p, ps, pp, box plan, isEqual)
+        match string res?kind with
+        | "Admitted" -> PendingAttemptPlanAdmission.Admitted (unbox<PendingAttemptPlan> res?plan)
+        | "ReplayedExisting" -> PendingAttemptPlanAdmission.ReplayedExisting (unbox<PendingAttemptPlan> res?existing)
+        | "IdentityMismatch" ->
+            PendingAttemptPlanAdmission.IdentityMismatch(
+                SessionId.create (string res?expectedSession),
+                PhysicalUserMessageId.create (string res?expectedPhysical),
+                unbox<PendingAttemptPlan> res?attempted
+            )
+        | "PlanConflict" ->
+            PendingAttemptPlanAdmission.PlanConflict(
+                unbox<PendingAttemptPlan> res?existing,
+                unbox<PendingAttemptPlan> res?attempted
+            )
+        | other -> failwithf "wanxiangli/failure: unexpected admission kind %s" other
 
     member _.TryPendingAttemptPlan
         (sessionId: SessionId)
         (physicalUserMessageId: PhysicalUserMessageId)
         : PendingAttemptPlan option =
-        let pendingKey = physicalPlanKey sessionId physicalUserMessageId
+        let res: obj =
+            store?TryPending(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId)
 
-        match pendingAttemptPlans.TryGetValue pendingKey with
-        | true, pending -> Some pending
-        | false, _ -> None
-
-    member private this.BindPendingAttemptPlan
-        (sessionId: SessionId)
-        (physicalUserMessageId: PhysicalUserMessageId)
-        (providerRun: ProviderRunIdentity)
-        : AttemptPlan option =
-        match this.TryPendingAttemptPlan sessionId physicalUserMessageId with
-        | None -> None
-        | Some pending ->
-            AttemptPlanner.bindProviderRun providerRun pending
-            |> bindProviderRunUnderKey (providerPlanKey sessionId providerRun) providerRun physicalUserMessageId
-            |> Some
+        if RecoveryStoreInterop.isAbsent res then None
+        else Some (unbox<PendingAttemptPlan> res)
 
     /// Bind the frozen pre-inference decision to the exact assistant run exposed
     /// by a later Host observation. Repeated observations are idempotent by the
@@ -217,62 +165,54 @@ type PluginRecoveryScope(journal: AgentJournal option) =
         (physicalUserMessageId: PhysicalUserMessageId)
         (providerRun: ProviderRunIdentity)
         : AttemptPlan option =
-        match this.TryAttemptPlan sessionId providerRun with
-        | Some established when established.Profile.PhysicalUserMessageId = physicalUserMessageId -> Some established
-        | Some _ -> None
-        | None -> this.BindPendingAttemptPlan sessionId physicalUserMessageId providerRun
+        let s = SessionId.value sessionId
+        let p = PhysicalUserMessageId.value physicalUserMessageId
+        let r = ProviderRunIdentity.value providerRun
+        let bindFn (pendingObj: obj) : obj =
+            box (AttemptPlanner.bindProviderRun providerRun (unbox<PendingAttemptPlan> pendingObj))
+
+        let res: obj = store?TryBindAttemptPlan(s, p, r, bindFn)
+        if RecoveryStoreInterop.isAbsent res then None
+        else Some (unbox<AttemptPlan> res)
 
     /// Owning CE consumes the frozen plan exactly once on terminal reconciliation.
     /// Provisional/unknown turns must use TryAttemptPlan (peek) to keep the plan alive;
     /// only terminal outcomes (TurnCompleted/TurnFailed/TurnAborted) call ConsumeAttemptPlan.
     /// Returns None if already consumed or never recorded.
     member this.ConsumeAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) : AttemptPlan option =
-        let key = providerPlanKey sessionId providerRun
+        let res: obj =
+            store?ConsumeAttemptPlan(SessionId.value sessionId, ProviderRunIdentity.value providerRun)
 
-        match attemptPlans.TryGetValue key with
-        | true, plan ->
-            attemptPlans.Remove key |> ignore
+        if RecoveryStoreInterop.isAbsent res then None
+        else Some (unbox<AttemptPlan> res)
 
-            pendingAttemptPlans.Remove(physicalPlanKey sessionId plan.Profile.PhysicalUserMessageId)
-            |> ignore
+    member this.TryAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) : AttemptPlan option =
+        let res: obj =
+            store?TryAttemptPlan(SessionId.value sessionId, ProviderRunIdentity.value providerRun)
 
-            Some plan
-        | false, _ -> None
+        if RecoveryStoreInterop.isAbsent res then None
+        else Some (unbox<AttemptPlan> res)
 
-    member this.TryAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) =
-        let key = providerPlanKey sessionId providerRun
-
-        match attemptPlans.TryGetValue key with
-        | true, plan -> Some plan
-        | false, _ -> None
-
-    member _.PublishManualChatIntervention(request: ManualInterventionRequest) =
-        manualChatInterventions.[request.ExecutionState.key] <- request
+    member _.PublishManualChatIntervention(request: ManualInterventionRequest) : unit =
+        let sid = SessionId.value request.ExecutionState.key.SessionId
+        let phys = PhysicalUserMessageId.value request.ExecutionState.key.PhysicalUserMessageId
+        store?PublishManualIntervention(sid, phys, box request) |> ignore
 
     member _.ManualChatInterventions() : ManualInterventionRequest[] =
-        manualChatInterventions.Values |> Seq.toArray
+        let arr: obj array = store?ManualInterventions()
+        if RecoveryStoreInterop.isAbsent arr then [||]
+        else arr |> Array.map unbox<ManualInterventionRequest>
 
     member _.RevokeManualIntervention(key: ChatExecutionKey) : unit =
-        manualChatInterventions.Remove key |> ignore
+        let sid = SessionId.value key.SessionId
+        let phys = PhysicalUserMessageId.value key.PhysicalUserMessageId
+        store?RevokeManualIntervention(sid, phys) |> ignore
 
     /// Session deletion drops arming and attempt plans for this session.
-    member this.ClearSession(sessionId: string) =
-        this.ClearAttemptPlansFor sessionId
-
-        manualChatInterventions.Keys
-        |> Seq.filter (fun key -> SessionId.value key.SessionId = sessionId)
-        |> Seq.toArray
-        |> Array.iter (fun key -> manualChatInterventions.Remove key |> ignore)
+    member this.ClearSession(sessionId: string) : unit =
+        store?ClearSession(sessionId) |> ignore
 
     /// Drops attempt plans whose key prefix matches (used for a session and
     /// its linked keys during session deletion). Prefer ConsumeAttemptPlan.
-    member this.ClearAttemptPlansFor(key: string) =
-        attemptPlans.Keys
-        |> Seq.filter (fun planKey -> planKey.StartsWith(key + "\u001f", StringComparison.Ordinal))
-        |> Seq.toList
-        |> List.iter (fun planKey -> attemptPlans.Remove planKey |> ignore)
-
-        pendingAttemptPlans.Keys
-        |> Seq.filter (fun planKey -> planKey.StartsWith(key + "\u001f", StringComparison.Ordinal))
-        |> Seq.toList
-        |> List.iter (fun planKey -> pendingAttemptPlans.Remove planKey |> ignore)
+    member this.ClearAttemptPlansFor(key: string) : unit =
+        store?ClearAttemptPlansFor(key) |> ignore

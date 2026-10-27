@@ -1,114 +1,90 @@
 namespace Wanxiangshu.OpenCode
 
+open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Host.Ports
+
+[<AllowNullLiteral>]
+type private ILiveHostConfigStore =
+    abstract accept: nextConfig: obj -> unit
+    abstract read: path: string array -> obj
+    abstract apply: settings: obj array -> obj
+
+module private LiveHostConfigInterop =
+    [<Import("LiveHostConfigStore", "wanxiangli/capability")>]
+    let storeClass: obj = jsNative
+
+    [<Emit("new $0($1)")>]
+    let createStore (cls: obj) (initialConfig: obj) : ILiveHostConfigStore = jsNative
 
 /// The live host config, shared between the adapter (which owns the host object)
 /// and the product (which reads and writes settings through `IHostConfigPort`).
 ///
 /// The host delivers its config object through the `config` hook, long after the
-/// ports were built. The holder therefore keeps the current object mutable and
-/// swaps it in place: the product keeps the same `IHostConfigPort` instance and
-/// sees the live object, never a stale snapshot.
+/// ports were built. The holder delegates live state to `wanxiangli/capability`'s
+/// `LiveHostConfigStore`, keeping the same `IHostConfigPort` instance and seeing
+/// the live object, never a stale snapshot.
 type LiveHostConfig(config: obj) =
 
-    // DSL-MUTABLE: resource — 宿主在 config 钩子里交付的活配置对象，用原地替换而非重建端口。
-    let mutable current = config
+    let store = LiveHostConfigInterop.createStore LiveHostConfigInterop.storeClass config
 
-    let writeLeaf (node: obj) (leaf: string) (value: HostSettingValue) : unit =
-        match value with
-        | HostSettingValue.Bool b -> node?(leaf) <- box b
-        | HostSettingValue.Text t -> node?(leaf) <- box t
+    let safeString (rawVal: obj) : string =
+        if isNull rawVal then "" else string rawVal
 
-    let ensureChild (node: obj) (head: string) : obj =
-        if isNull node?(head) then
-            node?(head) <- createObj []
-
-        node?(head)
-
-    let rec descendWrite (node: obj) (path: string list) (value: HostSettingValue) : unit =
-        match path with
-        | [] -> ()
-        | [ leaf ] -> writeLeaf node leaf value
-        | head :: rest -> descendWrite (ensureChild node head) rest value
-
-    let readLeaf (node: obj) (leaf: string) : obj option =
-        if isNull node || isNull node?(leaf) then
-            None
+    let parseSettingValue (kind: string) (rawVal: obj) : HostSettingValue =
+        if kind = "bool" then
+            HostSettingValue.Bool(unbox<bool> rawVal)
         else
-            Some node?(leaf)
+            HostSettingValue.Text(safeString rawVal)
 
-    let tryUnboxBool (act: obj) (expected: bool) : bool =
-        try
-            unbox<bool> act = expected
-        with _ ->
-            false
+    let parseGapPath (res: obj) : string list =
+        if isNull res?gapPath then []
+        else Array.toList (unbox<string array> res?gapPath)
 
-    let tryUnboxString (act: obj) (expected: string) : bool =
-        try
-            unbox<string> act = expected
-        with _ ->
-            false
-
-    let valueMatches (expected: HostSettingValue) (actual: obj option) : bool =
-        match expected, actual with
-        | HostSettingValue.Bool b, Some act -> tryUnboxBool act b
-        | HostSettingValue.Text t, Some act -> tryUnboxString act t
-        | _, None -> false
-
-    let rec descendStep (node: obj) (path: string list) : obj option =
-        match path with
-        | [] -> None
-        | [ leaf ] -> readLeaf node leaf
-        | head :: rest -> descendRead node?(head) rest
-
-    and descendRead (node: obj) (path: string list) : obj option =
-        if isNull node then None else descendStep node path
-
-    let toSettingValue (objVal: obj) : HostSettingValue =
-        if emitJsExpr objVal "typeof $0 === 'boolean'" then
-            HostSettingValue.Bool(unbox<bool> objVal)
+    let mapReadResult (res: obj) : Result<HostSettingValue option, HostError> =
+        if not (unbox<bool> res?ok) then
+            Error(HostError.Refused(unbox<string> res?error))
+        elif not (unbox<bool> res?found) then
+            Ok None
         else
-            HostSettingValue.Text(string objVal)
+            let kind = unbox<string> res?kind
+            let v = res?value
+            Ok(Some(parseSettingValue kind v))
 
-    let readFromObject (cfg: obj) (path: string list) : Result<HostSettingValue option, HostError> =
-        descendRead cfg path |> Option.map toSettingValue |> Ok
+    let settingToObj (s: RequiredSetting) : obj =
+        match s.Value with
+        | HostSettingValue.Bool b ->
+            createObj
+                [ "path" ==> List.toArray s.Path
+                  "kind" ==> "bool"
+                  "value" ==> box b ]
+        | HostSettingValue.Text t ->
+            createObj
+                [ "path" ==> List.toArray s.Path
+                  "kind" ==> "text"
+                  "value" ==> box t ]
 
-    let toSettingGap (gap: RequiredSetting) : SettingGap =
-        { Path = gap.Path
-          Reason = "the host did not accept or preserve the configured setting" }
-
-    let applyToObject (cfg: obj) (settings: RequiredSetting list) : Result<SettingGap option, HostError> =
-        settings
-        |> List.tryFind (fun setting ->
-            descendWrite cfg setting.Path setting.Value
-            not (valueMatches setting.Value (descendRead cfg setting.Path)))
-        |> Option.map toSettingGap
-        |> Ok
-
-    /// Decides how a rejected config write becomes a port verdict: a host config
-    /// can be frozen or otherwise non-writable, the write then throws instead of
-    /// being ignored, and the round trip did not complete — so the port reports
-    /// it and the product owns the verdict.
-    let applyToLiveConfig (cfg: obj) (settings: RequiredSetting list) : Result<SettingGap option, HostError> =
-        try
-            applyToObject cfg settings
-        with ex ->
-            Error(HostError.Refused("the host config rejected the write: " + ex.Message))
+    let mapApplyResult (res: obj) : Result<SettingGap option, HostError> =
+        if not (unbox<bool> res?ok) then
+            Error(HostError.Refused(unbox<string> res?error))
+        elif unbox<bool> res?hasGap then
+            let path = parseGapPath res
+            let reason = unbox<string> res?gapReason
+            Ok(Some { Path = path; Reason = reason })
+        else
+            Ok None
 
     /// Adopt the config object the host just delivered. The port instance stays
     /// the same, so the product keeps reading the live config.
-    member this.Accept(nextConfig: obj) : unit = current <- nextConfig
+    member _.Accept(nextConfig: obj) : unit =
+        store.accept(nextConfig)
 
     interface IHostConfigPort with
-        member this.Read(path: string list) : Result<HostSettingValue option, HostError> =
-            if isNull current then
-                Error(HostError.Refused "the host supplied no config object")
-            else
-                readFromObject current path
+        member _.Read(path: string list) : Result<HostSettingValue option, HostError> =
+            let res = store.read(List.toArray path)
+            mapReadResult res
 
-        member this.Apply(settings: RequiredSetting list) : Result<SettingGap option, HostError> =
-            if isNull current then
-                Error(HostError.Refused "the host supplied no config object")
-            else
-                applyToLiveConfig current settings
+        member _.Apply(settings: RequiredSetting list) : Result<SettingGap option, HostError> =
+            let settingsArray = settings |> List.map settingToObj |> List.toArray
+            let res = store.apply(settingsArray)
+            mapApplyResult res

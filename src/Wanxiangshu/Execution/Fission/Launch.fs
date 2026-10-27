@@ -1,5 +1,8 @@
 namespace Wanxiangshu.Execution.Fission
 
+open Fable.Core
+open Fable.Core.JsInterop
+
 open Wanxiangshu.Persistence.Journal.JournalOutcome
 open System
 open System.Threading.Tasks
@@ -25,6 +28,15 @@ open Wanxiangshu.Persistence.Journal
 /// logical owner. Every host capability arrives through FissionHostPort; a host
 /// tool adapter only decodes the call and encodes the outcome.
 module FissionLaunch =
+
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
+    [<Emit("$0 === undefined")>]
+    let private isUndefined (_v: obj) : bool = jsNative
+
+    let private isLane (sessionId: SessionId) : bool =
+        let r: obj = fissionRuntime?tryLane (SessionId.value sessionId)
+        not (isNull r) && not (isUndefined r)
 
     type FissionLaunchRequest =
         { CallerSessionId: string
@@ -276,7 +288,7 @@ module FissionLaunch =
             try
                 do! deliverLaneBody port durable profile groupId owner lane completionId payload laneClosed
             finally
-                FissionRuntime.endDelivery groupId completionId lane.Index
+                fissionRuntime?endDelivery (groupId, completionId, lane.Index)
         }
 
     let private deliverOneLane
@@ -294,7 +306,7 @@ module FissionLaunch =
 
             if
                 alreadyDelivered
-                || not (FissionRuntime.tryBeginDelivery groupId completionId lane.Index)
+                || not (fissionRuntime?tryBeginDelivery (groupId, completionId, lane.Index))
             then
                 return ()
             else
@@ -376,7 +388,7 @@ module FissionLaunch =
                           completionId
                           ex.Message ]
 
-            FissionRuntime.endDelivery groupId completionId -1
+            fissionRuntime?endDelivery (groupId, completionId, -1)
         }
 
     /// Capture exactly one canonical payload for a pre-Fission completion, then
@@ -394,7 +406,7 @@ module FissionLaunch =
         (payload: string)
         =
         task {
-            if not (FissionRuntime.tryBeginDelivery groupId completionId -1) then
+            if not (fissionRuntime?tryBeginDelivery (groupId, completionId, -1)) then
                 return ()
             else
                 return! broadcastAfterBegin port durable profile groupId owner lanes completionId payload
@@ -516,7 +528,7 @@ module FissionLaunch =
                     onPreAgentTerminal port durable profile groupId owner lanes childId completionId
                 )
 
-            FissionRuntime.trackGroupResource groupId subscription
+            fissionRuntime?trackGroupResource (groupId, subscription)
 
     let private onPtyCompletion
         (port: FissionHostPort)
@@ -562,7 +574,7 @@ module FissionLaunch =
             let subscription =
                 ownerRuns.SubscribePtyCompletion(onPtyCompletion port durable profile groupId owner lanes wanted)
 
-            FissionRuntime.trackGroupResource groupId subscription
+            fissionRuntime?trackGroupResource (groupId, subscription)
 
     let private installPreFissionBroadcasts
         (port: FissionHostPort)
@@ -619,7 +631,7 @@ module FissionLaunch =
             | Ok laneId ->
                 port.RegisterLane laneId physicalParent directory
 
-                FissionRuntime.bindLane groupId owner lane.Index parsedCount laneId
+                fissionRuntime?bindLane (groupId, SessionId.value owner, lane.Index, parsedCount, SessionId.value laneId)
                 return Ok laneId
         }
 
@@ -656,7 +668,7 @@ module FissionLaunch =
 
     let private abortLanePort (port: FissionHostPort) (laneId: SessionId) =
         task {
-            FissionRuntime.unbindLane laneId
+            fissionRuntime?unbindLane (SessionId.value laneId) |> ignore
             ModelRouting.cancelUnacquiredExecution laneId |> ignore
             let! aborted = port.Sessions.AbortSession laneId
 
@@ -674,12 +686,12 @@ module FissionLaunch =
 
     let private silentInterruptOwnerPort (port: FissionHostPort) (sessionId: SessionId) =
         task {
-            FissionRuntime.markSilentInterrupt sessionId
+            fissionRuntime?markSilentInterrupt (SessionId.value sessionId)
 
             match! port.Sessions.InterruptAttempt sessionId with
             | Ok() -> return Ok()
             | Error error ->
-                FissionRuntime.clearSilentInterrupt sessionId
+                fissionRuntime?clearSilentInterrupt (SessionId.value sessionId)
                 return Error error
         }
 
@@ -873,7 +885,7 @@ module FissionLaunch =
             let owner = port.LogicalOwnerFor caller
             let fissionState = (AgentJournal.snapshot durable).AgentProjections.Fission
 
-            if FissionRuntime.tryLane caller |> Option.isSome then
+            if isLane caller then
                 return Error FissionLaunchRejection.CallerIsLane
             elif FissionProjection.tryActiveForOwner owner fissionState |> Option.isSome then
                 return Error FissionLaunchRejection.OwnerAlreadyFissioned

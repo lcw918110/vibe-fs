@@ -3,6 +3,8 @@ namespace Wanxiangshu.Execution.Fission
 open System
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -68,10 +70,8 @@ module FissionStartup =
 
 module FissionAdmission =
 
-    // One process-wide single-flight resource for live admissions only.
-    let private gate = obj ()
-    // DSL-MUTABLE: single-flight — one active fission admission per owner
-    let private activeOwners = HashSet<string>()
+    [<Import("fissionAdmissionRegistry", "wanxiangli/fission-group")>]
+    let private fissionAdmissionRegistry: obj = jsNative
 
     let private noHooks =
         { OnLanesCreated = fun _ _ _ _ -> Task.FromResult(Ok())
@@ -81,17 +81,17 @@ module FissionAdmission =
 
     let createWithHooks deps hooks = FissionAdmissionRuntime(deps, hooks)
 
-    let isActive (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) =
-        lock gate (fun () -> activeOwners.Contains(SessionId.value ownerSessionId))
+    let isActive (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) : bool =
+        fissionAdmissionRegistry?isActive (SessionId.value ownerSessionId)
 
-    let release (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) =
-        lock gate (fun () -> activeOwners.Remove(SessionId.value ownerSessionId) |> ignore)
+    let release (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) : unit =
+        fissionAdmissionRegistry?release (SessionId.value ownerSessionId) |> ignore
 
-    let releaseOwner (ownerSessionId: SessionId) =
-        lock gate (fun () -> activeOwners.Remove(SessionId.value ownerSessionId) |> ignore)
+    let releaseOwner (ownerSessionId: SessionId) : unit =
+        fissionAdmissionRegistry?release (SessionId.value ownerSessionId) |> ignore
 
-    let private reserve (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) =
-        lock gate (fun () -> activeOwners.Add(SessionId.value ownerSessionId))
+    let private reserve (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) : bool =
+        fissionAdmissionRegistry?reserve (SessionId.value ownerSessionId)
 
     let private dependencyError message =
         Error(FissionRejectReason.RuntimeUnavailable message)

@@ -14,5 +14,5 @@ async park(payload) {
   }
 
   async run() {
-    // Return JSON-compatible data. Returning does not deliver business work.
+    // Return JSON-compatible data. Returning only completes this program invocation.
   }

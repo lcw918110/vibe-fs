@@ -3,6 +3,8 @@ namespace Wanxiangshu.Execution.Routing
 open Wanxiangshu.Foundation.HostSession
 
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 
 type ModelRoutingTarget = { Model: string; Reasoning: string }
@@ -134,29 +136,40 @@ type internal CapacityTransitionCountersSnapshot =
       Stale: int64
       Conflict: int64 }
 
+type internal CapacityTransitionCountersLibrary =
+    abstract recordDuplicate: unit -> float
+    abstract recordStale: unit -> float
+    abstract recordConflict: unit -> float
+    abstract snapshot: unit -> obj
+    abstract reset: unit -> unit
+
+module internal CapacityTransitionCountersBinding =
+    [<Import("CapacityTransitionCounters", "wanxiangli/permit")>]
+    let private countersClass: obj = jsNative
+
+    [<Emit("new $0()")>]
+    let private construct (cls: obj) : CapacityTransitionCountersLibrary = jsNative
+
+    let create () = construct countersClass
+
 type internal CapacityTransitionCounters() =
-    let gate = obj ()
-    // DSL-MUTABLE: resource
-    let mutable duplicate = 0L
-    let mutable stale = 0L
-    // DSL-MUTABLE: resource
-    let mutable conflict = 0L
+    let library = CapacityTransitionCountersBinding.create ()
 
     member _.Record(outcome: CapacityTransitionOutcome) =
-        lock gate (fun () ->
-            match outcome with
-            | CapacityTransitionOutcome.Applied -> ()
-            | CapacityTransitionOutcome.AlreadyApplied -> duplicate <- duplicate + 1L
-            | CapacityTransitionOutcome.StaleFence -> stale <- stale + 1L
-            | CapacityTransitionOutcome.Conflict -> conflict <- conflict + 1L)
+        match outcome with
+        | CapacityTransitionOutcome.Applied -> ()
+        | CapacityTransitionOutcome.AlreadyApplied -> library.recordDuplicate () |> ignore
+        | CapacityTransitionOutcome.StaleFence -> library.recordStale () |> ignore
+        | CapacityTransitionOutcome.Conflict -> library.recordConflict () |> ignore
 
         outcome
 
     member _.Snapshot() =
-        lock gate (fun () ->
-            { Duplicate = duplicate
-              Stale = stale
-              Conflict = conflict })
+        let snap = library.snapshot ()
+
+        { Duplicate = int64 (unbox<float> snap?duplicate)
+          Stale = int64 (unbox<float> snap?stale)
+          Conflict = int64 (unbox<float> snap?conflict) }
 
 type internal CapacityExactOwnerSnapshot =
     { SessionId: string

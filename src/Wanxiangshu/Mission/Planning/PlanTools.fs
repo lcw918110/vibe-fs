@@ -2,6 +2,8 @@ namespace Wanxiangshu.Mission.Planning
 
 open System
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Host
 
 type DeliverResult =
@@ -160,16 +162,14 @@ module PlanTools =
     // work-028: at most one pending ask delegation per work. The tracker
     // is process-local memory — crash recovery has no hanging ask state
     // (work-035), so this never becomes a durable state machine.
-    // DSL-MUTABLE: resource — in-flight ask delegation gate
-    let private pendingAskGate = obj ()
-    // DSL-MUTABLE: resource — works with one pending ask delegation
-    let private pendingAskWorks = System.Collections.Generic.HashSet<string>()
+    [<Import("planAskGate", "wanxiangli/work")>]
+    let private planAskGate: obj = jsNative
 
     let private tryBeginPendingAsk (workId: string) : bool =
-        lock pendingAskGate (fun () -> pendingAskWorks.Add workId)
+        unbox<bool> (planAskGate?tryBegin(workId))
 
     let private clearPendingAsk (workId: string) : unit =
-        lock pendingAskGate (fun () -> pendingAskWorks.Remove workId |> ignore)
+        planAskGate?clear(workId) |> ignore
 
     // Snapshot has no delivered mark. Do not treat delivery authorization as already delivered.
     let private validateAskWork

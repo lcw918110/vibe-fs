@@ -132,6 +132,8 @@
     <Compile Include="OpenCode/Plugin/PluginTransforms.fs" />
     <Compile Include="OpenCode/Host/PluginTransformSurface.fsi" />
     <Compile Include="OpenCode/Host/PluginTransformSurface.fs" />
+    <Compile Include="OpenCode/Host/LatencyWatchdog.fsi" />
+    <Compile Include="OpenCode/Host/LatencyWatchdog.fs" />
     <Compile Include="OpenCode/Plugin/PluginHooks.fsi" />
     <Compile Include="OpenCode/Plugin/PluginHooks.fs" />
     <Compile Include="OpenCode/Plugin/SpikePlugin.fsi" />

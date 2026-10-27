@@ -1,5 +1,8 @@
 namespace Wanxiangshu.Execution.Fission
 
+open Fable.Core
+open Fable.Core.JsInterop
+
 open Wanxiangshu.Persistence.Journal.JournalOutcome
 open System
 open System.Collections.Generic
@@ -26,11 +29,14 @@ open Wanxiangshu.Composition.Durable
 /// old logical owner's SessionId/completion cell.
 module FissionHost =
 
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
+
     /// A Fission owner replacement physically aborts the old present without
     /// cancelling logical-owner resources. Fission owns that distinction; the
     /// Host root supplies the two published continuations only.
     let routeAttemptAborted (sessionId: SessionId) (onSilentReplacement: unit -> unit) (onOrdinaryAbort: unit -> unit) =
-        if FissionRuntime.isSilentInterrupt sessionId then
+        if fissionRuntime?isSilentInterrupt (SessionId.value sessionId) then
             onSilentReplacement ()
         else
             onOrdinaryAbort ()
@@ -437,7 +443,7 @@ module FissionHost =
                     |> Option.map (startTakeoverWithAuthority sessionPort durable directoryFor group)
                     |> Option.defaultValue (task { return false })
             finally
-                FissionRuntime.endTakeover group.GroupId
+                fissionRuntime?endTakeover group.GroupId
         }
 
     let private startTakeover
@@ -446,7 +452,7 @@ module FissionHost =
         (directoryFor: SessionId -> string option)
         (group: FissionGroupProjection)
         =
-        if FissionRuntime.tryBeginTakeover group.GroupId then
+        if fissionRuntime?tryBeginTakeover group.GroupId then
             runClaimedTakeover sessionPort durable directoryFor group
         else
             task { return false }
@@ -563,7 +569,7 @@ module FissionHost =
                           sprintf "fission failed terminal was a duplicate or found no listener: group=%s" group.GroupId ]
 
                 FissionAdmission.releaseOwner group.OwnerSessionId
-                FissionRuntime.clearOwner group.OwnerSessionId
+                fissionRuntime?clearOwner (SessionId.value group.OwnerSessionId) |> ignore
         }
 
     let private failGroup
@@ -698,7 +704,7 @@ module FissionHost =
             match convergence with
             | Ok() ->
                 FissionAdmission.releaseOwner group.OwnerSessionId
-                FissionRuntime.clearOwner group.OwnerSessionId
+                fissionRuntime?clearOwner (SessionId.value group.OwnerSessionId) |> ignore
                 return true
             | Error error ->
                 do! failGroup sessionPort eventPort durable group error
@@ -1203,7 +1209,7 @@ module FissionHost =
         : Task<bool> =
         task {
             let isOwnerReplaced =
-                FissionRuntime.isSilentInterrupt turn.SessionId
+                fissionRuntime?isSilentInterrupt (SessionId.value turn.SessionId)
                 || (journal
                     |> Option.exists (fun durable ->
                         FissionProjection.tryActiveForOwner

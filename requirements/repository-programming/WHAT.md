@@ -6,7 +6,7 @@
 
 ## [002] 四层同构应用
 
-能力在公开基类、工具描述、canonical examples 与运行时门禁中一致投影。Read → `cat/stat/whereAll/where`，Glob → `ls`，Grep → `rg`，Write → `write/mkdir`，Move → `mv`，Remove → `rm`，Exec → `call/signal/send`，Fork → `fork`，Resume → `resume`，Commission → `commission`，DevOps → `devops`，Fission → `fission`，Horizon → `horizon`，Advisor → `advisor`，Ask → `ask`，Review → `review`。canonical 成员序为 `write, rm, mv, cat, ls, rg, stat, mkdir, whereAll, where, call, signal, send, fork, resume, commission, devops, fission, horizon, advisor, ask, review`，仅列实际授权成员。`park/unpark/abandon` 是普遍生命周期成员，不进入能力列表，仍受会话及权限边界约束。Manager 的 reviewOnly、Plan 写前评审与 PLAN_PATH、Ask 业务门禁保持不变。编程内 join/dag 的投影、实现、类型和教学全部退出；委派 resume 不是程序恢复，resetScope 与业务 deliver 不成为程序成员。
+能力在公开基类、工具描述、canonical examples 与运行时门禁中一致投影。Read → `cat/stat/whereAll/where`，Glob → `ls`，Grep → `rg`，Write → `write/mkdir`，Move → `mv`，Remove → `rm`，Exec → `call/signal/send`，Fork → `fork`，Resume → `resume`，Commission → `commission`，DevOps → `devops`，Fission → `fission`，Horizon → `horizon`，Advisor → `advisor`，Ask → `ask`，Review → `review`。canonical 成员序为 `write, rm, mv, cat, ls, rg, stat, mkdir, whereAll, where, call, signal, send, fork, resume, commission, devops, fission, horizon, advisor, ask, review`，仅列实际授权成员。`park/unpark/abandon` 是普遍生命周期成员，不进入能力列表，仍受会话及权限边界约束。Manager 的 reviewOnly、Plan 写前评审与 PLAN_PATH、Ask 业务门禁保持不变。编程内 join/dag 的投影、实现、类型和教学全部退出；委派 resume 不是程序恢复，resetScope 与 Work 生命周期决策不成为程序成员。
 
 ## [003] 确定性生成
 
@@ -138,7 +138,7 @@ Manager 的 `todowrite-for-manager` 程序入口始终按角色准入；仓库�
 
 ## [028] 程序结果与业务义务
 
-普通 return 只结束当前程序；命令退出、程序终结、工具响应结束和业务交付是四种事实。成功返回、自动暂停、显式 park、恢复和放弃均不能绕过 Work、评审、Ask、Ownership 或 deliver 门禁。错误、计算预算耗尽和现场丢失按真实失败或中断报告；暂停不能伪装成终结。已有读观察、文件效果和资源义务随原对象保留，恢复继续原状态，不重新创建运行。
+普通 return 只结束当前程序；命令退出、程序终结、工具响应结束和业务交付是四种事实。成功返回、自动暂停、显式 park、恢复和放弃均不能绕过 Work、评审、Ask、Ownership 等准入门禁。错误、计算预算耗尽和现场丢失按真实失败或中断报告；暂停不能伪装成终结。已有读观察、文件效果和资源义务随原对象保留，恢复继续原状态，不重新创建运行。
 
 ## [029] 单次终态结算与真实 effects
 
@@ -150,7 +150,7 @@ Manager 的 `todowrite-for-manager` 程序入口始终按角色准入；仓库�
 
 ## [031] 未结清现场与业务交付
 
-deliver 门禁按所属会话的程序名字及真实状态查询；暂停程序须先恢复或放弃，拒绝与提醒列名字，不要求抄写内部 handle。程序 return、parked 回执和命令 exit 不解除业务义务。会话关闭向程序设施发送关闭消息，复用 abandon 收尾；资源未确认结清不得先删登记或报告完成。提醒沿既有 Pair Hint 路径组织，不回写旧工具结果及已呈现历史字节。
+Work 终局门禁按所属会话的程序名字及真实状态查询；暂停程序须先恢复或放弃，拒绝与提醒列名字，不要求抄写内部 handle。程序 return、parked 回执和命令 exit 不解除业务义务。会话关闭向程序设施发送关闭消息，复用 abandon 收尾；资源未确认结清不得先删登记或报告完成。提醒沿既有 Pair Hint 路径组织，不回写旧工具结果及已呈现历史字节。
 
 ## [032] 按名字恢复原现场
 
@@ -182,7 +182,7 @@ parked 回执沿既有 Synthetic TOML 和宿主渲染边界呈现 name、state�
 
 ## [039] 状态所有权与两包边界
 
-wanxiangli/program 拥有 Session 名称登记、Run 程序状态、计算预算规则、请求准入期限、恢复关系、私有代际、控制及收尾，以及独立 join 的等待接线。Work、权限、评审、Ownership、Journal 各自拥有业务事实。wanxiangli/runtime 拥有独立进程、隔离、文件与锚点、原子写和版本检查、命令、终端、输入输出、信号、输出外存及物理时钟；不解释 intent、不拥有程序生命周期、不认识角色或 deliver。program → runtime 是明确的单向公开依赖。旧 programming/sandbox/fs/process/pty/spool/time/wait 的真实消费者全部切换，旧入口、owner、计时路径及兼容别名退出；两包不是转发壳，主仓不继续拥有程序状态。
+wanxiangli/program 拥有 Session 名称登记、Run 程序状态、计算预算规则、请求准入期限、恢复关系、私有代际、控制及收尾，以及独立 join 的等待接线。Work、权限、评审、Ownership、Journal 各自拥有业务事实。wanxiangli/runtime 拥有独立进程、隔离、文件与锚点、原子写和版本检查、命令、终端、输入输出、信号、输出外存及物理时钟；不解释 intent、不拥有程序生命周期、不认识角色或 Work 终局规则。program → runtime 是明确的单向公开依赖。旧 programming/sandbox/fs/process/pty/spool/time/wait 的真实消费者全部切换，旧入口、owner、计时路径及兼容别名退出；两包不是转发壳，主仓不继续拥有程序状态。
 
 ## [040] rm/mv：Move/Remove 编程面与 as-is 落盘
 

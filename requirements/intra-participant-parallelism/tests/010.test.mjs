@@ -54,6 +54,7 @@ test('WHAT[intra-participant-parallelism-010] an interrupted Fission group is se
       {
         name: 'restart-fork',
         intent: '等待本次派工回执，超时后保留原派工状态。',
+        remainingScopeTurnsEstimate: 3,
         program:
           'class Js extends JsProgram { async run() { return await this.fork({ name: "ruling-materials", charge: "collect seven materials" }); } }',
       },

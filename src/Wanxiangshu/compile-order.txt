@@ -613,8 +613,6 @@ Execution/Delegation/Fork/Runtime.fsi
 Execution/Delegation/Fork/Runtime.fs
 Execution/Fission/Admission.fsi
 Execution/Fission/Admission.fs
-Execution/Fission/Runtime.fsi
-Execution/Fission/Runtime.fs
 Participant/Provider/Attempt/Fallback/Evidence.fsi
 Participant/Provider/Attempt/Fallback/Evidence.fs
 Process/ProcessRequest.fsi
@@ -1347,6 +1345,8 @@ OpenCode/Plugin/OpenCodeHostConfig.fsi
 OpenCode/Plugin/OpenCodeHostConfig.fs
 OpenCode/Host/OpenCodeHostPorts.fsi
 OpenCode/Host/OpenCodeHostPorts.fs
+OpenCode/Host/LatencyWatchdog.fsi
+OpenCode/Host/LatencyWatchdog.fs
 OpenCode/Plugin/PluginHooks.fsi
 OpenCode/Plugin/PluginHooks.fs
 OpenCode/Plugin/SpikePlugin.fsi

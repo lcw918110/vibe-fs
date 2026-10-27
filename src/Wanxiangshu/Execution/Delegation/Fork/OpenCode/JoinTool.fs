@@ -2,7 +2,9 @@ namespace Wanxiangshu.Execution.Delegation.Fork.OpenCode
 
 open System
 open System.Threading.Tasks
+open Fable.Core
 open Fable.Core.JsInterop
+
 open Wanxiangshu.Host
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Handle
@@ -30,6 +32,16 @@ open Wanxiangshu.Process
 /// The decisions this tool makes live in `JoinRun`; this file binds them to the
 /// OpenCode host (runtime, journal, mailbox, clock) and renders the wire.
 module JoinTool =
+
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
+    [<Emit("$0 === undefined")>]
+    let private isUndefined (_v: obj) : bool = jsNative
+
+    let private tryFissionLaneInfo (sessionId: SessionId) : (string * int) option =
+        let r: obj = fissionRuntime?tryLane (SessionId.value sessionId)
+        if isNull r || isUndefined r then None
+        else Some (unbox<string> r?GroupId, unbox<int> r?LaneIndex)
 
     [<RequireQualifiedAccess>]
     module Path =
@@ -212,8 +224,7 @@ module JoinTool =
             // group from a previous process is a broken tool record, not an
             // implicit lane to resume.
             let lane =
-                FissionRuntime.tryLane sessionId
-                |> Option.map (fun binding -> binding.GroupId, binding.LaneIndex)
+                tryFissionLaneInfo sessionId
                 |> JoinRun.decideLane
 
             let joinTask = joinTaskForMembership runtime permit waitTask lane

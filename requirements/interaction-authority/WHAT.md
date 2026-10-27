@@ -105,3 +105,10 @@ DevOps 的固定绑定由道路初始化确立，其模型配置与 Persona 在�
 该 attempt 一旦终结，抑制立即失效：稳定 terminal 观测（`TurnCompleted`、`TurnFailed`、`TurnAborted`，以及 `TurnNeedsContinuation` 的来源——`length`、没有 provider error 的空/XML-only `stop`）或 exact durable `ChatExecution` Terminal 任一成立，本次 `ProviderRunIdentity` 就按 [019] 重新获得 nudge 资格；gate 未满足时，此后每个新的合法 terminal occasion 都必须重新获得资格。两类终结证据相互独立，先到者即解除抑制，不等待另一侧追平。解除抑制不改变结局归属：completed-with-error 属于 `TurnFailed`，即使输出为空也必须等待 exact typed failure，由 provider recovery 处理，不得转成 missing-final-report。
 
 抑制判据只能是 attempt 的在途/终结状态，严禁使用 durable physical 身份、continuation kind、Session/LogicalRun 或 ledger 条目本身的存在作为永久压制条件：凡凭“该 physical 曾被接受为 ProviderRetryAttempt”压掉后续 fresh terminal 的实现均为 RED。同一 exact terminal occasion 的重复观测仍由既有 publish/dedupe 幂等吸收，不因解除抑制而重复发送。
+
+
+## [024] 全角色空终态必须继续，无最大次数
+
+任何角色（包括 Advisor、Distiller、Engineer、DevOps、Plan、Manager，以及未映射角色）的自然 `finish=stop`，若没有有效正文也没有真实工具调用，不构成有效会话终止。仅推理内容不是正文，不能当作已经回复。必须沿既有 InteractionRepair 的 exact-terminal gate nudge 接续同一会话；同一个终止的重复观察只发一次，不同新回合连续空终止则每次继续请求，**暂不设最大 nudge 次数**。已经有真实工具调用的回合不是“无正文无工具”；已确认的真实人工取消仍按取消处理，不自动抢回。
+
+验收：`requirements/interaction-authority/tests/024.test.mjs` 覆盖全部角色、无文本／只有 reasoning／真实工具调用及连续空终止不耗尽；`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `interaction-authority-024` 通过真实注册的 OMP `turn_end` hook 连续触发 35 个新空回合，确认每回合一条 agent-attributed nudge、同回合重放不重复、真实工具/正文/人工取消不误触发。

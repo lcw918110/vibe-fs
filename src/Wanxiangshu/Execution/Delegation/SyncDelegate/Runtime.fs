@@ -259,6 +259,10 @@ module internal SyncDelegateInternals =
 
             false
 
+module private RuntimeDeferredInterop =
+    [<Import("deferredInspectionStore", "wanxiangli/delegate-batch")>]
+    let deferredStore: obj = jsNative
+
 /// EXEC-026 / EXEC-031: reusable SyncDelegate CE (Acquire → GetOrCreate → Send →
 /// ordinary Completion → bounded delivered view). No return tool / dual-await.
 ///
@@ -1098,8 +1102,11 @@ type SyncDelegateRuntime
 
         cleanupDelegateDraft (sessionKey sessionId)
 
+        RuntimeDeferredInterop.deferredStore?clearSession (sessionKey sessionId) |> ignore
+
     member _.Dispose() =
         let retiredDelegates = store.ClearAll()
+        RuntimeDeferredInterop.deferredStore?clearAll () |> ignore
 
         for delegateId in retiredDelegates do
             cleanupDelegateDraft (sessionKey delegateId)

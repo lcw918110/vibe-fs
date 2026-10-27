@@ -1484,7 +1484,7 @@ test('WHAT[scope-progress-016] OMP native todowrite settles min and triggers fou
     const record=(id,n)=>todo.execute(id,{remainingScopeTurnsEstimate:n},null,null,ctx)
     const begin=i=>env.eventHandlers.get('turn_start')({type:'turn_start',turnIndex:i},ctx)
     const end=i=>env.eventHandlers.get('turn_end')({type:'turn_end',turnIndex:i,
-      message:{role:'assistant',stopReason:'stop',content:[]},toolResults:[]},ctx)
+      message:{role:'assistant',stopReason:'stop',content:[{type:'text',text:'Normal completed turn.'}]},toolResults:[]},ctx)
     await begin(0)
     assert.equal((await record('first',7)).details.estimate,7)
     assert.equal((await record('second',3)).details.minimum,3)
@@ -1572,12 +1572,54 @@ test('WHAT[scope-progress-017] OMP cold restart settles an already accepted but 
     const next=env.registeredTools.find(x=>x.name==='todowrite')
     assert.equal((await next.execute('call-017b',{remainingScopeTurnsEstimate:3},null,null,ctx)).details.estimate,3)
     await env.eventHandlers.get('turn_end')({type:'turn_end',turnIndex:0,
-      message:{role:'assistant',stopReason:'stop',content:[]},toolResults:[]},ctx)
+      message:{role:'assistant',stopReason:'stop',content:[{type:'text',text:'Normal completed turn.'}]},toolResults:[]},ctx)
     assert.equal(scopeProgress.status(sid).estimate,3)
     await env.eventHandlers.get('session_shutdown')({},ctx)
   }finally{
     scopeProgress.clear(sid)
     clearSessionState(sid)
     rmSync(work,{recursive:true,force:true})
+  }
+})
+
+
+test('WHAT[interaction-authority-024] OMP every role auto-nudges each NEW tool-free empty stop without a maximum', async () => {
+  const env=createOmpTestEnvironment()
+  const steers=[]
+  env.mockPi.sendUserMessage=async (text,opts)=>{steers.push({text,opts})}
+  await activateOnOmp(env.mockPi,env.mockPlugin,env.agentsList)
+  const sid='ses_omp_blank_all_roles_024'
+  const ctx=await activateSession(env,sid)
+  const begin=async index=>env.eventHandlers.get('turn_start')({type:'turn_start',turnIndex:index},ctx)
+  const end=async (index,message,toolResults=[])=>env.eventHandlers.get('turn_end')({
+    type:'turn_end',turnIndex:index,message,toolResults,
+  },ctx)
+  const blank={role:'assistant',stopReason:'stop',content:[]}
+  try{
+    for(let number=0;number<35;number++){
+      await begin(number)
+      await end(number,blank)
+      assert.equal(steers.length,number+1,
+        'every new empty physical turn must nudge, regardless of role or preceding nudge count')
+      assert.equal(steers.at(-1).opts.attribution,'agent')
+      assert.equal(steers.at(-1).opts.deliverAs,'steer')
+      assert.ok(steers.at(-1).text.length>0)
+    }
+    await end(34,blank)
+    assert.equal(steers.length,35,'replayed end of same run may not send again')
+    await begin(35)
+    await end(35,{role:'assistant',stopReason:'stop',content:[{type:'thinking',thinking:'only private thoughts'}]})
+    assert.equal(steers.length,36,'reasoning is not formal prose')
+    await begin(36)
+    await end(36,{role:'assistant',stopReason:'stop',content:[{type:'toolCall',id:'call-36',name:'read',arguments:{}}]})
+    assert.equal(steers.length,36,'a real tool call is not an empty tool-free termination')
+    await begin(37)
+    await end(37,{role:'assistant',stopReason:'stop',content:[{type:'text',text:'completed'}]})
+    assert.equal(steers.length,36,'actual prose is a valid normal termination')
+    await begin(38)
+    await end(38,{role:'assistant',stopReason:'aborted',content:[]})
+    assert.equal(steers.length,36,'explicit operator cancellation must remain cancelled')
+  } finally {
+    clearSessionState(sid)
   }
 })

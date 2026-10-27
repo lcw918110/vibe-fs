@@ -10,7 +10,9 @@ open Wanxiangshu.Foundation.TerminalSignal
 open System
 open System.Collections.Generic
 open System.Threading.Tasks
+open Fable.Core
 open Fable.Core.JsInterop
+
 open Wanxiangshu.Change.Host
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Context.Trace
@@ -33,6 +35,14 @@ open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Process
 open Wanxiangshu.OpenCode.Host
 open Fable.Core
+
+module private FissionLibrary =
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let fissionRuntime: obj = jsNative
+    [<Emit("$0 === undefined")>]
+    let isUndefined (_v: obj) : bool = jsNative
+
+open FissionLibrary
 
 module private DeliveryAttemptLibrary =
     [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
@@ -443,7 +453,13 @@ type ToolRuntimeScope
             Some(SessionId.create ctx.SessionId)
 
     let logicalOwnerFor (sessionId: SessionId) =
-        FissionRuntime.tryOwner sessionId
+        let ownerOpt: obj = fissionRuntime?tryOwner (SessionId.value sessionId)
+        let ownerSessionOpt =
+            if isNull ownerOpt || isUndefined ownerOpt || String.IsNullOrEmpty (unbox<string> ownerOpt) then
+                None
+            else
+                Some (SessionId.create (unbox<string> ownerOpt))
+        ownerSessionOpt
         |> Option.orElseWith (fun () ->
             journal
             |> Option.bind (fun durable ->

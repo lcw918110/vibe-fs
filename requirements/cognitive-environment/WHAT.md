@@ -100,3 +100,10 @@ Pair Hint 不承载 `assume`、`defer`、`publish`、`todowrite` 等微原语的
 中文估计提醒、委派首次问答与协商回执 steer 分别验收；首次协商尚未答复时，非 reset 工具结果不得推送重置初始化提醒。模型负责判断任务状态闭环何时真正完成，系统只报告已确认的进度状态。host-boundary 的真实 OMP / OpenCode 请求副本不得修改历史或继承错误语言。
 
 证明：`tests/018.test.mjs` 经真实注册的 OpenCode Provider hook 验证中文／英文切换只改变新 steer，不改用户或工具原文，并验证中文首次协商的精确物理回执门；`host-boundary/tests/omp-scope-seam.test.mjs` 与 `scope-hni-physical.test.mjs` 验证两个宿主的请求副本。
+
+
+## [019] 模型只看到当前有效的 Work 生命周期入口
+
+Plan 与 Manager 的任期、义务账、接力、晋级及结案只通过 `review` 进入领域状态机。工具描述、调用提示、角色表和项目导览必须按这一条直接告知模型，不得暗示 review 后还需要第二个确认调用；已存在的有效 `review` 不因某份历史资源文案而失去效力。独立的 `wxs_deliver` 仅把材料交还接收方，不推进任期，也不得因清理生命周期说明而丢失。
+
+证明：`tests/019.test.mjs` 覆盖现行中英双语工具资源、仓库 README／导览／office 权限说明及 `wxs_deliver` 的独立合法性。

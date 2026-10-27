@@ -210,7 +210,7 @@ test('WHAT[interaction-authority-019] duplicate gate-nudge claim is AlreadyAdmit
       assert.equal(turns.needsInteractionRepair(role, false, 'length', []), true)
       for (const finish of ['stop', 'aborted', 'error']) assert.equal(turns.needsInteractionRepair(role, false, finish, [text('done')]), false)
     }
-    for (const role of ['distiller', '']) assert.equal(turns.needsInteractionRepair(role, false, 'tool-calls', []), false)
+    for (const role of ['distiller', 'advisor', '']) assert.equal(turns.needsInteractionRepair(role, false, 'tool-calls', []), true, 'all roles must repair tool-free empty turns')
     assert.equal(turns.roleOfAgent(undefined, 'coder'), 'coder')
     assert.equal(turns.roleOfAgent('coder', 'inspector'), 'coder')
     assert.equal(turns.roleOfAgent('not-a-managed-agent', 'inspector'), 'inspector')

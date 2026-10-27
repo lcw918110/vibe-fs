@@ -18,6 +18,15 @@ module internal FissionGroupLaw =
 
     let ints (value: obj) : int list = unbox<int array> value |> Array.toList
 
+open Wanxiangshu.Foundation.Identity
+
+[<CLIMutable>]
+type FissionLaneBinding =
+    { GroupId: string
+      OwnerSessionId: SessionId
+      LaneIndex: int
+      LaneCount: int }
+
 [<RequireQualifiedAccess>]
 type FissionRejectReason =
     | AlreadyFissioned

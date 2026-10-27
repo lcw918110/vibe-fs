@@ -345,6 +345,8 @@ module Adapter =
         System.Collections.Generic.Dictionary<string, LatestProviderLease>()
 
     let private activeProgressRuns = System.Collections.Generic.Dictionary<string, string>()
+    let private nudgedEmptyRuns = System.Collections.Generic.HashSet<string>()
+    let private lastEndedProgressRun = System.Collections.Generic.Dictionary<string, string * string>()
     let private pendingAdvisorSteers =
         System.Collections.Generic.Dictionary<string, string * string * System.Threading.Tasks.TaskCompletionSource<obj>>()
 
@@ -3452,6 +3454,7 @@ module Adapter =
                 let recovered: Task<obj> = unbox (advisorFlow?resume(sid, scopeEpoch sid))
                 recovered |> ignore
                 activeProgressRuns[sid] <- Guid.NewGuid().ToString("N")
+                lastEndedProgressRun.Remove sid |> ignore
                 Surface.onTurnStart sid
 
                 do!
@@ -3467,8 +3470,41 @@ module Adapter =
             task {
                 let sid = ctxSessionId ctx
                 settleProgress sid
+                let message = fieldValue event "message"
+                let finish = stringOf (fieldValue message "stopReason")
+                let parts = tryArray (fieldValue message "content")
+                let hasProse =
+                    parts |> Array.exists (fun part ->
+                        stringOf (fieldValue part "type") = "text"
+                        && not (String.IsNullOrWhiteSpace(stringOf (fieldValue part "text"))))
+                let hasTools =
+                    parts |> Array.exists (fun part -> stringOf (fieldValue part "type") = "toolCall")
+                    || (tryArray (fieldValue event "toolResults")).Length > 0
+                let turnIndex = stringOf (fieldValue event "turnIndex")
+                let run =
+                    match activeProgressRuns.TryGetValue sid with
+                    | true, id -> id
+                    | _ ->
+                        match lastEndedProgressRun.TryGetValue sid with
+                        | true, (previousIndex, previousRun) when previousIndex = turnIndex -> previousRun
+                        | _ -> sid + ":unobserved:" + turnIndex
                 activeProgressRuns.Remove sid |> ignore
-                match decodeTerminal (fieldValue event "message") with
+                lastEndedProgressRun[sid] <- (turnIndex, run)
+                if stringOf (fieldValue message "role") = "assistant"
+                   && (finish = "stop" || finish = "length")
+                   && not hasProse && not hasTools
+                   && nudgedEmptyRuns.Add run then
+                    let prose =
+                        ProviderProse.render
+                            (ProviderLanguageBinding.forSessionText sid)
+                            "runtime/interaction-continue"
+                            Map.empty
+                    let options = createObj [ "deliverAs" ==> "steer"; "attribution" ==> "agent" ]
+                    try
+                        let! _ = awaitObj (call2 (fieldValue pi "sendUserMessage") (box prose) options)
+                        ()
+                    with _ -> ()
+                match decodeTerminal message with
                 | None -> return jsUndefined
                 | Some terminal ->
                     do!
@@ -3649,6 +3685,8 @@ module Adapter =
                 latestProviderLeases.Clear()
                 pendingPreviousSteers.Clear()
                 activeProgressRuns.Clear()
+                nudgedEmptyRuns.Clear()
+                lastEndedProgressRun.Clear()
                 for kv in pendingAdvisorSteers do
                     let _, _, completion = kv.Value
                     completion.SetResult (createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> "OMP Session ended before physical Advisor steer acceptance" ])

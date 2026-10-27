@@ -1,1 +1,1 @@
-deliver 仅限 Manager 调用
+只有当前会话已获授权的生命周期角色可以提交 review。

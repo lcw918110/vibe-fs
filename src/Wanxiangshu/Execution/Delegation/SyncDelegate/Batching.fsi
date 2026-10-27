@@ -39,3 +39,9 @@ module SyncDelegateBatchRules =
 
     /// The settled result instruction that replaces the tool output of `callId`.
     val tryReplacedResult: callId: string -> string option
+
+    /// Cleans up pending deferred calls and settled replacements for one session.
+    val clearSession: sessionId: string -> unit
+
+    /// Cleans up all pending deferred calls and settled replacements across all sessions.
+    val clearAll: unit -> unit

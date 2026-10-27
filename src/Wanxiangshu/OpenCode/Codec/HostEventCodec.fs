@@ -200,7 +200,7 @@ module HostEventCodec =
 
     let private hasStartedState (info: obj) =
         let time = if isNull info then null else info?time
-        not (isNull time) && not (isNull time?created)
+        not (isNull time) && not (isNull time?created) && not (providerStepTerminalInfo info)
 
     let private completionFromFinish =
         function

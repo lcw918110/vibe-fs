@@ -9,6 +9,8 @@ open Wanxiangshu.Persistence.Journal
 
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Fission
+open Fable.Core
+open Fable.Core.JsInterop
 
 /// Durable topology evidence: which child session belongs to which parent, with
 /// which execution agent, and which fission lane belongs to which owner. These
@@ -16,6 +18,9 @@ open Wanxiangshu.Execution.Fission
 /// cache of what this process currently drives, never the existence truth
 /// (crash-reconciliation-020, managed-session-lifecycle-024).
 module SessionBindingRecovery =
+
+    [<Import("fissionRuntime", "wanxiangli/fission-group")>]
+    let private fissionRuntime: obj = jsNative
 
     let private agentNameOf (record: HandleRecord) : string =
         let target =
@@ -87,4 +92,12 @@ module SessionBindingRecovery =
         let projections () =
             (AgentJournal.snapshot journal).AgentProjections
 
-        FissionRuntime.installDurableLaneEvidence (fun laneSessionId -> fissionLaneFor (projections ()) laneSessionId)
+        fissionRuntime?installDurableLaneEvidence (fun (laneSessionIdStr: string) ->
+            fissionLaneFor (projections ()) (SessionId.create laneSessionIdStr)
+            |> Option.map (fun binding ->
+                {| GroupId = binding.GroupId
+                   OwnerSessionId = SessionId.value binding.OwnerSessionId
+                   LaneIndex = binding.LaneIndex
+                   LaneCount = binding.LaneCount |}
+                |> box)
+            |> Option.toObj)
