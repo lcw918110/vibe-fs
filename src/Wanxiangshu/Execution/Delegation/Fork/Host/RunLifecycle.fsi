@@ -1,5 +1,6 @@
 namespace Wanxiangshu.Execution.Delegation.Fork.Host
 
+open System
 open System.Collections.Generic
 open System.Threading.Tasks
 open Wanxiangshu.Execution.Delegation
@@ -75,9 +76,18 @@ module HostForkRunLifecycle =
         onAccepted: ContinuationAcceptanceObserver ->
             Task<AgentOwnerDispatchOutcome>
 
+    val internal tryGetRun: store: obj -> agentId: string -> PendingHostRun option
+    val internal containsRun: store: obj -> agentId: string -> bool
+    val internal pendingRunCount: store: obj -> int
+    val internal allRuns: store: obj -> PendingHostRun list
+    val internal allRunsAsDictionary: store: obj -> Dictionary<string, PendingHostRun>
+    val internal removeRunByAgentId: store: obj -> agentId: string -> unit
+    val internal drainAllRuns: store: obj -> {| Run: PendingHostRun; Subscription: IDisposable option |} list
+    val internal drainCancelledRuns: store: obj -> agentIds: string list -> IDisposable list
+
     val complete:
         gate: obj ->
-        pendingRuns: Dictionary<string, PendingHostRun> ->
+        pendingRuns: obj ->
         journal: AgentJournal option ->
         parentId: SessionId ->
         sessions: ISessionHostPort ->
@@ -88,7 +98,7 @@ module HostForkRunLifecycle =
 
     val installRun:
         gate: obj ->
-        pendingRuns: Dictionary<string, PendingHostRun> ->
+        pendingRuns: obj ->
         journal: AgentJournal option ->
         parentId: SessionId ->
         sessions: ISessionHostPort ->
@@ -101,11 +111,11 @@ module HostForkRunLifecycle =
             PendingHostRun
 
     val settleParentCancelled:
-        gate: obj -> pendingRuns: Dictionary<string, PendingHostRun> -> run: PendingHostRun -> unit
+        gate: obj -> pendingRuns: obj -> run: PendingHostRun -> unit
 
     val failRun:
         gate: obj ->
-        pendingRuns: Dictionary<string, PendingHostRun> ->
+        pendingRuns: obj ->
         journal: AgentJournal option ->
         parentId: SessionId ->
         sessions: ISessionHostPort ->
@@ -115,7 +125,7 @@ module HostForkRunLifecycle =
 
     val markReady:
         _gate: obj ->
-        _pendingRuns: Dictionary<string, PendingHostRun> ->
+        _pendingRuns: obj ->
         _journal: AgentJournal option ->
         _parentId: SessionId ->
         _sessions: ISessionHostPort ->

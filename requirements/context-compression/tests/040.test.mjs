@@ -26,7 +26,10 @@ test('WHAT[context-compression-040] SnapshotScope keeps the result co-located wi
   ]
   const retained = filterSnapshot(ofArray(raw))
   assert.deepEqual(retained.map(m => m.id), ['u1', 'a1', 'a2'])
-  assert.deepEqual(retained[1].parts.map(p => p.id), ['r1', 'r1'], 'both halves of the older reset must survive')
+  assert.deepEqual(retained[1].parts.map(p => p.type), ['text', 'toolCall', 'toolResult'],
+    'the surviving assistant prose precedes both halves of the older reset')
+  assert.equal(retained[1].parts[0].text, 'work', 'assistant prose of the same message is not dropped')
+  assert.deepEqual(retained[1].parts.slice(1).map(p => p.id), ['r1', 'r1'], 'both halves of the older reset must survive')
   assert.deepEqual(retained[2].parts.map(p => p.id), ['r2', 'r2'])
   assert.equal(raw[1].Parts.length, 5, 'the session snapshot remains unchanged')
 })

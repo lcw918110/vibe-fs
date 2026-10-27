@@ -111,6 +111,7 @@ const schemaOf = (state) => ({
   int: () => schemaOf({ ...state, int: true }),
   nonnegative: () => schemaOf({ ...state, nonnegative: true }),
   integer: () => schemaOf({ ...state, int: true }),
+  min: (bound) => schemaOf({ ...state, min: bound }),
   ...state,
 })
 const toolModule = () => {

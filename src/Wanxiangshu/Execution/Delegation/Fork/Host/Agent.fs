@@ -309,7 +309,7 @@ module HostForkAgent =
                 return!
                     HostForkChildDispatch.sendToExistingChild
                         runtime.Gate
-                        runtime.PendingRuns
+                        runtime.PendingRunStore
                         runtime.Journal
                         runtime.ParentId
                         runtime.Sessions
@@ -401,7 +401,7 @@ module HostForkAgent =
                 return!
                     HostForkChildDispatch.sendToExistingChild
                         runtime.Gate
-                        runtime.PendingRuns
+                        runtime.PendingRunStore
                         runtime.Journal
                         runtime.ParentId
                         runtime.Sessions

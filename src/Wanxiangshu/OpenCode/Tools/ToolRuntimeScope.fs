@@ -901,6 +901,13 @@ type ToolRuntimeScope
             let key = SessionId.value parentSessionId
             obtainWorkDevOpsTask parentSessionId key
 
+    /// Advisor advice is a continuation into a working session, so physical
+    /// acceptance arrives only after that session finishes its current turn.
+    /// Thirty minutes bounds a hopeless wait without turning a long turn into
+    /// Unknown; the durable Process stays single-flight meanwhile.
+    [<Literal>]
+    let AdvisorSteerAcceptanceBudgetMs = 1_800_000
+
     /// Best-effort negotiate answer delivery: every failed step is recorded
     /// (receipt, recipient, delegator, stage, reason). Recording only — no
     /// decision reads it.
@@ -989,6 +996,7 @@ type ToolRuntimeScope
         (recipient: string)
         (receipt: string)
         (confirm: string -> string -> bool)
+        (budget: int option)
         : ContinuationAcceptanceObserver =
         let observerGate = obj ()
         let subscriptions = ResizeArray<IDisposable>()
@@ -1021,7 +1029,8 @@ type ToolRuntimeScope
                             false)
 
                 if alreadyAccepted then
-                    registration.Dispose() }
+                    registration.Dispose()
+          Budget = budget }
 
     let sendConsultationSteer
         (recipient: string)
@@ -1032,7 +1041,13 @@ type ToolRuntimeScope
         : Task<Result<unit, string>> =
         let target = SessionId.create recipient
         let directory = directoryFor recipient |> Option.orElse workspaceDirectory
-        let observer = privateConsultationObserver recipient receipt confirm
+        // A busy worker lands the steer only after its current turn ends. The
+        // admission default (10s) would declare Unknown while the Host is still
+        // holding a perfectly good queued message, so advice waits far longer.
+        let budget = if awaitPhysical then Some AdvisorSteerAcceptanceBudgetMs else None
+        let observer = privateConsultationObserver recipient receipt confirm budget
+
+        let consultationPort = DispatchSessionPort.ofSessionPort sessions |> DispatchSessionPort.forConsultation
 
         let active =
             journal
@@ -1059,7 +1074,7 @@ type ToolRuntimeScope
             let dispatcher = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
 
             dispatcher.SendAgentOwnerRoot
-                (DispatchSessionPort.ofSessionPort sessions)
+                consultationPort
                 target
                 (LlmFacing.renderInstruction answer)
                 closed.IdentitySeed

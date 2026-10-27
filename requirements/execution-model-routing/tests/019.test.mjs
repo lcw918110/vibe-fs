@@ -14,12 +14,13 @@ const commit = (runtime, acquired, physical) => routing.commitExecutionAdmission
 
 test('WHAT[execution-model-routing-019] local DevOps binding rejects conflicting explicit rebind while original target remains available', async () => {
   const runtime = routing.createRuntime(() => firstTarget)
+  routing.seedDevOpsModelTarget(runtime, 'devops-session', 'provider/first:high')
   for (const physical of ['first', 'next', 'third']) {
     const acquired = await acquire(runtime, physical)
     assert.equal(acquired.kind, 'Acquired')
     assert.deepEqual(routing.executionAdmissionTarget(runtime, acquired.lease), firstTarget)
     assert.deepEqual(commit(runtime, acquired, physical), { kind: 'Applied' })
-    assert.throws(() => routing.bindDevopsTarget(runtime, 'devops-session', changedTarget), /immutable/)
+    assert.throws(() => routing.seedDevOpsModelTarget(runtime, 'devops-session', 'other/changed:none'), /immutable/)
     assert.throws(() => routing.commitExecutionAdmission(runtime, acquired.lease, {
       sessionId: 'devops-session', physicalUserMessageId: physical,
       role: 'devops', participant: 'devops', target: changedTarget,
@@ -29,29 +30,87 @@ test('WHAT[execution-model-routing-019] local DevOps binding rejects conflicting
   }
 })
 
-test('WHAT[execution-model-routing-019] changed scheduler cannot overwrite a previously bound DevOps target', { todo: 'GAP-129: current availability check allows changing the supposedly immutable binding; 34-D1 needs decision' }, async () => {
+test('WHAT[execution-model-routing-019] an unrecorded DevOps session is scheduled normally and routing never invents a binding for it', async () => {
+  let allocations = 0
+  let selected = firstTarget
+  const runtime = routing.createRuntime(() => {
+    allocations += 1
+    return selected
+  })
+  // A human-rooted DevOps office session, and a road's DevOps child before any
+  // target is recorded, both arrive here with no binding at all. Neither is a
+  // "resume that changed the model": there is no recorded target to change.
+  assert.equal(routing.boundDevopsTarget(runtime, 'devops-session'), null, 'a cold DevOps session reports no binding')
+  const first = await acquire(runtime, 'unrecorded-first')
+  assert.equal(first.kind, 'Acquired', 'an unrecorded DevOps session must reach the scheduler, not be refused')
+  assert.equal(allocations, 1)
+  assert.deepEqual(routing.executionAdmissionTarget(runtime, first.lease), firstTarget)
+  assert.deepEqual(commit(runtime, first, 'unrecorded-first'), { kind: 'Applied' })
+  assert.equal(
+    routing.boundDevopsTarget(runtime, 'devops-session'),
+    null,
+    'committing a target must not fabricate a fixed binding nobody recorded',
+  )
+  routing.releasePhysicalExecution(runtime, 'devops-session', 'unrecorded-first')
+
+  // Being unbound, the session follows the scheduler like any other session
+  // instead of deadlocking on a model that a later preference stops offering.
+  selected = changedTarget
+  const second = await acquire(runtime, 'unrecorded-second')
+  assert.equal(second.kind, 'Acquired')
+  assert.equal(allocations, 2)
+  assert.deepEqual(routing.executionAdmissionTarget(runtime, second.lease), changedTarget)
+  routing.releasePhysicalExecution(runtime, 'devops-session', 'unrecorded-second')
+})
+
+test('WHAT[execution-model-routing-019] DevOps admission resolves missing cache entry from durable resolver into acceleration layer', async () => {
+  // The real scheduler honours `previous` as a preference; here it answers with
+  // that same target, which is the only answer a bound DevOps session accepts.
+  const runtime = routing.createRuntime((role, running, previous) => previous ?? changedTarget)
+  routing.setDurableDevopsResolver(runtime, (sessionId) => {
+    if (sessionId === 'devops-session') return 'provider/first:high'
+    return null
+  })
+  // First admission misses cache, queries durable resolver, populates acceleration layer
+  const acquired = await acquire(runtime, 'durable-first')
+  assert.equal(acquired.kind, 'Acquired')
+  assert.deepEqual(routing.executionAdmissionTarget(runtime, acquired.lease), firstTarget)
+  assert.deepEqual(routing.boundDevopsTarget(runtime, 'devops-session'), firstTarget)
+  routing.releasePhysicalExecution(runtime, 'devops-session', 'durable-first')
+})
+
+test('WHAT[execution-model-routing-019] a scheduler that answers with another model queues the bound DevOps session instead of drifting it', async () => {
+  const runtime = routing.createRuntime(() => changedTarget)
+  routing.seedDevOpsModelTarget(runtime, 'devops-session', 'provider/first:high')
+  const outcome = await acquire(runtime, 'drifting')
+  assert.equal(outcome.kind, 'Queued', 'a different model answer is a refusal to run, not a new binding')
+  routing.cancelPendingExecution(runtime, 'devops-session')
+  assert.deepEqual(routing.boundDevopsTarget(runtime, 'devops-session'), firstTarget)
+})
+
+test('WHAT[execution-model-routing-019] dropSession purges bound DevOps target entry from acceleration layer', () => {
+  const runtime = routing.createRuntime(() => firstTarget)
+  routing.seedDevOpsModelTarget(runtime, 'ses-to-drop', 'provider/first:high')
+  assert.deepEqual(routing.boundDevopsTarget(runtime, 'ses-to-drop'), firstTarget)
+  routing.dropSession(runtime, 'ses-to-drop')
+  assert.equal(routing.boundDevopsTarget(runtime, 'ses-to-drop'), null)
+})
+
+test('WHAT[execution-model-routing-019] changed scheduler cannot overwrite a previously bound DevOps target', async () => {
   let selected = firstTarget
   const runtime = routing.createRuntime(() => selected)
+  routing.seedDevOpsModelTarget(runtime, 'devops-session', 'provider/first:high')
   const first = await acquire(runtime, 'first')
   assert.equal(first.kind, 'Acquired')
   assert.deepEqual(commit(runtime, first, 'first'), { kind: 'Applied' })
   routing.releasePhysicalExecution(runtime, 'devops-session', 'first')
 
   selected = changedTarget
-  try {
-    const next = await acquire(runtime, 'next')
-    if (next.kind === 'Acquired') {
-      assert.deepEqual(routing.executionAdmissionTarget(runtime, next.lease), firstTarget)
-    } else {
-      assert.equal(next.kind, 'Queued')
-      routing.cancelPendingExecution(runtime, 'devops-session')
-    }
-  } catch (error) {
-    if (error?.code === 'ERR_ASSERTION') throw error
-    assert.match(String(error), /immutable/)
-  } finally {
-    routing.releasePhysicalExecution(runtime, 'devops-session', 'next')
-  }
+  // The fixed binding is authority, not a hint to the scheduler: a changed
+  // scheduler preference cannot drift a road's DevOps model. The session waits.
+  const next = await acquire(runtime, 'next')
+  assert.equal(next.kind, 'Queued')
+  routing.cancelPendingExecution(runtime, 'devops-session')
   assert.deepEqual(routing.boundDevopsTarget(runtime, 'devops-session'), firstTarget)
 })
 

@@ -476,13 +476,80 @@ module HostForkRunLifecycle =
     /// P0-RECOVERY-JOIN-001: only proven terminals may claim the cell.
     /// Aborted is observation — never recordCompletion / SetResult / mailbox.
     /// Claim runs only after JoinableCompletion proof succeeds (fail closed).
-    let private claimPendingRun (gate: obj) (pendingRuns: Dictionary<string, PendingHostRun>) (run: PendingHostRun) =
+    let private isJsDefined (x: obj) =
+        not (isNull x) && box x <> emitJsExpr () "undefined"
+
+    let internal tryGetRun (store: obj) (agentId: string) : PendingHostRun option =
+        let p: obj = store?tryGetPayload(agentId)
+        if isJsDefined p then
+            Some (unbox<PendingHostRun> p)
+        else
+            None
+
+    let internal containsRun (store: obj) (agentId: string) : bool =
+        store?containsAgent(agentId) = true
+
+    let internal pendingRunCount (store: obj) : int =
+        unbox<int> store?count
+
+    let internal allRuns (store: obj) : PendingHostRun list =
+        let all: obj array = store?allPayloads()
+        all
+        |> Seq.choose (fun item ->
+            if isJsDefined item then Some (unbox<PendingHostRun> item) else None)
+        |> Seq.toList
+
+    let internal allRunsAsDictionary (store: obj) : Dictionary<string, PendingHostRun> =
+        let d = Dictionary<string, PendingHostRun>()
+        for run in allRuns store do
+            d.[run.AgentId] <- run
+        d
+
+    let internal removeRunByAgentId (store: obj) (agentId: string) : unit =
+        store?removeByAgentId(agentId) |> ignore
+
+    let internal drainAllRuns (store: obj) : {| Run: PendingHostRun; Subscription: IDisposable option |} list =
+        let drained: obj array = store?drainAll()
+        drained
+        |> Seq.choose (fun item ->
+            if not (isJsDefined item) then None
+            else
+                let p = item?payload
+                if not (isJsDefined p) then None
+                else
+                    let run = unbox<PendingHostRun> p
+                    let s = item?subscription
+                    let sub = if isJsDefined s then Some (unbox<IDisposable> s) else None
+                    Some {| Run = run; Subscription = sub |})
+        |> Seq.toList
+
+    let internal drainCancelledRuns (store: obj) (agentIds: string list) : IDisposable list =
+        let cancelledSet = Set.ofList agentIds
+        let drainedSubs: obj array = store?drainCancelled(agentIds |> List.toArray)
+        let subs = ResizeArray<IDisposable>()
+        for item in drainedSubs do
+            if isJsDefined item then
+                subs.Add(unbox<IDisposable> item)
+
+        for run in allRuns store do
+            if Set.contains run.AgentId cancelledSet then
+                let verdict: obj = store?settleParentCancelled(run.AgentId, run.Token)
+                if verdict?claimed = true then
+                    run.Finished <- true
+                    let s = verdict?subscription
+                    if isJsDefined s then
+                        subs.Add(unbox<IDisposable> s)
+                    AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "ParentCancelled") |> ignore
+        subs |> Seq.toList
+
+    let private claimPendingRun (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
         lock gate (fun () ->
-            match pendingRuns.TryGetValue run.AgentId with
-            | true, current when obj.ReferenceEquals(current.Token, run.Token) && not run.Finished ->
+            let verdict: obj = pendingRuns?claim(run.AgentId, run.Token)
+            if verdict?claimed = true then
                 run.Finished <- true
                 true, run.Subscription
-            | _ -> false, None)
+            else
+                false, None)
 
     let private committedOutcome
         (journal: AgentJournal option)
@@ -512,12 +579,9 @@ module HostForkRunLifecycle =
                         (sprintf "EXEC-009/PERSIST-002 HandleCompleted append failed: %s" error)
         }
 
-    let private removeClaimedRun (gate: obj) (pendingRuns: Dictionary<string, PendingHostRun>) (run: PendingHostRun) =
+    let private removeClaimedRun (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
         lock gate (fun () ->
-            match pendingRuns.TryGetValue run.AgentId with
-            | true, current when obj.ReferenceEquals(current.Token, run.Token) ->
-                pendingRuns.Remove run.AgentId |> ignore
-            | _ -> ())
+            pendingRuns?removeClaimed(run.AgentId, run.Token) |> ignore)
 
     let private resolveFinalCommittedOutcome
         (journal: AgentJournal option)
@@ -550,7 +614,7 @@ module HostForkRunLifecycle =
 
     let private releaseClaimedRunIfCommitted
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -576,7 +640,7 @@ module HostForkRunLifecycle =
 
     let private startClaimDelivery
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -587,7 +651,7 @@ module HostForkRunLifecycle =
             try
                 let! finalOutcome = resolveFinalCommittedOutcome journal parentId proof run agentOutcome
                 releaseClaimedRunIfCommitted gate pendingRuns journal parentId run
-                run.Source.SetResult finalOutcome
+                AsyncSupport.trySetResult run.Source finalOutcome |> ignore
             with error ->
                 deliverClaimSettlementFault run error
         }
@@ -600,7 +664,7 @@ module HostForkRunLifecycle =
             ()
 
     let private deliverClaimedCompletion
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (gate: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
@@ -626,7 +690,7 @@ module HostForkRunLifecycle =
 
     let private deliverProvenCompletion
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -641,7 +705,7 @@ module HostForkRunLifecycle =
 
     let private deliverFailedCompletion
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -674,7 +738,7 @@ module HostForkRunLifecycle =
     /// reader of the same terminal still sees the material.
     let private settleCompletedView
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -779,7 +843,7 @@ module HostForkRunLifecycle =
 
     let private completeHarnessRun
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -797,7 +861,7 @@ module HostForkRunLifecycle =
 
     let private completeWitnessedRun
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -887,7 +951,7 @@ module HostForkRunLifecycle =
 
     let private completeProvenResult
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -936,7 +1000,7 @@ module HostForkRunLifecycle =
 
     let complete
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
@@ -987,7 +1051,7 @@ module HostForkRunLifecycle =
 
     let private recoverFailedSettlement
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (run: PendingHostRun)
@@ -1022,7 +1086,7 @@ module HostForkRunLifecycle =
 
     let installRun
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
@@ -1053,7 +1117,15 @@ module HostForkRunLifecycle =
               Subscription = None
               Finished = false }
 
-        lock gate (fun () -> pendingRuns.[agentId] <- run)
+        lock gate (fun () ->
+            let existing: obj = pendingRuns?tryGetPayload(agentId)
+            if not (obj.ReferenceEquals(existing, null)) && not (emitJsExpr existing "$0 === undefined") then
+                let oldRun = unbox<PendingHostRun> existing
+                oldRun.Finished <- true
+                oldRun.Subscription |> Option.iter (fun s -> s.Dispose())
+                AsyncSupport.trySetResult oldRun.Source (AgentCompletion.abandoned oldRun.AgentId "Superseded") |> ignore
+
+            pendingRuns?register(agentId, run.Token, (SessionId.value childId), (string role), run) |> ignore)
 
         // DSL-MUTABLE: algorithm-scratch — install-time replay window flag
         let mutable armed = false
@@ -1102,6 +1174,7 @@ module HostForkRunLifecycle =
         let disposeImmediately =
             lock gate (fun () ->
                 run.Subscription <- Some subscription
+                pendingRuns?attachSubscription(run.AgentId, run.Token, subscription) |> ignore
                 armed <- true
                 run.Finished)
 
@@ -1114,25 +1187,25 @@ module HostForkRunLifecycle =
     /// this runs. Settle only the in-memory waiter/subscription; routing the same
     /// run through `complete(Failed "cancelled")` would incorrectly compete with
     /// Abandoned by attempting a HandleCompleted(CANCELLED) commit.
-    let settleParentCancelled (gate: obj) (pendingRuns: Dictionary<string, PendingHostRun>) (run: PendingHostRun) =
+    let settleParentCancelled (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
         let claimed, subscriptionToDispose =
             lock gate (fun () ->
-                match pendingRuns.TryGetValue run.AgentId with
-                | true, current when obj.ReferenceEquals(current.Token, run.Token) && not run.Finished ->
+                let verdict: obj = pendingRuns?settleParentCancelled(run.AgentId, run.Token)
+                if verdict?claimed = true then
                     run.Finished <- true
-                    pendingRuns.Remove run.AgentId |> ignore
                     true, run.Subscription
-                | _ -> false, None)
+                else
+                    false, None)
 
         if claimed then
             subscriptionToDispose
             |> Option.iter (fun subscription -> subscription.Dispose())
 
-            run.Source.SetResult(AgentCompletion.abandoned run.AgentId "ParentCancelled")
+            AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "ParentCancelled") |> ignore
 
     let failRun
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
@@ -1145,7 +1218,7 @@ module HostForkRunLifecycle =
     /// MarkReady for API shape; body is intentionally a no-op.
     let markReady
         (_gate: obj)
-        (_pendingRuns: Dictionary<string, PendingHostRun>)
+        (_pendingRuns: obj)
         (_journal: AgentJournal option)
         (_parentId: SessionId)
         (_sessions: ISessionHostPort)

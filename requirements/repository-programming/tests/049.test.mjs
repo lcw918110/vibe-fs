@@ -44,7 +44,7 @@ test('WHAT[repository-programming-049] todowrite requires three strings and a no
       const remainingScopeTurnsEstimate = argumentSchema(handle,'remainingScopeTurnsEstimate')
       assert.equal(remainingScopeTurnsEstimate.safeParse(-1).success,false)
       assert.equal(remainingScopeTurnsEstimate.safeParse(0).success,true)
-      assert.equal(remainingScopeTurnsEstimate.safeParse(2.5).success,false)
+      assert.equal(remainingScopeTurnsEstimate.safeParse(2.5).success,true,'the estimate is a real number')
       assert.equal(remainingScopeTurnsEstimate.safeParse(undefined).success,false)
       const modelSchema = z.object({ name, program, intent, remainingScopeTurnsEstimate }).strict()
       assert.deepEqual(z.toJSONSchema(modelSchema).required, ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'])

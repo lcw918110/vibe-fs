@@ -88,6 +88,24 @@ module ManagedAgent =
     let isInternal (agent: ManagedAgent) =
         agent.Visibility = AgentVisibility.Internal
 
+    let isManagedName (value: string) : bool =
+        if String.IsNullOrWhiteSpace value then
+            false
+        else
+            let trimmed = value.Trim()
+            tryParse trimmed |> Option.isSome || ManagedAgentCatalog.isBookkeeperName trimmed
+
+    let isFunctionalName (value: string) : bool =
+        if isNull value then
+            false
+        else
+            let normalized = value.Trim().ToLowerInvariant()
+            normalized = "title"
+            || normalized = "compaction"
+            || normalized = "summary"
+            || normalized = "explore"
+            || normalized = "generate"
+
     let private unknownAgentSuggestion (name: string) =
         if name.IndexOf("review", StringComparison.OrdinalIgnoreCase) >= 0 then
             " Use 'manager'."

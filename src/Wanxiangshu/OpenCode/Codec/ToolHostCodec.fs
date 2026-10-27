@@ -222,6 +222,12 @@ module private HostArgDecode =
         else
             Error()
 
+    let nonNegativeNumberFromValue (value: obj) : Result<float option, unit> =
+        if emitJsExpr value "typeof $0 === 'number' && Number.isFinite($0) && $0 >= 0" then
+            Ok(Some(unbox<float> value))
+        else
+            Error()
+
     let boolFromValue (value: obj) = HostIngressCodec.primitiveBoolean value
 
     let tryBoolFromValue (value: obj) =
@@ -264,6 +270,11 @@ type HostToolArguments internal (raw: obj) =
         | None -> Ok None
         | Some value -> HostArgDecode.nonNegativeIntegerFromValue value
 
+    member _.OptionalNonNegativeNumber(name: string) : Result<float option, unit> =
+        match HostIngressCodec.optionalObjectProperty raw name with
+        | None -> Ok None
+        | Some value -> HostArgDecode.nonNegativeNumberFromValue value
+
     member _.Raw: obj = raw
 
 type HostToolFactory = private HostToolFactory of obj
@@ -298,6 +309,9 @@ module ToolHostCodec =
 
     [<Emit("$0.schema.number().int().nonnegative().describe($1)")>]
     let private rawNonNegativeIntegerSchemaDescribed (tool: obj) (description: string) : obj = jsNative
+
+    [<Emit("$0.schema.number().min(0).describe($1)")>]
+    let private rawNonNegativeNumberSchemaDescribed (tool: obj) (description: string) : obj = jsNative
 
     [<Emit("$0.schema.number().int().nonnegative().describe($1).optional()")>]
     let private rawOptionalNonNegativeIntegerSchemaDescribed (tool: obj) (description: string) : obj = jsNative
@@ -494,6 +508,9 @@ module ToolHostCodec =
 
     let nonNegativeIntegerSchemaDescribed description (HostToolFactory factory) =
         HostSchema(rawNonNegativeIntegerSchemaDescribed factory description)
+
+    let nonNegativeNumberSchemaDescribed description (HostToolFactory factory) =
+        HostSchema(rawNonNegativeNumberSchemaDescribed factory description)
 
     let optionalStringArraySchema (HostToolFactory factory) =
         HostSchema(rawOptionalStringArraySchema factory)

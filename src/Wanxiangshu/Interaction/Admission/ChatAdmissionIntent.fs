@@ -7,6 +7,7 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Participant.Persona
+open Wanxiangshu.Participant.ManagedAgents
 open Wanxiangshu.Execution.Session.ChatExecution
 
 [<RequireQualifiedAccess>]
@@ -121,7 +122,9 @@ module ChatAdmissionIntent =
     /// Host-internal (compaction / synthetic) classification, shared by
     /// the intent resolver and the read-side Host hooks.
     let isHostInternal (message: DecodedMessage) : bool =
-        message.IsHostCompaction || message.IsHostSynthetic
+        message.IsHostCompaction
+        || message.IsHostSynthetic
+        || (message.ExplicitAgent |> Option.exists ManagedAgent.isFunctionalName)
 
     let private identityCarrierName =
         function

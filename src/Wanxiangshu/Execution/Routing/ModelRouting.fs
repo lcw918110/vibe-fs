@@ -326,7 +326,13 @@ module ModelRouting =
     let private targetProvider (target: ModelRoutingTarget) =
         target.Model.Substring(0, target.Model.IndexOf '/')
 
-    type internal ModelRoutingRuntime(scheduler: obj) =
+    let mutable private sharedDurableResolver: (string -> string option) option = None
+
+    type internal ModelRoutingRuntime(scheduler: obj, ?durableDevopsResolver: string -> string option) =
+        let mutable durableResolver =
+            match durableDevopsResolver with
+            | Some r -> Some r
+            | None -> sharedDurableResolver
         let gate = obj ()
         let transitionCounters = CapacityTransitionCounters()
 
@@ -351,10 +357,6 @@ module ModelRouting =
         // stopped (SuppressProviderStep). Only a stopped AND superseded execution may
         // carry a trailing chat.params without a committed lease.
         let stoppedPhysical = HashSet<string * string>()
-        // DSL-MUTABLE: resource — execution purpose per admitted physical user
-        // purged with the session.
-        let leasePurposeBySession =
-            Dictionary<string, (string * ModelExecutionPurpose) list>()
 
         let admissionQueue = ExecutionAdmissionQueue(gate, transitionCounters)
         let admissionOwner = ExecutionCapacityOwner(transitionCounters)
@@ -381,32 +383,6 @@ module ModelRouting =
             match activeBySession.TryGetValue sessionId with
             | true, lease when lease.PhysicalUserMessageId.IsSome && lease.Purpose = purpose -> Some lease.Target
             | _ -> None
-
-        let recordLeasePurposeEntry sessionId physical purpose =
-            let existing =
-                match leasePurposeBySession.TryGetValue sessionId with
-                | true, entries -> entries
-                | false, _ -> []
-
-            leasePurposeBySession.[sessionId] <- (physical, purpose) :: existing
-
-        /// Record the purpose of an admitted physical execution. Reservations carry
-        /// no physical identity yet; their adoption records the real one.
-        let rememberLeasePurpose sessionId (lease: ExecutionLease) =
-            match lease.PhysicalUserMessageId with
-            | Some physical -> recordLeasePurposeEntry sessionId physical lease.Purpose
-            | None -> ()
-
-        /// Purpose of a possibly stale admitted physical execution. An unknown
-        /// execution is treated as an ordinary owner execution: the conservative
-        /// side of the fixed DevOps binding rule (execution-model-routing-019).
-        let staleLeasePurpose sessionId physicalUserMessageId =
-            match leasePurposeBySession.TryGetValue sessionId with
-            | true, entries ->
-                entries
-                |> List.tryFind (fun (physical, _) -> physical = physicalUserMessageId)
-                |> Option.map snd
-            | false, _ -> None
 
         let rememberProviderRunTarget sessionId physicalUserMessageId providerRun =
             match activeBySession.TryGetValue sessionId with
@@ -496,6 +472,50 @@ module ModelRouting =
             | Some candidate -> candidate = target
             | None -> false
 
+        /// execution-model-routing-019: the durable record is the only source a
+        /// cold process may consult for a fixed DevOps target.
+        let resolveDurableDevopsTarget resolve sessionId =
+            resolve sessionId
+            |> Option.map parseDurableModelTarget
+
+        let tryResolveDurableDevopsTarget sessionId =
+            durableResolver |> Option.bind (fun resolve -> resolveDurableDevopsTarget resolve sessionId)
+
+        /// A recorded fixed DevOps target, from this process' binding or the
+        /// durable store. No record means the session is an ordinary demand: a
+        /// human-rooted DevOps office session, or a road's DevOps child before
+        /// its target is decided. Neither has a target to preserve or to lose.
+        let adoptDurableDevopsTarget (sessionId: string) (durableTarget: ModelRoutingTarget option) =
+            durableTarget
+            |> Option.map (fun target ->
+                boundDevopsTargetBySession.[sessionId] <- target
+                target)
+
+        let cachedDevopsTarget (sessionId: string) : ModelRoutingTarget option =
+            match boundDevopsTargetBySession.TryGetValue sessionId with
+            | true, bound -> Some bound
+            | false, _ -> adoptDurableDevopsTarget sessionId (tryResolveDurableDevopsTarget sessionId)
+
+        let tryGetBoundDevopsTarget (sessionId: string) (role: Role) =
+            if role <> Role.DevOps then
+                None
+            else
+                cachedDevopsTarget sessionId
+
+        /// The routing policy for one demand. A recorded DevOps target is an
+        /// authority, not a hint: the scheduler still answers whether that exact
+        /// target may run now, but an answer naming a different model is a
+        /// refusal to wait, never permission to drift the fixed binding.
+        let confirmFixedTarget (role: Role) purpose running fixedTarget =
+            match scheduleOrPoison running role (Some fixedTarget) purpose with
+            | Some candidate when candidate = fixedTarget -> Some fixedTarget
+            | _ -> None
+
+        let routeForSession sessionId (role: Role) previous (purpose: ModelExecutionPurpose) running =
+            match tryGetBoundDevopsTarget sessionId role with
+            | Some fixedTarget -> confirmFixedTarget role purpose running fixedTarget
+            | None -> scheduleOrPoison running role previous purpose
+
         let routeFreshOrPoison
             retireOnUnavailable
             sessionId
@@ -512,7 +532,7 @@ module ModelRouting =
                     oldPhysicalUserMessageId,
                     physicalUserMessageId,
                     lenderSessionId,
-                    (fun running -> scheduleOrPoison running role previous purpose),
+                    (fun running -> routeForSession sessionId role previous purpose running),
                     retireOnUnavailable = retireOnUnavailable
                 )
             with ex ->
@@ -524,7 +544,7 @@ module ModelRouting =
                 capacity.ReserveFresh(
                     sessionId,
                     lenderSessionId,
-                    (fun running -> scheduleOrPoison running role previous purpose)
+                    (fun running -> routeForSession sessionId role previous purpose running)
                 )
             with ex ->
                 poison ex
@@ -539,14 +559,16 @@ module ModelRouting =
                   Purpose = demand.Purpose }
 
             activeBySession.[demand.SessionId] <- lease
-            rememberLeasePurpose demand.SessionId lease
 
-        let enforceDevopsBindingNormal sessionId role target =
-            match role = Role.DevOps, boundDevopsTargetBySession.TryGetValue sessionId with
-            | true, (true, bound) when
-                bound <> target
-                && exactTargetAvailable role bound (running ()) ModelExecutionPurpose.Normal
-                ->
+        /// execution-model-routing-019: a recorded DevOps target never changes.
+        /// Availability is not an escape hatch — an unavailable fixed target is
+        /// a capacity or health failure, never a reason to pick another model.
+        /// Routing never invents a binding: only a road whose target was already
+        /// recorded is fixed, so an unrecorded DevOps office session keeps
+        /// following the scheduler like every other session.
+        let enforceDevopsBindingNormal (sessionId: string) (role: Role) (target: ModelRoutingTarget) =
+            match tryGetBoundDevopsTarget sessionId role with
+            | Some bound when bound <> target ->
                 invalidOp (
                     sprintf
                         "execution-model-routing: DevOps model binding is immutable (%s/%s vs %s/%s)"
@@ -555,7 +577,6 @@ module ModelRouting =
                         target.Model
                         target.Reasoning
                 )
-            | true, _ -> boundDevopsTargetBySession.[sessionId] <- target
             | _ -> ()
 
         /// The fixed DevOps target binding belongs to the owner execution only
@@ -563,14 +584,8 @@ module ModelRouting =
             (sessionId: string)
             (role: Role)
             (target: ModelRoutingTarget)
-            (purpose: ModelExecutionPurpose)
             =
             enforceDevopsBindingNormal sessionId role target
-
-        let tryGetBoundDevopsTarget (sessionId: string) (role: Role) =
-            match role = Role.DevOps, boundDevopsTargetBySession.TryGetValue sessionId with
-            | true, (true, t) -> Some t
-            | _ -> None
 
         let resolvePreviousTarget (purpose: ModelExecutionPurpose) sessionId role =
             match activeTargetOfPurpose purpose sessionId with
@@ -585,7 +600,7 @@ module ModelRouting =
             resolvePreviousTarget ModelExecutionPurpose.Normal sessionId role
 
         let commit (demand: ExecutionAdmissionDemand) (target: ModelRoutingTarget) =
-            enforceImmutableDevopsBinding demand.SessionId demand.Role target demand.Purpose
+            enforceImmutableDevopsBinding demand.SessionId demand.Role target
             rememberExecution demand target
 
             let identity: ExecutionAdmissionExactIdentity =
@@ -646,7 +661,6 @@ module ModelRouting =
 
         let retireCurrentExecution sessionId =
             let changed = activeBySession.Remove sessionId
-            leasePurposeBySession.Remove sessionId |> ignore
 
             continuationInputs.Keys
             |> Seq.filter (fun (inputSession, _) -> inputSession = sessionId)
@@ -784,7 +798,6 @@ module ModelRouting =
                         Participant = Some participant }
 
                 activeBySession.[sessionId] <- adopted
-                rememberLeasePurpose sessionId adopted
 
                 Some(issueAdmission sessionId physicalUserMessageId role participant lease.Target)
             | Some _ -> None
@@ -866,7 +879,6 @@ module ModelRouting =
                       Purpose = purpose }
 
                 activeBySession.[sessionId] <- lease
-                rememberLeasePurpose sessionId lease
 
                 drainDemands ()
                 issueAdmission sessionId physicalUserMessageId role participant target
@@ -965,7 +977,7 @@ module ModelRouting =
             match reserveFreshOrPoison sessionId role lenderSessionId previous purpose with
             | None -> None
             | Some target ->
-                enforceImmutableDevopsBinding sessionId role target purpose
+                enforceImmutableDevopsBinding sessionId role target
 
                 let lease: ExecutionLease =
                     { PhysicalUserMessageId = None
@@ -975,7 +987,6 @@ module ModelRouting =
                       Purpose = purpose }
 
                 activeBySession.[sessionId] <- lease
-                rememberLeasePurpose sessionId lease
 
                 drainDemands ()
                 Some target
@@ -984,7 +995,7 @@ module ModelRouting =
             match tryReserveFresh sessionId role purpose lenderSessionId with
             | None -> None
             | Some target ->
-                enforceImmutableDevopsBinding sessionId role target purpose
+                enforceImmutableDevopsBinding sessionId role target
                 Some target
 
         let tryReserveLocked sessionId (role: Role) (purpose: ModelExecutionPurpose) (lenderSessionId: string option) =
@@ -1072,7 +1083,6 @@ module ModelRouting =
                       Purpose = purpose }
 
                 activeBySession.[sessionId] <- lease
-                rememberLeasePurpose sessionId lease
 
                 drainDemands ()
                 Some target
@@ -1096,7 +1106,7 @@ module ModelRouting =
             match tryAcquireFreshLease sessionId physicalUserMessageId role participant purpose lenderSessionId with
             | None -> None
             | Some target ->
-                enforceImmutableDevopsBinding sessionId role target purpose
+                enforceImmutableDevopsBinding sessionId role target
                 Some target
 
         let replaceActiveLeaseAndEnforce
@@ -1143,10 +1153,9 @@ module ModelRouting =
                       Purpose = purpose }
 
                 activeBySession.[sessionId] <- lease
-                rememberLeasePurpose sessionId lease
 
                 drainDemands ()
-                enforceImmutableDevopsBinding sessionId role target purpose
+                enforceImmutableDevopsBinding sessionId role target
                 Some target
             | None -> None
 
@@ -1417,21 +1426,10 @@ module ModelRouting =
                     cacheKeyOpt |> Option.iter (fun k -> activeProviderStepTasks.[k] <- t)
                     t)
 
-        let enforceStaleObservedBinding (observed: ExecutionAdmissionExactIdentity) =
-            match staleLeasePurpose observed.SessionId observed.PhysicalUserMessageId with
-            | Some purpose -> enforceImmutableDevopsBinding observed.SessionId observed.Role observed.Target purpose
-            | None ->
-                enforceImmutableDevopsBinding
-                    observed.SessionId
-                    observed.Role
-                    observed.Target
-                    ModelExecutionPurpose.Normal
-
         let enforceObservedBinding (observed: ExecutionAdmissionExactIdentity) =
-            match activeBySession.TryGetValue observed.SessionId with
-            | true, active when active.PhysicalUserMessageId = Some observed.PhysicalUserMessageId ->
-                enforceImmutableDevopsBinding observed.SessionId observed.Role observed.Target active.Purpose
-            | _ -> enforceStaleObservedBinding observed
+            // The fixed DevOps binding is per session, not per purpose: a stale or
+            // specific-purpose observation is judged by the same record.
+            enforceImmutableDevopsBinding observed.SessionId observed.Role observed.Target
 
         let retargetContinuationInputs sessionId previousPhysicalId physicalUserMessageId admission =
             match admission with
@@ -1471,7 +1469,6 @@ module ModelRouting =
                         PhysicalUserMessageId = Some physicalUserMessageId }
 
                 activeBySession.[sessionId] <- next
-                rememberLeasePurpose sessionId next
                 drainDemands ()
 
                 let admission =
@@ -1480,6 +1477,8 @@ module ModelRouting =
                 retargetContinuationInputs sessionId identity.PhysicalUserMessageId physicalUserMessageId admission
                 admission
             | _ -> invalidOp "continuation no longer owns its previous model lease"
+
+        new(scheduler: obj) = ModelRoutingRuntime(scheduler, ?durableDevopsResolver = None)
 
         member _.AcquireExecutionAdmission
             (
@@ -1670,22 +1669,11 @@ module ModelRouting =
                 | true, lease -> lease.PhysicalUserMessageId
                 | false, _ -> None)
 
-        member _.BindDevopsTarget(sessionId: string, target: ModelRoutingTarget) =
-            lock gate (fun () ->
-                match boundDevopsTargetBySession.TryGetValue sessionId with
-                | true, bound when
-                    bound <> target
-                    && exactTargetAvailable Role.DevOps bound (running ()) ModelExecutionPurpose.Normal
-                    ->
-                    invalidOp (
-                        sprintf
-                            "execution-model-routing: DevOps model binding is immutable (%s/%s vs %s/%s)"
-                            bound.Model
-                            bound.Reasoning
-                            target.Model
-                            target.Reasoning
-                    )
-                | _ -> boundDevopsTargetBySession.[sessionId] <- target)
+        member _.DropSession(sessionId: string) : unit =
+            lock gate (fun () -> boundDevopsTargetBySession.Remove sessionId |> ignore)
+
+        member _.SetDurableDevopsResolver(resolver: string -> string option) =
+            durableResolver <- Some resolver
 
         member _.SeedBoundDevOpsModel(sessionId: string, value: string) =
             let target = parseDurableModelTarget value
@@ -1841,6 +1829,10 @@ module ModelRouting =
 
     let private sharedGate = obj ()
     // DSL-MUTABLE: resource — process-shared scheduler runtime singleton
+
+    let internal setSharedDurableDevopsResolver (resolver: string -> string option) =
+        sharedDurableResolver <- Some resolver
+
     let mutable private sharedRuntime: ModelRoutingRuntime option = None
     // DSL-MUTABLE: single-flight — in-flight scheduler bootstrap
     let mutable private sharedLoad: Task<ModelRoutingRuntime> option = None
@@ -2080,6 +2072,11 @@ module ModelRouting =
         match lock sharedGate (fun () -> sharedRuntime) with
         | Some runtime -> runtime.BoundDevopsTarget(SessionId.value sessionId) |> Option.map toHostModel
         | None -> None
+
+    let internal dropSession (sessionId: SessionId) : unit =
+        match lock sharedGate (fun () -> sharedRuntime) with
+        | Some runtime -> runtime.DropSession(SessionId.value sessionId)
+        | None -> ()
 
     /// Seed the fixed DevOps target from a road's durable projection
     /// (execution-model-routing-019).

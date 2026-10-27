@@ -819,8 +819,14 @@ module ModelRoutingSurface =
                    physicalUserMessageId = physicalUserMessageId |})
         |> Option.defaultValue null
 
-    let bindDevopsTarget (runtime: obj) (sessionId: string) (target: obj) : unit =
-        (runtimeOf runtime).BindDevopsTarget(sessionId, targetOf target)
+    let dropSession (runtime: obj) (sessionId: string) : unit =
+        (runtimeOf runtime).DropSession(sessionId)
+
+    let setDurableDevopsResolver (runtime: obj) (resolver: obj) : unit =
+        let fn = unbox<string -> obj> resolver
+        (runtimeOf runtime).SetDurableDevopsResolver(fun sid ->
+            let res = fn sid
+            if isNull res then None else Some(string res))
 
     /// Seed the fixed DevOps target from a durable road's 'provider/model:reasoning'
     /// string. Decoding is fail-closed and the write reuses the same binding path a

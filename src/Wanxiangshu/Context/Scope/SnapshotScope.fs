@@ -33,7 +33,7 @@ module SnapshotScope =
         | "toolResult"
         | "tool-result"
         | "tool_result" -> createObj [ "resultFor" ==> field item "id" ]
-        | _ -> createObj []
+        | kind -> createObj [ "type" ==> kind ]
 
     let private resultPartId (part: obj) =
         match text (field part "type") with

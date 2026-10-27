@@ -114,6 +114,8 @@ DevOps 角色原生具备完整的本地工程文件操作能力（Read, Write, 
 
 已退役的直接文件工具不进入 Host 目录；Manager 不得借用 `todowrite-for-engineer/devops` 绕过能力边界。
 
+`Join` 与 `Horizon` 依据已确立的角色和当前进程的子任务归属准入，不依赖 Work 活跃任期、Review 接纳、清理 blocker 或退任冻结。首次 Review 之前以及收尾期间仍须能观察、等待和收取已经建立的子任务；顶层工具与程序成员不能因是否经过 Work 门禁而产生不同结果。角色未定、用户问询等待、消融及子任务恢复与归属边界仍有效；观察和收拢不创建 Work 任期，也不授予新派工权限。
+
 ## [026] Review 接纳前禁止向固定 DevOps 派工
 
 在当前迭代的 Review 被系统接纳前，严禁 Manager 向绑定的固定 DevOps 派发任何任务；已有只读 Engineer 的合法 `resume` 与 `fork` 只读调查不受误伤。对未接纳评审前向 DevOps 派工的拦截与拒绝，必须发生在任何持久化副作用之前。

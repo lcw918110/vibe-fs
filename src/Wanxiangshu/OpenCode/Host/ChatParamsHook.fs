@@ -9,6 +9,7 @@ open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host.Ports
 open Wanxiangshu.Persistence.Journal
+open Wanxiangshu.Participant.ManagedAgents
 
 /// PROMPT-006 / execution-model-routing-009: chat.params is an observation barrier, not a routing
 /// authority and not a drift checker. chat.message / internal SendPrompt must already have
@@ -185,15 +186,20 @@ module ChatParamsHook =
         if supportsTemperature input then
             applyManagedTemperature input output
 
+    let private isExplicitlyUnmanagedAgent input =
+        match tryAgent input with
+        | Some agent when not (ManagedAgent.isManagedName agent) -> true
+        | _ -> false
+
     let private applyManagedPolicy (journal: AgentJournal option) input output =
-        match tryAgent input, tryExecutionKey input with
-        | Some agent, Some key when
+        match isExplicitlyUnmanagedAgent input, tryAgent input, tryExecutionKey input with
+        | false, Some agent, Some key when
             readAdmission key |> Option.isSome
             || ModelRouting.wasStoppedExecutionSuperseded key
             ->
             validateManagedObservation journal agent key
             projectManagedTemperature input output
-        | Some agent, Some key -> validateManagedObservation journal agent key
+        | false, Some agent, Some key -> validateManagedObservation journal agent key
         | _ -> ()
 
     let private handleInput (journal: AgentJournal option) (input: obj) (output: obj) =
@@ -236,7 +242,8 @@ module ChatParamsHook =
         (input: obj)
         (output: obj)
         =
-        applyTurnParams turnOpt input output
+        if not (isExplicitlyUnmanagedAgent input) then
+            applyTurnParams turnOpt input output
         handleInput journal input output
 
     /// Host invokes chat.params as a native two-argument JS function. The boxed

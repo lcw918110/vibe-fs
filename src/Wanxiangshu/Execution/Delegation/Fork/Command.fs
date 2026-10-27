@@ -342,12 +342,6 @@ module ForkCommand =
             Some(AgentJournal.handleProjection journal owner)
         | _ -> None
 
-    let private announceChild (runtime: HostForkRuntime) (host: DelegationEnvironment) agentKey =
-        runtime.TryFindAgentOrAdopt agentKey
-        |> Option.map (fun (childId, _, _) -> childId)
-        |> Option.iter (fun childId ->
-            FissionRuntime.notifyChildCreated (SessionId.create (callerText host)) agentKey childId)
-
     let private runManagerFork
         (host: DelegationEnvironment)
         (runtime: HostForkRuntime)
@@ -420,7 +414,6 @@ module ForkCommand =
             taskResult {
                 do! recordFissionAffinity host handleId
                 let! result = runManagerFork host runtime role request language attachment handleId managed
-                announceChild runtime host handleId
                 return placementWire language request result
             }
 
@@ -520,7 +513,6 @@ module ForkCommand =
                 taskResult {
                     do! recordFissionAffinity host agentId
                     let! result = runManagerReuse host runtime role request language attachment agentId
-                    announceChild runtime host agentId
 
                     return
                         match result with
@@ -929,7 +921,6 @@ module ForkCommand =
                     taskResult {
                         do! recordFissionAffinity host handleId
                         let! result = runManagerFork host runtime role request language attachment handleId managed
-                        announceChild runtime host handleId
                         return result
                     }
 
@@ -1241,7 +1232,6 @@ module ForkCommand =
                     taskResult {
                         do! recordFissionAffinity host agentId
                         let! reused = runManagerReuse host runtime role request (lang host) attachment agentId
-                        announceChild runtime host agentId
 
                         return reused
                     }

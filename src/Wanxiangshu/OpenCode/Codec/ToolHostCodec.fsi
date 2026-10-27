@@ -22,6 +22,7 @@ type HostToolArguments =
     member Texts: name: string -> string list
     member OptionalNumber: name: string -> float option
     member OptionalNonNegativeInteger: name: string -> Result<int option, unit>
+    member OptionalNonNegativeNumber: name: string -> Result<float option, unit>
     member Raw: obj
 
 type HostToolFactory = private HostToolFactory of obj
@@ -62,6 +63,7 @@ module ToolHostCodec =
     val optionalNumberSchema: factory: HostToolFactory -> HostSchema
     val optionalNonNegativeIntegerSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
     val nonNegativeIntegerSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
+    val nonNegativeNumberSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
     val optionalStringArraySchema: factory: HostToolFactory -> HostSchema
     val stringArraySchema: factory: HostToolFactory -> HostSchema
     val objectSchemaOf: fields: (string * HostSchema) list -> factory: HostToolFactory -> HostSchema

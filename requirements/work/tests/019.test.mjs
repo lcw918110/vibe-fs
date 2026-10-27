@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
-import { acceptAuthorityRoot, injectAcceptedAssessment, openIncumbency, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import { acceptAuthorityRoot, awaitPrompted, injectAcceptedAssessment, openIncumbency, withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
 import { permissionOfToolName } from '../../../dist/OpenCode/Tools/ToolRegistrySurface.js'
 import { rolePermissionRules } from '../../../dist/OpenCode/Tools/ToolSurface.js'
 import { generateRole } from '../../../dist/Repository/Programming/Js/GeneratorSurface.js'
@@ -37,6 +37,41 @@ const runManagerProgram = async (hooks, sessionID, body) =>
       { sessionID, agent: 'manager' },
     ),
   )
+
+test('WHAT[work-019] a fresh Manager can observe and join before its first Work review', async () => {
+  await withExecutablePlugin(async (hooks, directory, createdIds, runtime) => {
+    const sessionID = 'ses-fresh-manager-observation-019'
+    await acceptAuthorityRoot(runtime, sessionID, 'manager')
+    const stateRoot = await journalSurface.JournalSurface_initializeStateRoot(directory)
+    assert.equal(lifecycle.inspected(stateRoot, sessionID), undefined)
+
+    const horizon = String(await hooks.tool.horizon.execute({}, bound(sessionID, 'fresh-horizon')))
+    assert.doesNotMatch(horizon, denied)
+    assert.match(horizon, /devops/)
+    const joined = String(await hooks.tool.join.execute({}, bound(sessionID, 'fresh-join')))
+    assert.doesNotMatch(joined, denied)
+    assert.match(joined, /nothing away to receive|nothing to join|没有|无可等待/i)
+
+    const placed = await runManagerProgram(hooks, sessionID,
+      'return await this.fork({ calling: "engineer", name: "Ada", charge: "Inspect the requested behavior" }, []);')
+    assert.match(placed, /ok = true/)
+    const child = createdIds.at(-1)
+    await awaitPrompted(child)
+    assert.match(String(await hooks.tool.horizon.execute({}, bound(sessionID, 'child-horizon'))), /Ada/)
+    assert.equal(lifecycle.inspected(stateRoot, sessionID), undefined,
+      'observing and joining must not fabricate a Work incumbency')
+  })
+})
+
+test('WHAT[work-019] observation and join still reject a caller without established authority', async () => {
+  await withExecutablePlugin(async (hooks, _directory, createdIds) => {
+    for (const name of ['horizon', 'join']) {
+      const result = String(await hooks.tool[name].execute({}, bound('ses-unestablished-observation', name)))
+      assert.match(result, /authority|established|身份|权威|确立/i)
+    }
+    assert.deepEqual(createdIds, [])
+  })
+})
 
 test('WHAT[work-019] a fresh Manager can inspect before its first review and that review opens work synchronously', async () => {
   await withExecutablePlugin(async (hooks, directory, _createdIds, runtime) => {

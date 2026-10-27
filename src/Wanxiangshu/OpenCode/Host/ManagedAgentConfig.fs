@@ -229,7 +229,8 @@ module ManagedAgentConfig =
         for name in ManagedAgent.requiredNames do
             applyNamedOwnedFields agents inventory patterns name
 
-        config?compaction <- createObj [ "auto" ==> false ]
+        config?compaction <-
+            createObj [ "auto" ==> true; "prune" ==> false; "autocontinue" ==> true ]
         disableHostChatRetry config
 
     /// Project Wanxiangshu-owned non-model fields onto Host agent entries.

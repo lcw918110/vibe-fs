@@ -187,7 +187,7 @@ test('WHAT[context-compression-034] resetScope registration carries the new prot
   assert.ok(def, 'resetScope must be registered')
   assert.equal(
     def.description,
-    'End the current Scope; preserve operator and assistant prose/reasoning plus critical consultation tool call/results, remove ordinary old tool process, and report outstanding work. Arguments: experience and objective.',
+    'End the current Scope; preserve operator and assistant prose plus critical consultation tool call/results, retire the old Scope\'s thinking and ordinary tool process, and report outstanding work. Arguments: experience and objective.',
   )
   assert.equal(
     def.parameters.properties.newScopeObjective.description,
@@ -320,6 +320,49 @@ test('WHAT[scope-progress-016] OMP strips the physical delivery receipt before t
   assert.equal(contentText(sent[1].content), advice)
   assert.equal(contentText(sent[2].content), 'operator text\n[receipt:r-keep]', 'operator bytes are never rewritten')
   assert.match(contentText(messages[1].content), /\[receipt:r-0123abcd\]$/, 'raw history keeps the receipt for message_start')
+})
+
+test('WHAT[context-compression-053] OMP retires the closed Scope thinking from the request copy and keeps assistant prose', async () => {
+  const env = createOmpTestEnvironment()
+  await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
+  const sid = 'ses_omp_scope_thinking_053'
+  const sessionCtx = await activateSession(env, sid)
+  env.setTurnMode('keep')
+
+  const oldAssistant = {
+    role: 'assistant',
+    content: [
+      { type: 'reasoning', text: 'closed scratch reasoning' },
+      { type: 'text', text: 'closed assistant prose' },
+      { type: 'toolCall', id: 'read-053', name: 'read', args: {} },
+    ],
+  }
+  const resetAssistant = { role: 'assistant', content: [{ type: 'toolCall', id: 'reset-053', name: 'resetScope', args: {} }] }
+  const liveAssistant = {
+    role: 'assistant',
+    content: [{ type: 'reasoning', text: 'live scratch reasoning' }, { type: 'text', text: 'live prose' }],
+  }
+  const messages = [
+    { role: 'user', content: [{ type: 'text', text: 'ship the scope port' }], timestamp: 1000 },
+    oldAssistant,
+    { role: 'toolResult', toolCallId: 'read-053', toolName: 'read', content: [{ type: 'text', text: 'old body' }] },
+    resetAssistant,
+    { role: 'toolResult', toolCallId: 'reset-053', content: 'Scope reset.' },
+    liveAssistant,
+  ]
+
+  const result = await env.eventHandlers.get('context')({ messages }, sessionCtx)
+  const sent = result.messages
+  const sentOld = sent[1]
+  assert.deepEqual(sentOld.content.map(part => part.type), ['text'],
+    'the closed Scope thinking is retired while its prose stays')
+  assert.equal(contentText(sentOld.content), 'closed assistant prose')
+  assert.equal(sent.some(message => message.toolCallId === 'read-053'), false, 'the ordinary old tool result is retired')
+  const sentLive = sent.find(message => JSON.stringify(message.content ?? '').includes('live prose'))
+  assert.deepEqual(sentLive.content.map(part => part.type), ['reasoning', 'text'],
+    'thinking inside the live Scope is untouched')
+  assert.deepEqual(oldAssistant.content.map(part => part.type), ['reasoning', 'text', 'toolCall'],
+    'the raw Host message object keeps its original parts')
 })
 
 test('WHAT[context-compression-034] OMP purge preserves a user-attributed custom message and refuses a batch without an operator message', async () => {
@@ -1433,7 +1476,7 @@ test('WHAT[scope-progress-016] OMP native todowrite settles min and triggers fou
     await env.eventHandlers.get('session_start')({},ctx)
     const todo=env.registeredTools.find(x=>x.name==='todowrite')
     assert.ok(todo)
-    assert.equal(todo.parameters.properties.remainingScopeTurnsEstimate.type,'integer')
+    assert.equal(todo.parameters.properties.remainingScopeTurnsEstimate.type,'number')
     const estimateHelp=[readFileSync(new URL('../../../resources/provider/tool/js-program/arg-estimate/en.md',import.meta.url),'utf8').trim(),
       readFileSync(new URL('../../../resources/provider/tool/js-program/arg-estimate/zh-CN.md',import.meta.url),'utf8').trim()]
     assert.ok(estimateHelp.includes(todo.description),'OMP todowrite carries the contract text, not its own wording')
@@ -1448,12 +1491,12 @@ test('WHAT[scope-progress-016] OMP native todowrite settles min and triggers fou
     await end(0)
     assert.equal(scopeProgress.status(sid).estimate,3)
     await begin(1)
-    assert.equal((await record('third',3)).details.estimate,3)
+    assert.equal((await record('third',3.5)).details.estimate,3.5)
     await end(1)
     for(let n=0;n<90&&steers.length===0;n++)await new Promise(resolve=>setTimeout(resolve,15))
     assert.equal(asks.length,4)
-    assert.match(JSON.stringify(asks[0]),/工作进展受到了什么阻碍|What has held back the progress/,
-      'an unchanged estimate asks the stalled-progress question from the shared resource')
+    assert.match(JSON.stringify(asks[0]),/没有下降 0.1|did not fall by 0.1/,
+      'a round short of the promised 0.1 drop asks the stall question from the shared resource')
     assert.deepEqual(asks.map(x=>x.tools),[undefined,false,undefined,false],
       'the worker retains its provider tools while the dedicated Advisor has none')
     assert.equal(steers.length,1)
@@ -1464,7 +1507,7 @@ test('WHAT[scope-progress-016] OMP native todowrite settles min and triggers fou
     const journal=new SqliteJournal(new DatabaseSync(join(root,'wanxiangshu','advisor-process.sqlite')))
     try {
       const progress=journal.read('scope-progress:'+sid.length+':'+sid+':1:0').map(JSON.parse)
-      assert.deepEqual(progress.filter(x=>x.kind==='Settled').map(x=>x.estimate),[3,3])
+      assert.deepEqual(progress.filter(x=>x.kind==='Settled').map(x=>x.estimate),[3,3.5])
       assert.equal(progress.filter(x=>x.kind==='Recorded').length,3)
       let facts=[]
       for(let n=0;n<100;n++){
@@ -1482,7 +1525,7 @@ test('WHAT[scope-progress-016] OMP native todowrite settles min and triggers fou
       await end(2)
       assert.equal(scopeProgress.status(sid).resetDue,true)
       const finalProgress=journal.read('scope-progress:'+sid.length+':'+sid+':1:0').map(JSON.parse)
-      assert.deepEqual(finalProgress.filter(x=>x.kind==='Settled').map(x=>x.estimate),[3,3,0])
+      assert.deepEqual(finalProgress.filter(x=>x.kind==='Settled').map(x=>x.estimate),[3,3.5,0])
       await new Promise(resolve=>setTimeout(resolve,20))
       assert.equal(asks.length,4,'a settled AdvisorDue replay cannot cause a second paid consultation')
       assert.equal(steers.length,1)

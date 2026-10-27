@@ -78,7 +78,8 @@ module ModelRoutingSurface =
 
     val tryProviderStepIdentity: runtime: obj -> providerRun: string -> obj
 
-    val bindDevopsTarget: runtime: obj -> sessionId: string -> target: obj -> unit
+    val dropSession: runtime: obj -> sessionId: string -> unit
+    val setDurableDevopsResolver: runtime: obj -> resolver: obj -> unit
     val boundDevopsTarget: runtime: obj -> sessionId: string -> obj
     val seedDevOpsModelTarget: runtime: obj -> sessionId: string -> target: string -> unit
 

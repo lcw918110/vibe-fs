@@ -275,7 +275,8 @@ module HostSessionNudge =
 
                 let observer =
                     { Notify = (fun physical -> AsyncSupport.trySetResult acceptedPhysical physical |> ignore)
-                      AttachDisposable = registrations.Add }
+                      AttachDisposable = registrations.Add
+                      Budget = None }
 
                 let! outcome =
                     sendGateContinuationWithProfile

@@ -256,7 +256,7 @@ test('WHAT[capability-enforcement-010] MACFG_configureManager_legacy_agent_is_fa
   cfg.agent.build = {}
 
   assert.throws(() => configureManager(cfg), /Legacy agent name 'build'/)
-  assert.equal(cfg.compaction.auto, false)
+  assert.equal(cfg.compaction.auto, true)
   assert.equal(cfg.agent.manager.permission['*'], 'deny')
   assert.equal(cfg.agent.orchestrator.permission['*'], 'deny')
 })
@@ -399,7 +399,7 @@ integrationTest('WHAT[capability-enforcement-010] MANAGER_legacy_agent_configura
     const config = fullConfig()
     config.agent.build = {}
     assert.throws(() => hooks.config(config), /Legacy agent name 'build'/)
-    assert.equal(config.compaction.auto, false)
+    assert.equal(config.compaction.auto, true)
     assert.equal(config.agent['manager'].permission['*'], 'deny')
   })
 })

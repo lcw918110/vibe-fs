@@ -37,6 +37,15 @@ open Wanxiangshu.Persistence.Journal
 open Fable.Core
 
 
+module private HostForkPendingRunStore =
+    [<Import("PendingRunStore", "wanxiangli/handle-lifecycle")>]
+    let pendingRunStoreClass: obj = jsNative
+
+    let createPendingRunStore () : obj =
+        emitJsExpr pendingRunStoreClass "new $0()"
+
+open HostForkPendingRunStore
+
 [<RequireQualifiedAccess>]
 module private HostPtyOwnership =
     [<Import("Ownership", "wanxiangli/ownership")>]
@@ -241,7 +250,8 @@ type private PromptAcceptanceScope(notify: PhysicalUserMessageId -> unit, onClos
                             false)
 
                 if release then
-                    registration.Dispose() }
+                    registration.Dispose()
+          Budget = None }
 
 /// Bridges real child sessions to the existing completion mailbox.
 /// Fork / Reuse / Pty operations live in extension files (semantic split).
@@ -282,7 +292,7 @@ type HostForkRuntime
     // DSL-MUTABLE: resource — dormant /continue child registry by agent id
     let dormantChildren = Dictionary<string, SessionId>()
     // DSL-MUTABLE: resource — pending host run registry by agent id
-    let pendingRuns = Dictionary<string, PendingHostRun>()
+    let pendingRuns = createPendingRunStore ()
     /// Provider TerminalName → PtyId. Occupied until Join delivers closure.
     // DSL-MUTABLE: resource — terminal name to PtyId map
     let terminalByName = Dictionary<string, string>()
@@ -626,7 +636,8 @@ type HostForkRuntime
     member internal _.Runtime = runtime
     member internal _.Children = children
     member internal _.DormantChildren = dormantChildren
-    member internal _.PendingRuns = pendingRuns
+    member internal _.PendingRuns = HostForkRunLifecycle.allRunsAsDictionary pendingRuns
+    member internal _.PendingRunStore = pendingRuns
     member internal _.PtyRuns = ptyLeases.Keys :> ICollection<string>
 
     /// Fission admission snapshot: existing external work belongs to the logical
@@ -634,10 +645,9 @@ type HostForkRuntime
     /// no completion is consumed here.
     member _.SnapshotOutstandingAgentRuns() =
         lock gate (fun () ->
-            pendingRuns.Values
-            |> Seq.filter (fun run -> not run.Finished)
-            |> Seq.map (fun run -> run.AgentId, run.ChildId)
-            |> Seq.toList)
+            HostForkRunLifecycle.allRuns pendingRuns
+            |> List.choose (fun run ->
+                if not run.Finished then Some (run.AgentId, run.ChildId) else None))
 
     member _.SnapshotOutstandingPtyRuns() =
         lock gate (fun () -> HostPtyOwnership.unsettledIds ptyOwnership ptyScopeId)
@@ -683,10 +693,7 @@ type HostForkRuntime
     /// nothing pending is a no-op success.
     member this.SendDeferredFirstPrompt(agentId: string) : Task<Result<unit, string>> =
         let pendingRunForAgent () =
-            lock gate (fun () ->
-                match pendingRuns.TryGetValue agentId with
-                | true, run -> Some run
-                | false, _ -> None)
+            lock gate (fun () -> HostForkRunLifecycle.tryGetRun pendingRuns agentId)
 
         let deliverDeferredPrompt
             (pending:
@@ -769,14 +776,15 @@ type HostForkRuntime
 
         let subscriptions =
             lock gate (fun () ->
-                let values =
-                    pendingRuns.Values
-                    |> Seq.choose (fun run ->
-                        run.Finished <- true
-                        run.Subscription)
-                    |> Seq.toList
+                let drained = HostForkRunLifecycle.drainAllRuns pendingRuns
+                let subs = ResizeArray<IDisposable>()
 
-                pendingRuns.Clear()
+                for item in drained do
+                    let run = item.Run
+                    run.Finished <- true
+                    AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "HostDetached") |> ignore
+                    item.Subscription |> Option.iter (fun s -> subs.Add s)
+
                 children.Clear()
                 dormantChildren.Clear()
                 deferredFirstPrompts.Clear()
@@ -785,25 +793,18 @@ type HostForkRuntime
                     ptyOwnershipSeq <- ptyOwnershipSeq + 1
                     HostPtyOwnership.cancel ptyOwnership id lease ptyOwnershipSeq
 
-                values)
+                subs |> Seq.toList)
 
-        subscriptions |> List.iter (fun subscription -> subscription.Dispose())
+        subscriptions |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
 
     member private this.DrainCancelledCallbacks(agentIds: string list, retainedAgents: string list) : Task<unit> =
         let cancelled = Set.ofList agentIds
         closePromptAcceptanceScopes false (fun agentId -> Set.contains agentId cancelled)
 
         let subscriptions =
-            lock gate (fun () ->
-                pendingRuns.Values
-                |> Seq.filter (fun run -> Set.contains run.AgentId cancelled)
-                |> Seq.choose (fun run ->
-                    let subscription = run.Subscription
-                    run.Subscription <- None
-                    subscription)
-                |> Seq.toList)
+            lock gate (fun () -> HostForkRunLifecycle.drainCancelledRuns pendingRuns agentIds)
 
-        subscriptions |> List.iter (fun subscription -> subscription.Dispose())
+        subscriptions |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
 
         task {
             if List.isEmpty retainedAgents then
@@ -1124,7 +1125,7 @@ type HostForkRuntime
     /// advances. Test-only; production settlement uses HostForkRunLifecycle.
     member _.InjectPendingPersistFailure() : unit =
         lock gate (fun () ->
-            match pendingRuns.Values |> Seq.tryHead with
+            match HostForkRunLifecycle.allRuns pendingRuns |> List.tryHead with
             | None -> ()
             | Some run ->
                 AsyncSupport.trySetResult
@@ -1172,7 +1173,7 @@ type HostForkRuntime
         | Some childId -> Some childId
         | None -> this.TryChildFromDurable agentId |> Option.map (fun (childId, _, _) -> childId)
 
-    member _.PendingRunCount = lock gate (fun () -> pendingRuns.Count)
+    member _.PendingRunCount = lock gate (fun () -> HostForkRunLifecycle.pendingRunCount pendingRuns)
     member _.PendingCompletionCount = runtime.PendingCompletionCount
     member _.IsCancelled = runtime.IsCancelled
     member internal _.IsCancelling = lock cancelGate (fun () -> cancelTask.IsSome)

@@ -15,7 +15,7 @@ open Wanxiangshu.Process
 module HostForkChildDispatch =
     val sendToExistingChild:
         gate: obj ->
-        pendingRuns: Dictionary<string, PendingHostRun> ->
+        pendingRuns: obj ->
         journal: AgentJournal option ->
         parentId: SessionId ->
         sessions: ISessionHostPort ->
@@ -51,7 +51,7 @@ module HostForkChildDispatch =
         parentKey: string ->
         parentAbortToken: int ->
         gate: obj ->
-        pendingRuns: Dictionary<string, PendingHostRun> ->
+        pendingRuns: obj ->
         children: Dictionary<string, SessionId> ->
         sessions: ISessionHostPort ->
         journal: AgentJournal option ->

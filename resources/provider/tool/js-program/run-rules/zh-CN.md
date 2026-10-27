@@ -1,4 +1,4 @@
-每次 todowrite 请求提交必填字符串 name、program、intent，以及必填非负整数 remainingScopeTurnsEstimate。JS 程序自身只接收三个执行字段。工具在准入时按 UTF8Bytes(intent) × 50ms 一次性确定期限。本次所有操作及被唤醒目标共用剩余时间；进入下一次 call 或 unpark 不能重置或延长它。
+每次 todowrite 请求提交必填字符串 name、program、intent，以及必填非负实数 remainingScopeTurnsEstimate（可以带小数）。JS 程序自身只接收三个执行字段。工具在准入时按 UTF8Bytes(intent) × 50ms 一次性确定期限。本次所有操作及被唤醒目标共用剩余时间；进入下一次 call 或 unpark 不能重置或延长它。
 
 独立 SDK 操作可用 Promise.all 或 Promise.allSettled。call(command) 先等本程序之前发起的 SDK 操作结清，再启动一条命令。在途操作要等待，不拒绝、不重发、不取消；真实失败和已有副作用保留。排空与命令等待消耗同一入口窗口。
 

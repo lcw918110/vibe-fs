@@ -82,7 +82,7 @@ fork 首 prompt typed 渲染的正文**只有本次 Assignment 指令**，不再
 
 父到子、同步委托、dag、DevOps 与 Advisor 请求只发送本次 charge / intent，**不传任何调用方历史、完整 post-scope 视图、`[[context]]`、筛选数组或附件 view**，也不附加父方未完成的活跃回合。子方只能从收到的当前指令开始，缺少必要事实时用 `negotiate(questions: string)` 向委托者提问；不得擅自推定未提供的上下文。charge 是任务本身（以 `# ...` 注释头呈现），协商返回的事实只是新的 steer，并不克隆 authority。
 
-排队指导只在实际发往 provider 的 transform 边界裁决：若该物理输入所续接的精确 child work 已正常完成（包括已被 join 消费），本次请求不再发送，并用 interrupt 停止这次续跑。不得用 provider 的自然 stop 代替任务完成事实，不得中断同一会话后来接到的新任务。此拦截只作用于出站请求副本；已落地的指导消息保留在会话历史中，后续真正续上的任务仍可使用，不设会话级永久禁令。
+`askPreviousScope`、`negotiate` 和 Advisor 的异步答复只在实际发往 provider 的 transform 边界裁决：以真实物理消息标识咨询答复，查其之前最近一条已完成 assistant 回合；该回合没有工具调用时中断本次续跑，不依赖可能被排队消息拖住的 work 或 session 终态。有工具调用、没有可确认的前一回合，以及当前输入是操作员消息或新 assignment 时不得据此中断。此判断只决定本次咨询续跑，不把自然 stop 写成 Work 完成事实。拦截只作用于出站请求副本；已落地的答复保留在会话历史中，后续真正续上的任务仍可使用，不设会话级永久禁令。
 
 ## [022] 建议性工具次数
 

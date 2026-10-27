@@ -2,6 +2,8 @@ namespace Wanxiangshu.Execution.Fission
 
 open System
 open System.Collections.Generic
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.Identity
 
 [<CLIMutable>]
@@ -16,17 +18,15 @@ type FissionLaneBinding =
 /// causes and may be rebuilt after restart.
 module FissionRuntime =
 
+    [<Import("fissionLaneRegistry", "wanxiangli/fission-group")>]
+    let private laneRegistry: obj = jsNative
+    [<Emit("$0 === undefined")>]
+    let private isUndefined (_v: obj) : bool = jsNative
+
+
     let private gate = obj ()
-    // DSL-MUTABLE: resource — lane binding registry by session id
-    let private lanes = Dictionary<string, FissionLaneBinding>()
     // DSL-MUTABLE: resource — silent interrupt owner set
     let private silentInterrupts = HashSet<string>()
-    // DSL-MUTABLE: resource — handle affinity map by owner+handle key
-    let private handleAffinities = Dictionary<string, int>()
-
-    // DSL-MUTABLE: resource — child observer callback registry by group id
-    let private childObservers =
-        Dictionary<string, int -> string -> SessionId -> unit>()
 
     // DSL-MUTABLE: resource — group disposable resource registry
     let private groupResources = Dictionary<string, ResizeArray<IDisposable>>()
@@ -34,9 +34,6 @@ module FissionRuntime =
     let private deliveryClaims = HashSet<string>()
     // DSL-MUTABLE: single-flight — takeover claim latch per group
     let private takeoverClaims = HashSet<string>()
-
-    let private handleKey ownerSessionId handleId =
-        SessionId.value ownerSessionId + "\u001f" + handleId
 
     let private deliveryKey groupId completionId (laneIndex: int) =
         groupId + "\u001f" + completionId + "\u001f" + string laneIndex
@@ -57,39 +54,51 @@ module FissionRuntime =
             groupResources.Remove groupId |> ignore
         | false, _ -> ()
 
-    let bindLane groupId ownerSessionId laneIndex laneCount laneSessionId =
-        let binding =
-            { GroupId = groupId
-              OwnerSessionId = ownerSessionId
-              LaneIndex = laneIndex
-              LaneCount = laneCount }
-
-        lock gate (fun () -> lanes.[SessionId.value laneSessionId] <- binding)
+    let bindLane (groupId: string) (ownerSessionId: SessionId) (laneIndex: int) (laneCount: int) (laneSessionId: SessionId) : unit =
+        laneRegistry?bindLane (
+            groupId,
+            SessionId.value ownerSessionId,
+            laneIndex,
+            laneCount,
+            SessionId.value laneSessionId
+        )
 
     let unbindLane laneSessionId =
-        lock gate (fun () -> lanes.Remove(SessionId.value laneSessionId) |> ignore)
+        laneRegistry?unbindLane (SessionId.value laneSessionId) |> ignore
 
-    // The registry above is a cache of the lanes this process drives; the fission
-    // projection is the truth that survives a restart (same rule as child
-    // bindings: durable answers existence, process tables answer "driving it now").
-    // DSL-MUTABLE: algorithm-scratch
-    let mutable private durableLaneEvidence: (SessionId -> FissionLaneBinding option) option =
-        None
+    let installDurableLaneEvidence (resolve: SessionId -> FissionLaneBinding option) : unit =
+        laneRegistry?hydrateFromDurable (fun (laneSessionIdStr: string) ->
+            resolve (SessionId.create laneSessionIdStr)
+            |> Option.map (fun binding ->
+                {| GroupId = binding.GroupId
+                   OwnerSessionId = SessionId.value binding.OwnerSessionId
+                   LaneIndex = binding.LaneIndex
+                   LaneCount = binding.LaneCount |}
+                |> box)
+            |> Option.toObj)
 
-    let installDurableLaneEvidence (resolve: SessionId -> FissionLaneBinding option) =
-        durableLaneEvidence <- Some resolve
+    let tryLane laneSessionId : FissionLaneBinding option =
+        let recordOpt: obj = laneRegistry?tryLane (SessionId.value laneSessionId)
 
-    let tryLane laneSessionId =
-        lock gate (fun () ->
-            match lanes.TryGetValue(SessionId.value laneSessionId) with
-            | true, binding -> Some binding
-            | false, _ -> durableLaneEvidence |> Option.bind (fun resolve -> resolve laneSessionId))
+        if isNull recordOpt || isUndefined recordOpt then
+            None
+        else
+            Some
+                { GroupId = unbox<string> recordOpt?GroupId
+                  OwnerSessionId = SessionId.create (unbox<string> recordOpt?OwnerSessionId)
+                  LaneIndex = unbox<int> recordOpt?LaneIndex
+                  LaneCount = unbox<int> recordOpt?LaneCount }
 
     let tryOwner laneSessionId =
         tryLane laneSessionId |> Option.map (fun binding -> binding.OwnerSessionId)
 
     let logicalOwner sessionId =
-        tryOwner sessionId |> Option.defaultValue sessionId
+        let ownerStr: string = laneRegistry?logicalOwner (SessionId.value sessionId)
+
+        if String.IsNullOrEmpty ownerStr then
+            sessionId
+        else
+            SessionId.create ownerStr
 
     let markSilentInterrupt ownerSessionId =
         lock gate (fun () -> silentInterrupts.Add(SessionId.value ownerSessionId) |> ignore)
@@ -102,9 +111,6 @@ module FissionRuntime =
 
     let tryConsumeSilentInterrupt ownerSessionId =
         lock gate (fun () -> silentInterrupts.Contains(SessionId.value ownerSessionId))
-
-    let bindHandleAffinity ownerSessionId handleId laneIndex =
-        lock gate (fun () -> handleAffinities.[handleKey ownerSessionId handleId] <- laneIndex)
 
     let trackGroupResource groupId (resource: IDisposable) =
         lock gate (fun () ->
@@ -131,47 +137,17 @@ module FissionRuntime =
     let endTakeover groupId =
         lock gate (fun () -> takeoverClaims.Remove groupId |> ignore)
 
-    let private observerForGroup groupId =
-        lock gate (fun () ->
-            match childObservers.TryGetValue groupId with
-            | true, callback -> Some callback
-            | false, _ -> None)
-
-    let notifyChildCreated laneSessionId handleId childSessionId =
-        match tryLane laneSessionId with
-        | None -> ()
-        | Some binding ->
-            bindHandleAffinity binding.OwnerSessionId handleId binding.LaneIndex
-
-            observerForGroup binding.GroupId
-            |> Option.iter (fun callback -> callback binding.LaneIndex handleId childSessionId)
-
     let clearOwner ownerSessionId =
         let ownerKey = SessionId.value ownerSessionId
+        let cleanup: obj = laneRegistry?clearOwner (ownerKey)
+
+        let groupIds: string array =
+            if isNull cleanup || isUndefined cleanup then
+                [||]
+            else
+                unbox<string array> cleanup?RemovedGroupIds
 
         lock gate (fun () ->
-            let groupIds =
-                lanes
-                |> Seq.filter (fun kv -> kv.Value.OwnerSessionId = ownerSessionId)
-                |> Seq.map (fun kv -> kv.Value.GroupId)
-                |> Seq.distinct
-                |> Seq.toArray
-
-            lanes
-            |> Seq.filter (fun kv -> kv.Value.OwnerSessionId = ownerSessionId)
-            |> Seq.map (fun kv -> kv.Key)
-            |> Seq.toArray
-            |> Array.iter (fun key -> lanes.Remove key |> ignore)
-
-            groupIds |> Array.iter (fun groupId -> childObservers.Remove groupId |> ignore)
-
             groupIds |> Array.iter (fun groupId -> takeoverClaims.Remove groupId |> ignore)
-
             groupIds |> Array.iter (disposeGroupResources groupResources)
-
-            handleAffinities.Keys
-            |> Seq.filter (fun key -> key.StartsWith(ownerKey + "\u001f"))
-            |> Seq.toArray
-            |> Array.iter (fun key -> handleAffinities.Remove key |> ignore)
-
             silentInterrupts.Remove ownerKey |> ignore)

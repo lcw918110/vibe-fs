@@ -65,6 +65,9 @@ test('WHAT[context-compression-039] OpenCode prompts for a first chargeable esti
   assert.equal(copy.length,3)
   assert.equal(copy[2].attribution,'agent')
   assert.equal(copy[2].strong,true)
+  const realUsers = copy.filter(message => message.info.role === 'user'
+    && !message.parts.every(part => 'synthetic' in part && part.synthetic))
+  assert.deepEqual(realUsers, [original[0]], 'OpenCode automatic title must still see exactly the original user message')
   assert.match(copy[2].parts[0].text,/remainingScopeTurnsEstimate/)
   assert.equal(original[0].parts[0].text, 'read this file')
   assert.equal(toolText(original[1]), 'file body')
@@ -419,6 +422,8 @@ test('WHAT[delegation-negotiation-004] registered negotiate sends ephemeral BTW 
     assert.match(visibleAnswer, /byte-preserving parser/)
     assert.ok(guidance.body.metadata?.wanxiangshu_prompt_key,
       'real continuation must carry a durable PromptKey')
+    assert.equal(guidance.body.parts[0].metadata.wanxiangshu_consultation_steer, true,
+      'the physical consultation answer carries its origin into the last request gate')
     assert.equal(guidance.body.noReply, undefined,
       'do not fake a private promptAsync steer with a status-dependent noReply flag')
     const childHistory = (await session.messages({ path: { id: child } })).data
@@ -579,7 +584,9 @@ test('WHAT[context-compression-047] registered OpenCode reset archives physical 
         parts: [{ type: 'text', text: 'Do not use the replacement parser. Exact counterexample 37.' }] },
     ]
     const originalBytes = JSON.stringify(prefix)
-    const system = { system: ['Prior real provider system: preserve counterexample 37 verbatim'] }
+    const config = { agent: {} }
+    await hooks.config(config)
+    const system = { system: [config.agent.engineer.prompt + '\nPrior real provider system: preserve counterexample 37 verbatim'] }
     await hooks['experimental.chat.system.transform']({ sessionID: sid }, system)
     await hooks['chat.params']({ sessionID: sid, model: { providerID: 'fixture', modelID: 'old-model' } }, {})
     const outbound = { messages: structuredClone(prefix) }
@@ -670,6 +677,7 @@ test('WHAT[context-compression-047] registered OpenCode reset archives physical 
     assert.equal(providerAttempts, 2, 'one real old-model answer after bounded tool-veto retry, no replay duplicate')
     assert.equal(toolVetoes, 1)
     assert.equal(outboundSteers().length, 1, 'old answer delivered through one real PromptDispatcher continuation')
+    assert.equal(outboundSteers()[0].body.parts[0].metadata.wanxiangshu_consultation_steer, true)
     clearSessionState(sid)
   })
 })
@@ -719,7 +727,9 @@ test('WHAT[context-compression-050] real OpenCode first reset has no previous-sc
     clearSessionState(sid)
     await acceptAuthorityRoot(runtime,sid,'engineer')
     async function physicallyObserve(run) {
-      const first={system:['Observed real provider system for '+run]}
+      const config = { agent: {} }
+      await hooks.config(config)
+      const first={system:[config.agent.engineer.prompt + '\nObserved real provider system for '+run]}
       await hooks['experimental.chat.system.transform']({sessionID:sid},first)
       await hooks['chat.params']({sessionID:sid,model:{providerID:'fixture',modelID:'old-model'}},{})
       await normalTransform(safeCaps(),sid,{},{messages:[
@@ -799,6 +809,31 @@ test('WHAT[context-compression-051] a cold OpenCode request with historical rese
   })
 })
 
+
+test('WHAT[context-compression-053] the OpenCode request copy retires closed Scope thinking, keeps prose and leaves history intact', async () => {
+  const sid = 'ses_scope_053_thinking'
+  clearSessionState(sid)
+  const reasoning = text => ({ type: 'reasoning', text })
+  const prose = text => ({ type: 'text', text })
+  const operator = user('u-053', 'work the scope', 1)
+  const oldAssistant = assistant('a-old-053', reasoning('closed scratch'), prose('closed prose'), tool('read-053', 'read', 'old body'))
+  const resetAssistant = assistant('a-reset-053', tool('reset-053', 'resetScope', 'Scope reset'))
+  const liveAssistant = assistant('a-live-053', reasoning('live scratch'), prose('live prose'))
+  const raw = [operator, oldAssistant, resetAssistant, liveAssistant]
+  const copy = await outbound(sid, raw)
+  const sentOld = copy.find(message => message.info?.id === 'a-old-053')
+  assert.deepEqual(sentOld.parts.map(part => part.type), ['text'],
+    'the closed Scope thinking is retired while its prose stays')
+  assert.equal(sentOld.parts[0].text, 'closed prose')
+  assert.equal(copy.some(message => message.parts?.some(part => part.callID === 'read-053')), false,
+    'the ordinary old tool call is retired')
+  const sentLive = copy.find(message => message.info?.id === 'a-live-053')
+  assert.deepEqual(sentLive.parts.map(part => part.type), ['reasoning', 'text'],
+    'thinking inside the live Scope is untouched')
+  assert.deepEqual(oldAssistant.parts.map(part => part.type), ['reasoning', 'text', 'tool'],
+    'the raw Host message object keeps every original part')
+  clearSessionState(sid)
+})
 
 test('WHAT[advisor-pure-chat] an Advisor session is pure chat: no Pair Hint steer, estimate request or Scope protocol', async () => {
   const { Role } = await import('../../../dist/Foundation/Roles.js')
@@ -890,7 +925,9 @@ test('WHAT[context-compression-043] OpenCode resetScope commits durable archive 
     await acceptAuthorityRoot(runtime, sid, 'engineer')
 
     // 1. Establish full outbound observation triad via actual host hooks
-    const system = { system: ['System instruction for scope verification 043'] }
+    const config = { agent: {} }
+    await hooks.config(config)
+    const system = { system: [config.agent.engineer.prompt + '\nSystem instruction for scope verification 043'] }
     await hooks['experimental.chat.system.transform']({ sessionID: sid }, system)
     await hooks['chat.params']({ sessionID: sid, model: { providerID: 'anthropic', modelID: 'claude-3-5-sonnet' } }, {})
 
@@ -990,7 +1027,9 @@ test('WHAT[context-compression-043] OpenCode resetScope write blob failure leave
     await acceptAuthorityRoot(runtime, sid, 'engineer')
 
     // Establish full observation
-    await hooks['experimental.chat.system.transform']({ sessionID: sid }, { system: ['System prompt'] })
+    const config = { agent: {} }
+    await hooks.config(config)
+    await hooks['experimental.chat.system.transform']({ sessionID: sid }, { system: [config.agent.engineer.prompt] })
     await hooks['chat.params']({ sessionID: sid, model: { providerID: 'anthropic', modelID: 'claude-3-5-sonnet' } }, {})
     await normalTransform(safeCaps(), sid, {}, {
       messages: [{ info: { id: 'u1', role: 'user', sessionID: sid, time: { created: 1 } }, parts: [{ type: 'text', text: 'Task' }] }],
@@ -1050,7 +1089,9 @@ test('WHAT[context-compression-043] OpenCode resetScope appendAgent failure prop
     await acceptAuthorityRoot(runtime, sid, 'engineer')
 
     // Establish full observation
-    await hooks['experimental.chat.system.transform']({ sessionID: sid }, { system: ['System prompt for append failure'] })
+    const config = { agent: {} }
+    await hooks.config(config)
+    await hooks['experimental.chat.system.transform']({ sessionID: sid }, { system: [config.agent.engineer.prompt + '\nSystem prompt for append failure'] })
     await hooks['chat.params']({ sessionID: sid, model: { providerID: 'anthropic', modelID: 'claude-3-5-sonnet' } }, {})
     await normalTransform(safeCaps(), sid, {}, {
       messages: [{ info: { id: 'u1', role: 'user', sessionID: sid, time: { created: 1 } }, parts: [{ type: 'text', text: 'Task' }] }],
@@ -1162,6 +1203,7 @@ test('WHAT[context-compression-052] one actual OpenCode provider run charges onc
     assert.equal(tool.args.remainingScopeTurnsEstimate.safeParse(undefined).success,false)
     assert.equal(tool.args.remainingScopeTurnsEstimate.safeParse(-1).success,false)
     assert.equal(tool.args.remainingScopeTurnsEstimate.safeParse(0).success,true)
+    assert.equal(tool.args.remainingScopeTurnsEstimate.safeParse(2.5).success,true,'the estimate is a real number')
     const context=(callID,messageID)=>({sessionID:sid,agent:'devops',callID,messageID})
     const [left,right]=await Promise.all([
       tool.execute(estimateArgs('estimate-high',8),context('todo-high-052','physical-run-one-052')),
@@ -1178,7 +1220,11 @@ test('WHAT[context-compression-052] one actual OpenCode provider run charges onc
     assert.ok(typeof replay==='string')
     await hooks['chat.params']({sessionID:sid,model},{})
     assert.equal(scopeProgress.status(sid).estimate,4,'same run cannot double charge or invent advisor trigger')
-    const zero=await tool.execute(estimateArgs('scope-complete',0),context('todo-zero-052','physical-run-two-052'))
+    const fractional=await tool.execute(estimateArgs('estimate-fraction',3.5),context('todo-fraction-052','physical-run-two-052'))
+    assert.match(String(fractional),/# ok/,'a real Host call accepts a fractional estimate')
+    await hooks['chat.params']({sessionID:sid,model},{})
+    assert.equal(scopeProgress.status(sid).estimate,3.5,'the charged estimate keeps its fractional value')
+    const zero=await tool.execute(estimateArgs('scope-complete',0),context('todo-zero-052','physical-run-three-052'))
     assert.match(String(zero),/# ok/)
     await hooks['chat.params']({sessionID:sid,model},{})
     assert.equal(scopeProgress.status(sid).estimate,0)

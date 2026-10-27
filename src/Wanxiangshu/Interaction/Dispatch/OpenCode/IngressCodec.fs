@@ -185,7 +185,7 @@ module PromptIngressCodec =
     ///
     /// Which of them count as a compaction source is the product's rule
     /// (`HostInternalClassification`); this only reads them.
-    let private hostMessageFacts (output: obj) : HostInternalClassification.HostMessageFacts =
+    let private hostMessageFacts (input: obj) (output: obj) : HostInternalClassification.HostMessageFacts =
         let outputParts = parts output
         let message = childObject output "message"
 
@@ -196,13 +196,15 @@ module PromptIngressCodec =
             |> Array.exists (fun part ->
                 readString part "type"
                 |> Option.exists (fun kind -> kind.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
-          HasSummary = isTrueProperty message "summary"
+          HasSummary = isTrueProperty message "summary" || isTrueProperty input "summary"
           AgentIsCompaction =
-            (agentOf output
-             |> Option.exists (fun agent -> agent.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
+            ([ input; output; message; childObject input "info" ]
+             |> List.choose agentOf
+             |> List.exists (fun agent -> agent.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
           ModeIsCompaction =
-            (readString message "mode"
-             |> Option.exists (fun mode -> mode.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
+            ([ readString message "mode"; readString input "mode"; readString (childObject input "info") "mode" ]
+             |> List.choose id
+             |> List.exists (fun mode -> mode.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
           HasParts = messageParts.Length > 0
           AllPartsSynthetic = Array.forall (fun part -> isTrueProperty part "synthetic") messageParts }
 
@@ -315,7 +317,7 @@ module PromptIngressCodec =
                 | MalformedText -> Some kind
                 | _ -> None)
 
-        let facts = hostMessageFacts output
+        let facts = hostMessageFacts input output
 
         { InvalidIdentityCarrier = invalidCarrier
           SessionId = sessionId

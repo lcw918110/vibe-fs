@@ -40,6 +40,8 @@ type HostForkRuntime =
     member internal Children: Dictionary<string, SessionId>
     member internal DormantChildren: Dictionary<string, SessionId>
     member internal PendingRuns: Dictionary<string, PendingHostRun>
+    /// The live pending-run owner; `PendingRuns` is a read-only snapshot.
+    member internal PendingRunStore: obj
     member internal PtyRuns: ICollection<string>
     member SnapshotOutstandingAgentRuns: unit -> (string * SessionId) list
     member SnapshotOutstandingPtyRuns: unit -> string list

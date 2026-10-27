@@ -18,7 +18,8 @@ test('WHAT[advisor-008] the production Advisor steer selects Await while ordinar
   assert.match(runtime, /SendAdvisorSteer\([\s\S]*?sendConsultationSteer recipient answer processId \(fun _ _ -> isCurrent \(\)\) true/)
   assert.match(runtime, /HostForkBusyNudge\.sendObservedAwait sessions journal/)
   assert.match(runtime, /SendAgentOwnerRoot[\s\S]*?if awaitPhysical then PromptDispatcher\.AwaitMode\.Await else PromptDispatcher\.AwaitMode\.Detached/)
-  assert.match(runtime, /sendConsultationSteer recipient answer receipt Wanxiangshu\.Context\.Scope\.Surface\.confirmNegotiationSteer false/)
+  assert.match(runtime, /let sendNegotiationSteer[\s\S]*?Wanxiangshu\.Context\.Scope\.Surface\.confirmNegotiationSteer r owner[\s\S]*?sendConsultationSteer recipient answer receipt confirm false/,
+    'ordinary negotiation observes the physical steer and stays Detached')
   assert.match(nudge, /let sendObservedAwait[\s\S]*?PromptDispatcher\.AwaitMode\.Await/)
   assert.match(nudge, /let sendObserved[\s\S]*?PromptDispatcher\.AwaitMode\.Detached/)
 })

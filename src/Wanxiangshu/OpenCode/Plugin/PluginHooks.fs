@@ -532,10 +532,83 @@ module PluginHooks =
                     | _ -> return None
                 }
 
+            let activeCompactingSessions = System.Collections.Generic.HashSet<string>()
+
+            let sessionStringOf (target: obj) : string =
+                if isNull target || isNull target?sessionID then
+                    ""
+                else
+                    string target?sessionID
+
             let transformOrdinarySystem =
                 ProviderSystemTransform.createWith roleFor planStageFor
 
-            let systemTransform (input: obj) (output: obj) : Task<unit> =
+            let nonNull (x: obj) = if isNull x then None else Some x
+
+            let readTrimmed (target: obj) (field: string) =
+                nonNull target
+                |> Option.bind (fun t -> nonNull t?(field))
+                |> Option.map string
+                |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                |> Option.map (fun s -> s.Trim())
+
+            let lastMessageAgent (messages: obj) =
+                nonNull messages
+                |> Option.bind (fun msgs ->
+                    let len: int = unbox msgs?length
+                    if len > 0 then nonNull msgs?(len - 1) else None)
+                |> Option.bind (fun lastMsg ->
+                    readTrimmed lastMsg "agent"
+                    |> Option.orElseWith (fun () -> readTrimmed lastMsg?info "agent")
+                    |> Option.orElseWith (fun () ->
+                        let mode = readTrimmed lastMsg "mode"
+                        let infoMode = readTrimmed lastMsg?info "mode"
+                        if mode = Some "compaction" || infoMode = Some "compaction" then Some "compaction"
+                        else None))
+
+            let tryRequestAgent (candidate: obj) : string option =
+                nonNull candidate
+                |> Option.bind (fun c ->
+                    let directAgent =
+                        readTrimmed c "agent"
+                        |> Option.orElseWith (fun () -> readTrimmed c?info "agent")
+                        |> Option.orElseWith (fun () -> readTrimmed c?message "agent")
+                    let directMode =
+                        let m1 = readTrimmed c "mode"
+                        let m2 = readTrimmed c?info "mode"
+                        let m3 = readTrimmed c?message "mode"
+                        if m1 = Some "compaction" || m2 = Some "compaction" || m3 = Some "compaction" then Some "compaction"
+                        else None
+                    directAgent
+                    |> Option.orElse directMode
+                    |> Option.orElseWith (fun () -> lastMessageAgent c?messages))
+
+            let isExplicitlyUnmanagedAgent (candidate: obj) : bool =
+                match tryRequestAgent candidate with
+                | Some agent -> not (ManagedAgent.isManagedName agent)
+                | None -> false
+
+            let isFunctionalAgent (candidate: obj) : bool =
+                match tryRequestAgent candidate with
+                | Some agent -> ManagedAgent.isFunctionalName agent
+                | None -> false
+
+            let ownedSystemPrompts =
+                [ for language in [ ProviderLanguage.English; ProviderLanguage.SimplifiedChinese ] do
+                      for role in [ Role.Manager; Role.Orchestrator; Role.Engineer; Role.DevOps; Role.Plan; Role.Advisor ] do
+                          yield (PromptResources.systemForRole language role).Trim()
+                      yield (PromptResources.loadBookkeeperSystemFor language).Trim() ]
+
+            let ownsSystem (output: obj) : bool =
+                let system: string array = if isNull output?system then [||] else unbox output?system
+                system
+                |> Array.tryHead
+                |> Option.exists (fun text ->
+                    ownedSystemPrompts |> List.exists (fun owned ->
+                        not (String.IsNullOrWhiteSpace owned)
+                        && (text = owned || text.StartsWith(owned + "\n", StringComparison.Ordinal))))
+
+            let applySystemTransform (input: obj) (output: obj) : Task<unit> =
                 task {
                     let projected = PluginTransforms.negotiationProjectSystem input output
 
@@ -552,6 +625,13 @@ module PluginHooks =
                     if not projected && not (String.IsNullOrEmpty sid) then
                         outboundViewStore?recordSystem (sid, output?system) |> ignore
                 }
+
+            let systemTransform (input: obj) (output: obj) : Task<unit> =
+                let temporary = PluginTransforms.negotiationIsTemporary (sessionStringOf input)
+                if not temporary && not (ownsSystem output) then
+                    Task.FromResult(())
+                else
+                    applySystemTransform input output
 
 
             // CASE-003: typed capture at the tool boundary — shared
@@ -578,8 +658,42 @@ module PluginHooks =
                 if not (System.String.IsNullOrWhiteSpace sessionId) then
                     CasebookLifecycle.collector.Collect(sessionId, toolName, toolInput?args, rendered)
 
+            let tryFirstMessageSessionId (outObj: obj) : string option =
+                match isNull outObj || isNull outObj?messages with
+                | true -> None
+                | false ->
+                    let msgs = outObj?messages
+                    let len: int = unbox msgs?length
+                    match len with
+                    | 0 -> None
+                    | _ ->
+                        let first = msgs?(0)
+                        let rawSid = if isNull first?sessionID then first?info?sessionID else first?sessionID
+                        match isNull rawSid with
+                        | true -> None
+                        | false -> Some(string rawSid)
+
+            let isCompactingTransform (inObj: obj) (outObj: obj) : bool =
+                let sidOpt =
+                    let sid1 = sessionStringOf inObj
+                    match String.IsNullOrWhiteSpace sid1 with
+                    | false -> Some sid1
+                    | true -> tryFirstMessageSessionId outObj
+                match sidOpt with
+                | Some sid when not (String.IsNullOrWhiteSpace sid) ->
+                    activeCompactingSessions.Remove(sid)
+                | _ -> false
+
+            let isUnmanagedTransform (inObj: obj) (outObj: obj) : bool =
+                isCompactingTransform inObj outObj
+                || isExplicitlyUnmanagedAgent inObj
+                || isExplicitlyUnmanagedAgent outObj
+
             let ownedTransform (inObj: obj) (outObj: obj) : Task =
-                scope.RunOwnedWork(fun () -> transform inObj outObj)
+                if isUnmanagedTransform inObj outObj then
+                    (Task.FromResult(()) :> Task)
+                else
+                    scope.RunOwnedWork(fun () -> transform inObj outObj)
 
             let client = if isNull input then null else input?client
 
@@ -1167,10 +1281,15 @@ module PluginHooks =
                     let temporary =
                         not (isNull rawSession)
                         && PluginTransforms.negotiationIsTemporary (string rawSession)
+
+                    let isFunctional = isFunctionalAgent input || isFunctionalAgent output
+
                     // The SDK-created readonly temporary session is not an admitted
                     // managed work execution. Its real provider tool schema remains
                     // untouched, and tool.execute.before independently denies tools.
-                    if not temporary then
+                    // Functional agents (title, compaction, summary, explore, generate)
+                    // are internal Host functional callers and bypass managed execution.
+                    if not temporary && not isFunctional then
                         let pending: Task<unit> =
                             emitJsExpr (originalChatMessage, input, output) "$0($1, $2)"
                         do! pending
@@ -1180,7 +1299,8 @@ module PluginHooks =
                         && not (String.IsNullOrWhiteSpace(string rawSession))
                         && sessionPort.IsManagedChild(SessionId.create (string rawSession))
 
-                    if not temporary && not managedChild && not (isNull output) && not (isNull output?message) then
+                    let unmanaged = isExplicitlyUnmanagedAgent input
+                    if not unmanaged && not temporary && not managedChild && not (isNull output) && not (isNull output?message) then
                         let tools = requireUserMessageTools output?message
                         tools?negotiate <- box false
                 }
@@ -1192,8 +1312,7 @@ module PluginHooks =
                 let question =
                     match string receipt?trigger with
                     | "ResetDue" -> "host/advisor-question/reset-due"
-                    | "Equal" -> "host/advisor-question/equal"
-                    | _ -> "host/advisor-question/increase"
+                    | _ -> "host/advisor-question/stall"
                 ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) question Map.empty
 
             let observeAdvisorTask (sessionId: string) (started: Task<obj>) =
@@ -1243,20 +1362,28 @@ module PluginHooks =
                         observeAdvisorTask sessionId resumed
 
             let rememberModelParams (input: obj) (output: obj) =
+                let unmanaged = isExplicitlyUnmanagedAgent input
                 let currentSession = if isNull input?sessionID then "" else string input?sessionID
                 let temporary =
                     not (String.IsNullOrWhiteSpace currentSession)
                     && PluginTransforms.negotiationIsTemporary currentSession
-                if not temporary then
-                    if not (String.IsNullOrWhiteSpace currentSession) then
-                        bindProgressJournal currentSession
-                        settlePriorProgress currentSession
+
+                let shouldTouchJournal = not temporary && not unmanaged && not (String.IsNullOrWhiteSpace currentSession)
+                if shouldTouchJournal then
+                    bindProgressJournal currentSession
+                    settlePriorProgress currentSession
+
+                if not temporary && not unmanaged then
                     emitJsExpr (chatParams, input, output) "$0($1, $2)" |> ignore
+
+                let shouldRememberModel = not temporary && not unmanaged
+                if shouldRememberModel then
                     PluginTransforms.negotiationRememberModel input
                     tryRecoverAdvisor currentSession
-                let modelSessionId = unbox<string> input?sessionID
 
-                if not temporary && not (String.IsNullOrEmpty modelSessionId) then
+                let modelSessionId = unbox<string> input?sessionID
+                let shouldRecordModel = not temporary && not unmanaged && not (String.IsNullOrEmpty modelSessionId)
+                if shouldRecordModel then
                     outboundViewStore?recordModel (modelSessionId, input?model) |> ignore
 
             let chatParamsRegistration =
@@ -1332,6 +1459,8 @@ module PluginHooks =
                     Diagnostic.emit
                         "compaction_started"
                         [ "session_id", SessionId.value sid; "result", "cannot-refuse" ]
+
+                    activeCompactingSessions.Add(SessionId.value sid) |> ignore
 
                     let! contribution = product.Compaction.OnCompacting sid
 
@@ -1417,6 +1546,7 @@ module PluginHooks =
                         calibration?clearSession(SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
+                        activeCompactingSessions.Remove(SessionId.value sessionId) |> ignore
                         AdvisorSeat.clear (SessionId.value sessionId))
 
             let observeEvent raw =

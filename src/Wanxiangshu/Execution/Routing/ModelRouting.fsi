@@ -35,6 +35,7 @@ module ModelRouting =
 
     type internal ModelRoutingRuntime =
         new: scheduler: obj -> ModelRoutingRuntime
+        new: scheduler: obj * ?durableDevopsResolver: (string -> string option) -> ModelRoutingRuntime
 
         member AcquireExecutionAdmission:
             sessionId: string *
@@ -90,7 +91,8 @@ module ModelRouting =
 
         member OwnsExecutionAdmission: sessionId: string * physicalUserMessageId: string -> bool
 
-        member BindDevopsTarget: sessionId: string * target: ModelRoutingTarget -> unit
+        member DropSession: sessionId: string -> unit
+        member SetDurableDevopsResolver: resolver: (string -> string option) -> unit
         member SeedBoundDevOpsModel: sessionId: string * value: string -> unit
 
         member RememberProviderStepIdentity:
@@ -207,6 +209,7 @@ module ModelRouting =
     val internal tryProviderStepIdentity: providerRun: ProviderRunIdentity -> (SessionId * PhysicalUserMessageId) option
 
     val readExecutionAdmission: key: ChatExecutionKey -> (string * ModelRoutingTarget) option
+    val internal dropSession: sessionId: SessionId -> unit
     val internal boundDevopsModel: sessionId: SessionId -> HostModel option
     val internal releaseExecution: sessionId: SessionId -> CapacityTransitionOutcome
 

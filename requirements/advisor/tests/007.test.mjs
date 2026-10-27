@@ -10,9 +10,9 @@ import { stateRoot } from '../../../dist/Persistence/Journal/RuntimePath.js'
 import { negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel, negotiationForgetSession } from '../../../dist/OpenCode/Plugin/PluginTransforms.js'
 
 const program = 'class Js extends JsProgram { async run() { return { seen: true }; } }'
-const args = (name) => ({
+const args = (name, remainingScopeTurnsEstimate = 4) => ({
   name, program, intent: 'Observe this Provider round without modifying the workspace.',
-  remainingScopeTurnsEstimate: 4,
+  remainingScopeTurnsEstimate,
 })
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 const waitFor = async (predicate) => {
@@ -61,11 +61,11 @@ test('WHAT[advisor-007] real OpenCode progress escalation commits SQLite identit
       negotiationRememberSystem({ sessionID: session }, { system: ['Real worker system instruction'] })
       negotiationRememberMessages(session, { messages: [{ info: { id: 'worker-user-007', role: 'user', sessionID: session }, parts: [{ type: 'text', text: 'Observed worker evidence before this consultation.' }] }] })
       negotiationRememberModel({ sessionID: session, model })
-      assert.match(await executor.execute(args('nondecreasing'), context('t2', 'provider-2')), /# ok/)
+      assert.match(await executor.execute(args('stalled', 4), context('t2', 'provider-2')), /# ok/)
       await hooks['chat.params']({ sessionID: session, model }, {})
       const charged = scopeProgress.settle(session, '0', 'provider-2')
       assert.equal(charged.charged, true, 'the second physical run must be recorded and settled')
-      assert.equal(charged.advisor, true, 'the unchanged estimate must trigger Advisor before checking SQLite')
+      assert.equal(charged.advisor, true, 'a round without the promised 0.1 drop must trigger Advisor before checking SQLite')
       await waitFor(() => existsSync(db) && (() => {
         const journal = new SqliteJournal(new DatabaseSync(db))
         try { return journal.read('advisor-process:' + session).some(frame => JSON.parse(frame).kind === 'Admitted') }
@@ -76,7 +76,7 @@ test('WHAT[advisor-007] real OpenCode progress escalation commits SQLite identit
         try { return journal.read('advisor-process:' + session) } finally { journal.close() }
       }
       const admitted = inspect().map(JSON.parse).filter(frame => frame.kind === 'Admitted')
-      assert.equal(admitted.length, 1, 'one SQLite claim is committed for the nondecreasing Provider round')
+      assert.equal(admitted.length, 1, 'one SQLite claim is committed for the stalled Provider round')
       const reservation = admitted[0]
       assert.equal(reservation.scope, '0')
       assert.equal(reservation.report, '0:provider-2')

@@ -22,6 +22,7 @@ test('WHAT[advisor-010] real ToolRuntimeScope cannot settle final steer before P
     let key
     const sessionPort = hostPort(async (_session, _text, options) => {
       key = options.Metadata.wanxiangshu_prompt_key
+      assert.equal(options.Metadata.wanxiangshu_consultation_steer, true)
       resolveDispatched()
       return dispatcher.admittedWithReceipt('submitted-not-accepted')
     })

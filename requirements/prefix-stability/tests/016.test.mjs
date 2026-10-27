@@ -28,7 +28,7 @@ async function outbound(sessionId, messages) {
   return out.messages
 }
 
-test('WHAT[prefix-stability-016] OpenCode provider transform preserves old completed output bytes after turnBudget decreases', async () => {
+test('WHAT[prefix-stability-016] later rounds never rewrite bytes already sent for earlier tool results', async () => {
   const sid = 'ses_scope_016_cache'
   const toolMessage = (id, name, output) => ({
     info: { id: 'asst-' + id, role: 'assistant', time: { created: 2 } },
@@ -42,36 +42,37 @@ test('WHAT[prefix-stability-016] OpenCode provider transform preserves old compl
   const rawResetText = reset.parts[0].state.output
   const first = await outbound(sid, [operator, reset])
   const firstRendered = JSON.stringify(first[1])
-  assert.match(first[1].parts[0].state.output, /Remaining turnBudget: 6/)
+  assert.equal(first[1].parts[0].state.output, rawResetText, 'no countdown suffix is appended')
   const read = toolMessage('read-016', 'read', 'new data')
   const second = await outbound(sid, [operator, reset, read])
   assert.equal(JSON.stringify(second[1]), firstRendered,
-    'the historical reset result must remain a verbatim prefix, including its old budget suffix')
-  assert.match(second[2].parts[0].state.output, /Remaining turnBudget: 5/)
+    'the historical reset result must stay a verbatim prefix across requests')
+  assert.equal(second[2].parts[0].state.output, 'new data')
   assert.equal(reset.parts[0].state.output, rawResetText,
     'raw Host history must remain untouched even though the outgoing array changed')
   clearSessionState(sid)
 })
 const user = (key, timestamp = 1) => ({ kind: 'user', operator: true, key, timestamp, parts: [] })
 const assistant = (id, tool) => ({ kind: 'assistant', operator: false, parts: [{ id, tool, terminalField: 'output' }] })
-const tail = (plan, index) => plan.hints.find(x => x.kind === 'tool' && x.index === index)?.tail
 
-test('WHAT[prefix-stability-016] repeated provider requests replay each old terminal result verbatim', () => {
+test('WHAT[prefix-stability-016] repeated provider requests plan the same retention for old terminal results', () => {
   const sid = 'pfx-016-open'
   const operator = user('task', 1), reset = assistant('r1', 'resetScope'), read = assistant('read-1', 'read')
   clearSessionState(sid)
   planRequest(sid, [operator])
   resetScopeState(sid, 6)
   const prior = planRequest(sid, [operator, reset])
-  assert.equal(tail(prior, 1), '[Remaining turnBudget: 6]')
   onTurnStart(sid)
   const later = planRequest(sid, [operator, reset, read])
-  assert.equal(tail(later, 1), tail(prior, 1), 'the earliest previous result must not change when time advances')
-  assert.equal(tail(later, 2), '[Remaining turnBudget: 5]', 'the new result carries the current budget')
+  assert.deepEqual(prior.hints, [], 'no countdown tail is planned for any tool result')
+  assert.deepEqual(later.hints, [], 'a later request plans no tail either')
+  assert.deepEqual(later.slots.map(s => s.index).slice(0, prior.slots.length),
+    prior.slots.map(s => s.index), 'the retained prefix keeps its positions')
+  assert.equal(later.slots.length, prior.slots.length + 1, 'the new terminal result is appended, not merged')
   clearSessionState(sid)
 })
 
-test('WHAT[prefix-stability-016] new operator steer preserves old result bytes without resetScope reanchor', () => {
+test('WHAT[prefix-stability-016] new operator steer is not a cold prefix boundary', () => {
   const sid = 'pfx-016-steer'
   const operator = user('task', 1), reset = assistant('r1', 'resetScope')
   clearSessionState(sid)
@@ -80,8 +81,9 @@ test('WHAT[prefix-stability-016] new operator steer preserves old result bytes w
   const previous = planRequest(sid, [operator, reset])
   const next = planRequest(sid, [operator, reset, user('steer', 2)])
   assert.equal(next.initialized, true)
-  assert.equal(next.budget, previous.budget)
   assert.equal(next.strong, null)
-  assert.equal(tail(next, 1), tail(previous, 1), 'steer is not a cold prefix boundary')
+  assert.deepEqual(next.hints, [])
+  assert.deepEqual(next.slots.slice(0, previous.slots.length).map(s => s.index),
+    previous.slots.map(s => s.index), 'the earlier plan survives a new operator message')
   clearSessionState(sid)
 })

@@ -66,7 +66,6 @@ const MEMBERS_BY_PERMISSION = {
   DevOpsConsultation: ['devops'],
   Fission: ['fission'],
   Horizon: ['horizon'],
-  Advisor: [],
   Ask: ['ask'],
   Review: ['review'],
   ReviewAssessment: ['review'],
@@ -194,7 +193,7 @@ test('WHAT[repository-programming-001] JS001_lifecycle_members_are_carried_by_ev
 })
 
 test('WHAT[repository-programming-001] JS001_non_projected_permissions_never_produce_members', () => {
-  for (const name of ['Join', 'Edit', 'Pty', 'Fetch', 'Finality', 'ResetScope', 'BashHoneypot']) {
+  for (const name of ['Join', 'Edit', 'Pty', 'Fetch', 'Finality', 'ResetScope', 'BashHoneypot', 'Advisor']) {
     const result = generate('Engineer', caps(name), 'en')
     assert.equal(isNone(result), true, `${name} alone must not generate a surface`)
   }

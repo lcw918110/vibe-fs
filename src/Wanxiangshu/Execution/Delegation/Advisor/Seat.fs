@@ -350,7 +350,8 @@ module AdvisorSeat =
 
             let acceptanceObserver: ContinuationAcceptanceObserver =
                 { Notify = ignore
-                  AttachDisposable = fun subscription -> lock acceptance (fun () -> acceptance.Add subscription) }
+                  AttachDisposable = fun subscription -> lock acceptance (fun () -> acceptance.Add subscription)
+                  Budget = None }
 
             // advisor-[002] on a fresh seat (F39-01): the view opens the child's Authority Root,
             // so the dispatcher must see that root accepted before the intent is sent. A

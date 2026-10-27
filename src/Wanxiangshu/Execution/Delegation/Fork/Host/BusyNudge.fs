@@ -72,10 +72,15 @@ module HostForkBusyNudge =
         task {
             let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create j)
             let syntheticPrompt = LlmFacing.renderInstruction prompt
+            let port = DispatchSessionPort.ofSessionPort sessions
+            let dispatchPort =
+                match observer with
+                | None -> port
+                | Some _ -> DispatchSessionPort.forConsultation port
 
             let! sent =
                 rt.SendContinuation
-                    (DispatchSessionPort.ofSessionPort sessions)
+                    dispatchPort
                     childId
                     syntheticPrompt
                     PromptAuthority.ContinuationKind.BusyAgentNudge

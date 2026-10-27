@@ -2,6 +2,7 @@ namespace Wanxiangshu.Interaction.Dispatch
 
 open System
 open System.Threading.Tasks
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Outcome
@@ -78,6 +79,15 @@ module DispatchSessionPort =
 
             member _.SubscribeTerminal(sessionId, listener) =
                 port.SubscribeTerminal(sessionId, listener) }
+
+    let forConsultation (port: IDispatchSessionPort) : IDispatchSessionPort =
+        { new IDispatchSessionPort with
+            member _.SendPrompt(sessionId, request, metadata, late) =
+                let carrier = metadata |> Option.defaultWith (fun () -> createObj [])
+                carrier?wanxiangshu_consultation_steer <- box true
+                port.SendPrompt(sessionId, request, Some carrier, late)
+            member _.SubscribeFutureTerminal(sessionId, listener) = port.SubscribeFutureTerminal(sessionId, listener)
+            member _.SubscribeTerminal(sessionId, listener) = port.SubscribeTerminal(sessionId, listener) }
 
     /// Build a dispatch port over the neutral P-02 send port and the product
     /// terminal source. `metadata` is a product side channel with no neutral

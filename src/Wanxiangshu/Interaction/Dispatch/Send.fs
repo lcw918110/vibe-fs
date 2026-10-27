@@ -132,7 +132,7 @@ module PromptDispatcherSend =
         registration |> Option.iter (fun owned -> owned.Dispose())
 
     let private beginOwnedConfirmation key registration (observer: ContinuationAcceptanceObserver) =
-        let outcome, subscription = PromptPhysicalAcceptance.beginConfirmation key None
+        let outcome, subscription = PromptPhysicalAcceptance.beginConfirmation key observer.Budget
 
         try
             observer.AttachDisposable subscription
@@ -215,11 +215,15 @@ module PromptDispatcherSend =
         (abandon: PromptAbandonReason -> string -> Task<Result<unit, string>>)
         (sendTask: Task<SendOutcome>)
         (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
-        : Task<Result<PromptKey, string>> =
+        : Task<Result<PromptKey, string> * bool> =
+        // The verdict travels with the result: a Host that refused before
+        // accepting anything must stay `NotSent`, not decay into `Failed`.
+        let mutable definitelyNotSent = false
         let settle =
             task {
                 let! outcome = sendTask
-                let action, _, _ = answerOf outcome
+                let action, notSent, _ = answerOf outcome
+                definitelyNotSent <- notSent
 
                 match action with
                 | SendLedger.Submit receipt ->
@@ -240,9 +244,10 @@ module PromptDispatcherSend =
 
         task {
             try
-                return! settle
+                let! result = settle
+                return result, definitelyNotSent
             with ex ->
-                return Error ex.Message
+                return Error ex.Message, false
         }
 
     let private publicResultOfAttempt =
@@ -256,6 +261,14 @@ module PromptDispatcherSend =
     let private continuationAttemptOutcome (outcome: SendOutcome) (result: Result<PromptKey, string>) =
         let _, definitelyNotSent, _ = answerOf outcome
 
+        match result with
+        | Error error when definitelyNotSent -> PromptDispatcher.SendAttemptOutcome.NotSent error
+        | Ok sentKey -> PromptDispatcher.SendAttemptOutcome.Sent sentKey
+        | Error error -> PromptDispatcher.SendAttemptOutcome.Failed error
+
+    /// Same classification, with the verdict the physical-aware await observed
+    /// instead of a synthesized one.
+    let private attemptOutcomeFrom (definitelyNotSent: bool) (result: Result<PromptKey, string>) =
         match result with
         | Error error when definitelyNotSent -> PromptDispatcher.SendAttemptOutcome.NotSent error
         | Ok sentKey -> PromptDispatcher.SendAttemptOutcome.Sent sentKey
@@ -509,7 +522,7 @@ module PromptDispatcherSend =
 
                 let awaitRootSend sendTask =
                     task {
-                        let! outcome =
+                        let! outcome, _ =
                             awaitPhysicalAwareSend
                                 key
                                 sessionId
@@ -682,7 +695,7 @@ module PromptDispatcherSend =
                             | PromptDispatcher.AwaitMode.Detached -> detachedOutcome ()
                             | PromptDispatcher.AwaitMode.Await ->
                                 task {
-                                    let! outcome =
+                                    let! outcome, definitelyNotSent =
                                         awaitPhysicalAwareSend
                                             key
                                             sessionId
@@ -692,7 +705,7 @@ module PromptDispatcherSend =
                                                 this.Abandon key sessionId reason |> TaskValue.map (fun _ -> Error error))
                                             sendTask
                                             (confirmation |> Option.map fst)
-                                    return continuationAttemptOutcome (SendOutcome.AdmittedWithReceipt(TransportReceipt.create "accepted")) outcome
+                                    return attemptOutcomeFrom definitelyNotSent outcome
                                 }
 
                         return! sendAfterAdmission ()

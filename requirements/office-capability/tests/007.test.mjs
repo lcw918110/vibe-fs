@@ -19,15 +19,11 @@ test('WHAT[office-capability-007] an existing DevOps model target accepts the sa
   const runtime = routing.createRuntime(route)
   const road = 'office-road'
   const target = { model: 'host/fixed-model', reasoning: 'none' }
-  routing.bindDevopsTarget(runtime, road, target)
+  routing.seedDevOpsModelTarget(runtime, road, 'host/fixed-model:none')
   assert.deepEqual(routing.boundDevopsTarget(runtime, road), target)
   assert.throws(
     () => routing.seedDevOpsModelTarget(runtime, road, 'host/other-model:none'),
     /durable DevOps model binding is immutable/,
-  )
-  assert.throws(
-    () => routing.bindDevopsTarget(runtime, road, { model: 'host/third-model', reasoning: 'none' }),
-    /DevOps model binding is immutable/,
   )
   assert.deepEqual(routing.boundDevopsTarget(runtime, road), target)
 })

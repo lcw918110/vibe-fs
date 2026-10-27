@@ -26,4 +26,5 @@ module DispatchSessionPort =
         request: PromptRequest -> metadata: obj option -> late: LateDeliveryListener option -> SessionPromptOptions
 
     val ofSessionPort: port: ISessionHostPort -> IDispatchSessionPort
+    val forConsultation: port: IDispatchSessionPort -> IDispatchSessionPort
     val ofNeutral: promptPort: IPromptPort -> terminalSource: ISessionTerminalSource -> IDispatchSessionPort

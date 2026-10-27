@@ -237,6 +237,8 @@ module ToolExecuteGate =
             )
         elif
             role = Role.Manager
+            && managerPermission <> Some ToolPermission.Join
+            && managerPermission <> Some ToolPermission.Horizon
             && spec.Name <> "todowrite-for-manager"
             && spec.Name <> "review"
             && spec.Name <> "resetScope"

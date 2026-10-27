@@ -165,6 +165,10 @@ module Adapter =
         | :? int as number -> Some(float number)
         | _ -> None
 
+    /// JSON cannot carry NaN or infinities, so only a crafted JS caller gets here.
+    [<Emit("Number.isFinite($0)")>]
+    let private isFiniteNumber (_value: obj) : bool = jsNative
+
     let private optionalInt (value: obj) : int option =
         match value with
         | null -> None
@@ -343,6 +347,12 @@ module Adapter =
     let private activeProgressRuns = System.Collections.Generic.Dictionary<string, string>()
     let private pendingAdvisorSteers =
         System.Collections.Generic.Dictionary<string, string * string * System.Threading.Tasks.TaskCompletionSource<obj>>()
+
+    /// The advice is a steer into a working session, so its physical
+    /// message_start arrives only after that session's current turn ends.
+    /// Thirty minutes bounds a hopeless wait without calling a long turn Unknown.
+    [<Literal>]
+    let AdvisorSteerAcceptanceBudgetMs = 1_800_000
 
     let private pendingPreviousSteers =
         System.Collections.Generic.Dictionary<string, string * PrefixEpochId>()
@@ -1528,7 +1538,7 @@ module Adapter =
                   "loadMode", box "essential"
                   "approval", box "read"
                   "description",
-                  box "End the current Scope; preserve operator and assistant prose/reasoning plus critical consultation tool call/results, remove ordinary old tool process, and report outstanding work. Arguments: experience and objective."
+                  box "End the current Scope; preserve operator and assistant prose plus critical consultation tool call/results, retire the old Scope's thinking and ordinary tool process, and report outstanding work. Arguments: experience and objective."
                   "parameters",
                   box (
                       createObj
@@ -2099,7 +2109,7 @@ module Adapter =
         | Some "toolResult"
         | Some "tool-result"
         | Some "tool_result" -> createObj [ "resultFor", fieldValue part "id" ]
-        | _ -> createObj []
+        | kind -> createObj [ "type", box (defaultArg kind "") ]
 
     let private ompNeutralMessage (message: obj) : obj =
         let kind = ompScopeKind message
@@ -3051,7 +3061,7 @@ module Adapter =
                         let options = createObj [ "deliverAs" ==> "steer"; "attribution" ==> "agent" ]
                         try
                             let! _ = awaitObj (call2 (fieldValue pi "sendUserMessage") (box text) options)
-                            let! confirmed = observedOrTimeout tcs.Task 30000
+                            let! confirmed = observedOrTimeout tcs.Task AdvisorSteerAcceptanceBudgetMs
                             if isNull confirmed then
                                 pendingAdvisorSteers.Remove key |> ignore
                                 return refuse "Advisor steer has no confirmed physical acceptance"
@@ -3075,8 +3085,7 @@ module Adapter =
                 let questionPath =
                     match stringOf (fieldValue receipt "trigger") with
                     | "ResetDue" -> "host/advisor-question/reset-due"
-                    | "Equal" -> "host/advisor-question/equal"
-                    | _ -> "host/advisor-question/increase"
+                    | _ -> "host/advisor-question/stall"
                 let question = ProviderProse.render (ProviderLanguageBinding.forSessionText sid) questionPath Map.empty
                 let launched: Task<obj> = unbox (advisorFlow?trigger(sid, epoch, key, question))
                 launched |> ignore
@@ -3094,7 +3103,7 @@ module Adapter =
                 createObj [ "type" ==> "object"
                             "properties" ==> createObj [
                                 "remainingScopeTurnsEstimate" ==> createObj [
-                                    "type" ==> "integer"; "minimum" ==> 0
+                                    "type" ==> "number"; "minimum" ==> 0
                                     "description" ==> estimateProse ]]
                             "required" ==> [| "remainingScopeTurnsEstimate" |]
                             "additionalProperties" ==> false ]
@@ -3109,10 +3118,11 @@ module Adapter =
                 "execute" ==> Func<obj, obj, obj, obj, obj, obj>(fun callId arguments _signal _onUpdate ctx ->
                     task {
                         let sid = ctxSessionId ctx
-                        let value = optionalInt (fieldValue arguments "remainingScopeTurnsEstimate")
+                        let rawEstimate = fieldValue arguments "remainingScopeTurnsEstimate"
+                        let value = optionalFloat rawEstimate
                         let cid = stringOf callId
                         if String.IsNullOrWhiteSpace sid || String.IsNullOrWhiteSpace cid || value.IsNone
-                           || value.Value < 0 then
+                           || not (isFiniteNumber rawEstimate) || value.Value < 0.0 then
                             return ompScopeRefused "todowrite requires the real call identity and nonnegative remainingScopeTurnsEstimate"
                         else
                             bindProgress sid

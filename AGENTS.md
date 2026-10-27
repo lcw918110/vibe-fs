@@ -477,7 +477,7 @@ HNI 采用严格分层架构，防止宿主概念侵入产品核心：
 | **P-14** | `IDelegationCallerHost`, `DelegationCaller` | `Host/Domain/DelegationCaller.fs(i)` | **WIRED-OC (Tier B)** | 委派调用上下文接缝（commit `58660d4d9`） |
 | **P-15** | `IDelegationCommandHost`, `DelegationReply` | `Host/Domain/DelegationCommand.fs(i)` | **WIRED-OC (Tier B)** | 委派命令返回中继（待与 P-14 合并至领域模型） |
 | **P-16** | `PairGuidanceTranscript`, `PairGuidanceLedger` | `Host/Domain/PairGuidance.fs(i)` | **WIRED-OC (Tier B)** | 配对指导事实提取接缝（commit `3e2f12213` 草稿曾误记为 P-13，经 D-01 碰撞裁决正式分配并保留为 P-16） |
-| **P-17** | `FissionHostPort`, `FissionSessionPort`, `FissionEventPort` | `Host/FissionPort.fs(i)` | **WIRED-OC (Transitional)** | Fission 多分支并发接缝，正向 P-01/P-07 汇聚 |
+| **P-17** | `FissionHostPort`, `FissionSessionPort`, `FissionEventPort` | `Execution/Fission/FissionEnvironment.fs(i)` | **WIRED-OC (Transitional)** | Fission 多分支并发接缝，正向 P-01/P-07 汇聚（`OpenCode/Host/FissionHostSurface.fs(i)` 为装配） |
 | **P-18** | `HostToolContext`, `ToolAdmission` | `Host/ToolContext.fs(i)` | **RETIRED (ID 废弃)** | 原与 P-04 文件名冲突，更名后将融入 P-04，本 ID 永久作废不复用 |
 | **P-19** | `IHostConfigPort`, `RequiredSetting`, `HostSettingValue` | `Host/Ports/HostConfig.fs(i)` | **WIRED-OC** | 宿主配置动态读取与校验门禁（commit `93a51ca15`） |
 | **P-20** | *(保留中)* | — | **NEXT FREE** | 下一个新增端口的保留 ID |
@@ -814,6 +814,7 @@ CUT36_OMP_REAL_SMOKE=1 \
 - **标的不存在事实（NOT_IN_BRANCH）**：经全仓多维度检索实证，《交接.md》记载的待迁移源文件 `src/Wanxiangshu/Execution/Delegation/Fission/FissionLaneQuiescenceGate.fs(.fsi)` 在当前分支中**完全不存在**，亦无任何 `Execution/Delegation/Fission` 目录。全仓无 `FissionLaneQuiescenceGate` 或 `laneQuiescence` 符号，`compile-order.txt` 与 `owner-impact-corpus.json` 亦无任何相关历史条目。
 - **裁决与处置**：本包标的系已过期的过时描述，不存在真实的宿主状态所有权待迁出。遵照裁决，**不为不存在的宿主在库侧凭空制造孤儿组件**，已彻底清理库侧临时试探代码（删除未落地文件与测试，还原 `Wanxiangli.FissionGroup.fsproj`、`index.d.ts` 与局部 AGENTS.md），保持 `wanxiangli/fission-group` 纯洁。
 - **状态定性**：本包与 Package-13 同理，定性为 **NOT_IN_BRANCH / 标的不存在而阻断（BLOCKED）**，不记为完成，亦不记为失败。
+- **库侧有效资产事实核对（2026-10-26 补充）**：经 2026-10-26 只读核实，库侧 `wanxiangli/src/fission-group/FissionLaneQuiescenceGate.fs` 实际存在、已纳入门禁 fsproj/index.d.ts 导出并在 `002.test.mjs`（5 项测试）中全绿生效；前述“清理库侧试探代码”仅系此前针对主仓路径缺失时的过度陈述口径，库侧现存门禁对象客观有效并承接中立分道静默判定。
 
 ### 6.27 Package-24 标的核查与阻断裁决（2026-10-26）
 - **标的无待迁状态所有权事实（NOT_IN_BRANCH）**：经全仓与 Sphinx 目录只读检视实证，《交接.md》与任务假设中提及的 `src/Wanxiangshu/Sphinx/V2/Runtime/Registry.fs(.fsi)` 实际全为纯函数（`toLockEntry`、`ordered`、`bind`、`lockOf`、`compatible`），其调用点 `Surface.inspectRegistryBinding` 即时消费并丢弃返回值，全链路不存在任何进程内或会话级的可变注册表字典或跨调用状态容器；`V2/Composition/Commands.fs` 中的 `RuntimeHandle.delivered: HashSet<EventId>` 属于绑定底层 `EventStoreHandle` 的持久化切段故障去重防护，并非运行时注册表状态。

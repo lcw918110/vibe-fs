@@ -42,6 +42,36 @@ const toolModule = {
 const waitForPromptCount = (runtime, count) => forkTool.awaitPromptCount(runtime, count)
 const ownerDescriptor = (sessionId) => [{ sessionId, agent: 'manager' }]
 
+test('WHAT[delegation-021] late consultation stops only after a tool-free completed turn', async () => {
+  await withRealFork('manager-consultation-boundary', async ({ hooks, runtime }) => {
+    for (const kind of ['askPreviousScope', 'negotiate', 'advisor']) {
+      const sid = `consult-${kind}`
+      const earlier = { info: { id: 'user-original', role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'task' }] }
+      const assistant = { info: { id: 'assistant-before', role: 'assistant', sessionID: sid, time: { completed: 5 } }, parts: [{ type: 'text', text: 'Finished' }] }
+      const steer = { info: { id: `reply-${kind}`, role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'answer', metadata: { wanxiangshu_consultation_steer: true } }] }
+      const output = { messages: structuredClone([earlier, assistant, steer]) }
+      const count = runtime.abortedIds.length
+      await hooks['experimental.chat.messages.transform']({}, output)
+      assert.deepEqual(output.messages, [])
+      assert.deepEqual(runtime.abortedIds.slice(count), [sid])
+    }
+    for (const prior of [
+      { time: { completed: 5 }, parts: [{ type: 'tool', state: { status: 'completed' } }] },
+      { time: {}, parts: [{ type: 'text', text: 'in progress' }] },
+    ]) {
+      const sid = 'consult-continue-' + (prior.time.completed ?? 'pending')
+      const output = { messages: [
+        { info: { id: 'u', role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'task' }] },
+        { info: { id: 'a', role: 'assistant', sessionID: sid, time: prior.time }, parts: prior.parts },
+        { info: { id: 's', role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'answer', metadata: { wanxiangshu_consultation_steer: true } }] },
+      ] }
+      const count = runtime.abortedIds.length
+      await assert.rejects(hooks['experimental.chat.messages.transform']({}, output), /accepted-execution-missing/)
+      assert.equal(runtime.abortedIds.length, count)
+    }
+  })
+})
+
 // A join that must answer inside a bounded window. The window is never
 // widened; its timer is always cleared, so a join that answered early never
 // keeps the process alive waiting for the deadline.
@@ -157,56 +187,7 @@ test('WHAT[delegation-026] reused child completes after busy guidance and a fres
     }
   })
 })
-test('WHAT[delegation-021] queued guidance cannot restart completed work or interrupt a fresh assignment', async () => {
-  const owner = 'manager-late-guidance'
-  await withRealFork(owner, async ({ hooks, createdIds, runtime }) => {
-    const terminals = await observeTerminals(runtime)
-    try {
-      const receipt = await forkCall(hooks, owner, 'Ada', 'INITIAL-CHARGE')
-      const child = createdIds[0]
-      const agentId = agentIdOf(receipt)
-      const root = physicalUserMessageOf(runtime, child).id
-      const event = hooks.event
-      hooks.event = async (args) => {
-        if (args.event.type === 'message.updated') {
-          await resumeCall(hooks, owner, 'Ada', 'QUEUED-ASYNC-GUIDANCE')
-          await runtime.awaitIngress()
-        }
-        return event(args)
-      }
-      await childTurn(hooks, runtime, child, `run-${child}-1`, 'FINISHED ANSWER', null, terminals.awaitRun)
-      hooks.event = event
-      assert.equal(workLifecycleOf(runtime, owner, agentId, child, root), 'CompletedAwaitingJoin')
-      assert.match(await joinCall(hooks, owner), /FINISHED ANSWER/)
 
-      const history = await runtime.client.session.messages({ path: { id: child } })
-      const output = { messages: history.data.map(message => ({
-        ...message, info: { ...(message.info ?? message), sessionID: child },
-      })) }
-      const aborts = runtime.abortedIds.length
-      await hooks['experimental.chat.messages.transform']({ sessionID: child }, output)
-      assert.deepEqual(output.messages, [], 'the completed work must not reach the provider again')
-      assert.deepEqual(runtime.abortedIds.slice(aborts), [child], 'interrupt the stale continuation attempt')
-      const retained = await runtime.client.session.messages({ path: { id: child } })
-      assert.ok(retained.data.some(message => message.parts.some(part => /QUEUED-ASYNC-GUIDANCE/.test(part.text ?? ''))),
-        'the suppression changes only the request, not the stored guidance')
-
-      await resumeCall(hooks, owner, 'Ada', 'FRESH-CHARGE')
-      const beforeFresh = runtime.abortedIds.length
-      const transform = hooks['experimental.chat.messages.transform']
-      hooks['experimental.chat.messages.transform'] = async (input, request) => {
-        await transform(input, request)
-        assert.match(JSON.stringify(request.messages), /QUEUED-ASYNC-GUIDANCE/,
-          'the new task can still use guidance retained in the conversation')
-      }
-      await childTurn(hooks, runtime, child, `run-${child}-2`, 'FRESH ANSWER', null, terminals.awaitRun)
-      assert.equal(runtime.abortedIds.length, beforeFresh, 'do not interrupt the new assignment')
-      assert.match(await joinCall(hooks, owner), /FRESH ANSWER/)
-    } finally {
-      terminals.dispose()
-    }
-  })
-})
 test('WHAT[delegation-026] FORK_TOOL_acceptance_unknown_never_claims_charge_was_not_placed', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'wxs-fork-unknown-'))
   const owner = 'manager-unknown'

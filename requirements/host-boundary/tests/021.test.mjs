@@ -113,11 +113,17 @@ test('WHAT[host-boundary-021] HOST_021_plugin_load_graph_has_no_semantic_recover
   // lifecycle events directly.
   assert.match(spike, /PluginRecoveryWiring\.attach boot/)
   assert.doesNotMatch(spike, /SignalChatRecovery|PluginRuntimeReloaded|CapacityProjectionReplayed/)
-  assert.match(
-    recoveryWiring,
-    /scope\.AttachDurabilityActivation\(fun \(\) ->\s*scope\.RunBackground\(fun \(\) ->/,
-  )
+  // Load installs one callback; the callback owns the later lifecycle work.
+  // `recovery` itself already runs in the background, and the activation is its
+  // only caller, so nothing executes at load.
+  const activationAt = recoveryWiring.indexOf('scope.AttachDurabilityActivation(fun () ->')
+  assert.ok(activationAt > 0, 'plugin load must install a durability-activation callback')
   assert.equal([...recoveryWiring.matchAll(/AttachDurabilityActivation/g)].length, 1)
+  assert.match(recoveryWiring, /let recovery \(\) =\s*scope\.RunBackgroundTracked\(fun \(\) ->/)
+  assert.ok(
+    recoveryWiring.indexOf('scope.TrackDurabilityActivation(recovery ())') > activationAt,
+    'the background recovery must start inside the activation callback, not at load',
+  )
   assert.doesNotMatch(recoveryWiring, /restoreLinkedChildren|recoverFamilyDirect|defaultRecoverPromptClaims/)
 })
 test('WHAT[host-boundary-021] HOST_021_broken_tool_recovery_APIs_do_not_exist', () => {

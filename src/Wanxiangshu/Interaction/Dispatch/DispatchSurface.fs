@@ -402,7 +402,8 @@ module DispatchSurface =
         : Task<obj> =
         let observer: ContinuationAcceptanceObserver =
             { Notify = PhysicalUserMessageId.value >> onAccepted
-              AttachDisposable = box >> attachRegistration }
+              AttachDisposable = box >> attachRegistration
+              Budget = None }
 
         sendAgentOwnerRootWithMode (awaitModeOf awaitMode) (Some observer) port handle session text identitySeed
 
@@ -589,7 +590,8 @@ module DispatchSurface =
         : Task<obj> =
         let observer: ContinuationAcceptanceObserver =
             { Notify = PhysicalUserMessageId.value >> onAccepted
-              AttachDisposable = box >> attachRegistration }
+              AttachDisposable = box >> attachRegistration
+              Budget = None }
 
         sendContinuationWithObserver
             port

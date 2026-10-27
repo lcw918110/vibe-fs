@@ -171,3 +171,19 @@ omp 入口模块（`src/Wanxiangshu/Composition/Omp/` 下携带 `[<ExportDefault
 入口模块不得出现任何产品决策：不写准入/拒绝规则、不写重试、不算预算、不渲染产品散文、不保留产品状态；并且不 import 任何产品模块。允许的命名面只有中立端口、omp 适配器与 second-host plugin 取值面（`System`、`Fable.Core`、`Wanxiangshu.Host.Ports`、`Wanxiangshu.Host.SecondHost`、`Wanxiangshu.Omp`），产品散文只存在于产品资源树。
 
 该约束由门禁 `scripts/checks/omp-entry-decision-gate.mjs` 强制：门禁只读取入口模块与其接口，不扫描其他 lane 的文件；入口模块缺失、导出点缺失或歧义时必须 fail closed。门禁自带 planted-violation 自证——每一类禁止项都必须在植入违规后被拒绝，且真实入口模块必须被接受；自证失败本身就是门禁 issue。
+
+
+## [036] 宿主功能性角色与自动 compaction 隔离契约
+
+宿主内置的功能性代理（title、compaction、summary、explore、generate）服务于宿主自身的生命周期与元数据维护，不隶属于万象术受托治理的 managed roles（manager、orchestrator、engineer、devops、plan、advisor）：
+
+1. **请求级系统所有权与视图隔离**：OpenCode 1.19.4 的 system hook 不携带当前 agent，且先于 chat.params；title 可复用 managed 会话及用户消息。只有以万象术自有角色提示词完整字节开头（后接换行或结束）的请求，才进入产品 system 改写与出站快照；临时协商沿专用前缀投影处理。其他请求原样保留，即使自定义功能性提示词、与 managed 请求同会话交错，或在尾部引用产品提示词，也不得注入 Scope 或污染快照。禁止用宿主英文提示词片段、历史用户 agent 或会话身份猜当前角色；
+2. **历史会话压缩服从 as-is 语义**：`session.compacting` 只授权该会话紧接的一次 `messages.transform` 旁路，读取时即消费，不延续到 system/params 或后续普通请求。宿主传入当前存活上下文的什么内容，就原样提供给压缩模型；绝不恢复前任已被 tenure cut 裁切的历史，也不得注入预算后缀。其他会话不受影响；
+3. **宿主自动 compaction 策略保留**：万象术不得物理禁用宿主自动压缩。配置钩子必须保留 `auto=true, prune=false, autocontinue=true`，允许宿主自发触发安全压缩，且该压缩不推进 Scope epoch、不扣减计费估计、不更改在途委托事实；
+4. **准入与执行旁路**：功能性角色在 `chat.message` 中不受 managed lease 约束或强加 tools 屏蔽，允许其无阻碍直接执行。
+5. **参数隔离**：chat.params 以实际调用的 agent 为准，非 managed 请求不得结算 Scope 进度、触发 Advisor、覆盖模型快照或记录 managed 模型容量；宿主参数原样保留。
+6. **共享历史中的作者身份**：产品在请求副本追加的 Scope 提醒必须将每个文本 part 标记为宿主原生 `synthetic=true`，不伪装成真实用户消息。OpenCode 的后台 title 与普通请求变换可共享同一数组；变换后 title 的真实用户计数必须仍只包含原始用户消息，不能因产品提醒从一条变成两条而静默取消自动命名。
+
+2026-10-27 实测：上一轮仅 system/params 旁路不能修复 title。未标记的 Scope steer 使真实 DevOps 会话不发出 title 请求；补齐 synthetic 后，OpenCode 1.19.4 在开启插件的真实 DevOps 新会话中发出 `small=true agent=title`，并将持久标题更新为「自动标题生成诊断」。普通 DevOps 模型请求在诊断上限被停止，此证据仅证明后台自动标题完成，不冒充普通任务完成。
+
+源码依据：[OpenCode v1.19.4 request.ts](https://github.com/anomalyco/opencode/blob/v1.19.4/packages/opencode/src/session/llm/request.ts)、[compaction.ts](https://github.com/anomalyco/opencode/blob/v1.19.4/packages/opencode/src/session/compaction.ts)、[prompt.ts](https://github.com/anomalyco/opencode/blob/v1.19.4/packages/opencode/src/session/prompt.ts)。

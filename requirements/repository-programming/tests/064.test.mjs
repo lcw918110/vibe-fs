@@ -67,8 +67,8 @@ test('WHAT[repository-programming-064] the physical Host ToolSpec requires the p
   }
   const estimate = argumentSchema(registered,'remainingScopeTurnsEstimate')
   assert.notEqual(estimate.optional, true)
-  assert.equal(estimate.integer,true)
-  assert.equal(typeof estimate.nonnegative,'function', 'the integer schema requires an exposed nonnegative validator')
+  assert.equal(estimate.type,'number','the estimate is a real number, not an integer')
+  assert.notEqual(estimate.integer, true, 'a fractional estimate must remain valid')
   for (const former of ['unpark', 'abandon', 'prefixUntil', 'carry'])
     assert.equal(argumentSchema(registered, former), null)
 })

@@ -189,10 +189,10 @@ const stubClient = (createdIds, prompts, messages, abortedIds) => {
             {
               type: 'text',
               text: textPart?.text ?? '',
-              metadata: key ? { wanxiangshu_prompt_key: key } : undefined,
+              metadata: textPart?.metadata,
             },
           ],
-          metadata: key ? { wanxiangshu_prompt_key: key } : undefined,
+          metadata: args?.body?.metadata,
         }
         const perSession = messagesBySession.get(sessionId) ?? []
         perSession.push(message)

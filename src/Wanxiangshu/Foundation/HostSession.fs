@@ -11,7 +11,11 @@ type ProviderAttemptSource =
 
 type ContinuationAcceptanceObserver =
     { Notify: PhysicalUserMessageId -> unit
-      AttachDisposable: System.IDisposable -> unit }
+      AttachDisposable: System.IDisposable -> unit
+      /// How long the caller is willing to wait for PhysicalAccepted. A busy
+      /// target lands the message only after its current turn ends, so callers
+      /// that know this state a larger budget than the admission default.
+      Budget: int option }
 
 /// HOST-004: process-local side-effect admission capability.
 type ISessionQuiescenceGate =

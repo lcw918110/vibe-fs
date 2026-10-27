@@ -44,7 +44,7 @@
 
 **真正由操作员编写的用户消息**不是上下文清理边界，且永不删除。每次 `resetScope` 清理时按原序保留这些 operator 用户消息（包括确实来自操作员的普通 prompt 或 steer）；宿主上的 `role: "user"` 载体不自动意味着 operator 身份。协商、旧 Scope、Advisor 等代理答复以 `attribution: agent` 呈现时属于代理过程，不得冒充 operator；处于旧 scope 的这类答复按普通历史清理，最近一次 reset 之后属于当前活跃 scope 的内容原样保留。
 
-最新一次 `resetScope` 之前，始终保留真人操作员消息、实际可取得的 assistant 文本与 reasoning、历次 `resetScope` 及关键工具的完整调用与配对结果；仅清理不在保留名单上的普通工具过程。assistant 消息即使混有被清理的工具 part，其文本与 reasoning 仍须保留。系统不得借缺少编号在保留规则之外另行删除操作员消息。
+最新一次 `resetScope` 之前，始终保留真人操作员消息、实际可取得的 assistant 文本、历次 `resetScope` 及关键工具的完整调用与配对结果；仅清理不在保留名单上的普通工具过程，以及属于已结束 Scope 的 thinking/reasoning。assistant 消息即使混有被清理的工具 part，其正文仍须保留；同一消息里的 thinking 随旧 Scope 一起退场。最新 `resetScope` 之后的消息（含 thinking）完整保留。系统不得借缺少编号在保留规则之外另行删除操作员消息。
 
 ## [019] 重锚边界与辅助注入可见性
 
@@ -72,15 +72,15 @@ resetScope(
 
 **没有** `newScopeTurnBudget` 或 `kpiCompletion`。成功的 durable `ScopeReanchored` 开始下一 Scope，并使单一 `ScopeProgress` 在新 epoch 重新建立首次计费估计；失败、Unknown 或同调用重放不得提前更新进度。
 
-请求副本清理普通旧工具过程，但历次真人 operator 消息、所有实际可取得的 assistant 文本与 reasoning、`resetScope` 以及 `assume / negotiate / askPreviousScope / askPrevious / advisor` 真正关键工具的**完整调用及其按 toolCallId 配对的原结果**，跨任意次数 reset 保留。不能因 assistant 与被清理的 read/bash 同消息就误删 assistant 正文／思考；不得保留孤儿工具结果。代理 attributed user 不冒充 operator。真正在途 fork/resume/commission 从 durable HandleLedger 与子会话最后一次已接受派出提示词读取，reset 成功结果可以附尚未归队工作清单，不改写历史工具返回值。
+请求副本清理普通旧工具过程与旧 Scope 的 thinking/reasoning，但历次真人 operator 消息、所有实际可取得的 assistant 文本、`resetScope` 以及 `assume / negotiate / askPreviousScope / askPrevious / advisor` 真正关键工具的**完整调用及其按 toolCallId 配对的原结果**，跨任意次数 reset 保留。不能因 assistant 与被清理的 read/bash 同消息就误删 assistant 正文；thinking 只在最新 reset 之后保留；不得保留孤儿工具结果。代理 attributed user 不冒充 operator。真正在途 fork/resume/commission 从 durable HandleLedger 与子会话最后一次已接受派出提示词读取，reset 成功结果可以附尚未归队工作清单，不改写历史工具返回值。
 
 OpenCode 和 OMP 只能按照同一 PairHint 中立过滤计划物理投影；reset 成功仍须先写完整可验证的 Provider archive/blob，再提交 `ScopeReanchored`。完整历史归档是 durable 事实，不等同于咨询时保存多份快照。
 
 ## [034] todowrite 计费回合、最小估计、ResetDue 与 Advisor
 
-进度计费单位是**包含至少一次真实有效 `todowrite` 的 Provider LLM 回合**，不等于所有 LLM 请求。没有 `todowrite` 的回合免费，不提交估计，也不触发进度比较。同一实际 `providerRunId` 无论执行多少次有效 `todowrite`，仅计一次；取所有报告值的最小整数 `min(remainingScopeTurnsEstimate[])`。工具 Schema 保证每项报告的 `remainingScopeTurnsEstimate` 必填、非负整数；额外字段拒绝。每个 toolCallId 仅采信一次，不得因 Provider 回执重放重复结算。同回合全部受理的工具集合结束后，由下一次真实 Provider 请求边界统一结算，不按某个工具完成的时间抢先收费。
+进度计费单位是**包含至少一次真实有效 `todowrite` 的 Provider LLM 回合**，不等于所有 LLM 请求。没有 `todowrite` 的回合免费，不提交估计，也不触发进度比较。同一实际 `providerRunId` 无论执行多少次有效 `todowrite`，仅计一次；取所有报告值的最小实数 `min(remainingScopeTurnsEstimate[])`。工具 Schema 保证每项报告的 `remainingScopeTurnsEstimate` 必填、非负实数（允许小数）；额外字段拒绝。每个 toolCallId 仅采信一次，不得因 Provider 回执重放重复结算。同回合全部受理的工具集合结束后，由下一次真实 Provider 请求边界统一结算，不按某个工具完成的时间抢先收费。
 
-当前 Scope 第一份估计建立基线；此后 `newEstimate >= oldEstimate` 自动产生专席 Advisor Process，`newEstimate < oldEstimate` 继续工作。此规则明牌写入 `todowrite` 参数描述，**不指示模型不得策略性报数**。估计到 0 时由宿主记下 `ResetDue`，从下一次正常工作请求开始追加单独的强 agent-attributed `resetScope` steer，直到真实重锚；重置前再次计费也触发 Advisor。没有已确认估计时，正常工作请求强提醒**通过 `todowrite` 提交首次估计**，而不是催模型先 reset。代理侧请求／标题摘要请求不追加进度提示，不递减和修改进度。真人新消息和代理答复都不自动鼓励 reset。
+当前 Scope 第一份估计建立基线；此后每个计费回合的估计应比上一计费回合至少下降 `0.1`，判定按 `oldEstimate - newEstimate >= 0.08`（`JudgedDrop`）继续工作，否则（持平、上升或降幅不足）自动产生专席 Advisor Process。对外文案只承诺 `0.1`（`DocumentedDrop`）；判定留得更宽 `0.02`，正好覆盖十进制小数无法被二进制精确表示带来的误差，让按承诺报数不被误判，而不是把 0.1 暗中抬高。这个估计同样是模型求助的通道：如实报数，需要帮助时数字自然降不下来，系统据此安排 Advisor。求助要早：一旦判断剩余回合装不下当前 Scope，就在同一回合把估计调到真实预期并接住由此触发的顾问对话；早谈一次的代价远低于磨到弹尽粮绝才求助，提示词据此明写鼓励及时、主动求助，而不是鼓励闷头硬扛。`todowrite` 参数描述按此措辞公开规则，也**不指示模型不得策略性报数**。估计到 0 时由宿主记下 `ResetDue`，从下一次正常工作请求开始追加单独的强 agent-attributed `resetScope` steer，直到真实重锚；重置前再次计费也触发 Advisor。没有已确认估计时，正常工作请求强提醒**通过 `todowrite` 提交首次估计**，而不是催模型先 reset。代理侧请求／标题摘要请求不追加进度提示，不递减和修改进度。真人新消息和代理答复都不自动鼓励 reset。
 
 工具执行结果、assistant 原文和历史工具调用**绝不**附带旧的 `[Remaining turnBudget: N]` 后缀；`turnBudget` 倒计时、KPI 倍率、首次无预算强制 reset 与零预算弱提醒全部退役。进度所有权在 `wanxiangli/scope-progress`，PairHint 只决定历史过滤和待首问 negotiate／askPreviousScope 的强 steer；两宿主不得复制一份预算状态。
 
@@ -186,7 +186,7 @@ askPreviousScope(
 
 ## [045] 旧 KPI 倍率与 turnBudget 已退役
 
-`resetScope` 仅接受 `oldScopeVerboseVerbatimExperience?: string | null` 与 `newScopeObjective: string`。`kpiCompletion`、`newScopeTurnBudget`、按 KPI 档位乘预算因子、`[Remaining turnBudget: N]` 工具结果后缀均已删除，不得在 OpenCode 或 OMP 维护兼容影子判断。新 Scope 第一次有效 `todowrite` 建立计费回合估计基线；估计不降自动触发内部专席、报 0 后从下一主回合持续强 steer 要求重置。
+`resetScope` 仅接受 `oldScopeVerboseVerbatimExperience?: string | null` 与 `newScopeObjective: string`。`kpiCompletion`、`newScopeTurnBudget`、按 KPI 档位乘预算因子、`[Remaining turnBudget: N]` 工具结果后缀均已删除，不得在 OpenCode 或 OMP 维护兼容影子判断。新 Scope 第一次有效 `todowrite` 建立计费回合估计基线；估计较上一计费回合少降判定门槛（对外 0.1，判定 0.08）时自动触发内部专席、报 0 后从下一主回合持续强 steer 要求重置。
 
 证明：`wanxiangli/src/scope-progress/tests/001.test.mjs` 及 OpenCode 注册 `todowrite-for-*` 的 `WHAT[context-compression-052]`、OMP/OpenCode 两文本 `resetScope` 物理测试。
 
@@ -217,10 +217,23 @@ OMP **已真实实现并在本地 OMP SDK + SSE 假 Provider 验证**原生旧�
 
 第一次成功 `resetScope` 建立第一个显式重锚，不要求 `askPreviousScope`；第二次及以后才有前任真实工作 Scope 与首问义务。pending 通过单独强 steer 呈现，不硬阻断普通工具。工具结果无旧预算倒计时后缀。
 
-证明：`wanxiangli/src/pair-hint/tests/014.test.mjs`、`wanxiangli/src/scope-progress/tests/001.test.mjs` 以及双宿主 `context-compression-050` 实体重锚 canary。 OMP 的原生 `todowrite` 现已注册 essential 工具，`turn_start`／`turn_end` 实际回合归属中同一轮取最小估计，非递减触发隔离的 A/B/C/D 问询，专席 B/D 不传工具目录，物理 agent steer 经真实 `message_start` 确认后才持久完成。`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `scope-progress-016` 和 `017` 在 Node/Bun 验证同回合聚合、零预算、完整自动 Advisor 与原生 shutdown/cold restart；此内部每回合运行 ID 是 SDK turn 边界的 best-effort 事实，不假装所有供应商都有可回放 responseId。
+证明：`wanxiangli/src/pair-hint/tests/014.test.mjs`、`wanxiangli/src/scope-progress/tests/001.test.mjs` 以及双宿主 `context-compression-050` 实体重锚 canary。 OMP 的原生 `todowrite` 现已注册 essential 工具，`turn_start`／`turn_end` 实际回合归属中同一轮取最小估计，降幅不足判定门槛触发隔离的 A/B/C/D 问询，专席 B/D 不传工具目录，物理 agent steer 经真实 `message_start` 确认后才持久完成。`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `scope-progress-016` 和 `017` 在 Node/Bun 验证同回合聚合、零预算、完整自动 Advisor 与原生 shutdown/cold restart；此内部每回合运行 ID 是 SDK turn 边界的 best-effort 事实，不假装所有供应商都有可回放 responseId。
 
 ## [051] 冷恢复没有进度证据时建立首次计费估计，而不是编造旧预算
 
 即使历史里有 `resetScope`，当前进程仍不能从默认 0 猜测已提交的剩余计费估计。`wanxiangli/scope-progress` 现在可通过真实 SQLite 计费事实（逐 toolCall 的 `Recorded`、经 CAS 一次提交的 `Settled`）按原 Session/Scope 重建上个付费回合估计、最小值、`ResetDue` 以及未结算 Provider 回合。OpenCode 在启动时已加入同一 `.Herdchestra/wanxiangshu/advisor-process.sqlite` 的持久 Journal 工厂接线，**官方宿主 Fable 与 JS module-linkage 已通过，真实 OpenCode 014 已证明清空内存后按 SQLite 恢复计费余额，015 已证明并存工作区的 Session 不会串写**。没有任何能证明该 Scope 的计费事实时仍必须 `known=false`，下一次正常工作请求催 `todowrite(remainingScopeTurnsEstimate)` 建立新基线；不能伪造 `[Remaining turnBudget: 0]`、不触发零预算弱提醒，也不能仅因冷恢复要求 `resetScope`。只有 SQLite 已确认的零估计锁存才允许继续催真实重锚。
 
 证明：`wanxiangli/src/pair-hint/tests/015.test.mjs`、`scope-progress/tests/001.test.mjs`、`scope-progress/tests/007–008.test.mjs` 的真实 SQLite/SIGKILL/CAS 恢复，以及 `requirements/host-boundary/tests/scope-hni-physical.test.mjs` 中的 `context-compression-051`。OpenCode `requirements/advisor/tests/014.test.mjs`（真实计费冷恢复）及 `015.test.mjs`（两个并行插件隔离持久工厂）均已通过。
+
+## [052] 单个真实 Provider 回合只计费一次并取最小实数估计
+
+同一个真实 Provider 回合里多次调用 `todowrite`，只按该回合结一次账，取所有报告的 `min(remainingScopeTurnsEstimate)`；调用方给的 `remainingScopeTurnsEstimate` 是必填非负实数，Schema 接受小数。回合识别以宿主真实回合边界为准，不因某个工具先完成就先扣一次。
+
+证明：`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `context-compression-052`（真实注册工具、真实 `chat.params` 结算、`2.5` 物理接受）与 `wanxiangli/src/scope-progress/tests/001.test.mjs` 的多报告取最小用例。
+
+
+## [053] 已结束 Scope 的 thinking 随该 Scope 退役
+
+最新 `resetScope` 之前的 assistant thinking/reasoning 属于已结束的 Scope，和普通旧工具过程一起从发往模型的请求副本中移除；assistant 正文、真人 operator 消息、`resetScope` 与关键咨询工具的成对调用结果仍按 [046] 保留。最新 reset 之后的消息，thinking 照旧完整保留。两种宿主都必须从中立计划拿到 part 类别，不得把 reasoning 折成无类别对象后按“非工具 part”一律保留。
+
+证明：`wanxiangli/src/pair-hint/tests/016.test.mjs` 的裁剪与活 Scope 保留两个用例；`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `context-compression-053` 经真实注册的 OpenCode transform 与 OMP `before_provider_request` 断言旧 thinking 不出现在请求副本、原始消息对象与持久历史保持原样。

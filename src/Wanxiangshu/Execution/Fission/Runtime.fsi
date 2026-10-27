@@ -35,5 +35,4 @@ module FissionRuntime =
     val endDelivery: groupId: string -> completionId: string -> laneIndex: int -> unit
     val tryBeginTakeover: groupId: string -> bool
     val endTakeover: groupId: string -> unit
-    val notifyChildCreated: laneSessionId: SessionId -> handleId: string -> childSessionId: SessionId -> unit
     val clearOwner: ownerSessionId: SessionId -> unit

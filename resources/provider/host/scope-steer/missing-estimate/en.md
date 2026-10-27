@@ -1,1 +1,1 @@
-The current Scope has no estimate of remaining billable rounds yet. Submit remainingScopeTurnsEstimate in this todowrite.
+The current Scope has no estimate of remaining billable rounds yet. Submit remainingScopeTurnsEstimate in this todowrite as a nonnegative number; fractions are fine. Each charged round should lower it by at least 0.1 from the previous charged round. Report what you actually expect, not a number tuned to the rule.

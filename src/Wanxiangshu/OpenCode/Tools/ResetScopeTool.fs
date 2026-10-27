@@ -198,7 +198,7 @@ module ResetScopeTool =
     let spec (factory: HostToolFactory) (journal: AgentJournal option) (snapshotPort: ISessionSnapshotPort option) : ToolSpec =
         { Name = Surface.ResetScopeTool
           Description =
-            "End the current Scope, preserve operator and available assistant prose/reasoning plus critical consultation calls/results, and remove ordinary old tool process. Return accepted outstanding delegation prompts."
+            "End the current Scope, preserve operator and available assistant prose plus critical consultation calls/results, retire the old Scope's thinking and ordinary tool process, and return accepted outstanding delegation prompts."
           Arguments =
             [ "oldScopeVerboseVerbatimExperience",
               ToolHostCodec.optionalStringSchemaDescribed

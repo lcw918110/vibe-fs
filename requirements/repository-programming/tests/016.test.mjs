@@ -25,6 +25,7 @@ const schemaOf = (state) => ({
   describe: (text) => schemaOf({ ...state, description: text }),
   int: () => schemaOf({ ...state, integer: true }),
   nonnegative: () => schemaOf({ ...state, nonnegative: true }),
+  min: bound => schemaOf({ ...state, min: bound }),
 })
 const toolModule = () => {
   const tool = (definition) => definition
@@ -193,6 +194,7 @@ const schemaOf = (state) => ({
   describe: (text) => schemaOf({ ...state, description: text }),
   int: () => schemaOf({ ...state, integer: true }),
   nonnegative: () => schemaOf({ ...state, nonnegative: true }),
+  min: bound => schemaOf({ ...state, min: bound }),
 })
 const toolModule = () => {
   const tool = (definition) => definition

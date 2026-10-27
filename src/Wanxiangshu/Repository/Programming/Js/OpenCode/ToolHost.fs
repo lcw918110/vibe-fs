@@ -48,10 +48,10 @@ module JsToolSpec =
         : ToolSpec =
         let readCheck = JsToolPolicy.defaultReadCheck surface.RoleName readCheck
 
-        let inputOf (args: HostToolArguments) : (obj * int) option =
+        let inputOf (args: HostToolArguments) : (obj * float) option =
             if not (hasOnlyAllowedArguments args.Raw) then None
             else
-            match args.OptionalText "name", args.OptionalText "program", args.OptionalText "intent", args.OptionalNonNegativeInteger "remainingScopeTurnsEstimate" with
+            match args.OptionalText "name", args.OptionalText "program", args.OptionalText "intent", args.OptionalNonNegativeNumber "remainingScopeTurnsEstimate" with
             | Some name, Some program, Some intent, Ok(Some estimate) ->
                 Some(createObj [ "name" ==> name; "program" ==> program; "intent" ==> intent ], estimate)
             | _ -> None
@@ -70,7 +70,7 @@ module JsToolSpec =
             | None -> None
             | Some _ -> Some(DeliverySettlement.DeferredDelivery(fun () -> settlementOf ctx))
 
-        let recordProgress (ctx: HostToolContext) (estimate: int) =
+        let recordProgress (ctx: HostToolContext) (estimate: float) =
             match callFenceOf ctx with
             | None -> None
             | Some (providerRun, toolCallId) ->
@@ -133,7 +133,7 @@ module JsToolSpec =
             [ "name", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argNameProse ()) factory
               "program", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argProgramProse ()) factory
               "intent", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argIntentProse ()) factory
-              "remainingScopeTurnsEstimate", ToolHostCodec.nonNegativeIntegerSchemaDescribed
+              "remainingScopeTurnsEstimate", ToolHostCodec.nonNegativeNumberSchemaDescribed
                   (JsToolPolicy.argEstimateProse ()) factory ]
           Execute =
             fun args ctx ->

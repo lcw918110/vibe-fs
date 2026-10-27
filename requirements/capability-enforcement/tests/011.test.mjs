@@ -193,7 +193,7 @@ test('WHAT[capability-enforcement-011] MACFG_applyOwnedFields_writes_owned_keys_
   const result = configure(cfg)
   assert.equal(result.ok, true, result.ok ? '' : result.error)
 
-  assert.equal(cfg.compaction.auto, false)
+  assert.equal(cfg.compaction.auto, true)
   for (const name of NAMES) {
     const entry = cfg.agent[name]
     assert.ok(entry.mode !== undefined, `${name} must receive owned mode`)
@@ -222,7 +222,7 @@ test('WHAT[capability-enforcement-011] MACFG_configureFromHostConfig_returns_rol
   cfg.agent.manager.model = 'provider/shared'
   const result = configure(cfg)
   assert.equal(result.ok, true, result.ok ? '' : result.error)
-  assert.equal(cfg.compaction.auto, false)
+  assert.equal(cfg.compaction.auto, true)
   assert.equal(cfg.agent.manager.model, 'provider/shared')
 })
 test('WHAT[capability-enforcement-011] MACFG_configureFromHostConfig_projects_missing_catalog_without_model_authority', () => {
@@ -237,7 +237,7 @@ test('WHAT[capability-enforcement-011] MACFG_configureFromHostConfig_projects_mi
     assert.equal('model' in entry, false, `${name} must not receive a model binding`)
   }
   assert.equal(cfg.agent.bookkeeper.hidden, true)
-  assert.equal(cfg.compaction.auto, false)
+  assert.equal(cfg.compaction.auto, true)
 })
 }
 
@@ -279,7 +279,7 @@ integrationTest('WHAT[capability-enforcement-011] MANAGER_config_projects_owned_
   await withPlugin(async (hooks) => {
     const config = fullConfig()
     hooks.config(config)
-    assert.equal(config.compaction.auto, false)
+    assert.equal(config.compaction.auto, true)
     for (const role of ROLE_NAMES) {
       const permission = config.agent[role].permission
       for (const toolName of TOOL_NAMES) {

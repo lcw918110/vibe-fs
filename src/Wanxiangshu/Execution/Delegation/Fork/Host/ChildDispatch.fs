@@ -77,7 +77,7 @@ module HostForkChildDispatch =
 
     let private settlePendingAbandoned
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (settleAbandoned: PendingHostRun -> unit)
         (agentIds: string list)
         =
@@ -85,9 +85,8 @@ module HostForkChildDispatch =
 
         let pending =
             lock gate (fun () ->
-                pendingRuns.Values
-                |> Seq.filter (fun run -> Set.contains run.AgentId owned)
-                |> Seq.toList)
+                HostForkRunLifecycle.allRuns pendingRuns
+                |> List.filter (fun run -> Set.contains run.AgentId owned))
 
         for run in pending do
             settleAbandoned run
@@ -118,7 +117,7 @@ module HostForkChildDispatch =
     let private clearChildrenAndRuns
         (gate: obj)
         (children: Dictionary<string, SessionId>)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (durableDevOpsChild: SessionId option)
         =
         lock gate (fun () ->
@@ -135,10 +134,13 @@ module HostForkChildDispatch =
             | Some cid -> children.["devops"] <- cid
             | None -> ()
 
-            let cancelled = pendingRuns.Keys |> Seq.filter (isFixedDevOps >> not) |> Seq.toList
+            let cancelled =
+                HostForkRunLifecycle.allRuns pendingRuns
+                |> List.choose (fun run ->
+                    if not (isFixedDevOps run.AgentId) then Some run.AgentId else None)
 
             for agentId in cancelled do
-                pendingRuns.Remove agentId |> ignore)
+                HostForkRunLifecycle.removeRunByAgentId pendingRuns agentId)
 
     let private nudgeBusyChild
         (sendBusyNudge:
@@ -155,7 +157,7 @@ module HostForkChildDispatch =
 
     let private completeIdleExistingSend
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
@@ -215,7 +217,7 @@ module HostForkChildDispatch =
 
     let private dispatchIdleExistingChild
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
@@ -274,7 +276,7 @@ module HostForkChildDispatch =
     /// `role` before reaching this point.
     let sendToExistingChild
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (journal: AgentJournal option)
         (parentId: SessionId)
         (sessions: ISessionHostPort)
@@ -301,10 +303,7 @@ module HostForkChildDispatch =
         : Task<Result<ForkResult, string>> =
         taskResult {
             let activeRun =
-                lock gate (fun () ->
-                    match pendingRuns.TryGetValue agentId with
-                    | true, run -> Some run
-                    | false, _ -> None)
+                lock gate (fun () -> HostForkRunLifecycle.tryGetRun pendingRuns agentId)
 
             match activeRun, runtime.IsCancelled with
             | Some _, true -> return! Error "Fork runtime is cancelled"
@@ -357,7 +356,7 @@ module HostForkChildDispatch =
         (parentKey: string)
         (parentAbortToken: int)
         (gate: obj)
-        (pendingRuns: Dictionary<string, PendingHostRun>)
+        (pendingRuns: obj)
         (children: Dictionary<string, SessionId>)
         (sessions: ISessionHostPort)
         (journal: AgentJournal option)

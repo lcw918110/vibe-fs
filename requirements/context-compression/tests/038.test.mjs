@@ -1,22 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { planRequest, resetScopeState, turnBudget, isScopeInitialized, onTurnStart, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
+import { planRequest, resetScopeState, isScopeInitialized, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
 
 const user = (key, timestamp) => ({ kind: 'user', operator: true, key, timestamp, parts: [] })
 const tool = (id, name, terminalField = '') => ({ id, tool: name, terminalField })
 const assistant = (...parts) => ({ kind: 'assistant', operator: false, parts })
 const result = (id) => ({ kind: 'result', operator: false, resultFor: id, resultField: 'content', parts: [] })
 
-test('WHAT[context-compression-038] HNI scope view plans a fresh strong steer independently of message envelopes', () => {
+test('WHAT[context-compression-038] HNI scope view plans retention without inventing a steer or suffix', () => {
   const session = 'ses_scope_038_user'
   clearSessionState(session)
   const messages = [user('100:do the task', 100)]
   const plan = planRequest(session, messages)
   assert.equal(plan.active, true)
   assert.deepEqual(plan.slots.map(x => x.index), [0])
-  assert.deepEqual(plan.hints, [])
-  assert.match(plan.strong, /Then call resetScope immediately/)
-  assert.equal(turnBudget(session), 0)
+  assert.deepEqual(plan.hints, [], 'the retired countdown owns no tool-result or user tail')
+  assert.equal(plan.strong, null, 'the missing-estimate steer belongs to ScopeProgress')
+  assert.equal(plan.weak, null)
   assert.equal(isScopeInitialized(session), false)
   assert.equal(messages[0].parts.length, 0, 'the plan cannot mutate raw Host messages')
   clearSessionState(session)
@@ -31,13 +31,8 @@ test('WHAT[context-compression-038] the HNI scope plan retains reset and active 
   const messages = [operator, assistant(tool('old', 'read', 'output')), assistant(tool('reset', 'resetScope', 'output')), assistant(tool('new', 'read', 'output'))]
   const plan = planRequest(session, messages)
   assert.deepEqual(plan.slots.map(x => x.index), [0, 2, 3])
-  assert.equal(plan.hints.find(x => x.index === 2).tail, '[Remaining turnBudget: 5]')
-  assert.equal(plan.hints.find(x => x.index === 3).field, 'output')
-  onTurnStart(session)
-  assert.equal(turnBudget(session), 4)
-  const later = planRequest(session, [...messages, assistant(tool('later', 'read', 'output'))])
-  assert.equal(later.hints.find(x => x.index === 3).tail, '[Remaining turnBudget: 5]', 'the old result is pinned')
-  assert.equal(later.hints.find(x => x.index === 4).tail, '[Remaining turnBudget: 4]', 'new results show current budget')
+  assert.deepEqual(plan.hints, [], 'tool results never carry the retired budget suffix')
+  assert.deepEqual(messages.map(m => m.parts?.length ?? 0), [0, 1, 1, 1], 'raw parts stay untouched')
   clearSessionState(session)
 })
 
@@ -49,12 +44,9 @@ test('WHAT[context-compression-038] a separate OMP toolResult uses the same plan
   resetScopeState(session, 2)
   const messages = [operator, assistant(tool('reset', 'resetScope')), result('reset'), assistant(tool('read', 'read')), result('read')]
   const plan = planRequest(session, messages)
-  assert.deepEqual(plan.hints.filter(x => x.kind === 'tool').map(x => x.index), [2, 4])
-  assert.ok(plan.hints.filter(x => x.kind === 'tool').every(x => x.field === 'content'))
-  assert.ok(plan.hints.filter(x => x.kind === 'tool').every(x => x.tail === '[Remaining turnBudget: 2]'))
-  onTurnStart(session)
+  assert.deepEqual(plan.slots.map(x => x.index), [0, 1, 2, 3, 4])
+  assert.deepEqual(plan.hints, [], 'the neutral plan writes no tool-result tail in either envelope')
   const replay = planRequest(session, [...messages, assistant(tool('next', 'read')), result('next')])
-  assert.equal(replay.hints.find(x => x.index === 4).tail, '[Remaining turnBudget: 2]', 'earlier OMP tool result stays unchanged')
-  assert.equal(replay.hints.find(x => x.index === 6).tail, '[Remaining turnBudget: 1]', 'the newly completed OMP result shows the current budget')
+  assert.deepEqual(replay.hints, [], 'a repeated plan still writes no tail')
   clearSessionState(session)
 })

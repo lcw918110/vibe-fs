@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { planRequest, planFilter, appendTailOnce, budgetSuffix, turnBudget, isScopeInitialized, onTurnStart, resetScopeState, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
+import { planRequest, planFilter, appendTailOnce, budgetSuffix, isScopeInitialized, onTurnStart, resetScopeState, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
 
 const user = (key,time=1) => ({ kind: 'user', operator: true, key, timestamp: time, parts: [] })
 const assistant = (...parts) => ({ kind: 'assistant', operator: false, parts })
@@ -24,7 +24,7 @@ test('WHAT[context-compression-033] reset removes old OMP tool results and prese
   assert.deepEqual(planFilter(messages).map(s=>s.index),[0,3,4,5,6])
 })
 
-test('WHAT[context-compression-034] new operator prompts after reset preserve the committed budget and scope', () => {
+test('WHAT[context-compression-034] new operator prompts after reset keep the scope and carry no retired countdown', () => {
   const sid='scope-034-budget'
   clearSessionState(sid)
   const first=user('first',1000)
@@ -32,18 +32,13 @@ test('WHAT[context-compression-034] new operator prompts after reset preserve th
   onTurnStart(sid)
   assert.equal(isScopeInitialized(sid),false)
   resetScopeState(sid,5)
-  assert.equal(planRequest(sid,[first,assistant(call('reset','resetScope'))]).budget,5)
-  onTurnStart(sid)
-  assert.equal(turnBudget(sid),4)
-  onTurnStart(sid)
-  assert.equal(turnBudget(sid),3)
+  assert.equal(planRequest(sid,[first,assistant(call('reset','resetScope'))]).initialized,true)
   const second=user('second',2000)
   const next=planRequest(sid,[first,assistant(call('reset','resetScope')),second])
-  assert.equal(next.budget,3)
   assert.equal(next.initialized,true)
   assert.equal(next.strong,null)
-  resetScopeState(sid,8)
-  assert.equal(turnBudget(sid),8)
+  assert.deepEqual(next.hints,[],'a later operator prompt receives no countdown tail')
+  assert.equal(next.weak,null,'a new operator prompt never wakes a retired weak reminder')
   clearSessionState(sid)
 })
 
@@ -60,11 +55,10 @@ test('WHAT[context-compression-034] request-copy suffix does not double append f
   assert.equal(blocks[0].text,'error body')
 })
 
-test('WHAT[context-compression-034] HNI planning carries the exact mandatory initialization reminder', () => {
+test('WHAT[context-compression-034] the neutral plan leaves the missing-estimate steer to ScopeProgress', () => {
   const sid='scope-034-reminder'
   const plan=planRequest(sid,[user('new')])
-  const reminder='[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]'
-  assert.equal(plan.strong,reminder)
+  assert.equal(plan.strong,null,'first estimation is owned by ScopeProgress, not PairHint')
   assert.deepEqual(plan.hints,[], 'mandatory initialization has no historical message or tool-result suffix')
   clearSessionState(sid)
 })

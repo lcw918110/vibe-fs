@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { normalTransform, DeliveryAdjudication } from '../../../dist/OpenCode/Plugin/PluginTransforms.js'
-import { resetScopeState, clearSessionState, turnBudget } from '../../../dist/Context/Scope/Surface.js'
+import { resetScopeState, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
 
-const SEP = '\0\uFEFF'
+const MISSING_ESTIMATE = /no estimate of remaining billable rounds/
 const user = (id, text, created) => ({ info: { id, role: 'user', time: { created } }, parts: [{ type: 'text', text }] })
 const assistant = (id, ...parts) => ({ info: { id, role: 'assistant', time: { created: 2 } }, parts })
 const tool = (callID, name, output, status = 'completed') => ({ type: 'tool', callID, tool: name, state: { status, input: {}, ...(status === 'error' ? { error: output } : { output }) } })
@@ -37,7 +37,7 @@ async function outbound(sessionId, messages) {
   return out.messages
 }
 
-test('WHAT[context-compression-039] OpenCode sends a scoped request copy; completed results receive initialization reminder without changing the Host history', async () => {
+test('WHAT[context-compression-039] OpenCode sends a scoped request copy that asks for the first estimate without changing the Host history', async () => {
   const sid = 'ses_scope_039_initial'
   clearSessionState(sid)
   const raw = [user('u1', 'read this file', 1), assistant('a1', tool('c1', 'read', 'file body'))]
@@ -45,17 +45,16 @@ test('WHAT[context-compression-039] OpenCode sends a scoped request copy; comple
   const copy = await outbound(sid, raw)
   assert.equal(copy, raw, 'OpenCode requires the provider request array to be edited in place')
   assert.equal(copy[0].parts[0].text, 'read this file')
-  assert.equal(copy[0].content, undefined)
-  assert.equal(copy[1].parts[0].state.output, 'file body')
+  assert.equal(copy[1].parts[0].state.output, 'file body', 'a completed result keeps its exact bytes')
   assert.equal(copy[2].steering, true)
   assert.equal(copy[2].strong, true)
-  assert.match(copy[2].parts[0].text, /Then call resetScope immediately/)
+  assert.match(copy[2].parts[0].text, MISSING_ESTIMATE)
   assert.equal(original[0].parts[0].text, 'read this file')
   assert.equal(toolText(original[1]), 'file body')
   clearSessionState(sid)
 })
 
-test('WHAT[context-compression-039] OpenCode applies a reset, preserves only its call and later work, and reads the new budget', async () => {
+test('WHAT[context-compression-039] OpenCode applies a reset, preserves only its call and later work, and adds no countdown suffix', async () => {
   const sid = 'ses_scope_039_reset'
   clearSessionState(sid)
   const operator = user('u1', 'scope initial', 100)
@@ -64,11 +63,11 @@ test('WHAT[context-compression-039] OpenCode applies a reset, preserves only its
   const raw = [operator, assistant('a1', tool('old', 'read', 'old')), assistant('a2', tool('reset', 'resetScope', 'Scope reset')), assistant('a3', tool('next', 'read', 'new'))]
   const original = [...raw]
   const copy = await outbound(sid, raw)
-  assert.equal(copy.length, 3)
+  assert.equal(copy.length, 4, 'operator, reset and later work survive; the pre-reset result is dropped')
   assert.equal(copy[1].parts[0].tool, 'resetScope')
-  assert.equal(copy[1].parts[0].state.output, 'Scope reset' + SEP + '[Remaining turnBudget: 3]')
-  assert.equal(copy[2].parts[0].state.output, 'new' + SEP + '[Remaining turnBudget: 3]')
+  assert.equal(copy[1].parts[0].state.output, 'Scope reset', 'the completed reset result keeps its exact bytes')
+  assert.equal(copy[2].parts[0].state.output, 'new')
+  assert.match(copy[3].parts[0].text, MISSING_ESTIMATE, 'an unproven progress state asks for a real estimate')
   assert.equal(original[3].parts[0].state.output, 'new', 'the original result object is not edited')
-  assert.equal(turnBudget(sid), 3)
   clearSessionState(sid)
 })
