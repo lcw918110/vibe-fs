@@ -167,12 +167,6 @@ module Surface =
         | FatalityDecision.FatalAfterSettlement -> box {| kind = "FatalAfterSettlement" |}
 
 
-    /// The only confirmed-failure step. priorSameProviderRetry is a confirmed fact,
-    /// not a timeout and not an ambiguous result.
-    let recoveryStep (priorSameProviderRetry: bool) : string =
-        match ProviderAttemptRecovery.next priorSameProviderRetry with
-        | ProviderRecoveryStep.RetrySameProvider -> "RetrySameProvider"
-        | ProviderRecoveryStep.BlacklistProviderThenRetry -> "BlacklistProviderThenRetry"
 
     let decide (value: obj) : obj =
         let decision = value |> inputOf |> ExecutionFailurePolicy.decide

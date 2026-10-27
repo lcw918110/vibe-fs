@@ -20,7 +20,7 @@ module ModelRoutingSurface =
     val releaseSharedExecutionAdmissionBeforeProvider: token: obj -> observed: obj -> obj
     val sharedRetainContinuationInput: token: obj -> physicalUserMessageId: string -> obj
     val releasePhysical: sessionId: string -> physicalUserMessageId: string -> obj
-    val bootstrapAndLoadAt: path: string -> template: string -> Task<obj>
+
 
     /// Enter a provider step on the process-shared runtime — the same
     /// execution-scoped admission the real transform boundary must satisfy.
@@ -100,9 +100,6 @@ module ModelRoutingSurface =
 
     val takeProviderRunTarget: runtime: obj -> providerRun: string -> obj
 
-    val condemnFailedTarget: runtime: obj -> providerRun: string -> obj
-
-    val retainFailedTargetForRetry: runtime: obj -> sessionId: string -> providerRun: string -> obj
 
     val suppressProviderStep: runtime: obj -> sessionId: string -> physicalUserMessageId: string -> unit
     val snapshotOccupied: runtime: obj -> obj array

@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as routing from '../../../dist/OpenCode/Host/ModelRoutingSurface.js'
 
-const templateUrl = new URL('../../../resources/wanxiangshu.mjs', import.meta.url)
-
 test('WHAT[execution-model-routing-018] routing supports new role collection (Engineer, DevOps) and decouples legacy slots', async () => {
-  const { default: route } = await import(`${templateUrl.href}?test=${Date.now()}`)
+  const route = (role) => {
+    if (role === 'engineer') return { model: 'provider/engineer-model', reasoning: 'none' }
+    if (role === 'devops') return { model: 'provider/devops-model', reasoning: 'none' }
+    return null
+  }
 
   // Must route engineer to a valid target
   const engineerTarget = route('engineer', [], null)

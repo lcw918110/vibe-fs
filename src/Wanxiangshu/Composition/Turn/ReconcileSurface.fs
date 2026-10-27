@@ -207,6 +207,7 @@ module ReconcileSurface =
             (wakeOf incoming)
         |> function
             | ReconcileProgram.ReconcileWake.IdleWake _ -> "IdleWake"
+            | ReconcileProgram.ReconcileWake.IdleFailureWake _ -> "IdleFailureWake"
             | ReconcileProgram.ReconcileWake.RetryWake -> "RetryWake"
             | ReconcileProgram.ReconcileWake.FailureWake _ -> "FailureWake"
             | ReconcileProgram.ReconcileWake.AbortWake -> "AbortWake"

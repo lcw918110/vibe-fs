@@ -8,10 +8,11 @@ const ReconcileSurface = await import("../../../dist/Composition/Turn/ReconcileS
 
 const idleWake = ReconcileSurface.idleWake('s1', 1n)
 
-test('WHAT[host-boundary-005] exact failure wake survives same-physical idle admission', () => {
+test('WHAT[host-boundary-005] exact failure and idle evidence survive in either order', () => {
   const failure = ReconcileSurface.failureWakeFor('msg-current')
 
-  assert.equal(ReconcileSurface.mergeWakeKind('msg-current', failure, idleWake), 'FailureWake')
+  assert.equal(ReconcileSurface.mergeWakeKind('msg-current', failure, idleWake), 'IdleFailureWake')
+  assert.equal(ReconcileSurface.mergeWakeKind('msg-current', idleWake, failure), 'IdleFailureWake')
   assert.equal(
     ReconcileSurface.mergeWakeKind('', failure, ReconcileSurface.failureWake()),
     'FailureWake',
@@ -163,7 +164,7 @@ test('WHAT[host-boundary-005] terminal provider failure publishes only with matc
     'idle observed before session.error must not publish a provider failure without its typed witness',
   )
 })
-test('WHAT[host-boundary-005] exact failure witness dominates every same-run coarse wake ordering', () => {
+test('WHAT[host-boundary-005] failure witness is retained and idle evidence is preserved', () => {
   const physical = 'msg-failure-property'
   const terminal = ReconcileSurface.evidenceTerminalFor(physical, 'TurnFailed')
   const coarseWake = fc.constantFrom(ReconcileSurface.retryWake(), ReconcileSurface.idleWake('ses-failure-property'))
@@ -177,7 +178,7 @@ test('WHAT[host-boundary-005] exact failure witness dominates every same-run coa
       for (const wake of incomingWakes) {
         assert.equal(
           ReconcileSurface.mergeWakeKind(physical, ReconcileSurface.failureWakeFor(physical), wake),
-          'FailureWake',
+          wake.kind === 'IdleWake' ? 'IdleFailureWake' : 'FailureWake',
         )
         assert.equal(ReconcileSurface.decisionName(ReconcileSurface.decideStep(wake, terminal)), 'StopPass')
       }

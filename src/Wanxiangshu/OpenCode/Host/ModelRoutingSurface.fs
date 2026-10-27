@@ -518,6 +518,7 @@ module ModelRoutingSurface =
                          None
                      else
                          Some lenderSessionId)
+                    None
 
             let! completed = awaitAdmission acquisition
             return acquireAdmissionObject completed
@@ -582,11 +583,6 @@ module ModelRoutingSurface =
             (PhysicalUserMessageId.create physicalUserMessageId)
         |> physicalReleaseObject
 
-    /// Load the user-visible scheduler module through the owner boundary. The
-    /// returned function is an opaque JS capability and is never introspected by
-    /// the semantic caller.
-    let bootstrapAndLoadAt (path: string) (template: string) : Task<obj> =
-        ModelRouting.bootstrapAndLoadAt path template
 
     /// Invoke a scheduler with plain JS target observations. `null` means the
     /// scheduler declined the demand; target validation remains owned by routing.
@@ -879,19 +875,6 @@ module ModelRoutingSurface =
         |> Option.map targetObject
         |> Option.defaultValue null
 
-    /// provider-attempt-recovery-021: the failed attempt was itself the same-provider retry, so its
-    /// exact witness target condemns the provider of that target.
-    let condemnFailedTarget (runtime: obj) (providerRun: string) : obj =
-        (runtimeOf runtime).CondemnFailedTarget(providerRun)
-        |> Option.map targetObject
-        |> Option.defaultValue null
-
-    /// provider-attempt-recovery-021: the failed attempt was this provider's first confirmed failure,
-    /// so the next fresh admission of this session is bound to the failed target.
-    let retainFailedTargetForRetry (runtime: obj) (sessionId: string) (providerRun: string) : obj =
-        (runtimeOf runtime).RetainFailedTargetForRetry(sessionId, providerRun)
-        |> Option.map targetObject
-        |> Option.defaultValue null
 
     let suppressProviderStep (runtime: obj) (sessionId: string) (physicalUserMessageId: string) : unit =
         (runtimeOf runtime).SuppressProviderStep(sessionId, physicalUserMessageId)

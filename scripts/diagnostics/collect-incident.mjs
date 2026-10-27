@@ -344,18 +344,6 @@ if (fs.existsSync(pluginArtifactPath)) {
   } catch {}
 }
 
-const mjsPath = path.join(os.homedir(), '.config', 'opencode', 'wanxiangshu.mjs')
-let mjsSyntax = '文件未找到'
-if (fs.existsSync(mjsPath)) {
-  try {
-    execSync(`node --check "${mjsPath}" 2>&1`)
-    mjsSyntax = '语法正确 (Syntax OK)'
-  } catch (err) {
-    mjsSyntax = `语法异常 (Syntax Error): ${err.message}`
-  }
-  fs.copyFileSync(mjsPath, path.join(incidentPath, 'wanxiangshu.mjs'))
-}
-
 const jsonPath = path.join(os.homedir(), '.config', 'opencode', 'opencode.json')
 if (fs.existsSync(jsonPath)) {
   try {
@@ -478,7 +466,6 @@ ${lastErrorLines.join('\n') || '[未捕获到显式 ERROR 标记，请查阅 run
 | **插件编译产物 (Plugin.js)** | ${pluginBuildStatus} | \`dist/OpenCode/Plugin/Plugin.js\` |
 | **操作系统核心转储 (.ips)** | ${capturedSystemReports.length > 0 ? '已固化底层崩溃报告' : '近 24 小时无底层崩溃'} | ${capturedSystemReports.length > 0 ? `\`${capturedSystemReports[0]}\`` : '无'} |
 | **批次运行时日志 (Run-Scoped)** | 精准截取本生命周期共 ${runLines.length} 行日志 | \`run-scoped.log\` |
-| **模型调度器 (wanxiangshu.mjs)** | ${mjsSyntax} | \`wanxiangshu.mjs\` |
 | **OpenCode 客户端配置** | 已脱敏固化当前 Provider 与 Agent 映射 | \`opencode-config.json\` |
 
 ---
@@ -493,7 +480,6 @@ ${incidentDirName}/
 ├── run-scoped.log          # 本次运行周期的完整日志上下文
 ├── events-tail.json        # 万象术内核状态机最后 10 条跳变切片
 ├── latest-events.ndjson    # 万象术事件账本原始快照（穿透多仓）
-├── wanxiangshu.mjs         # 当时的调度策略快照
 ├── opencode-config.json    # 当时的模型凭据配置快照（脱敏）
 ${capturedSystemReports.map(f => `├── ${f}    # 操作系统核心崩溃转储`).join('\n')}
 \`\`\`

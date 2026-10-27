@@ -38,6 +38,7 @@ module ReconcileProgram =
             failure: ExecutionFailure *
             diagnostic: string *
             source: FailureWakeSource
+        | IdleFailureWake of QuiescencePermit * PhysicalUserMessageId * ExecutionFailure * string * FailureWakeSource
         | AbortWake
 
     val mergeWake:

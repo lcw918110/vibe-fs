@@ -449,20 +449,11 @@ module internal ChatAdmissionTransaction =
         | Error error ->
             compensate observe ports witness lease ChatExecutionTerminalDisposition.Failed (commitError error)
 
-    let private projectDeferredInput observe ports witness target =
+    let private projectDeferredInput observe witness target =
         taskResult {
             observe ChatAdmissionTransactionStep.ProjectHost
-
-            match
-                modelFromTarget target
-                |> Result.bind (fun model -> effect (fun () -> ports.ProjectHost model))
-            with
-            | Ok() ->
-                observe ChatAdmissionTransactionStep.Settled
-                return ChatAdmissionTransactionOutcome.DeferredInput(witness, target)
-            | Error error ->
-                let! _ = settleWitness observe ports witness ChatExecutionTerminalDisposition.Failed
-                return! Error(ChatAdmissionTransactionError.InputProjectionFailed error)
+            observe ChatAdmissionTransactionStep.Settled
+            return ChatAdmissionTransactionOutcome.DeferredInput(witness, target)
         }
 
     let private executeFreshAdmission observe (withLeaseOwner: ChatAdmissionLeaseOwner) ports witness =
@@ -486,7 +477,7 @@ module internal ChatAdmissionTransaction =
             let! witness = acceptAdmission observe ports managed
 
             match tryInputTarget witness with
-            | Some target -> return! projectDeferredInput observe ports witness target
+            | Some target -> return! projectDeferredInput observe witness target
             | None -> return! executeFreshAdmission observe withLeaseOwner ports witness
         }
 
@@ -511,6 +502,7 @@ module internal ChatAdmissionTransaction =
         (journal: AgentJournal)
         (acceptManagedIntent:
             ChatAdmissionIntent.ManagedIntent -> Task<Result<ManagedChatAcceptanceWitness, ManagedChatAcceptanceError>>)
+        (hostTarget: ModelRoutingTarget)
         (projectHostModel: HostModel -> Result<unit, exn>)
         : ChatAdmissionTransactionPorts =
         { Accept = acceptManagedIntent
@@ -532,6 +524,7 @@ module internal ChatAdmissionTransaction =
                                 (AcceptedChatExecutionEvidence.participant evidence)
                                 ModelExecutionPurpose.Normal
                                 lenderSessionId
+                                (Some hostTarget)
 
                         return Ok acquired
                     with error ->

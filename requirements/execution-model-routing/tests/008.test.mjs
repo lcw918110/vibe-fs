@@ -75,16 +75,14 @@ test('WHAT[execution-model-routing-008] EMR_008_distinct_current_roles_may_hold_
   }
 })
 
-// execution-model-routing-008: the live plugin ignores both a configured Host
-// agent model and an incoming message model; chat.message owns the projection.
-test('WHAT[execution-model-routing-008] EMR_008_actual_plugin_ignores_configured_host_agent_model_and_incoming_message_model', async () => {
+test('WHAT[execution-model-routing-008] the plugin preserves the model resolved by OpenCode', async () => {
   await withExecutablePlugin(async (hooks) => {
     const output = { message: {
       id: 'msg-config-precedence', role: 'user', sessionID: 'ses-config-precedence', agent: 'engineer',
       model: { providerID: 'host', modelID: 'override-attempt' },
     }, parts: [] }
     await hooks['chat.message']({ sessionID: 'ses-config-precedence', messageID: 'msg-config-precedence', agent: 'engineer' }, output)
-    assert.deepEqual({ ...output.message.model }, { providerID: 'provider', modelID: 'engineer-model', variant: 'none' })
+    assert.deepEqual({ ...output.message.model }, { providerID: 'host', modelID: 'override-attempt' })
   })
 })
 }

@@ -437,10 +437,7 @@ test('WHAT[execution-failure-policy-002] every phase and failure yields exactly 
     assert.equal(decision.breaker.kind, scenario.breaker, scenario.label)
   }
 
-  // Attempt recovery contract: first retry as-is, second retry blacklists the provider
-  assert.equal(typeof policy.recoveryStep, 'function')
-  assert.equal(policy.recoveryStep(false), 'RetrySameProvider')
-  assert.equal(policy.recoveryStep(true), 'BlacklistProviderThenRetry')
+
 })
 
 test('WHAT[execution-failure-policy-002] one failure decision owner: the host policy only adapts wanxiangli/failure', async () => {
@@ -467,6 +464,6 @@ test('WHAT[execution-failure-policy-002] one failure budget owner: the host proj
   const library = await import('wanxiangli/failure-budget')
   const budget = new library.ProviderFailureBudget()
   assert.equal(budget.contractVersion, 1)
-  assert.equal(budget.defaultBudget, 12, 'the host DefaultBudget literal must equal the library default')
+  assert.equal(budget.defaultBudget, 10, 'the host DefaultBudget literal must equal the library default')
 })
 }

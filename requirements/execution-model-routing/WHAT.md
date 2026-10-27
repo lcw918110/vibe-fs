@@ -1,26 +1,13 @@
 # execution-model-routing — WHAT
 
-## [001] 唯一模型调度 authority = `~/.config/opencode/wanxiangshu.mjs`；缺失时原子创建推荐模板
+## [001] 模型选择与官方机制一致；彻底去除 `wanxiangshu.mjs` 机制
 
-Wanxiangshu 的 managed 模型调度由 `~/.config/opencode/wanxiangshu.mjs` 的 default export 唯一决定。其余来源（`opencode.json`、环境变量、Host-final agent inventory、内建表）一律不得覆盖或替代该权威。
-若文件不存在，系统在加载时确保目录存在并原子创建推荐策略模板，随后加载该文件。已有文件严禁自动覆盖。文件缺失、加载失败或导出非法时直接 fail closed。
+Wanxiangshu 彻底废除 `~/.config/opencode/wanxiangshu.mjs` 文件及其自定义调度、拉黑与协议加载机制。
+每个 agent 执行走什么模型完全与 OpenCode 官方机制一致：**优先使用用户显式选择，其次使用 `opencode.json` / `opencode.jsonc` 中指定的配置**。插件不再注入自定义 scheduler 覆盖该模型选择。
 
-## [002] scheduler ABI 为 `role + running + previous → target | null`，协议版本 `routingProtocol = 2`
+## [002] 无 fallback 策略
 
-调度函数的签名合同为：
-```js
-export const routingProtocol = 2
-export const hasTheoreticalCapacity = (role) => { ... }
-export default function route(role, running, previous) { ... }
-```
-- `role`：当前请求由 IdentitySeed 确立且在 logical run 内不可变的 fixed canonical Role。每次 fresh physical execution 均以该固定 Role 作为调度输入。participant 由 IdentitySeed 确立，随 acquire 输入与 capacity identity 显式传递，不作为调度函数参数。系统严格区分本地 participant 与远端 ModelTarget。
-- `running`：当前进程所有活跃 provider capacity token 的 ModelTarget multiset，元素形状固定为 `{ model: string, reasoning: string }`，保留重复项。
-- `previous`：仅当同一 SessionId 的当前活跃物理执行被原子取代时，才将该被取代执行的 target 作为同一 demand 的 fresh 调度输入；新 Session、exact terminal 释放后重建、无关 Session 一律传 `null`。`previous` 只是接续偏好提示，不占容量。不存在只读副本入场，也不存在第二模型池。
-
-- `routingProtocol`：模板必须导出 `routingProtocol = 2`；它是协议格式版本，不是启用开关。加载器显式验证 `routingProtocol === 2`；缺 `route` 或 `hasTheoreticalCapacity`、或另设只读委托参数来打开第二模型池的配置，必须给出可操作的错误并 fail closed，且不得自动覆盖用户已有的 `wanxiangshu.mjs`。
-- 协议 2 的导出形状除 `route` 外还包含只读查询 `hasTheoreticalCapacity(role)`。理论容量只按 Role 的模型池回答。不要求单独的配置存在性查询；该查询存在或缺失都不得打开只读副本池。
-- 返回值：必须包含非空 `provider/model` 与 `reasoning`，或返回 `null`。
-- 抛出异常、返回 Promise 或非法结构均视为配置错误，直接 fail closed。
+系统不再维护候选模型池或备用 provider 切换逻辑。发生错误、中断或需要重试催促时，一律沿用该 agent 原本由用户或原生配置确定的同一模型重新尝试，严禁切换到备选模型或拉黑主模型。
 
 ## [003] `running` 是真实 provider capacity token multiset；不是 live-session / active-execution 计数
 
@@ -31,9 +18,9 @@ export default function route(role, running, previous) { ... }
 发送或排队阶段严禁抢占 model slot，`SendPrompt` 必须保持 `Model=None`。新 execution 的需求准入点是 Host 接收物理 user message 后的 `chat.message` 边界。同一活跃 run 的 `HumanMessage` / `BusyAgentNudge` 只接纳追加材料，不产生第二份调度需求；其 exact lease 交接遵循 [006] 的可见材料边界。
 若调度器返回 `null`，不调用 provider、不消耗失败预算，demand 进入 pending 队列并在 occupancy 变更时由事件驱动重算。新到达的物理 user message 或会话销毁将取消并取代被 supersede 的旧 pending demand。
 
-## [005] 模型选择策略全部属于 MJS；runtime 不再拥有 lane、容量表或候选算法
+## [005] 模型选择权归宿主；Runtime 不保留自定义调度策略
 
-Runtime 仅负责加载 scheduler、校验 ABI、维护进程共享的 token ledger 与借贷仲裁，不拥有任何模型分类、优先级表、容量上限或调度策略。一切关于模型选取与并发限制的逻辑均属于 MJS 策略。
+模型选择权完全交还宿主（OpenCode）。Runtime 仅维护真实执行租约的生命周期绑定与并发仲裁，不再拥有外部 MJS 调度策略层或多候选切换逻辑。
 
 ## [006] exact lease 与 fresh execution 路由；活跃 run 的追加材料延后交接
 
@@ -50,9 +37,9 @@ durable Accepted 之后、Host projection 之前，容量 owner 以 exact 新输
 租约释放必须依赖确切的物理执行终结证据（无 error、completed assistant、`finish` 明确属于 `stop | length | content-filter`，且其 parentID 匹配 PhysicalUserMessageId）。
 `finish="tool-calls"` 仅终结单步并归还 step token，不解除 physical execution binding；assistant error，以及 Host 将流错误归一化后的 `finish="unknown" | "error"`，都只作为单步终结证据，不直接删除 execution binding，以便 Host 继续同 material retry。业务层的 handle 完成、join 或 finality 不直接操作租约。
 
-## [008] `opencode.json` model 不再具有 authority；不校验不同角色 model 互异
+## [008] 官方模型配置为权威来源（用户选择优先，其次 `opencode.json` / `opencode.jsonc`）
 
-Host 的 `opencode.json` 不作为 managed model 的真相源。系统不要求不同 canonical 角色使用互异的物理模型字符串；两者解析至相同 target 属于合法状态 (历史 `fast-`/`deep-` 档亦然)。
+宿主原生解析出的模型配置（用户会话选择优先，其次为 `opencode.json` / `opencode.jsonc` 中 `agent.<name>.model` 配置）为唯一模型真相源。系统尊重宿主选择并原样保持，不强加角色互异性校验，亦不修改宿主 message 对象的 model 字段。
 
 ## [009] managed model 准入与读取分离；dispatch message 保持 model-free
 

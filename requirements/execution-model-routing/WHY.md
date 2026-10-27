@@ -12,8 +12,8 @@ MJS 表达策略        ──► (role, running, previous) -> { model, reasonin
 如果将调度规则、候选列表、并发容量硬编码在 runtime 内，任何模型池调整或策略变动都会导致产品核心代码修改。反之，若由 runtime 猜测默认模型或允许多处配置覆盖，则会失去单一真相。
 
 `execution-model-routing` 的核心不变量：
-- **单一权威**：唯一配置源为 `~/.config/opencode/wanxiangshu.mjs`；缺失时自动原子生成推荐模板。
-- **职责划分**：Runtime 仅维护真实 lease multiset 与串行仲裁；选择算法完全交由 MJS 纯函数表达。
+- **官方机制对齐**：彻底去除 `wanxiangshu.mjs` 文件及其机制。每个 agent 的模型选择与 OpenCode 官方机制一致：优先用户选择，其次 `opencode.json` / `opencode.jsonc` 指定。
+- **无 Fallback**：没有模型切换或 fallback 备选池，保持模型稳定性。
 - **租约生命周期绑定物理执行**：Managed lease 绑定至 `(SessionId, PhysicalUserMessageId)`，不以 session 为长期独占单位。
 - **固定 Role 路由与解耦**：调度输入为由 IdentitySeed 确立且在 logical run 内不可变的 fixed canonical Role，participant 随 acquire 输入显式传递。同一 physical execution 复用原 target 与 fence，新 physical execution 经调度器路由可选取新 target 但绝不改变 participant identity；严格区分本地 participant 与远端 ModelTarget。`previous` 只来自被原子取代的当前活跃执行，其余一律为 null，不存在 session 级 previous 缓存。
 - **Capacity 确切身份**：Capacity exact identity 严格包含 SessionId + PhysicalUserMessageId + fixed Role + Participant + target + fence。execution binding 仅改变 target 与 lease，绝不修改 participant identity。借用只能使用 acquire 输入中显式 lender 的 credit。

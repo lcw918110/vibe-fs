@@ -15,7 +15,6 @@
     <Compile Include="Resources/PackageResources.fs"/>
     <Compile Include="Resources/ProviderResourceBytes.fsi"/>
     <Compile Include="Resources/ProviderResourceBytes.fs"/>
-    <Compile Include="Resources/ModelRoutingResource.fsi"/>
-    <Compile Include="Resources/ModelRoutingResource.fs"/>
+
   </ItemGroup>
 </Project>

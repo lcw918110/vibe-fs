@@ -20,14 +20,14 @@ test('WHAT[execution-model-routing-009] SDK target encoding separates model iden
   assert.deepEqual(payload.model, { providerID: 'provider', modelID: 'model' })
 })
 
-test('WHAT[execution-model-routing-009] actual chat.message reads session identity from output and projects the configured scheduler target', async () => {
+test('WHAT[execution-model-routing-009] actual chat.message preserves the host-selected model', async () => {
   await withExecutablePlugin(async (hooks) => {
     const output = { message: {
       id: 'msg-output-session', role: 'user', sessionID: 'ses-output-session', agent: 'engineer',
       model: { providerID: 'host', modelID: 'placeholder' },
     }, parts: [] }
     await hooks['chat.message']({ messageID: 'msg-output-session' }, output)
-    assert.deepEqual({ ...output.message.model }, { providerID: 'provider', modelID: 'engineer-model', variant: 'none' })
+    assert.deepEqual({ ...output.message.model }, { providerID: 'host', modelID: 'placeholder' })
   })
 })
 
@@ -90,11 +90,7 @@ test('WHAT[execution-model-routing-009] chat.params cannot create missing admiss
   })
 })
 
-// execution-model-routing-009: runtime observation is read-only. Drift is a
-// test-time fast-check property: for every scheduler decision the chat.message
-// projection equals the committed lease target, and the chat.params observation
-// of that same target passes and only projects temperature.
-test('WHAT[execution-model-routing-009] for every scheduler decision the params observation equals the committed lease target', async () => {
+test('WHAT[execution-model-routing-009] host-selected models remain unchanged through chat.params', async () => {
   const { default: fc } = await import('fast-check')
   const chatParams = await import('../../../dist/OpenCode/Host/ChatParamsSurface.js')
 
@@ -104,10 +100,6 @@ test('WHAT[execution-model-routing-009] for every scheduler decision the params 
   })
 
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
-    // The property is about the routing target, not about key text. Derive the
-    // physical identity from the run ordinal so every generated case addresses a
-    // fresh exact (SessionId, PhysicalUserMessageId) pair; a random suffix can
-    // repeat or normalize into an already-committed lease.
     let ordinal = 0
     await fc.assert(
       fc.asyncProperty(
@@ -116,19 +108,18 @@ test('WHAT[execution-model-routing-009] for every scheduler decision the params 
           const suffix = (++ordinal).toString(36)
           const sessionID = 'ses-emr009-' + suffix
           const messageID = 'msg-emr009-' + suffix
-          globalThis.__wanxiangshu_test_routing_decision = () => target
-          try {
+          {
+            const [providerID, ...modelParts] = target.model.split('/')
+            const modelID = modelParts.join('/')
             const admitted = {
               message: {
                 id: messageID, role: 'user', sessionID, agent: 'engineer',
-                model: { providerID: 'host', modelID: 'placeholder' },
+                model: { providerID, modelID, variant: target.reasoning },
               },
               parts: [],
             }
             await hooks['chat.message']({ sessionID, agent: 'engineer', messageID }, admitted)
             const projected = admitted.message.model
-            const [providerID, ...modelParts] = target.model.split('/')
-            const modelID = modelParts.join('/')
             assert.equal(projected.providerID, providerID)
             assert.equal(projected.modelID, modelID)
             assert.equal(projected.variant, target.reasoning)
@@ -146,8 +137,6 @@ test('WHAT[execution-model-routing-009] for every scheduler decision the params 
             assert.equal(observed.temperature, 1)
             assert.equal(output.temperature, 1)
             assert.equal(output.model, undefined, 'the host model object is not rewritten')
-          } finally {
-            delete globalThis.__wanxiangshu_test_routing_decision
           }
         },
       ),

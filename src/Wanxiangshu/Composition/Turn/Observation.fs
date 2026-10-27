@@ -46,7 +46,7 @@ type ReconciledTurnDelivery =
     | IdleRevisit
 
 /// The reconciled turn plus the quiescence evidence of the pass that delivered it.
-/// Only an IdleWake carries `Some permit`; retry / failure wakes carry None. The
+/// An idle wake carries `Some permit`, including one merged with failure. The
 /// side-effect boundary re-checks the permit immediately before any physical
 /// idle-derived send.
 type ReconciledTurnContext =

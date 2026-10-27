@@ -69,8 +69,6 @@ module PluginBoot =
             // Fail-fast resource load before any consumer (StaticTools / BlogTool / EnforcerHost).
             RuntimeResources.install (RuntimeResourceAssembly.load ())
 
-            // execution-model-routing-001: bootstrap/load the sole model scheduler during Load Phase.
-            // This may create the missing user config atomically, but performs no Host call.
             do! ModelRouting.initialize ()
 
             // HNI P-10: `PathsPort` is the single authority for the host's

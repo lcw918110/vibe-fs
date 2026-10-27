@@ -10,6 +10,7 @@ open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
+open Wanxiangshu.Foundation.Outcome
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.Execution.Routing
@@ -132,20 +133,6 @@ module ProviderRecoveryWorkflow =
         kind = Some PromptAuthority.ContinuationKind.ProviderRetryAttempt
         && establishedRun = Some providerRun
 
-    /// Apply the only recovery step to the failed provider.
-    /// First confirmed failure keeps the provider for a verbatim retry.
-    /// A confirmed failure of that retry blacklists the provider.
-    let private settleFailedAttemptTarget (durable: AgentJournal) (turn: ReconciledTurn) =
-        match
-            ProviderAttemptRecovery.next (
-                failureIsSameProviderRetry durable turn.SessionId turn.PhysicalUserMessageId turn.ProviderRun
-            )
-        with
-        | ProviderRecoveryStep.RetrySameProvider ->
-            ModelRouting.retainFailedTargetForRetry turn.SessionId turn.ProviderRun
-            |> ignore
-        | ProviderRecoveryStep.BlacklistProviderThenRetry -> ModelRouting.condemnFailedTarget turn.ProviderRun |> ignore
-
     let private continueSameProvider
         (sessionPort: ISessionHostPort)
         (rootWorkspace: IRootWorkspaceReader)
@@ -191,9 +178,6 @@ module ProviderRecoveryWorkflow =
 
             if admitted then
                 observeRecoveryAcceptance durable input.Turn authorization observer
-
-            if not admitted then
-                settleFailedAttemptTarget durable input.Turn
 
             let! hostStopped =
                 providerAttemptStopFence?WaitForStop(
@@ -273,6 +257,31 @@ module ProviderRecoveryWorkflow =
         }
         :> Task
 
+    let private defaultPromptOptions : SessionPromptOptions =
+        { Model = None
+          Agent = None
+          Directory = None
+          Metadata = None
+          Tools = None
+          DetachedListener = None }
+
+    let private nudgeDirectly (sessionPort: ISessionHostPort) (turn: ReconciledTurn) (prompt: string) : Task<bool> =
+        task {
+            match! sessionPort.SendPrompt(turn.SessionId, prompt, defaultPromptOptions) with
+            | SendOutcome.AdmittedWithReceipt _ -> return true
+            | _ -> return false
+        }
+
+    let private notifyIfNudgeFailed (eventPort: IEventObservationPort) (turn: ReconciledTurn) (error: string) (sent: bool) =
+        match sent with
+        | false -> notifyFailure eventPort turn error
+        | true -> ()
+
+    let private verdictOfNudge (error: string) (sent: bool) =
+        match sent with
+        | true -> RetryVerdict.Dispatched
+        | false -> RetryVerdict.Terminal error
+
     let private continueDurableFailure
         (sessionPort: ISessionHostPort)
         (rootWorkspace: IRootWorkspaceReader)
@@ -316,7 +325,10 @@ module ProviderRecoveryWorkflow =
 
             match hasCapacity, recoveryContext with
             | false, _ -> notifyFailure eventPort turn "All candidate providers exhausted (zero capacity)"
-            | true, None -> notifyFailure eventPort turn error
+            | true, None ->
+                let prompt = ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+                let! sent = nudgeDirectly sessionPort turn prompt
+                notifyIfNudgeFailed eventPort turn error sent
             | true, Some(ownerSessionId, requestKind, current) ->
                 return!
                     retryConfirmedFailure
@@ -395,7 +407,10 @@ module ProviderRecoveryWorkflow =
 
             match hasCapacity, recoveryContext with
             | false, _ -> return RetryVerdict.Terminal "All candidate providers exhausted (zero capacity)"
-            | true, None -> return RetryVerdict.Terminal error
+            | true, None ->
+                let prompt = ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+                let! sent = nudgeDirectly sessionPort turn prompt
+                return verdictOfNudge error sent
             | true, Some(ownerSessionId, requestKind, current) ->
                 return!
                     Retry.attempt

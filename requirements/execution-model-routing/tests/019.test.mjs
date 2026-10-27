@@ -2,8 +2,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as routing from '../../../dist/OpenCode/Host/ModelRoutingSurface.js'
 
-const templateUrl = new URL('../../../resources/wanxiangshu.mjs', import.meta.url)
-
 const firstTarget = { model: 'provider/first', reasoning: 'high' }
 const changedTarget = { model: 'other/changed', reasoning: 'none' }
 const acquire = (runtime, physical) => routing.beginExecutionAdmission(runtime, 'devops-session', physical, 'devops', 'devops', null)
@@ -117,7 +115,7 @@ test('WHAT[execution-model-routing-019] changed scheduler cannot overwrite a pre
 test.todo('WHAT[execution-model-routing-019] fixed road binding persists across real restart and physical-session replacement without model drift (GAP-129)')
 
 test('WHAT[execution-model-routing-019] durable DevOps target seeding is fail-closed and idempotent', async () => {
-  const { default: route } = await import(`${templateUrl.href}?test=${Date.now()}`)
+  const route = () => firstTarget
   const runtime = routing.createRuntime(route)
   const fixedTarget = { model: 'provider/fixed-devops', reasoning: 'high' }
 

@@ -43,9 +43,10 @@ module ReconcileProgram =
 
     /// What started this reconcile pass (HOST-004 rev.3).
     ///
-    /// Only an `IdleWake` carries quiescence evidence — a fresh `SessionIdle`
-    /// observation. Retry / failure wakes never grant idle-derived continuation
-    /// rights. FailureWake freezes the physical user identity observed when the
+    /// An idle wake carries a fresh `SessionIdle` permit. A matching failure
+    /// wake keeps that permit while retaining the failure witness. A failure
+    /// alone grants no idle-derived continuation rights. FailureWake freezes the
+    /// physical user identity observed when the
     /// session.error arrived; this is failure finality, not ProviderRun identity.
     /// The scheduler generation (single-flight fencing) is a different physical
     /// concept and must never be reused as the attempt serial.
@@ -63,6 +64,7 @@ module ReconcileProgram =
             failure: ExecutionFailure *
             diagnostic: string *
             source: FailureWakeSource
+        | IdleFailureWake of QuiescencePermit * PhysicalUserMessageId * ExecutionFailure * string * FailureWakeSource
         /// HOST-004: operator abort is a typed wake category, not a failure.
         /// It never carries idle/repair rights: under it, Unknown / Provisional
         /// must never Publish a stable observation that business could turn into
@@ -75,6 +77,18 @@ module ReconcileProgram =
         (incoming: ReconcileWake)
         =
         match previous, incoming, currentPhysicalUserMessageId with
+        | ReconcileWake.FailureWake(Some physical, failure, diagnostic, source), ReconcileWake.IdleWake permit, Some current
+        | ReconcileWake.IdleWake permit, ReconcileWake.FailureWake(Some physical, failure, diagnostic, source), Some current
+            when physical = current -> ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
+        | ReconcileWake.IdleFailureWake(_, physical, failure, diagnostic, source), ReconcileWake.IdleWake permit, Some current
+            when physical = current -> ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
+        | ReconcileWake.IdleFailureWake(_, physical, _, _, _), ReconcileWake.RetryWake, Some current
+            when physical = current -> previous
+        | ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, FailureWakeSource.ExactAssistantProjection),
+          ReconcileWake.FailureWake(_, _, _, FailureWakeSource.CoarseHostSignal), Some current when physical = current ->
+            ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, FailureWakeSource.ExactAssistantProjection)
+        | ReconcileWake.IdleFailureWake(permit, physical, _, _, _), ReconcileWake.FailureWake(Some failed, failure, diagnostic, source), Some current
+            when physical = current && failed = current -> ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
         | ReconcileWake.FailureWake(_, _, _, FailureWakeSource.ExactAssistantProjection),
           ReconcileWake.FailureWake(_, _, _, FailureWakeSource.CoarseHostSignal),
           _ -> previous
@@ -122,7 +136,8 @@ module ReconcileProgram =
 
     let tryFailureWitness (wake: ReconcileWake) (turn: PublishTurn) : (ExecutionFailure * string) option =
         match wake with
-        | ReconcileWake.FailureWake(Some physical, failure, diagnostic, _) when
+        | ReconcileWake.FailureWake(Some physical, failure, diagnostic, _)
+        | ReconcileWake.IdleFailureWake(_, physical, failure, diagnostic, _) when
             physical = turn.PhysicalUserMessageId
             && (match turn.Outcome with
                 | TurnCompleted
@@ -135,6 +150,7 @@ module ReconcileProgram =
         | ReconcileWake.IdleWake _
         | ReconcileWake.RetryWake
         | ReconcileWake.FailureWake _
+        | ReconcileWake.IdleFailureWake _
         | ReconcileWake.AbortWake -> None
 
     let tryFailureWitnessReason wake turn =
@@ -151,7 +167,8 @@ module ReconcileProgram =
 
     let private unknownDecision (wake: ReconcileWake) =
         match wake with
-        | ReconcileWake.IdleWake _ ->
+        | ReconcileWake.IdleWake _
+        | ReconcileWake.IdleFailureWake _ ->
             // Classic black hole: SessionIdle + assistant reasoning +
             // finish=None. Observation is stable —
             // Publish to business; never StopPass silently. Whether to
@@ -168,7 +185,8 @@ module ReconcileProgram =
 
     let private provisionalDecision (wake: ReconcileWake) =
         match wake with
-        | ReconcileWake.IdleWake _ ->
+        | ReconcileWake.IdleWake _
+        | ReconcileWake.IdleFailureWake _ ->
             // Idle is the only wake that proves the exact current physical
             // execution is quiescent. A provisional/unknown assistant under
             // that witness belongs to business repair.

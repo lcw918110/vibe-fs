@@ -77,47 +77,6 @@ module PluginRecoveryWiring =
                 return queryInspectedWorks stateRoot workIds
         }
 
-    let private seedDevOpsTarget roadSessionId childSessionId target =
-        try
-            ModelRouting.seedBoundDevOpsModel childSessionId target
-        with ex ->
-            invalidOp (
-                sprintf
-                    "execution-model-routing-019: seeding the fixed DevOps target failed (road session %s, devops session %s, target '%s'): %s"
-                    (SessionId.value roadSessionId)
-                    (SessionId.value childSessionId)
-                    target
-                    ex.Message
-            )
-
-    /// Seed every road's fixed DevOps target into the process-shared routing
-    /// table from the durable road projection (execution-model-routing-019).
-    ///
-    /// The authority chain is durable end to end: the road projection holds the
-    /// target string, the road session's handle projection resolves the DevOps
-    /// child session, and ModelRouting owns the binding. A road without a bound
-    /// target is skipped; a malformed one is refused by the parser rather than
-    /// replaced by the current scheduler preference.
-    let private seedBoundDevOpsModelTargets
-        (journal: AgentJournal)
-        (works: (SessionId * Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) array)
-        =
-        let snapshot = AgentJournal.snapshot journal
-
-        for sessionId, work in works do
-            let target =
-                work.DevOpsTarget
-                |> Option.filter (fun text -> not (String.IsNullOrWhiteSpace text))
-
-            let child =
-                snapshot.AgentProjections.Sessions
-                |> Map.tryFind sessionId
-                |> Option.bind (fun projection -> projection.Handles)
-                |> Option.bind (HandleProjection.tryFindByByname "devops")
-                |> Option.map (fun handle -> handle.ChildSessionId)
-
-            Option.map2 (seedDevOpsTarget sessionId) child target |> ignore
-
     let private firstUserPrompt (messages: SessionMessage list) : string option =
         messages
         |> List.tryFind (fun message -> message.Role = "user")
@@ -338,15 +297,6 @@ module PluginRecoveryWiring =
                         do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded)
 
                         do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.CapacityProjectionReplayed)
-
-                        // execution-model-routing-019: reseed each road's fixed DevOps
-                        // model target from the durable road projection. Restart dropped
-                        // the process-local binding; without this the first Normal
-                        // admission would take the target from the current scheduler
-                        // preference and silently overwrite the road's fixed one.
-                        match boot.Journal with
-                        | Some journal -> seedBoundDevOpsModelTargets journal recoveryWorks
-                        | None -> ()
 
                         // crash-reconciliation-018: the load-phase normalization above owes
                         // one restart status guidance to the next real user instruction.

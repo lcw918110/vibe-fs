@@ -15,7 +15,7 @@
 /scripts/lib/test-surface-scan.mjs
 /scripts/warmup-opencode.mjs
 /src/Wanxiangshu/Resources/EnforcerCatalogResource.fs
-/src/Wanxiangshu/Resources/ModelRoutingResource.fs
+
 /src/Wanxiangshu/Resources/PackageMetadata.fs
 /src/Wanxiangshu/Resources/PackageResources.fs
 /src/Wanxiangshu/Resources/RuntimeResources.fs

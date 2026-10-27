@@ -287,36 +287,3 @@ test('WHAT[execution-model-routing-006] EMR_006_unrelated_session_supplies_no_pr
   assert.deepEqual(seenPrevious, [null, null])
 })
 }
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { readFile } = await import("node:fs/promises");
-const { default: test } = await import("node:test");
-
-const templateUrl = new URL('../../../resources/wanxiangshu.mjs', import.meta.url)
-const MANAGED = [
-  'engineer',
-  'manager',
-  'orchestrator',
-  'devops',
-]
-
-test('WHAT[execution-model-routing-006] EMR_006_recommended_template_prefers_previous_candidate_when_provider_has_capacity', async () => {
-  const { default: scheduler } = await import(`${templateUrl.href}?previous=${Date.now()}`)
-  const { invokeScheduler } = await import('../../../dist/OpenCode/Host/ModelRoutingSurface.js')
-  const route = (role, running, previous = null) => invokeScheduler(scheduler, role, running, previous)
-  const previous = { model: 'neuralwatt/glm-5.2-flex', reasoning: 'high' }
-
-  assert.deepEqual(route('engineer', [], previous), previous)
-
-  const neuralwattFull = Array.from({ length: 4 }, () => ({
-    model: 'neuralwatt/another-model',
-    reasoning: 'none',
-  }))
-  assert.equal(
-    route('engineer', neuralwattFull, previous).model,
-    'cursor/cursor-grok-4.6-xhigh',
-    'when the previous provider is full, the next template candidate applies',
-  )
-})
-}

@@ -6,7 +6,7 @@
 // `scripts/architecture-gate.mjs` scans `['.mjs']`, so this file is still gated.
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -58,22 +58,6 @@ const setupRoutingHome = (directory) => {
   const routingHome = join(directory, 'routing-home')
   const routingDir = join(routingHome, '.config', 'opencode')
   mkdirSync(routingDir, { recursive: true })
-  writeFileSync(
-    join(routingDir, 'wanxiangshu.mjs'),
-    `export const routingProtocol = 2
-export const hasTheoreticalCapacity = () => true
-export default function route(role, running, previous) {
-  if (!new Set(['manager', 'orchestrator', 'engineer', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'bookkeeper', 'plan', 'advisor']).has(role)) throw new Error('unexpected managed role: ' + role)
-  if (Array.isArray(globalThis.__wanxiangshu_test_routing_seen)) {
-    globalThis.__wanxiangshu_test_routing_seen.push({ role, running: running.map((item) => ({ ...item })) })
-  }
-  if (typeof globalThis.__wanxiangshu_test_routing_decision === 'function') {
-    return globalThis.__wanxiangshu_test_routing_decision(role, running, previous)
-  }
-  return { model: 'provider/' + role + '-model', reasoning: 'none' }
-}\n`,
-    'utf8',
-  )
   return routingHome
 }
 
@@ -185,6 +169,7 @@ const stubClient = (createdIds, prompts, messages, abortedIds) => {
         const message = {
           id: `msg-${sessionId}-${messagesBySession.get(sessionId)?.length ?? 0}`,
           role: 'user',
+          model: args?.body?.model ?? { providerID: 'fixture', modelID: `${args?.body?.agent ?? 'engineer'}-model` },
           parts: [
             {
               type: 'text',

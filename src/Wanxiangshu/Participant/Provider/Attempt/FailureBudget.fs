@@ -42,7 +42,7 @@ module ProviderFailureBudget =
     type FailureBudget = { ConsecutiveFailureCount: int }
 
     [<Literal>]
-    let DefaultBudget = 12 // = wanxiangli/failure-budget defaultBudget (asserted by execution-failure-policy-002)
+    let DefaultBudget = 10 // = wanxiangli/failure-budget defaultBudget (asserted by execution-failure-policy-002)
 
     /// What the controller may do after a failure has been recorded.
     type Verdict =

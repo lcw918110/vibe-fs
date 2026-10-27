@@ -112,6 +112,7 @@ module internal ChatAdmissionTransaction =
         journal: AgentJournal ->
         acceptManagedIntent:
             (ChatAdmissionIntent.ManagedIntent -> Task<Result<ManagedChatAcceptanceWitness, ManagedChatAcceptanceError>>) ->
+        hostTarget: ModelRoutingTarget ->
         projectHostModel: (HostModel -> Result<unit, exn>) ->
             ChatAdmissionTransactionPorts
 

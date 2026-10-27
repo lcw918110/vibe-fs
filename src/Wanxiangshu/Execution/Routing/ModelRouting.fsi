@@ -27,8 +27,7 @@ module ModelRouting =
         purpose: ModelExecutionPurpose ->
             ModelRoutingTarget option
 
-    val configPath: unit -> string
-    val bootstrapAndLoadAt: path: string -> template: string -> Task<obj>
+
     val toHostModel: target: ModelRoutingTarget -> HostModel
     val toOpenCodeModel: target: ModelRoutingTarget -> HostModel
     val sameTarget: expected: ModelRoutingTarget -> observed: HostModel -> bool
@@ -43,14 +42,15 @@ module ModelRouting =
             role: Role *
             participant: string *
             purpose: ModelExecutionPurpose *
-            lenderSessionId: string option ->
+            lenderSessionId: string option *
+            ?hostTarget: ModelRoutingTarget ->
                 Task<ExecutionAdmissionAcquisition>
 
         member ExecutionAdmissionTarget:
             lease: ExecutionAdmissionLease -> Result<ModelRoutingTarget, ExecutionAdmissionRejection>
 
         member internal ContinueExecutionAdmission:
-            previous: ExecutionAdmissionLease * physicalUserMessageId: string -> Task<ExecutionAdmissionAcquisition>
+            previous: ExecutionAdmissionLease * physicalUserMessageId: string * ?selectedTarget: ModelRoutingTarget -> Task<ExecutionAdmissionAcquisition>
 
         member internal RetainContinuationInput:
             previous: ExecutionAdmissionLease * physicalUserMessageId: string -> ModelRoutingTarget
@@ -126,10 +126,6 @@ module ModelRouting =
         member EndProviderStep: sessionId: string * physicalUserMessageId: string * providerRun: string -> unit
         member TakeProviderRunTarget: providerRun: string -> ModelRoutingTarget option
 
-        member CondemnFailedTarget: providerRun: string -> ModelRoutingTarget option
-
-        member RetainFailedTargetForRetry: sessionId: string * providerRun: string -> ModelRoutingTarget option
-
         member SuppressProviderStep: sessionId: string * physicalUserMessageId: string -> unit
         member SnapshotOccupied: unit -> ModelRoutingTarget array
         member PendingCount: int
@@ -141,11 +137,6 @@ module ModelRouting =
 
     val internal takeProviderRunTarget: providerRun: ProviderRunIdentity -> ModelRoutingTarget option
 
-    val internal condemnFailedTarget: providerRun: ProviderRunIdentity -> ModelRoutingTarget option
-
-    val internal retainFailedTargetForRetry:
-        sessionId: SessionId -> providerRun: ProviderRunIdentity -> ModelRoutingTarget option
-
     val internal hasTheoreticalCapacity: role: string -> ?purpose: ModelExecutionPurpose -> bool
 
     val internal acquireExecutionAdmission:
@@ -155,6 +146,7 @@ module ModelRouting =
         participant: string ->
         purpose: ModelExecutionPurpose ->
         lenderSessionId: string option ->
+        hostTarget: ModelRoutingTarget option ->
             Task<ExecutionAdmissionAcquisition>
 
     val internal executionAdmissionTarget:
@@ -185,7 +177,7 @@ module ModelRouting =
     val internal tryReadExecution: key: ChatExecutionKey -> ExecutionAdmissionLease option
 
     val internal continueExecutionAdmission:
-        previous: ExecutionAdmissionLease -> physicalId: PhysicalUserMessageId -> Task<ExecutionAdmissionAcquisition>
+        previous: ExecutionAdmissionLease -> physicalId: PhysicalUserMessageId -> target: ModelRoutingTarget -> Task<ExecutionAdmissionAcquisition>
 
     val internal retainContinuationInput:
         previous: ExecutionAdmissionLease -> key: ChatExecutionKey -> ModelRoutingTarget
@@ -237,5 +229,3 @@ module ModelRouting =
     /// The physical user message of a session's current active lease, when the
     /// lease is bound to an exact physical message. Read-only.
     val tryActivePhysical: sessionId: string -> string option
-
-    val projectHostModel: output: obj -> model: HostModel -> Result<unit, exn>

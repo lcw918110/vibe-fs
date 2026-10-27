@@ -9,7 +9,6 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
-open Wanxiangshu.Resources
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Execution.Session.ChatExecution
 
@@ -40,42 +39,6 @@ module ModelRouting =
         |> box
         |> ExactCapacityFenceReference.Create
         |> CapacityOwnership.OwnsExactFence
-
-    [<Import("homedir", "node:os")>]
-    let private homeDir () : string = jsNative
-
-    [<Import("dirname", "node:path")>]
-    let private dirName (path: string) : string = jsNative
-
-    [<Import("join", "node:path")>]
-    let private pathJoin (left: string, right: string) : string = jsNative
-
-    [<Import("mkdirSync", "node:fs")>]
-    let private mkdirSync (path: string, options: obj) : unit = jsNative
-
-    [<Import("writeFileSync", "node:fs")>]
-    let private writeFileSync (path: string, content: string, options: obj) : unit = jsNative
-
-    [<Import("linkSync", "node:fs")>]
-    let private linkSync (existingPath: string, newPath: string) : unit = jsNative
-
-    [<Import("unlinkSync", "node:fs")>]
-    let private unlinkSync (path: string) : unit = jsNative
-
-    [<Import("randomUUID", "node:crypto")>]
-    let private randomUuid () : string = jsNative
-
-    [<Import("pathToFileURL", "node:url")>]
-    let private pathToFileUrl (path: string) : obj = jsNative
-
-    [<Emit("import($0)")>]
-    let private importModule (url: string) : Task<obj> = jsNative
-
-    [<Emit("typeof $0 === 'function'")>]
-    let private isFunction (value: obj) : bool = jsNative
-
-    [<Emit("$0($1)")>]
-    let private callMarkProviderFailed (markFailed: obj) (provider: string) : unit = jsNative
 
     /// The slice of the stateless `wanxiangli/routing` protocol owner (CUT-10)
     /// this module reads. Module shape, protocol version, the synchronous
@@ -138,76 +101,13 @@ module ModelRouting =
 
         if isNull result then None else Some(targetOfDecoded result)
 
-    let configPath () =
-        pathJoin (pathJoin (homeDir (), ".config"), "opencode")
-        |> fun root -> pathJoin (root, "wanxiangshu.mjs")
-
-    let private errorCode (error: exn) =
-        let value = box error
-
-        if isNull value?code then None else Some(string value?code)
-
-    let private acceptBootstrapLinkError error =
-        match errorCode error with
-        | Some "EEXIST" -> ()
-        | _ -> raise error
-
-    let private publishBootstrap tempPath path =
-        try
-            linkSync (tempPath, path)
-        with ex ->
-            acceptBootstrapLinkError ex
-
-    let private removeBootstrapTemp tempPath =
-        try
-            unlinkSync tempPath
-        with _ ->
-            ()
-
-    let private publishBootstrapTemplate tempPath path template =
-        try
-            writeFileSync (tempPath, template, createObj [ "encoding" ==> "utf8"; "flag" ==> "wx" ])
-            publishBootstrap tempPath path
-        finally
-            removeBootstrapTemp tempPath
-
-    let bootstrapAndLoadAt (path: string) (template: string) : Task<obj> =
-        task {
-            if String.IsNullOrWhiteSpace path then
-                invalidArg "path" "execution-model-routing: scheduler path must be non-empty"
-
-            mkdirSync (dirName path, createObj [ "recursive" ==> true ])
-
-            // A direct O_EXCL write makes the destination name visible before all
-            // bytes are written, so another OpenCode process could import a partial
-            // module. Publish a fully-written same-directory inode with an atomic
-            // hard-link instead; EEXIST means another bootstrap already won.
-            let tempPath = path + ".tmp-" + randomUuid ()
-            publishBootstrapTemplate tempPath path template
-
-            let fileUrl = string (pathToFileUrl path)?href
-            let! moduleObj = importModule fileUrl
-            // Shape and version are judged by wanxiangli/routing; a refused
-            // module fails closed here and the user file is left untouched.
-            let policy = protocol.admit moduleObj
-            let scheduler: obj = policy?route
-            scheduler?markProviderFailed <- policy?markProviderFailed
-            scheduler?hasTheoreticalCapacity <- policy?hasTheoreticalCapacity
-            return scheduler
-        }
-
-    let private recommendedTemplate () =
-        ModelRoutingResource.recommendedTemplate ()
-
-    let bootstrapDefault () =
-        bootstrapAndLoadAt (configPath ()) (recommendedTemplate ())
 
     let toHostModel (target: ModelRoutingTarget) : HostModel =
         let slash = target.Model.IndexOf '/'
 
         { providerID = target.Model.Substring(0, slash)
           modelID = target.Model.Substring(slash + 1)
-          variant = Some target.Reasoning }
+          variant = if String.IsNullOrWhiteSpace target.Reasoning then None else Some target.Reasoning }
 
     let toOpenCodeModel (target: ModelRoutingTarget) : HostModel = toHostModel target
 
@@ -304,8 +204,6 @@ module ModelRouting =
     type private ProviderRunWitnessLibrary =
         abstract remember: sessionId: string * providerRun: string * target: obj -> unit
         abstract take: providerRun: string -> obj
-        abstract retainForRetry: sessionId: string * providerRun: string -> obj
-        abstract takeRetry: sessionId: string -> obj
         abstract rememberStep: sessionId: string * physicalUserMessageId: string * providerRun: string -> unit
         abstract stepOf: providerRun: string -> obj
         abstract forgetSession: sessionId: string -> unit
@@ -316,12 +214,6 @@ module ModelRouting =
 
     [<Emit("new $0()")>]
     let private constructWitness (cls: obj) : ProviderRunWitnessLibrary = jsNative
-
-    let private targetOrNone (value: obj) : ModelRoutingTarget option =
-        if isNull value then
-            None
-        else
-            Some(unbox<ModelRoutingTarget> value)
 
     let private targetProvider (target: ModelRoutingTarget) =
         target.Model.Substring(0, target.Model.IndexOf '/')
@@ -362,12 +254,6 @@ module ModelRouting =
         let admissionOwner = ExecutionCapacityOwner(transitionCounters)
         // DSL-MUTABLE: resource — process-local scheduler poison
         let mutable fatalError: exn option = None
-
-        let markFailedFn: obj =
-            if isNull scheduler then
-                null
-            else
-                scheduler?markProviderFailed
 
         let hasCapFn: obj =
             if isNull scheduler then
@@ -415,24 +301,8 @@ module ModelRouting =
             else
                 Some(unbox<string> view?sessionId, unbox<string> view?physicalUserMessageId)
 
-        let takeRecoveryRetryTarget sessionId =
-            witness.takeRetry sessionId |> targetOrNone
-
-        let retainFailedTargetOfRun sessionId providerRun =
-            witness.retainForRetry (sessionId, providerRun) |> targetOrNone
-
-        let markProviderOfTarget (target: ModelRoutingTarget) =
-            if not (isNull markFailedFn) && isFunction markFailedFn then
-                callMarkProviderFailed markFailedFn (targetProvider target)
-
-        // provider-attempt-recovery-021: a confirmed provider failure that kept its target binds this
-        // session's next fresh admission to that target; the binding is consumed
-        // once, and only a still-active replaced execution of the same purpose can
-        // otherwise supply the ordinary previous hint.
         let recoveryPreviousTarget (purpose: ModelExecutionPurpose) sessionId =
-            match takeRecoveryRetryTarget sessionId with
-            | Some target -> Some target
-            | None -> activeTargetOfPurpose purpose sessionId
+            activeTargetOfPurpose purpose sessionId
 
         let ensureHealthy () = fatalError |> Option.iter raise
 
@@ -468,7 +338,7 @@ module ModelRouting =
                 raise ex
 
         let exactTargetAvailable (role: Role) target running (purpose: ModelExecutionPurpose) =
-            match scheduleOrPoison running role (Some target) purpose with
+            match (if isNull scheduler then Some target else scheduleOrPoison running role (Some target) purpose) with
             | Some candidate -> candidate = target
             | None -> false
 
@@ -511,10 +381,15 @@ module ModelRouting =
             | Some candidate when candidate = fixedTarget -> Some fixedTarget
             | _ -> None
 
-        let routeForSession sessionId (role: Role) previous (purpose: ModelExecutionPurpose) running =
-            match tryGetBoundDevopsTarget sessionId role with
+        let devopsOrScheduled running role previous purpose =
+            function
             | Some fixedTarget -> confirmFixedTarget role purpose running fixedTarget
             | None -> scheduleOrPoison running role previous purpose
+
+        let routeForSession sessionId (role: Role) previous (purpose: ModelExecutionPurpose) running =
+            match isNull scheduler with
+            | true -> previous
+            | false -> devopsOrScheduled running role previous purpose (tryGetBoundDevopsTarget sessionId role)
 
         let routeFreshOrPoison
             retireOnUnavailable
@@ -585,7 +460,8 @@ module ModelRouting =
             (role: Role)
             (target: ModelRoutingTarget)
             =
-            enforceDevopsBindingNormal sessionId role target
+            if not (isNull scheduler) then
+                enforceDevopsBindingNormal sessionId role target
 
         let resolvePreviousTarget (purpose: ModelExecutionPurpose) sessionId role =
             match activeTargetOfPurpose purpose sessionId with
@@ -912,6 +788,7 @@ module ModelRouting =
             (participant: string)
             (purpose: ModelExecutionPurpose)
             (lenderSessionId: string option)
+            (hostTarget: ModelRoutingTarget option)
             =
             match currentExecutionOutcome sessionId physicalUserMessageId role participant purpose with
             | Some current -> current
@@ -920,7 +797,7 @@ module ModelRouting =
             | None ->
                 let oldPhysicalUserMessageId = currentPhysicalUserMessageId sessionId
 
-                let previous = previousForFreshPurpose purpose sessionId role
+                let previous = if isNull scheduler then hostTarget else previousForFreshPurpose purpose sessionId role
 
                 let replacePrevious () =
                     let previousPhysical =
@@ -952,10 +829,11 @@ module ModelRouting =
             (participant: string)
             (purpose: ModelExecutionPurpose)
             (lenderSessionId: string option)
+            (hostTarget: ModelRoutingTarget option)
             =
             lock gate (fun () ->
                 ensureHealthy ()
-                acquireFreshOrAdopt sessionId physicalUserMessageId role participant purpose lenderSessionId)
+                acquireFreshOrAdopt sessionId physicalUserMessageId role participant purpose lenderSessionId hostTarget)
 
         let acquireManagedSafe
             sessionId
@@ -964,9 +842,10 @@ module ModelRouting =
             (participant: string)
             (purpose: ModelExecutionPurpose)
             (lenderSessionId: string option)
+            (hostTarget: ModelRoutingTarget option)
             =
             try
-                acquireManagedTask sessionId physicalUserMessageId role participant purpose lenderSessionId
+                acquireManagedTask sessionId physicalUserMessageId role participant purpose lenderSessionId hostTarget
                 |> Task.FromResult
             with ex ->
                 failedTask<ExecutionAdmissionAcquisition> ex
@@ -1447,7 +1326,7 @@ module ModelRouting =
                 |> Array.iter (fun key -> continuationInputs.[key] <- lease)
             | _ -> ()
 
-        let continueExecutionAdmissionLocked (previous: ExecutionAdmissionLease) physicalUserMessageId =
+        let continueExecutionAdmissionLocked (previous: ExecutionAdmissionLease) physicalUserMessageId selectedTarget =
             ensureHealthy ()
             let identity = previous.Identity
             let sessionId = identity.SessionId
@@ -1458,15 +1337,17 @@ module ModelRouting =
                 && current.Participant = Some identity.Participant
                 && current.Target = target
                 ->
+                let nextTarget = selectedTarget |> Option.defaultValue target
                 let replacement =
-                    capacity.ContinueExecution(sessionId, identity.PhysicalUserMessageId, physicalUserMessageId, target)
+                    capacity.ContinueExecution(sessionId, identity.PhysicalUserMessageId, physicalUserMessageId, nextTarget)
 
                 supersededPhysical.Add(sessionId, identity.PhysicalUserMessageId) |> ignore
                 supersedeCurrentDemand sessionId
 
                 let next =
                     { current with
-                        PhysicalUserMessageId = Some physicalUserMessageId }
+                        PhysicalUserMessageId = Some physicalUserMessageId
+                        Target = nextTarget }
 
                 activeBySession.[sessionId] <- next
                 drainDemands ()
@@ -1487,13 +1368,14 @@ module ModelRouting =
                 role: Role,
                 participant: string,
                 purpose: ModelExecutionPurpose,
-                lenderSessionId: string option
+                lenderSessionId: string option,
+                ?hostTarget: ModelRoutingTarget
             ) : Task<ExecutionAdmissionAcquisition> =
             match normalizeAdmissionInput sessionId physicalUserMessageId role participant with
             | Error error -> failedTask<ExecutionAdmissionAcquisition> error
             | Ok(normSessionId, normPhysicalUserMessageId, normRole, normParticipant) ->
                 let normLender = lenderSessionId |> Option.bind normalizeSessionId
-                acquireManagedSafe normSessionId normPhysicalUserMessageId normRole normParticipant purpose normLender
+                acquireManagedSafe normSessionId normPhysicalUserMessageId normRole normParticipant purpose normLender hostTarget
 
         member internal _.RetainContinuationInput(previous: ExecutionAdmissionLease, physicalUserMessageId: string) =
             lock gate (fun () ->
@@ -1531,10 +1413,10 @@ module ModelRouting =
                     |> Seq.toArray
                     |> Array.iter releaseContinuationInputLocked))
 
-        member internal _.ContinueExecutionAdmission(previous: ExecutionAdmissionLease, physicalUserMessageId: string) =
+        member internal _.ContinueExecutionAdmission(previous: ExecutionAdmissionLease, physicalUserMessageId: string, ?selectedTarget: ModelRoutingTarget) =
             try
                 let acquired =
-                    lock gate (fun () -> continueExecutionAdmissionLocked previous physicalUserMessageId)
+                    lock gate (fun () -> continueExecutionAdmissionLocked previous physicalUserMessageId selectedTarget)
 
                 Task.FromResult acquired
             with error ->
@@ -1800,30 +1682,6 @@ module ModelRouting =
         member _.TakeProviderRunTarget(providerRun: string) : ModelRoutingTarget option =
             lock gate (fun () -> takeProviderRunTarget providerRun)
 
-        /// provider-attempt-recovery-021: the failed attempt was itself the
-        /// same-provider retry, so its confirmed failure condemns the provider of
-        /// the exact witness target. The witness is single-consumption: duplicate
-        /// observations, stale callbacks, cancellations and unknown submissions
-        /// hold no second permission.
-        member _.CondemnFailedTarget(providerRun: string) : ModelRoutingTarget option =
-            lock gate (fun () ->
-                match takeProviderRunWitness (providerRun.Trim()) with
-                | Some(_, target) ->
-                    markProviderOfTarget target
-                    drainDemands ()
-                    Some target
-                | None -> None)
-
-        /// provider-attempt-recovery-021: the failed attempt was this provider's
-        /// first confirmed failure, so its provider is kept and the next fresh
-        /// admission of this session is bound to the exact failed target for the
-        /// verbatim retry. The witness must belong to this session and the
-        /// binding is consumed once.
-        member _.RetainFailedTargetForRetry(sessionId: string, providerRun: string) : ModelRoutingTarget option =
-            match normalizeSessionId sessionId with
-            | None -> None
-            | Some normSessionId -> lock gate (fun () -> retainFailedTargetOfRun normSessionId (providerRun.Trim()))
-
         member _.HasTheoreticalCapacity (role: string) (purpose: ModelExecutionPurpose) : bool =
             lock gate (fun () -> hasTheoreticalCapacityLocked role purpose)
 
@@ -1845,8 +1703,7 @@ module ModelRouting =
             | None, None ->
                 let loading =
                     task {
-                        let! scheduler = bootstrapDefault ()
-                        let runtime = ModelRoutingRuntime(scheduler)
+                        let runtime = ModelRoutingRuntime(null)
                         lock sharedGate (fun () -> sharedRuntime <- Some runtime)
                         return runtime
                     }
@@ -1869,16 +1726,6 @@ module ModelRouting =
     let internal takeProviderRunTarget (providerRun: ProviderRunIdentity) : ModelRoutingTarget option =
         current().TakeProviderRunTarget(ProviderRunIdentity.value providerRun)
 
-    let internal condemnFailedTarget (providerRun: ProviderRunIdentity) : ModelRoutingTarget option =
-        current().CondemnFailedTarget(ProviderRunIdentity.value providerRun)
-
-    let internal retainFailedTargetForRetry
-        (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
-        : ModelRoutingTarget option =
-        current()
-            .RetainFailedTargetForRetry(SessionId.value sessionId, ProviderRunIdentity.value providerRun)
-
     /// purpose defaults to Normal: the provider recovery retry decisions ask
     /// about the owner execution of the failing role.
     let internal hasTheoreticalCapacity (role: string) (purpose: ModelExecutionPurpose) : bool =
@@ -1891,6 +1738,7 @@ module ModelRouting =
         (participant: string)
         (purpose: ModelExecutionPurpose)
         (lenderSessionId: string option)
+        (hostTarget: ModelRoutingTarget option)
         =
         current()
             .AcquireExecutionAdmission(
@@ -1899,7 +1747,8 @@ module ModelRouting =
                 role,
                 participant,
                 purpose,
-                lenderSessionId
+                lenderSessionId,
+                ?hostTarget = hostTarget
             )
 
     let internal executionAdmissionTarget (lease: ExecutionAdmissionLease) =
@@ -1944,9 +1793,9 @@ module ModelRouting =
             )
         | None -> None
 
-    let internal continueExecutionAdmission (previous: ExecutionAdmissionLease) (physicalId: PhysicalUserMessageId) =
+    let internal continueExecutionAdmission (previous: ExecutionAdmissionLease) (physicalId: PhysicalUserMessageId) (target: ModelRoutingTarget) =
         match lock sharedGate (fun () -> sharedRuntime) with
-        | Some runtime -> runtime.ContinueExecutionAdmission(previous, PhysicalUserMessageId.value physicalId)
+        | Some runtime -> runtime.ContinueExecutionAdmission(previous, PhysicalUserMessageId.value physicalId, selectedTarget = target)
         | None ->
             failedTask<ExecutionAdmissionAcquisition> (InvalidOperationException "model-routing runtime is unavailable")
 
@@ -2186,22 +2035,3 @@ module ModelRouting =
         match lock sharedGate (fun () -> sharedRuntime) with
         | Some runtime -> runtime.TryActivePhysical(sessionId.Trim())
         | None -> None
-
-    let private requireOutputMessage output =
-        let message = if isNull output then null else output?message
-
-        if isNull message then
-            invalidOp "EMR-009: managed chat.message routing has no mutable output.message"
-
-        message
-
-    /// execution-model-routing-009 Host projection. Routing owns both which outcomes carry a model
-    /// and the exact mutable Host field that receives that model; composition
-    /// roots only invoke this published projection.
-    let projectHostModel (output: obj) (model: HostModel) =
-        try
-            let message = requireOutputMessage output
-            message?model <- box model
-            Ok()
-        with error ->
-            Error error

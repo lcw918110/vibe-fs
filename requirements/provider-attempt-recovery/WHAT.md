@@ -32,11 +32,11 @@ A retry preserves the Logical Run's participant and system prompt. Model routing
 
 Reject a failure record whose count is not the valid successor, exceeds the budget, or advances an exhausted run. Rejection stops replay.
 
-## [008] Unusable content is not provider failure
+## [008] 空终态与 Provider 故障统一恢复（合并至 ReconcilePass，nudge 机制遵循 InteractionRepair）
 
-An empty or XML-only terminal without confirmed provider-error evidence never advances the provider-failure budget. Every repairable role, including Manager, must reach bounded Interaction Repair, at most once; an unfinished turn must not be silently dropped.
-
-An errored assistant terminal remains a failed attempt even when its formal output is empty or XML-only. If idle arrives before the exact typed failure observation, reconciliation waits rather than publishing a content-repair occasion. The matching failure observation owns budget accounting and the fresh retry; content validity cannot downgrade it to Interaction Repair.
+无有效正文且无工具调用的终态（包括自然 stop 但正文为空/XML-only、thought-only 无最终输出、以及 upstream_error 等 provider 错误）与普通 provider 故障不再人为割裂，统一在 ReconcilePass 中汇聚为需要修复催促的未完成态（TurnNeedsContinuation）。
+在真实闲置（quiescence/idle）到达时，系统遵循 InteractionRepair 的 exact-terminal gate 机制向会话分发统一催促提示词（“刚刚你异常停止，请你继续工作。”），催促模型在同一会话中重新输出。
+统一恢复受 10 次连续失败预算控制；未达 10 次时每次异常停止均可催促，达到 10 次耗尽时才真正判定为终端失败。真实人工取消（Abort / Cancelled）保持终结，严禁误触发催促。
 
 ## [009] Host retries are not domain failures
 
@@ -74,14 +74,10 @@ LocalInvariant, ProtocolRejection, AuthorizationDenied, UserCancelled, Supersede
 
 Budget folds only committed Authority Root, typed provider-failure and eligible business-main success facts; identical facts yield the same view. It holds no callback, continuation, next action, send permission or workflow entry. Every retry still consumes its exact typed failure licence and derives execution content from retry policy.
 
-## [021] 首次原样重试，第二次拉黑 Provider 后重试，以此类推
+## [021] 无 fallback 模型策略，严格遵循 OpenCode 原生配置
 
-系统已废除 Y 恢复材料与 prefix probe 候选机制。provider attempt 失败后的恢复策略统一为：**第一次原样重试（保留确切原目标），第二次把该 Provider 拉黑（永久 poison）后换候选 Provider 重试，以此类推**。
-
-具体而言：对某个目标 Provider 的首次失败，保留确切原目标作为同 session 下一次 fresh admission 的单次调度偏好并原样重试（不构造 FrozenRecordPrefix）；只有已发出该原样重试的确切 attempt 再次发生已授权 provider 失败，才永久 poison 该 provider 并轮换至下一候选 Provider，对新候选 Provider 同样遵循“首次原样重试、再次失败则拉黑”的递推规则。判定须同时有该 PhysicalUserMessageId 的 ProviderRetryAttempt 接受事实，以及为它建立 durable ProviderStarted 的同一 ProviderRunIdentity；同物理消息的后续 step 不算该重试自身。预算代数和 participant identity 不变。
-
-ordinary、sync delegate 和恢复重入遵守同一结算规则：取得 RetryFreshAttempt 后、重投发送前，单次消费确切 provider-run witness。重复、旧回调、取消和提交未知不取得结算权限。
-
+系统彻底废除 wanxiangshu.mjs 自定义调度与模型 fallback 机制。所有角色与 agent 执行模型完全与 OpenCode 官方机制一致：优先使用用户选择，其次使用 opencode.json 或 opencode.jsonc 中指定的模型。
+发生失败或催促重试时，严格使用该确定模型原样重试，严禁拉黑 provider 或在后台自动切换至候选模型池。失败预算统一为 10 次。
 ## [022] 发送须等待确切宿主终态
 
 Host 停止自动重试的唯一证据是确切 `(SessionId, ProviderRunIdentity)` 的 finalized errored assistant message 投影。session.error 只触发失败定局；session.idle、其它 run 或其它尝试均不能授权发送。缺少 durable ProviderStarted 不妨碍观察该宿主终态和判定失败。

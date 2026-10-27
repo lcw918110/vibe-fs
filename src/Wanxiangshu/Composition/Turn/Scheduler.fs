@@ -160,7 +160,8 @@ module Reconciler =
         let projectionSettledForWake (wake: ReconcileProgram.ReconcileWake) (turn: ReconciledTurn option) =
             match turn, wake with
             | None, _ -> false
-            | Some _, ReconcileProgram.ReconcileWake.IdleWake _ -> true
+            | Some _, ReconcileProgram.ReconcileWake.IdleWake _
+            | Some _, ReconcileProgram.ReconcileWake.IdleFailureWake _ -> true
             | Some observed, ReconcileProgram.ReconcileWake.FailureWake(Some physical, _, _, _) when
                 observed.PhysicalUserMessageId = physical
                 ->

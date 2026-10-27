@@ -102,19 +102,11 @@ npm install wanxiangshu --registry <your-private-registry>
 | `SPHINX_COMMON_DIR` | Sphinx MCP 独立进程的 durable workspace；缺失即启动失败 |
 | `SPHINX_START_CONFIG` | Sphinx MCP start 配置 JSON；缺失时只允许读取类工具（start 返回 `CONFIG_REQUIRED`） |
 
-### 升级：模型调度（协议 2）
-
-升级只做两件事：旧的环境变量已全部失效；模型调度配置需要升到协议 2。
+### 模型选择与旧环境变量
 
 **旧环境变量已失效。** `WANXIANGSHU_STRENGTH_MODE`、`WANXIANGSHU_STRENGTH_DRY_RUN_BUDGET`、`WANXIANGSHU_STRENGTH_HOST_CANARY`、`WANXIANGSHU_STRENGTH_K1_MARGIN`、`WANXIANGSHU_STRENGTH_K2_MARGIN`、`WANXIANGSHU_STRENGTH_K2_MIN_EVIDENCE`、`WANXIANGSHU_STRENGTH_CONTROL_BPS`、`WANXIANGSHU_STRENGTH_POLICY_VERSION`、`WANXIANGSHU_STRENGTH_SAVED_DEEP_*` 等一律不再读取。残留旧值不会阻止运行，也不会启用任何功能；从 shell 环境里删掉即可。
 
-**模型调度配置升级。** 配置位于 `~/.config/opencode/wanxiangshu.mjs`，需要导出：
-
-- `export const routingProtocol = 2`：调度 ABI 的稳定契约版本，不是运行开关。
-- `export default function route(role, running, previous)`：根据角色、当前活跃租约与接续偏好返回物理模型目标或 `null`。
-- `export const hasTheoreticalCapacity = (role) => …`：按角色回答当前是否有候选 provider 具有理论容量。
-
-随包模板 `resources/wanxiangshu.mjs` 已是协议 2 的参照形状，对照修改自己的配置即可。旧的三参数配置会被加载器明确拒绝并给出可操作错误；运行时不会覆盖用户已有的配置文件。
+**模型选择。** 由 OpenCode 决定：优先使用用户选择，其次使用 `opencode.json` 或 `opencode.jsonc` 中的配置。万象术不切换到备用模型。
 
 ### 快速开始
 
@@ -158,7 +150,7 @@ Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）
 
 领域事实以 journal（按 runtime 的 NDJSON）写入 `.Herdchestra/wanxiangshu/runtimes/`；没有 Git 仓库时使用给定目录，不回退 .git、XDG 或旧日志。随包资源：
 
-- `resources/provider/`（world / role / tool / delegation / host / lifecycle / runtime / library / casebook / planning / work；EN + zh-CN）；`resources/ablation/{fact-map,nodes,profiles,tool-map}.json`（feature-ablation 拓扑）；`resources/wanxiangshu.mjs`（model routing 模板）。**无** `resources/prompts/*`；**无** `catalog.json` SSOT。
+- `resources/provider/`（world / role / tool / delegation / host / lifecycle / runtime / library / casebook / planning / work；EN + zh-CN）；`resources/ablation/{fact-map,nodes,profiles,tool-map}.json`（feature-ablation 拓扑）。**无** `resources/prompts/*`；**无** `catalog.json` SSOT。
 - journal 与事实名默认冻结；升级前阅读 [CHANGELOG](CHANGELOG.md)。
 
 
@@ -272,7 +264,6 @@ resources/provider/
   work/<scenario>/{en,zh-CN}.md
   README.md
 resources/ablation/{fact-map,nodes,profiles,tool-map}.json
-resources/wanxiangshu.mjs
 ```
 
 加载：`Resources/`（`PackageResources`、`ProviderResources`、`PromptResources`、`RuntimeResourceAssembly`、`RuntimeResources`）；插件初始化 load/install 一次。

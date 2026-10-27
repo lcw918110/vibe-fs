@@ -107,29 +107,36 @@ module CompletedTurnClassifier =
     /// Returns either a publishable `TurnOutcome` or a private `SnapshotObservation`.
     /// Heterogeneous `obj` so finish=None stays instanceof SnapshotObservation in JS
     /// (HOST-004 Clean Break — must not mint TurnOutcome.TurnUnknown).
+    let private classifyNormalFinish parts =
+        function
+        | Some(value: string) when value.Equals("stop", StringComparison.OrdinalIgnoreCase) ->
+            classifyStopped parts
+        | Some(value: string) when value.Equals("tool-calls", StringComparison.OrdinalIgnoreCase) ->
+            box ReconcileProgram.TurnInProgress
+        | Some(value: string) when value.Equals("length", StringComparison.OrdinalIgnoreCase) ->
+            box (ReconcileProgram.TurnNeedsContinuation "assistant finish=length")
+        | Some(value: string) -> box (ReconcileProgram.TurnFailed(sprintf "assistant finish=%s" value))
+        | None -> box ReconcileProgram.TurnUnknown
+
     let classifyOutcome
         (completed: bool)
         (finish: string option)
         (errorName: string option)
         (parts: MessagePart array)
         : obj =
-        match isAbortErrorName errorName, completed && Option.isSome errorName, finish with
-        | true, _, _ -> box (ReconcileProgram.TurnAborted(defaultArg errorName "aborted"))
-        | false, true, _ -> box (ReconcileProgram.TurnFailed(defaultArg errorName "assistant completed with error"))
-        | false, false, Some value when value.Equals("aborted", StringComparison.OrdinalIgnoreCase) ->
-            box (ReconcileProgram.TurnAborted("finish=aborted"))
-        | false, false, Some value when value.Equals("error", StringComparison.OrdinalIgnoreCase) ->
-            box (ReconcileProgram.TurnFailed(defaultArg errorName "assistant finish=error"))
-        | false, false, Some value when value.Equals("stop", StringComparison.OrdinalIgnoreCase) ->
-            classifyStopped parts
-        | false, false, Some value when value.Equals("tool-calls", StringComparison.OrdinalIgnoreCase) ->
-            box ReconcileProgram.TurnInProgress
-        | false, false, Some value when value.Equals("length", StringComparison.OrdinalIgnoreCase) ->
-            box (ReconcileProgram.TurnNeedsContinuation "assistant finish=length")
-        | false, false, Some value -> box (ReconcileProgram.TurnFailed(sprintf "assistant finish=%s" value))
-        // No finish yet: private SnapshotObservation. Never invent Completed
-        // from parts alone — abort/error may still be racing the idle wake-up.
-        | false, false, None -> box ReconcileProgram.TurnUnknown
+        let isAbort =
+            isAbortErrorName errorName
+            || (finish |> Option.exists (fun value -> value.Equals("aborted", StringComparison.OrdinalIgnoreCase)))
+
+        let isError =
+            (completed && Option.isSome errorName)
+            || (finish |> Option.exists (fun value -> value.Equals("error", StringComparison.OrdinalIgnoreCase)))
+
+        match isAbort, isError with
+        | true, _ -> box (ReconcileProgram.TurnAborted(defaultArg errorName "aborted"))
+        | false, true when hasToolCallPart parts -> box ReconcileProgram.TurnInProgress
+        | false, true -> box (ReconcileProgram.TurnFailed(defaultArg errorName "assistant completed with error"))
+        | false, false -> classifyNormalFinish parts finish
 
     /// ARCH-011: named for the typed occasion (unfinished interaction), not for any
     /// character feature of the repair payload. A normal `finish=tool-calls` turn is

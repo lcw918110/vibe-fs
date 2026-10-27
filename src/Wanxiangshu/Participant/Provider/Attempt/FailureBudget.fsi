@@ -18,7 +18,7 @@ module ProviderFailureBudget =
     type FailureBudget = { ConsecutiveFailureCount: int }
 
     [<Literal>]
-    val DefaultBudget: int = 12
+    val DefaultBudget: int = 10
 
     type Verdict =
         | MayRetry of FailureBudget

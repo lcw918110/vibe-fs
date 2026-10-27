@@ -27,7 +27,6 @@ npm run diagnostics:collect -- "provider-retry-loop"
 ├── run-scoped.log          # 异常周期的精准运行时日志（排除历史噪点）
 ├── events-tail.json        # 万象术内核最后 10 条状态机跳变事实
 ├── latest-events.ndjson    # 事故现场的万象术事件账本原始快照（支持跨工作区穿透）
-├── wanxiangshu.mjs         # 当时生效的模型调度策略快照及语法校验结果
 ├── opencode-config.json    # 脱敏后的 Provider 与 Agent 物理配置快照
 └── system-crash-*.ips      # 近 24 小时内的操作系统核心崩溃转储（macOS .ips）
 ```

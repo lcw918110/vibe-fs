@@ -10,7 +10,7 @@ import { current, run } from './support/retry.mjs'
 const { budget, providerFailureProjection: projection } = owner
 
 test('WHAT[provider-attempt-recovery-005] finite budget boundaries stop automatic permission at the configured count', () => {
-  assert.ok(Number.isSafeInteger(budget.defaultBudget) && budget.defaultBudget > 0)
+  assert.equal(budget.defaultBudget, 10)
   for (const limit of [1, 3, budget.defaultBudget]) {
     assert.equal(budget.verdict(limit, { failures: limit - 1 }), 'MayRetry')
     assert.equal(budget.verdict(limit, { failures: limit }), 'Exhausted')

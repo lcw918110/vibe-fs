@@ -197,6 +197,15 @@ module InteractionRepairWorkflow =
     let private isInteractionRepairAttempt journal turn =
         continuationKindOf journal turn = Some PromptAuthority.ContinuationKind.InteractionRepair
 
+    let private isFailureBudgetExhausted (journal: AgentJournal option) (sessionId: SessionId) : bool =
+        match journal with
+        | Some durable ->
+            let snapshot = AgentJournal.snapshot durable
+            AgentProjection.tryFind sessionId snapshot.AgentProjections
+            |> Option.bind (fun session -> session.ProviderFailures)
+            |> Option.exists (fun pf -> pf.Exhausted || pf.Budget.ConsecutiveFailureCount >= ProviderFailureBudget.DefaultBudget)
+        | None -> false
+
     let private repairDefect
         (quiescence: ISessionQuiescenceGate)
         (context: ReconciledTurnContext)
@@ -210,16 +219,25 @@ module InteractionRepairWorkflow =
         : Task =
         let turn = context.Turn
 
-        match
-            CompletedTurnClassifier.decideRepairDefect
-                (isInteractionRepairAttempt journal turn)
-                turn.Observation
-                turn.Outcome
-        with
-        | CompletedTurnClassifier.RepairDefectDecision.RequestRepair ->
-            trySendIdleRepair quiescence context sessionPort rootWorkspace eventPort journal prompt repairKind observer
-        | CompletedTurnClassifier.RepairDefectDecision.AwaitRepairTerminal
-        | CompletedTurnClassifier.RepairDefectDecision.NoRepair -> AsyncSupport.completedTask ()
+        if isFailureBudgetExhausted journal turn.SessionId then
+            eventPort.NotifyTerminal
+                turn.SessionId
+                (TerminalOutcome.Failed(
+                    TerminalStop.forAuthority turn.AuthorityRootUserMessageId "failure budget exhausted (10)"
+                ))
+            |> ignore
+            AsyncSupport.completedTask ()
+        else
+            match
+                CompletedTurnClassifier.decideRepairDefect
+                    (isInteractionRepairAttempt journal turn)
+                    turn.Observation
+                    turn.Outcome
+            with
+            | CompletedTurnClassifier.RepairDefectDecision.RequestRepair ->
+                trySendIdleRepair quiescence context sessionPort rootWorkspace eventPort journal prompt repairKind observer
+            | CompletedTurnClassifier.RepairDefectDecision.AwaitRepairTerminal
+            | CompletedTurnClassifier.RepairDefectDecision.NoRepair -> AsyncSupport.completedTask ()
 
     /// interaction-authority-023: a retry continuation suppresses idle repair only
     /// while its own attempt is unsettled. The race this guards is the interleaved

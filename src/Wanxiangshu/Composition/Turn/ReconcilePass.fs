@@ -51,14 +51,16 @@ module ReconcilePass =
         : ReconciledTurnDelivery option =
         match shouldPublish, wake with
         | true, _ -> Some ReconciledTurnDelivery.Observation
-        | false, ReconcileProgram.ReconcileWake.IdleWake _ -> Some ReconciledTurnDelivery.IdleRevisit
+        | false, ReconcileProgram.ReconcileWake.IdleWake _
+        | false, ReconcileProgram.ReconcileWake.IdleFailureWake _ -> Some ReconciledTurnDelivery.IdleRevisit
         | false, ReconcileProgram.ReconcileWake.RetryWake
         | false, ReconcileProgram.ReconcileWake.FailureWake _
         | false, ReconcileProgram.ReconcileWake.AbortWake -> None
 
     let private quiescenceOf (wake: ReconcileProgram.ReconcileWake) =
         match wake with
-        | ReconcileProgram.ReconcileWake.IdleWake permit -> Some permit
+        | ReconcileProgram.ReconcileWake.IdleWake permit
+        | ReconcileProgram.ReconcileWake.IdleFailureWake(permit, _, _, _, _) -> Some permit
         | ReconcileProgram.ReconcileWake.RetryWake
         | ReconcileProgram.ReconcileWake.FailureWake _
         | ReconcileProgram.ReconcileWake.AbortWake -> None
