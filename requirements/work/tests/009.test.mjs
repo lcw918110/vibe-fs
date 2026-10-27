@@ -8,6 +8,7 @@ import { withReview, scores } from './support/plugin.mjs'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import * as scopeMod from '../../../dist/OpenCode/Tools/ToolRuntimeScopeSurface.js'
 import * as journalSurface from '../../../dist/Persistence/Journal/Surface.js'
+import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 
 const life = lifecycle.LifecycleSurface ?? lifecycle
 const verifyOwnership =
@@ -173,6 +174,8 @@ test('WHAT[work-009] the standalone review can complete cleanup when no owned re
     assert.equal(runtime.abortedIds.filter(id => id === session).length, before + 1)
     const root = await journalSurface.JournalSurface_initializeStateRoot(directory)
     assert.equal(life.inspected(root, session).Delivered, true)
+    assert.equal(dispatch.projectionObservation(runtime.journal, session).activeLogicalRun, null,
+      'registered review Completed must close the exact Manager Authority run through the shared journal')
   }, { session: 'standalone-cleanup-009' })
 })
 

@@ -1688,9 +1688,38 @@ type ToolRuntimeScope
 
         let stop (_request: obj) =
             task {
-                match! sessions.InterruptAttempt(SessionId.create ctx.SessionId) with
-                | Ok () -> return createObj [ "ok", box true ]
-                | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
+                // Work has already committed the retirement before invoking
+                // this effect. A genuinely Completed Manager tenure carries
+                // its exact durable retirement id; submit the matching
+                // AuthorityLogicalRunClosed through the shared journal owner
+                // before ending that physical attempt. Relays have no
+                // Completed retirement and must never close the logical run.
+                try
+                    match this.WorkspaceDirectory with
+                    | Some workspace ->
+                        let! commonDir = RuntimePath.stateRoot workspace
+                        let retirement =
+                            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir ctx.SessionId
+                            |> Option.bind Wanxiangshu.Mission.Lifecycle.DurableWorkHost.completedClosureId
+
+                        match retirement with
+                        | Some retirementId when this.IsRole(ctx, Role.Manager) ->
+                            do!
+                                JournalSurface.appendAuthorityLogicalRunClosed
+                                    commonDir
+                                    ctx.SessionId
+                                    retirementId
+                        | _ -> ()
+                    | None -> ()
+
+                    match! sessions.InterruptAttempt(SessionId.create ctx.SessionId) with
+                    | Ok () -> return createObj [ "ok", box true ]
+                    | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
+                with error ->
+                    return
+                        createObj
+                            [ "ok", box false
+                              "reason", box ("Manager closure or interrupt failed: " + error.Message) ]
             }
 
         Wanxiangshu.Mission.Lifecycle.DurableWorkHost.reviewEffects (

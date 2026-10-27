@@ -96,6 +96,8 @@ Attempt/TurnAborted、provider failure/retry、Fission、插件卸载、进程 s
 
 复用 SessionId 安装新身份前，依次完成 exact execution settlement、受权 child drain、`interaction-authority` 的 durable exact prior-run closure，并取得匹配 witness。association removal、detach、idle、timeout、Host observation、restart 都不能替代；缺证或 run 不匹配则拒绝。
 
+本轮接线验证：Manager 唯一 `review` 的 `Completed` 后置 stop effect 在已提交的 Work 中读取 `completedClosureId` 确切 retirement witness，调用共享 Journal 的 `appendAuthorityLogicalRunClosed`；`Relayed`、Plan 或缺少 exact retirement 时不得清除身份。原始 Work 领域直写的测试夹具必须显式调用同一官方窄口，不能将里程碑字串冒充 authority 已关闭。`requirements/work/tests/009.test.mjs` 验证真实注册 review 工具完成后 activeLogicalRun 为 null；`tests/020.test.mjs` 验证同 SessionId 的新身份和冷重开。
+
 ## [021] Lifecycle fatal
 
 Session delete、turn observation 或 strength semantic-cut incident 先完成其要求的 exact settlement、child drain 与 durable closure，再使用 composition 注入的 mandatory fatal capability。detach 不授权 fatal，不直接使用 physical adapter 或 optional/default/global fallback；同一 incident 至多一次 report/kill，不伪造 session terminal 或 child abandon。
@@ -157,6 +159,8 @@ child run 已在 journal 中证实的 Terminal 事实必须总能转化为一次
 Engineer/DevOps 的自然停止必须使父 join 取得一次真正可消费的完成事实。宿主确切观察到相同物理请求的 assistant message.updated（完成时间、合法 stop/length/content-filter 结尾）以及有 ProviderStarted 证据且 durable 提交成功的 ChatExecution.Terminal(Completed) 后，可以使用现有带代际和在途工具检查的 SessionQuiescenceGate permit 唤醒 Reconcile；不得额外要求另一个可能丢失的粗粒度 session.idle 才结算子任务。后续 session.idle 应幂等。
 
 此规则只处理已证实的精确当前 Completed。旧物理 parent、superseded run、Cancelled/Failed、未完成的工具、没有匹配 ProviderStarted 的伪消息均不得产生完成证明。终态归属与持久写入仍由已有 Host/Fork owner 验证，不能按时间或进程存活猜测完成。
+
+本轮定位与修复：HostEventCodec 的 `tryDecodeExactProviderStart` 明确排除含 `time.completed` 的消息；HostSignalRouter 原先只在这个 start decoder 成功时才调用 exact lifecycle callback，因此真正独立送达的 assistant terminal 被吞掉。现在路由器优先保留真实 Start，否则直接使用已解码并携全套确切 `(SessionId, PhysicalUserMessageId, ProviderRunId)` 的 Terminal 作为同一生命周期回调的身份，不从当前 Session 猜一个 run。`tests/029.test.mjs` 同时覆盖路由器最小红绿与真实 fork→Join，不靠额外 idle。
 
 真实事故（2026-10-25 UTC）：21:25 父 Manager resume(backport-runtime) 后 join；该子 Engineer 21:28:28 将 ChatExecution.Terminal(Completed) 写入 event sourcing 且有非空终态正文，但父 HandleWorkCompleted 从未追加，Join 停留在 external:child-completion。不能对磁盘日志直接补造 completion。
 

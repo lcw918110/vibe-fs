@@ -50,10 +50,24 @@ type HostSignalRouter
         | None -> ()
 
     let observeExactAssistant raw : Task<unit> =
-        match onExactAssistantObservation, HostEventCodec.tryDecodeExactProviderStart raw with
+        let terminal = HostEventCodec.tryDecodeExactProviderTerminal raw
+        // A completed assistant message is not also a "started" message:
+        // HostEventCodec.hasStartedState deliberately excludes time.completed.
+        // Route its exact (Session, physical parent, ProviderRun) witness
+        // directly so the already-started execution settles without needing
+        // an unrelated session.idle to wake the parent Join.
+        let observedIdentity =
+            HostEventCodec.tryDecodeExactProviderStart raw
+            |> Option.orElseWith (fun () ->
+                terminal
+                |> Option.map (fun completed ->
+                    { SessionId = completed.SessionId
+                      PhysicalUserMessageId = completed.PhysicalUserMessageId
+                      ProviderRun = completed.ProviderRun }))
+        match onExactAssistantObservation, observedIdentity with
         | Some observe, Some started ->
             let terminal =
-                HostEventCodec.tryDecodeExactProviderTerminal raw
+                terminal
                 |> Option.filter (fun completed ->
                     completed.SessionId = started.SessionId
                     && completed.PhysicalUserMessageId = started.PhysicalUserMessageId

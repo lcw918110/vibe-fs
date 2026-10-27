@@ -49,3 +49,24 @@ test('WHAT[managed-session-lifecycle-029] a rooted natural Engineer stop with a 
     } finally { observer.dispose() }
   })
 })
+
+
+test('WHAT[managed-session-lifecycle-029] completed exact assistant event reaches the Host signal observer without requiring an extra start event', async () => {
+  const {HostSignalRouter, HostSignalRouter__ObserveLocal_4E60E31B}=
+    await import('../../../dist/OpenCode/Signals/HostSignalAdapter.js')
+  const {SessionIdModule_create}=await import('../../../dist/Foundation/Identity.js')
+  const seen=[]
+  const router=new HostSignalRouter(new Set(),()=>{},(started,stepEnd,terminal)=>{
+    seen.push({started,stepEnd,terminal})
+    return Promise.resolve()
+  })
+  const event={type:'message.updated',properties:{info:{
+    sessionID:'child-natural-029',id:'run-natural-029',parentID:'msg-child-natural-029',
+    role:'assistant',time:{created:2,completed:3},finish:'stop',
+  }}}
+  await HostSignalRouter__ObserveLocal_4E60E31B(router,event)
+  assert.equal(seen.length,1,'exact terminal event itself must reach the lifecycle owner')
+  assert.equal(seen[0].stepEnd,true)
+  assert.equal(seen[0].started.ProviderRun?.fields?.[0],'run-natural-029')
+  assert.equal(seen[0].terminal?.Disposition?.tag,0)
+})

@@ -132,7 +132,8 @@ const withCompletedEngineer = async (action, { beforeCreate } = {}) => {
     const managerPhysical = 'd0p-manager-physical'
     const charge = 'D0-P charge: establish the original attached execution boundary.'
     const answer = 'D0-P actual assistant completion: the attached execution owns this response.'
-    const managerMessage = { id: managerPhysical, sessionID: manager, role: 'user', agent: 'manager', model: {} }
+    const managerMessage = { id: managerPhysical, sessionID: manager, role: 'user', agent: 'manager',
+      model: { providerID: 'fixture', modelID: 'manager-model' } }
     const managerParts = [{ type: 'text', text: 'Delegate one controlled Engineer investigation.' }]
     runtime.pushHostMessage(manager, { info: managerMessage, parts: managerParts })
     await hooks['chat.message']({ sessionID: manager, messageID: managerPhysical, agent: 'manager' },
@@ -182,7 +183,7 @@ const withCompletedEngineer = async (action, { beforeCreate } = {}) => {
       assert.equal(Array.isArray(physicalParts), true)
       assert.ok(physicalParts.some(part => part.type === 'text' && part.text.length > 0))
       assert.ok(physicalInfo.model)
-      assert.equal(physicalInfo.model.providerID, 'provider')
+      assert.equal(physicalInfo.model.providerID, 'fixture')
       assert.equal(physicalInfo.model.modelID, 'engineer-model')
       assert.equal(await pluginLifecycle.awaitAssignmentReady(originalRuntime, sent.child), true)
       const childProfile = dispatch.projectionObservation(runtime.journal, sent.child).activeLogicalRun

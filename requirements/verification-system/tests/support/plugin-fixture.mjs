@@ -593,6 +593,14 @@ export const completeManagerLife = async (runtime, sessionId) => {
   if (milestone() !== '已完成') {
     requireKind(await step('close', []), 'Completed', 'close')
   }
+  // This helper drives the raw Work domain rather than the actual review
+  // tool's Stop effect. Perform the same narrow Host authority closure after
+  // its exact durable Completed retirement, not on the stage label alone.
+  const durableWork = await import('../../../../dist/Mission/Lifecycle/DurableWorkHost.js')
+  const completed = durableWork.inspected(commonDir, sessionId)
+  const retirement = durableWork.completedClosureId(completed)
+  if (!retirement) throw new Error('Manager life completion has no exact retirement witness')
+  await journalSurface.JournalSurface_appendAuthorityLogicalRunClosed(commonDir, sessionId, retirement)
 }
 
 /**
