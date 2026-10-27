@@ -461,6 +461,7 @@ module PluginHooks =
             // is a port. Now is the Node monotonic clock (ms); Schedule wraps
             // the Node timer port's one-shot delay with a cancellation handle.
             let latencyTimerPort = NodeTiming.nodeTimerPort ()
+            let latencyObservers = Dictionary<string, string * (unit -> unit)>()
 
             let latencyPorts: LatencyWatchdogPorts =
                 { Now = performanceNow
@@ -484,38 +485,84 @@ module PluginHooks =
                               | Ok() -> true
                               | Error _ -> false
                       }
-                  Continue = fun sessionId prompt ->
+                  Continue = fun sessionId prompt accepted onLateRefused ->
                       task {
+                          // Detached is an actual handoff, not an Await with an
+                          // artificial deadline. Physical acceptance owns the
+                          // continuation outcome through the observer callback.
                           let registrations = ResizeArray<IDisposable>()
-                          use observing =
-                              { new IDisposable with
-                                  member _.Dispose() =
-                                      for registration in registrations do
-                                          registration.Dispose() }
-                          let acceptance: Wanxiangshu.Foundation.HostSession.ContinuationAcceptanceObserver =
-                              { Notify = fun _ -> ()
-                                AttachDisposable = registrations.Add
-                                Budget = Some 30000 }
-                          let! sent =
-                              HostSessionNudge.sendContinuationResult
-                                  sessionPort
-                                  host.RootWorkspace
-                                  (SessionId.create sessionId)
-                                  prompt
-                                  PromptAuthority.ContinuationKind.ProviderRetryAttempt
-                                  None
-                                  journal
-                                  PromptDispatcher.AwaitMode.Await
-                                  (Some acceptance)
+                          let token = Guid.NewGuid().ToString("N")
+                          let mutable released = false
+                          let release () =
+                              if not released then
+                                  released <- true
+                                  match latencyObservers.TryGetValue sessionId with
+                                  | true, (current, _) when current = token ->
+                                      latencyObservers.Remove sessionId |> ignore
+                                  | _ -> ()
+                                  for registration in registrations do
+                                      registration.Dispose()
+                          latencyObservers[sessionId] <- (token, release)
 
-                          return
-                              match sent with
-                              | Ok _ -> ""
-                              | Error reason -> reason
+                          let acceptance: Wanxiangshu.Foundation.HostSession.ContinuationAcceptanceObserver =
+                              { Notify = fun _ ->
+                                    release ()
+                                    accepted ()
+                                AttachDisposable = fun registration ->
+                                    if released then registration.Dispose()
+                                    else registrations.Add registration
+                                Budget = None }
+                          try
+                              let! sent =
+                                  HostSessionNudge.sendContinuationDetachedObservedResult
+                                      sessionPort
+                                      host.RootWorkspace
+                                      (SessionId.create sessionId)
+                                      prompt
+                                      PromptAuthority.ContinuationKind.ProviderRetryAttempt
+                                      None
+                                      journal
+                                      acceptance
+                                      (fun reason ->
+                                          release ()
+                                          onLateRefused reason)
+
+                              return
+                                  match sent with
+                                  | Ok _ -> ""
+                                  | Error reason ->
+                                      release ()
+                                      reason
+                          with error ->
+                              release ()
+                              return error.Message
                       }
+                  DropObserver = fun sessionId ->
+                      match latencyObservers.TryGetValue sessionId with
+                      | true, (_, release) -> release ()
+                      | _ -> ()
+                  Return = fun sessionId reason ->
+                      let sid = SessionId.create sessionId
+                      match HostSessionNudge.tryActiveProfile journal sid with
+                      | Some owner when sessionPort.IsManagedChild sid ->
+                          let stop =
+                              Wanxiangshu.Foundation.TerminalSignal.TerminalStop.forAuthority
+                                  owner.AuthorityRootUserMessageId
+                                  ("degeneration continuation unavailable: " + reason)
+                          if not (eventPort.NotifyTerminal
+                                      sid
+                                      (Wanxiangshu.Foundation.TerminalSignal.TerminalOutcome.Failed stop)) then
+                              Diagnostic.emit
+                                  "latency-degeneration-return-unobserved"
+                                  [ "session_id", sessionId; "reason", reason ]
+                      | _ ->
+                          Diagnostic.emit
+                              "latency-degeneration-return-unowned"
+                              [ "session_id", sessionId; "reason", reason ]
                   Managed = fun sessionId ->
-                      HostSessionNudge.tryActiveProfile journal (SessionId.create sessionId)
-                      |> Option.isSome
+                      let sid = SessionId.create sessionId
+                      sessionPort.IsManagedChild sid
+                      && (HostSessionNudge.tryActiveProfile journal sid |> Option.isSome)
                   Text = fun sessionId ->
                       ProviderProse.render
                           (ProviderLanguageBinding.forSessionText sessionId)

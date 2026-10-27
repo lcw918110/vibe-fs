@@ -103,6 +103,75 @@ module HostSessionNudge =
                         onAccepted
         }
 
+    /// Detached continuation with two independent observations: durable
+    /// physical acceptance and a later definite Host refusal. Neither waits
+    /// for the other; external OutcomeUnknown remains honestly unproven.
+    let sendContinuationDetachedObservedResult
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (sessionId: SessionId)
+        (prompt: string)
+        (kind: PromptAuthority.ContinuationKind)
+        (directory: string option)
+        (journal: AgentJournal option)
+        (onAccepted: ContinuationAcceptanceObserver)
+        (onRefused: string -> unit)
+        : Task<Result<PromptKey, string>> =
+        task {
+            match isFissionReplaced journal sessionId, journal, tryActiveProfile journal sessionId with
+            | true, _, _ -> return Error "Session is retired by Fission"
+            | false, None, _ -> return Error "No journal: a continuation cannot be claimed"
+            | false, Some _, None -> return Error "No active authority profile"
+            | false, Some durable, Some profile ->
+                let port =
+                    { new IDispatchSessionPort with
+                        member _.SendPrompt(sessionId, request, metadata, late) =
+                            let listener verdict : Task =
+                                task {
+                                    match verdict with
+                                    | Wanxiangshu.Host.Ports.DeliveryVerdict.Refused reason ->
+                                        onRefused reason
+                                    | _ -> ()
+                                    match late with
+                                    | Some original -> do! original verdict
+                                    | None -> ()
+                                } :> Task
+                            let sending =
+                                sessionPort.SendPrompt(
+                                    sessionId,
+                                    request.Text,
+                                    DispatchSessionPort.toHostOptions request metadata (Some listener)
+                                )
+                            // The initial Host send verdict is also asynchronous.
+                            // Observe it independently; never delay PromptDispatcher.
+                            (task {
+                                try
+                                    let! result = sending
+                                    match result with
+                                    | Wanxiangshu.Foundation.Outcome.SendOutcome.Retryable reason
+                                    | Wanxiangshu.Foundation.Outcome.SendOutcome.Fatal reason ->
+                                        onRefused reason
+                                    | _ -> ()
+                                with _ -> ()
+                            }) |> ignore<Task<unit>>
+                            sending
+                        member _.SubscribeFutureTerminal(sessionId, listener) =
+                            sessionPort.SubscribeFutureTerminal(sessionId, listener)
+                        member _.SubscribeTerminal(sessionId, listener) =
+                            sessionPort.SubscribeTerminal(sessionId, listener) }
+                let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
+                return!
+                    rt.SendContinuation
+                        port
+                        sessionId
+                        prompt
+                        kind
+                        profile
+                        (liveDirectory rootWorkspace directory)
+                        PromptDispatcher.AwaitMode.Detached
+                        (Some onAccepted)
+        }
+
     /// PROMPT-007 fire-and-forget: Detached — caller does not await PhysicalAccepted.
     ///
     /// The task is still observed. Discarding it — as `|> ignore` on the task did

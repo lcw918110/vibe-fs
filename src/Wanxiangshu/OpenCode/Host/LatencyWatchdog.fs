@@ -9,7 +9,9 @@ type LatencyWatchdogPorts =
     { Now: unit -> float
       Schedule: float -> (unit -> unit) -> IDisposable
       Abort: string -> Task<bool>
-      Continue: string -> string -> Task<string>
+      Continue: string -> string -> (unit -> unit) -> (string -> unit) -> Task<string>
+      Return: string -> string -> unit
+      DropObserver: string -> unit
       Managed: string -> bool
       Text: string -> string
       Diagnostic: string -> string -> unit }
@@ -57,7 +59,11 @@ type private TerminalVerdict =
 [<AttachMembers>]
 type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetector) =
 
+    [<Emit("Promise.resolve($1).then($2, $3)")>]
+    let observe (pending: Task<'t>) (onSuccess: 't -> unit) (onFailure: obj -> unit) : unit = jsNative
+
     let gate = obj ()
+    let recovering = Dictionary<string, int>()
     let measurements = Dictionary<string, LatencyMeasurement>()
     let mutable generation = 0
     let mutable disposed = false
@@ -67,6 +73,32 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
             ports.Diagnostic kind reason
         with _ ->
             ()
+
+    let validRecovery sessionId turn =
+        lock gate (fun () ->
+            not disposed
+            && (match recovering.TryGetValue sessionId with
+                | true, current -> current = turn
+                | _ -> false))
+
+    let finishRecovery sessionId turn =
+        lock gate (fun () ->
+            match recovering.TryGetValue sessionId with
+            | true, current when current = turn ->
+                recovering.Remove sessionId |> ignore
+                true
+            | _ -> false)
+
+    let failRecovery sessionId turn reason =
+        if finishRecovery sessionId turn then
+            diagnostic "latency-degeneration-returned" reason
+            try ports.Return sessionId reason
+            with error -> diagnostic "latency-degeneration-return-failed" error.Message
+
+    let revokeRecovery sid =
+        if recovering.Remove sid then
+            try ports.DropObserver sid
+            with error -> diagnostic "latency-degeneration-dispose-observer-failed" error.Message
 
     let disposeQuietly (handle: IDisposable option) =
         match handle with
@@ -82,70 +114,106 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     /// while the callback was pending or while Abort was in flight.
     let fire (sessionId: string) (thisGeneration: int) (thresholdMs: float) =
         if not disposed then
-            task {
-                try
-                    let armed =
+            let armed =
+                lock gate (fun () ->
+                    match measurements.TryGetValue sessionId with
+                    | true, measured when measured.Generation = thisGeneration && measured.Armed ->
+                        disposeQuietly measured.Timer
+                        measurements[sessionId] <- { measured with Armed = false; Aborting = true; Timer = None }
+                        recovering[sessionId] <- thisGeneration
+                        true
+                    | _ -> false)
+
+            if armed then
+                // Callback-driven handoff: no Task is awaited by this timer,
+                // the event hook, or the physical acceptance dispatcher.
+                let onAccepted () =
+                    if finishRecovery sessionId thisGeneration then
+                        diagnostic "latency-degeneration-resumed" sessionId
+
+                let onContinueFailure reason =
+                    failRecovery sessionId thisGeneration ("continuation: " + reason)
+
+                let onAbortAccepted accepted =
+                    let stillOurs =
                         lock gate (fun () ->
                             match measurements.TryGetValue sessionId with
-                            | true, recorded when
-                                recorded.Generation = thisGeneration && recorded.Armed
-                                ->
-                                // Disarm and drop the timer handle first: the
-                                // interrupt is issued at most once per attempt,
-                                // even if Abort hangs or throws.
-                                disposeQuietly recorded.Timer
-                                measurements[sessionId] <- { recorded with Armed = false; Aborting = true; Timer = None }
-                                true
-                            | _ -> false)
+                            | true, recorded when recorded.Generation = thisGeneration -> Some recorded
+                            | _ -> None)
 
-                    if armed then
-                        let! accepted = ports.Abort sessionId
-
-                        // Abort raced with a real completion: the host may have
-                        // settled the request while Abort was in flight. Only
-                        // the attempt that still owns the measurement records
-                        // a censored sample; an attempt that already completed
-                        // or was cancelled keeps its own accounting, so one
-                        // request is never counted both complete and censored.
-                        let stillOurs =
+                    match stillOurs with
+                    | None ->
+                        finishRecovery sessionId thisGeneration |> ignore
+                    | Some recorded when not accepted ->
+                        // A definite refusal leaves the original request alive,
+                        // unless the Host has already observed it idle. The
+                        // latter has no Provider left to finish the work, so
+                        // the original managed child must return a terminal.
+                        let idled =
                             lock gate (fun () ->
                                 match measurements.TryGetValue sessionId with
-                                | true, recorded when recorded.Generation = thisGeneration -> Some recorded
-                                | _ -> None)
+                                | true, current when current.Generation = thisGeneration ->
+                                    if current.Idle then
+                                        measurements.Remove(sessionId) |> ignore
+                                        true
+                                    else
+                                        measurements[sessionId] <- { current with Aborting = false }
+                                        false
+                                | _ -> false)
+                        if idled then
+                            failRecovery sessionId thisGeneration "interrupt refused after session became idle"
+                        // Otherwise preserve the original request and its
+                        // recovery ownership until a real terminal, a newer
+                        // provider start, a cancellation, or an idle event.
+                        // No fallback timer is created.
+                        diagnostic "latency-degeneration-abort-refused" sessionId
+                    | Some recorded ->
+                        // Claim the handoff before invoking any external callback:
+                        // a synchronous Host acceptance must not be lost.
+                        let released =
+                            lock gate (fun () ->
+                                match measurements.TryGetValue sessionId with
+                                | true, current when current.Generation = thisGeneration ->
+                                    measurements.Remove(sessionId) |> ignore
+                                    true
+                                | _ -> false)
 
-                        match accepted, stillOurs with
-                        | true, Some recorded ->
-                            let elapsed = ports.Now() - recorded.StartedAt
-                            detector.ObserveCensored(sessionId, max elapsed thresholdMs)
-                            let removed =
+                        if released && validRecovery sessionId thisGeneration then
+                            try
+                                detector.ObserveCensored(
+                                    sessionId,
+                                    max (ports.Now() - recorded.StartedAt) thresholdMs
+                                )
+                                observe
+                                    (ports.Continue sessionId (ports.Text sessionId) onAccepted onContinueFailure)
+                                    (fun reason ->
+                                        if not (String.IsNullOrEmpty reason) then
+                                            onContinueFailure reason)
+                                    (fun error -> onContinueFailure (string error))
+                            with error ->
+                                onContinueFailure error.Message
+
+                try
+                    observe
+                        (ports.Abort sessionId)
+                        onAbortAccepted
+                        (fun error ->
+                            let stillOurs =
                                 lock gate (fun () ->
                                     match measurements.TryGetValue sessionId with
                                     | true, current when current.Generation = thisGeneration ->
                                         measurements.Remove(sessionId) |> ignore
                                         true
                                     | _ -> false)
-
-                            if removed then
-                                let! error = ports.Continue sessionId (ports.Text sessionId)
-                                if not (String.IsNullOrEmpty error) then
-                                    diagnostic "latency-degeneration-continue-failed" error
-                        | true, None -> ()
-                        | false, Some _ ->
-                            lock gate (fun () ->
-                                match measurements.TryGetValue sessionId with
-                                | true, current when current.Generation = thisGeneration ->
-                                    if current.Idle then
-                                        measurements.Remove(sessionId) |> ignore
-                                    else
-                                        measurements[sessionId] <- { current with Aborting = false }
-                                | _ -> ())
-
-                            diagnostic "latency-degeneration-abort-refused" sessionId
-                        | false, None -> ()
+                            if stillOurs then
+                                failRecovery sessionId thisGeneration ("interrupt: " + string error))
                 with error ->
-                    diagnostic "latency-degeneration-timer-failed" error.Message
-            }
-            |> ignore<Task<unit>>
+                    lock gate (fun () ->
+                        match measurements.TryGetValue sessionId with
+                        | true, current when current.Generation = thisGeneration ->
+                            measurements.Remove(sessionId) |> ignore
+                        | _ -> ())
+                    failRecovery sessionId thisGeneration ("interrupt: " + error.Message)
 
     let startMeasurement (sessionId: string) (providerRun: string) =
         let threshold = detector.ThresholdMs sessionId
@@ -180,6 +248,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                         match measurements.TryGetValue sessionId with
                         | true, recorded when recorded.ProviderRun = Some run -> ()
                         | true, recorded ->
+                            revokeRecovery sessionId
                             disposeQuietly recorded.Timer
                             measurements.Remove(sessionId) |> ignore
 
@@ -188,7 +257,9 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                                 (sessionId + ": superseded without terminal")
 
                             startMeasurement sessionId run
-                        | false, _ -> startMeasurement sessionId run)
+                        | false, _ ->
+                            revokeRecovery sessionId
+                            startMeasurement sessionId run)
 
     /// A terminal assistant message for this session. Only a measurement that
     /// is still in flight and provably belongs to the same provider run records
@@ -216,6 +287,9 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
 
             match verdict with
             | Sampled recorded ->
+                if finishRecovery sessionId recorded.Generation then
+                    try ports.DropObserver sessionId
+                    with error -> diagnostic "latency-degeneration-dispose-observer-failed" error.Message
                 detector.ObserveCompleted(sessionId, ports.Now() - recorded.StartedAt)
             | ForeignProviderRun -> ()
             | DroppedUnattributable ->
@@ -235,6 +309,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                     match measurements.TryGetValue sessionId with
                     | true, recorded when recorded.ProviderRun = Some observedRun ->
                         measurements.Remove(sessionId) |> ignore
+                        revokeRecovery sessionId
                         disposeQuietly recorded.Timer
                     | _ -> ())
 
@@ -242,6 +317,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     member _.Cancel(sessionId: string) =
         if not (String.IsNullOrWhiteSpace sessionId) then
             lock gate (fun () ->
+                revokeRecovery sessionId
                 match measurements.TryGetValue sessionId with
                 | true, recorded ->
                     measurements.Remove(sessionId) |> ignore
@@ -252,20 +328,24 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     /// measurement until its receipt decides whether to continue.
     member _.OnIdle(sessionId: string) =
         if not disposed && not (String.IsNullOrWhiteSpace sessionId) then
-            let removed =
+            let removed, rejectedRun =
                 lock gate (fun () ->
                     match measurements.TryGetValue sessionId with
                     | true, recorded when not recorded.Aborting ->
                         measurements.Remove(sessionId) |> ignore
                         disposeQuietly recorded.Timer
-                        true
+                        true, (if not recorded.Armed then Some recorded.Generation else None)
                     | true, recorded ->
                         measurements[sessionId] <- { recorded with Idle = true }
-                        false
-                    | _ -> false)
+                        false, None
+                    | _ -> false, None)
 
             if removed then
                 diagnostic "latency-degeneration-idle-without-completion" sessionId
+            match rejectedRun with
+            | Some run ->
+                failRecovery sessionId run "interrupt was refused; source request became idle without terminal"
+            | None -> ()
 
     /// The session left the host: its latency statistics are stale.
     member _.ForgetDetector(sessionId: string) =
@@ -294,7 +374,9 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                 for KeyValue (_sessionId, recorded) in measurements do
                     disposeQuietly recorded.Timer
 
-                measurements.Clear())
+                measurements.Clear()
+                for session in recovering.Keys |> Seq.toArray do revokeRecovery session
+                recovering.Clear())
 
 /// Positional factory for JS consumers: the compiled record field names of
 /// LatencyWatchdogPorts are not a stable contract, the factory's parameter
@@ -315,9 +397,44 @@ module LatencyWatchdogFactory =
             { Now = now
               Schedule = schedule
               Abort = abort
-              Continue = continueAction
+              Continue = fun session prompt onAccepted _lateRefused ->
+                  task {
+                      let! error = continueAction session prompt
+                      if String.IsNullOrEmpty error then onAccepted ()
+                      return error
+                  }
+              Return = fun session reason -> diagnostic "latency-degeneration-returned" (session + ": " + reason)
+              DropObserver = fun _ -> ()
               Managed = managed
               Text = text
               Diagnostic = diagnostic }
 
         LatencyWatchdog(ports, detector)
+
+
+    /// Exercises the same production actor with observed physical acceptance.
+    /// There is deliberately no wall-clock deadline in this port.
+    let createObservedLatencyWatchdog
+        (now: unit -> float)
+        (schedule: float -> (unit -> unit) -> IDisposable)
+        (abort: string -> Task<bool>)
+        (continueObserved: string -> string -> (unit -> unit) -> (string -> unit) -> Task<string>)
+        (managed: string -> bool)
+        (text: string -> string)
+        (diagnostic: string -> string -> unit)
+        (returnFailure: string -> string -> unit)
+        (dropObserver: string -> unit)
+        (detector: RequestLatencyDetector)
+        : LatencyWatchdog =
+        LatencyWatchdog(
+            { Now = now
+              Schedule = schedule
+              Abort = abort
+              Continue = continueObserved
+              Managed = managed
+              Text = text
+              Diagnostic = diagnostic
+              Return = returnFailure
+              DropObserver = dropObserver },
+            detector
+        )

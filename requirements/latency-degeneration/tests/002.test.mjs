@@ -22,12 +22,16 @@ test('WHAT[latency-degeneration-007] production latency watchdog uses the attemp
   assert.match(wiring,/Abort = fun sessionId ->[\s\S]*?sessionPort\.InterruptAttempt/)
   assert.doesNotMatch(wiring,/sessionPort\.AbortSession/,
     'a watchdog must not tear down the session it needs to resume')
-  assert.match(wiring,/HostSessionNudge\.sendContinuationResult/,
+  assert.match(wiring,/HostSessionNudge\.sendContinuationDetachedObservedResult/,
     'the interruption must send the existing managed continuation, not only record censored latency')
-  assert.match(wiring,/PromptDispatcher\.AwaitMode\.Await/,
-    'a continuation must await physical acceptance rather than only write a Detached claim')
-  assert.match(wiring,/Some acceptance/,
-    'the send must bind a real acceptance observer instead of treating queueing as delivery')
+  const sender=readFileSync(new URL('../../../src/Wanxiangshu/Interaction/Dispatch/SessionNudge.fs',import.meta.url),'utf8')
+  assert.match(sender,/PromptDispatcher\.AwaitMode\.Detached/,
+    'the Host sender must dispatch without blocking on physical acceptance')
+  assert.match(wiring,/Notify = fun _ ->/, 'physical event callback must be installed')
+  assert.match(wiring,/accepted \(\)/, 'acceptance notification must settle continuation')
+  assert.match(wiring,/onLateRefused/, 'a late definite Host refusal must reach the failure-return port')
+  assert.match(wiring,/\n\s+acceptance\n/,
+    'the Host sender must receive a physical acceptance observer, not merely an SDK receipt')
 })
 
 test('WHAT[latency-degeneration-007] post-interrupt continuation waits for true PhysicalAccepted, not a queued SDK receipt', async()=>{
@@ -66,5 +70,35 @@ test('WHAT[latency-degeneration-007] post-interrupt continuation waits for true 
       if(!completed&&key)await acceptObservedPhysical(handle,context,key,'physical-cleanup-007')
       await sending
     }
+  })
+})
+
+
+test('WHAT[latency-degeneration-009] real detached sender returns without waiting but only emits resumed on genuine PhysicalAccepted',async()=>{
+  const dispatcher=await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
+  const {withJournal,hostPort,prepareAcceptanceObserver,acceptObservedPhysical,ownAcceptanceRegistration}=
+    await import('../../dispatch-protocol/tests/support/authority.mjs')
+  await withJournal('degeneration-detached-009',async handle=>{
+    const context=await prepareAcceptanceObserver(handle,'continuation','detached-physical')
+    const received=[]
+    let key
+    const sent=await dispatcher.sendContinuationWithAcceptance(
+      hostPort(async (_sid,_message,options)=>{
+        key=options.Metadata.wanxiangshu_prompt_key
+        return dispatcher.admittedWithReceipt('sdk-queued')
+      }),
+      handle,context.session,'Continue without waiting for physical receipt',
+      'ProviderRetryAttempt',context.profile,'Detached',
+      physical=>received.push(physical),
+      subscription=>ownAcceptanceRegistration(handle,subscription),
+    )
+    assert.equal(sent.ok,true,sent.error)
+    assert.ok(key)
+    assert.deepEqual(received,[],'claim and queued SDK receipt are NOT resumption')
+    const accepted=await acceptObservedPhysical(handle,context,key,'physical-resume-009')
+    assert.equal(accepted.ok,true,accepted.error)
+    assert.deepEqual(received,['physical-resume-009'])
+    assert.equal((await acceptObservedPhysical(handle,context,key,'physical-resume-009-duplicate')).ok,false,
+      'the same prompt key cannot be admitted for two physical messages')
   })
 })

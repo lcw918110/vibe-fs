@@ -34,6 +34,19 @@ module HostSessionNudge =
         onAccepted: ContinuationAcceptanceObserver option ->
             Task<Result<PromptKey, string>>
 
+
+    val sendContinuationDetachedObservedResult:
+        sessionPort: ISessionHostPort ->
+        rootWorkspace: IRootWorkspaceReader ->
+        sessionId: SessionId ->
+        prompt: string ->
+        kind: PromptAuthority.ContinuationKind ->
+        directory: string option ->
+        journal: AgentJournal option ->
+        onAccepted: ContinuationAcceptanceObserver ->
+        onRefused: (string -> unit) ->
+            Task<Result<PromptKey, string>>
+
     val sendContinuation:
         sessionPort: ISessionHostPort ->
         rootWorkspace: IRootWorkspaceReader ->

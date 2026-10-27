@@ -10,7 +10,9 @@ type LatencyWatchdogPorts =
     { Now: unit -> float
       Schedule: float -> (unit -> unit) -> IDisposable
       Abort: string -> System.Threading.Tasks.Task<bool>
-      Continue: string -> string -> System.Threading.Tasks.Task<string>
+      Continue: string -> string -> (unit -> unit) -> (string -> unit) -> System.Threading.Tasks.Task<string>
+      Return: string -> string -> unit
+      DropObserver: string -> unit
       Managed: string -> bool
       Text: string -> string
       Diagnostic: string -> string -> unit }
@@ -64,3 +66,16 @@ module LatencyWatchdogFactory =
         diagnostic: (string -> string -> unit) ->
         detector: RequestLatencyDetector ->
             LatencyWatchdog
+
+
+    val createObservedLatencyWatchdog:
+        now: (unit -> float) ->
+        schedule: (float -> (unit -> unit) -> IDisposable) ->
+        abort: (string -> System.Threading.Tasks.Task<bool>) ->
+        continueObserved: (string -> string -> (unit -> unit) -> (string -> unit) -> System.Threading.Tasks.Task<string>) ->
+        managed: (string -> bool) ->
+        text: (string -> string) ->
+        diagnostic: (string -> string -> unit) ->
+        returnFailure: (string -> string -> unit) ->
+        dropObserver: (string -> unit) ->
+        detector: RequestLatencyDetector -> LatencyWatchdog
