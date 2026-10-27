@@ -185,3 +185,12 @@ OpenCode 暂时建立一个作为接收方子会话的临时孙会话，Host 中
 `Detached` 回执仅证明本次调用已提交持久发送，**不等于真实回答已抵达子会话**；只有 Dispatcher 的 `PhysicalAccepted` 观察者在真实物理用户消息被接纳后，按接收方、回执、委派代际确认，才结算该答复回执。首次 `resetScope` 的门禁只看 negotiate 是否受理，与答复是否送达无关。伪造的 part.metadata 或出站 provider 文本不能结算回执。不得把「工具已发送」或临时会话已创建等同于答复已送达。
 
 **user-facing session 不提供协商工具。** 在 OpenCode 的 `chat.message` 钩子里，凡 `IsManagedChild = false` 的根会话，其真实 `UserMessage.tools.negotiate` 必须显式为 `false`，因此工具不进入该次 LLM 请求可用列表；`tool.execute.before` 仍必须对根会话伪造的协商调用硬拒绝。受委托子会话和 Advisor 必须保留工具。本判定按真实物理会话父子身份，**不能按 Manager / Engineer 等角色统一禁用**，以免误杀同角色子代理的首次协商。
+
+
+## [036] Busy 子代理的普通追加指令不得抢占当前 Scope
+
+当 Manager 对**仍在执行**的 Engineer／DevOps 调用 `resume` 或追加普通工作指令，复用现有子会话的 `BusyAgentNudge` 只记录一条带真实 PromptKey、原始 LogicalRun 与身份种子的后继输入，**不拥有中断当下 ProviderRun／工具调用的权利**。OpenCode 的 `session.promptAsync` 在未给出 `delivery` 时默认为 `steer`；这种普通 Busy 输入必须显式给 `delivery: "queue"`（兼容 SDK body 与顶层载体），由 Host 在下一个合法输入边界自然消费，不抢占正在执行的 `resetScope` 和新 Scope。
+
+这不修改专席、`negotiate`／`askPreviousScope` 回答的真实咨询 steer：只有明确携带 `wanxiangshu_consultation_steer=true` 的咨询消息才保持既定的最新一轮 assistant、tool-free 完成裁判，也不改变 degeneration 的 `ProviderRetryAttempt` 续跑投递语义。队列接纳仍不冒称工作指令已被模型消费；未物理接纳时继续按 PromptKey 的原持久恢复合同处理。
+
+事故证据：2026-10-27 09:54–09:55 UTC 的 `.Herdchestra/wanxiangshu/events/4e175784b9dc41548b338edc175b87bf-0000.ndjson` 中，两个 Engineer 在 `ScopeReanchored` 后的原执行分别遇到 `BusyAgentNudge` 输入及 `Terminal(Cancelled)`；其中一次 Cancel 仅晚于 reset 73ms。OpenCode 本地 SDK 的 Session.prompt 默认 delivery=steer，而此前 SdkClientPort 没有传送 delivery。验收：`requirements/execution-model-routing/tests/009.test.mjs` 的 SDK payload 先红后绿验证普通 Busy 走 queue、咨询 steer 和 ProviderRetry 仍按原语义；`requirements/delegation/tests/036.test.mjs` 使用真正注册的 Manager `fork`／`resume` 验证忙碌子会话不被发送者中断、PromptKey 保持且 payload 物理指定 queue。

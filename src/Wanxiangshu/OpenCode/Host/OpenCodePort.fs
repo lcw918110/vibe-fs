@@ -151,8 +151,28 @@ module OpenCodePortAdapter =
 
                     let model = opts.Model
 
+                    // A busy child is already running its current Scope.
+                    // OpenCode defaults omitted delivery to "steer", which
+                    // can promote an ordinary parent nudge before that child
+                    // finishes the existing provider/tool sequence. Its
+                    // resetScope may then be followed by a cancelled WorkMain.
+                    //
+                    // Queue ordinary BusyAgentNudge for the next input boundary.
+                    // A genuine consultation steer is separately marked and
+                    // intentionally preserves its latest-assistant stop rule.
+                    // ProviderRetryAttempt retains its immediate steer.
+                    let deliveryFields =
+                        match opts.Metadata with
+                        | Some metadata when
+                            emitJsExpr metadata
+                                "$0?.wanxiangshu_origin === 'BusyAgentNudge' && $0?.wanxiangshu_consultation_steer !== true"
+                            ->
+                            [ "delivery", box "queue" ]
+                        | _ -> []
+
                     let bodyFields =
                         [ "parts", box parts ]
+                        @ deliveryFields
                         @ modelRequestFields model
                         @ (opts.Agent
                            |> Option.map (fun agent -> [ "agent", box agent ])
@@ -181,6 +201,7 @@ module OpenCodePortAdapter =
                               "headers", box (headersObj opts.Directory)
                               "sessionID", box sId
                               "parts", box parts ]
+                            @ deliveryFields
                             @ modelRequestFields model
                             @ (opts.Agent
                                |> Option.map (fun agent -> [ "agent", box agent ])

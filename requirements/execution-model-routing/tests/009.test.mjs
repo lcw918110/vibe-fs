@@ -144,3 +144,38 @@ test('WHAT[execution-model-routing-009] host-selected models remain unchanged th
     )
   })
 })
+
+test('WHAT[execution-model-routing-009] BusyAgentNudge cannot steer-preempt a running child after resetScope', async () => {
+  const submitted=[]
+  const client={session:{promptAsync:async request=>{submitted.push(request);return {}}}}
+  const port=routing.createSdkClientPort(client)
+  const busy={
+    wanxiangshu_origin:'BusyAgentNudge',
+    wanxiangshu_prompt_key:'pk-busy-queued',
+  }
+  const consultation={
+    ...busy,wanxiangshu_consultation_steer:true,
+    wanxiangshu_prompt_key:'pk-consultation-steer',
+  }
+  const retry={
+    wanxiangshu_origin:'ProviderRetryAttempt',
+    wanxiangshu_prompt_key:'pk-provider-recovery',
+  }
+  for(const metadata of [busy,consultation,retry]){
+    const result=await routing.sendPrompt(port,'ses-engineer-reset','Continue work.',{
+      agent:'engineer',metadata,
+    })
+    assert.equal(result.kind,'AdmittedWithReceipt')
+  }
+  assert.equal(submitted.length,3)
+  assert.equal(submitted[0].body.delivery,'queue',
+    'BusyAgentNudge is a next-input message: it must not interrupt the current provider step')
+  assert.equal(submitted[0].delivery,'queue',
+    'SDK top-level delivery must agree with body in both payload protocol versions')
+  assert.equal(submitted[1].body.delivery??'steer','steer',
+    'the genuine consultation steer retains the established tool-free latest assistant rule')
+  assert.equal(submitted[2].body.delivery??'steer','steer',
+    'confirmed provider retry must retain immediate continuation semantics')
+  assert.equal(submitted[0].body.parts[0].metadata.wanxiangshu_origin,'BusyAgentNudge')
+  assert.equal(submitted[0].body.parts[0].metadata.wanxiangshu_prompt_key,'pk-busy-queued')
+})
