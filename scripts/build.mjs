@@ -6,6 +6,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { buildSourceDependency } from './wanxiangli-source.mjs'
+import { residentSpawn, requestCompiler } from './compiler/client.mjs'
+import { toolchain } from './compiler/toolchain.mjs'
+import { claim, release } from './compiler/ownership.mjs'
+import { readReferences, currentReferences, referenceKey } from './compiler/references.mjs'
 
 import { run as runSurfaceManifest } from './checks/js-surface-manifest.mjs'
 import { run as runModuleLinkage } from './checks/js-module-linkage.mjs'
@@ -25,9 +29,6 @@ import {
 } from './lib/build-state.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const dist = path.join(root, 'dist')
-const buildStateDir = path.join(root, '.fable-build')
-const buildLockFile = path.join(buildStateDir, 'build.lock')
 
 // ── Diagnostics & Output ─────────────────────────────────────────────────────
 
@@ -53,73 +54,30 @@ async function sleep(ms) {
 
 // ── Build Serialization ──────────────────────────────────────────────────────
 
-function isPidRunning(pid) {
-  if (!pid || typeof pid !== 'number' || isNaN(pid) || pid <= 0) return false
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return err.code === 'EPERM'
-  }
-}
-
 export class CrossProcessMutex {
   constructor(lockPath, name = 'lock') {
     this.lockPath = lockPath
     this.name = name
-    this.held = false
+    this.owner = null
   }
 
   async acquire(waitTimeoutMs = 180_000) {
-    fs.mkdirSync(path.dirname(this.lockPath), { recursive: true })
     const deadline = Date.now() + waitTimeoutMs
     while (Date.now() < deadline) {
-      try {
-        const payload = JSON.stringify({ pid: process.pid })
-        fs.writeFileSync(this.lockPath, payload, { flag: 'wx', encoding: 'utf8' })
-        this.held = true
+      this.owner = claim(this.lockPath + '.ownership')
+      if (this.owner) {
         return true
-      } catch (err) {
-        if (err.code !== 'EEXIST') throw err
-
-        // Check if existing lock is dead or stale
-        try {
-          const raw = fs.readFileSync(this.lockPath, 'utf8')
-          const info = JSON.parse(raw)
-          const isDead = !isPidRunning(info.pid)
-
-          if (isDead) {
-            try {
-              fs.unlinkSync(this.lockPath)
-              continue
-            } catch {}
-          }
-        } catch {
-          try {
-            fs.unlinkSync(this.lockPath)
-            continue
-          } catch {}
-        }
-
-        await sleep(100)
       }
+      await sleep(100)
     }
 
     throw new Error(`Failed to acquire ${this.name} after ${waitTimeoutMs}ms (lock at ${this.lockPath})`)
   }
 
   release() {
-    if (!this.held) return
-    try {
-      if (fs.existsSync(this.lockPath)) {
-        const raw = fs.readFileSync(this.lockPath, 'utf8')
-        const info = JSON.parse(raw)
-        if (info.pid === process.pid) {
-          fs.unlinkSync(this.lockPath)
-        }
-      }
-    } catch {}
-    this.held = false
+    if (!this.owner) return
+    release(this.lockPath + '.ownership', this.owner)
+    this.owner = null
   }
 }
 
@@ -172,16 +130,8 @@ async function verifyArtifacts(targetRoot = root) {
   }
 }
 
-function getToolchainIdentity() {
-  let dotnetVer = 'unknown'
-  let fableVer = 'unknown'
-  try {
-    dotnetVer = execFileSync('dotnet', ['--version'], { encoding: 'utf8' }).trim()
-  } catch {}
-  try {
-    fableVer = execFileSync('dotnet', ['tool', 'run', 'fable', '--version'], { encoding: 'utf8' }).trim()
-  } catch {}
-  return `dotnet ${dotnetVer} / fable ${fableVer}`
+function getToolchainIdentity(targetRoot = root, identity = toolchain(targetRoot)) {
+  return `resident ${identity.sdk} / ${identity.key} / ${referenceKey(currentReferences(readReferences(targetRoot)))}`
 }
 
 // ── Build Mode Decision ──────────────────────────────────────────────────────
@@ -285,6 +235,7 @@ export function determineBuildDecision({
   }
 
   const uniqueChangedPaths = [...new Set(changedPaths)]
+  if (toolchainChanged) uniqueChangedPaths.push(path.join(resolvedRoot, '.config/dotnet-tools.json'))
 
   if (!hasValidManifest || !outputsValid || !artifactsPresent || toolchainChanged || topologyChanged || hasNonFsChange || uniqueChangedPaths.length > 0) {
     const reason = !hasValidManifest
@@ -398,7 +349,9 @@ export async function runBuild({
   targetRoot = root,
   stdio = 'inherit',
   skipSourceDependency = path.resolve(targetRoot) !== root,
+  jobs = 1,
 } = {}) {
+  if (!Number.isInteger(jobs) || jobs < 1 || jobs > 4) throw new Error('--jobs must be an integer from 1 to 4')
   const resolvedRoot = path.resolve(targetRoot)
   const targetDist = path.join(resolvedRoot, 'dist')
   const lockFile = path.join(resolvedRoot, '.fable-build/build.lock')
@@ -411,7 +364,7 @@ export async function runBuild({
   try {
     // 使用源码依赖的当前产物；不能让旧 node_modules tarball 替新 submodule 报绿。
     if (!skipSourceDependency) {
-      buildSourceDependency(resolvedRoot)
+      buildSourceDependency(resolvedRoot, { jobs })
     }
     // A previously interrupted full rebuild may have left a staged backup
     // behind; settle it before reading any build state.
@@ -424,6 +377,9 @@ export async function runBuild({
 
     const artifactInputs = collectArtifactInputs(resolvedRoot)
     const artifactInputDigest = computeDigest(artifactInputs)
+    const compilerIdentity = toolchain(resolvedRoot)
+    const toolIdentity = getToolchainIdentity(resolvedRoot, compilerIdentity)
+    const referenceInputs = currentReferences(readReferences(resolvedRoot))
 
     const decision = determineBuildDecision({
       existingManifest,
@@ -432,7 +388,7 @@ export async function runBuild({
       compilerInputs,
       compilerInputDigest,
       artifactInputDigest,
-      currentToolchain: getToolchainIdentity(),
+      currentToolchain: toolIdentity,
     })
 
     let buildMode = decision.mode
@@ -452,6 +408,14 @@ export async function runBuild({
     // still the impact set of the files that differ, never the whole tree.
     // Wiping dist and recompiling everything hides an impact-set bug.
     let compileResult = null
+    const backup = stagedBackupDirFor(targetDist)
+    const copying = backup + '.copying'
+    fs.rmSync(copying, { recursive: true, force: true })
+    if (fs.existsSync(targetDist)) fs.cpSync(targetDist, copying, { recursive: true })
+    else fs.mkdirSync(copying, { recursive: true })
+    fs.renameSync(copying, backup)
+    stagedBackupDir = backup
+
     if (changedCompilerPaths.length > 0) {
       logInfo(`Compiling F# (${decision.reason})...`)
       compileResult = await compileIncremental({
@@ -459,7 +423,10 @@ export async function runBuild({
         isClean: false,
         root: resolvedRoot,
         outputDir: targetDist,
+        scratchRoot: path.join(resolvedRoot, '.fable-build/owner-compile'),
+        rootPropsPath: path.join(resolvedRoot, 'Directory.Build.props'),
         stdio,
+        spawn: residentSpawn(resolvedRoot),
       })
       if (!compileResult.ok) {
         throw new Error(
@@ -479,6 +446,11 @@ export async function runBuild({
     await verifyArtifacts(resolvedRoot)
 
     // Recheck input snapshot inside lock
+    const finalCompilerIdentity = toolchain(resolvedRoot)
+    if (finalCompilerIdentity.key !== compilerIdentity.key || referenceKey(currentReferences(referenceInputs)) !== referenceKey(referenceInputs)
+      || referenceKey(currentReferences(readReferences(resolvedRoot))) !== referenceKey(readReferences(resolvedRoot))) {
+      throw new Error('Toolchain changed during compilation; run the build again')
+    }
     const finalCompilerInputs = collectCompilerInputs(resolvedRoot, null)
     const finalCompilerDigest = computeDigest(finalCompilerInputs)
     if (finalCompilerDigest !== compilerInputDigest) {
@@ -503,7 +475,7 @@ export async function runBuild({
       generation: nextGeneration,
       compiler: {
         configuration: 'Debug',
-        toolIdentity: getToolchainIdentity(),
+        toolIdentity: getToolchainIdentity(resolvedRoot, finalCompilerIdentity),
         inputDigest: finalCompilerDigest,
         inputs: finalCompilerInputs,
       },
@@ -573,7 +545,7 @@ export const buildEntrypoint = runBuild
  */
 export async function planBuild({
   targetRoot = root,
-  currentToolchain = getToolchainIdentity(),
+  currentToolchain,
 } = {}) {
   const resolvedRoot = path.resolve(targetRoot)
   const targetDist = path.join(resolvedRoot, 'dist')
@@ -593,7 +565,7 @@ export async function planBuild({
     compilerInputs,
     compilerInputDigest,
     artifactInputDigest,
-    currentToolchain,
+    currentToolchain: currentToolchain ?? getToolchainIdentity(resolvedRoot),
   })
 
   if (decision.mode === 'no-op') {
@@ -646,39 +618,42 @@ export async function planBuild({
   }
 }
 
-// ── Clean Signal & Exit Handlers ─────────────────────────────────────────────
-
-function registerSignalHandlers() {
-  const cleanup = () => {
-    try {
-      if (fs.existsSync(buildLockFile)) {
-        const raw = fs.readFileSync(buildLockFile, 'utf8')
-        const info = JSON.parse(raw)
-        if (info.pid === process.pid) fs.unlinkSync(buildLockFile)
-      }
-    } catch {}
-  }
-
-  process.on('SIGINT', () => {
-    cleanup()
-    process.exit(130)
-  })
-  process.on('SIGTERM', () => {
-    cleanup()
-    process.exit(143)
-  })
-  process.on('exit', cleanup)
-}
-
 // ── Main Entrypoint ──────────────────────────────────────────────────────────
 
+export function parseParallelOptions(supplied) {
+  const args = []
+  let jobs = 1
+  let parallel = false
+  for (let index = 0; index < supplied.length; index++) {
+    const arg = supplied[index]
+    if (arg === '--parallel' || arg === '--jobs' || arg.startsWith('--jobs=')) {
+      if (parallel) throw new Error('Specify --parallel or --jobs only once')
+      parallel = true
+      const value = arg === '--parallel' ? '2' : arg === '--jobs' ? supplied[++index] : arg.slice(7)
+      if (!/^[1-4]$/.test(value ?? '')) throw new Error('--jobs must be an integer from 1 to 4')
+      jobs = Number(value)
+    } else args.push(arg)
+  }
+  if (parallel && args.some(arg => ['--plan', '--checker-status', '--checker-stop'].includes(arg))) {
+    throw new Error('Parallel compilation cannot be combined with plan, status or stop')
+  }
+  return { args, jobs }
+}
+
 async function main() {
-  registerSignalHandlers()
+  let options
+  try {
+    options = parseParallelOptions(process.argv.slice(2))
+  } catch (error) {
+    fail(error.message)
+    return
+  }
+  const { args, jobs } = options
 
   // Full compilation is forbidden. A flag that wipes dist and compiles every
   // source is rejected with the other unknown flags; fix the impact set.
-  const knownOptions = new Set(['--plan', '--help', '-h'])
-  const unknown = process.argv.slice(2).filter((arg) => arg.startsWith('-') && !knownOptions.has(arg))
+  const knownOptions = new Set(['--plan', '--help', '-h', '--checker-status', '--checker-stop'])
+  const unknown = args.filter((arg) => arg.startsWith('-') && !knownOptions.has(arg))
   if (unknown.length > 0) {
     console.error(`unknown option(s): ${unknown.join(', ')}`)
     console.error('full compilation is forbidden. Fix the impact set; do not rebuild the tree.')
@@ -690,6 +665,10 @@ async function main() {
 Usage: node scripts/build.mjs [options]
 
 Options:
+  --parallel   Compile independent wanxiangli modules in 2 processes
+  --jobs N     Use 1–4 library compiler processes (default 1); extra processes exit after the build
+  --checker-status  Show the resident compiler process
+  --checker-stop    Stop the resident compiler after pending work
   --plan       Compute and print the next build plan as JSON; no compile,
                resource emit, manifest, or dist write is performed
   --help, -h   Show this help message
@@ -698,6 +677,17 @@ Options:
   }
 
   const plan = process.argv.includes('--plan')
+  if (['--plan', '--checker-status', '--checker-stop'].filter(option => process.argv.includes(option)).length > 1) {
+    console.error('Choose one of --plan, --checker-status, or --checker-stop')
+    process.exit(1)
+  }
+  const control = process.argv.includes('--checker-stop') ? 'stop' : process.argv.includes('--checker-status') ? 'status' : null
+  if (control) {
+    const result = await requestCompiler(root, { op: control })
+    console.log(JSON.stringify(result))
+    process.exitCode = result.ok ? 0 : 1
+    return
+  }
 
   if (plan) {
     try {
@@ -711,7 +701,7 @@ Options:
   }
 
   try {
-    await runBuild({ targetRoot: root })
+    await runBuild({ targetRoot: root, jobs })
   } catch (err) {
     fail(err.message)
   }

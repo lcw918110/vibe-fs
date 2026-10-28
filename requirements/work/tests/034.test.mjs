@@ -80,7 +80,7 @@ const barrierTenure = (extra = {}) => ({
   ...extra,
 })
 
-test('WHAT[work-034] a committed barrier hides the triggering review and the user messages before it', () => {
+test('WHAT[work-034] a committed barrier keeps the user messages and the triggering review turn and hides the rest before it', () => {
   const rawMessages = [
     mark(userText('u-old', 'Initial user prompt'), { tenureId: 'old' }),
     mark(assistantText('a-old', 'previous tenure', 'u-old'), { tenureId: 'old' }),
@@ -92,8 +92,9 @@ test('WHAT[work-034] a committed barrier hides the triggering review and the use
   const before = JSON.stringify(rawMessages)
   const result = assemble(rawMessages, barrierTenure(), {})
   assert.equal(JSON.stringify(rawMessages), before)
-  assert.deepEqual(ids(result.messages), ['u-next', 'a-current'])
-  assert.equal(ids(result.messages).some((id) => id === 'u-old' || id === 'call' || id === 'result'), false)
+  assert.deepEqual(ids(result.messages), ['u-old', 'call', 'result', 'u-next', 'a-current'])
+  assert.equal(result.messages[0], rawMessages[0])
+  assert.equal(ids(result.messages).includes('a-old'), false)
 })
 
 test('WHAT[work-034] user messages U preserve original bytes and order verbatim without modification', () => {
@@ -189,7 +190,7 @@ test('WHAT[work-034] a barrier drops synthetic rows and does not inject a predec
   ]
   const result = assemble(rawMessages, barrierTenure(), {})
   assert.equal(result.messages.some((message) => msgId(message).startsWith('synthetic-prev-')), false)
-  assert.deepEqual(ids(result.messages), ['a-current'])
+  assert.deepEqual(ids(result.messages), ['u1', 'call', 'result', 'a-current'])
 })
 
 test('WHAT[work-034] durable Plan active state assembles U + current interactions in place', () => {
@@ -258,7 +259,7 @@ test('WHAT[work-034] clearing the plan ledger relays in one record', () => {
   assert.equal(work.history().filter((frame) => frame.events.some((event) => event.type === 'IncumbencyRetired')).length, 1)
 })
 
-test('WHAT[work-034] tenure assembly hides the review and does not materialize a previous record', () => {
+test('WHAT[work-034] tenure assembly keeps the user request and the triggering review turn and does not materialize a previous record', () => {
   const rawMessages = [
     mark(userText('u1', 'go'), { tenureId: 'old' }),
     mark(assistantText('call', 'review'), { toolCallId: 'review-1', tenureId: 'old' }),
@@ -267,10 +268,8 @@ test('WHAT[work-034] tenure assembly hides the review and does not materialize a
   ]
   const result = surface.PlanningSurface.assembleTenureMessages(rawMessages, barrierTenure(), {})
   const assembledIds = ids(result.messages)
-  assert.ok(!assembledIds.includes('u1'))
-  assert.ok(assembledIds.includes('a-new'))
   assert.ok(!assembledIds.some((id) => id.startsWith('synthetic-prev-')))
-  assert.deepEqual(assembledIds, ['a-new'])
+  assert.deepEqual(assembledIds, ['u1', 'call', 'result', 'a-new'])
 })
 
 test('WHAT[work-034] tenure reanchor event shape carries session, epochs, work and incumbency', () => {
@@ -318,10 +317,10 @@ test('WHAT[work-034] successor projection hides earlier rows and never inserts a
   ]
   const result = assemble(rawMessages, barrierTenure(), {})
   assert.equal(result.messages.filter((message) => msgId(message).startsWith('synthetic-prev-')).length, 0)
-  assert.deepEqual(ids(result.messages), ['a-current', 'a-uncaptured'])
+  assert.deepEqual(ids(result.messages), ['u-history', 'call', 'result', 'a-current', 'a-uncaptured'])
 })
 
-test('WHAT[work-034] the barrier hides every row before the review, including earlier user text', () => {
+test('WHAT[work-034] the barrier hides every non-user row before the review and keeps earlier user text', () => {
   const rawMessages = [
     mark(userText('u-history', 'Original user request'), { tenureId: 'old' }),
     mark(assistantText('a-s1', 'earlier assistant'), { tenureId: 'old' }),
@@ -333,8 +332,6 @@ test('WHAT[work-034] the barrier hides every row before the review, including ea
   const result = assemble(rawMessages, barrierTenure({ workId: 'work-post', incumbencyId: 'next' }), {})
   const kept = ids(result.messages)
   assert.equal(result.messages.filter((message) => msgId(message).startsWith('synthetic-prev-')).length, 0)
-  assert.ok(!kept.includes('u-history'))
   assert.ok(!kept.includes('a-s1'))
-  assert.ok(!kept.includes('call'))
-  assert.deepEqual(kept, ['u-command', 'a-post'])
+  assert.deepEqual(kept, ['u-history', 'call', 'result', 'u-command', 'a-post'])
 })

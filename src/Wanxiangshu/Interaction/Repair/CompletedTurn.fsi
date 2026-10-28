@@ -15,6 +15,7 @@ module CompletedTurnClassifier =
     val partsText: parts: MessagePart array -> string
     val partsSessionText: parts: MessagePart array -> string
     val hasToolCallPart: parts: MessagePart array -> bool
+    val hasRealToolCall: parts: MessagePart array -> bool
     val isAbortErrorName: name: string option -> bool
 
     val formalContentUnusable: parts: MessagePart array -> bool

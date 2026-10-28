@@ -40,6 +40,13 @@ module AuthorityLifeClassification =
     val closureFor:
         rootKindLabel: string -> isManager: bool -> agentOwnerLife: string option -> (string * string option) option
 
+    /// The closure kind and agent-owner life of an accepted root, total over
+    /// the root authority DU: a HumanRoot follows its recorded role, an
+    /// agent-owner uses its proven life or the coarse fallback. The in-process
+    /// counterpart of `closureFor`, which stays the owner of the durable-data
+    /// boundary.
+    val closureKindForRoot: kind: PromptRootAuthorityKind -> isManager: bool -> provenLife: string option -> string * string option
+
     /// The closure kind to record: the recorded one only while it belongs to
     /// this root kind, otherwise the kind the acceptance derives.
     val recordedClosureKind:

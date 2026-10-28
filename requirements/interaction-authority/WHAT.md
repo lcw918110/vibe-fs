@@ -111,4 +111,8 @@ DevOps 的固定绑定由道路初始化确立，其模型配置与 Persona 在�
 
 任何角色（包括 Advisor、Distiller、Engineer、DevOps、Plan、Manager，以及未映射角色）的自然 `finish=stop`，若没有有效正文也没有真实工具调用，不构成有效会话终止。仅推理内容不是正文，不能当作已经回复。必须沿既有 InteractionRepair 的 exact-terminal gate nudge 接续同一会话；同一个终止的重复观察只发一次，不同新回合连续空终止则每次继续请求，**暂不设最大 nudge 次数**。已经有真实工具调用的回合不是“无正文无工具”；已确认的真实人工取消仍按取消处理，不自动抢回。
 
+OpenCode 给每个 assistant step 包 `step-start`/`step-finish` 标记。这两个标记只说明跑过一步，不是工具调用；判“无正文无工具”时只认真实工具部件（含已结算的 tool 部件）与 patch。
+
+现场依据：2026-10-28 10022 Manager `ses_e7ed7cdb2ffe…`，Engineer `父方恢复`（wg46yn，`ses_e7e843cd7ffe…`）回合 `msg_1817dc764…` 07:51:06 `finish=stop`，只有两个 step 标记。旧判定把标记算作工具调用 → `TurnCompleted` → `completed with empty terminal output` 失败终态（`HandleWorkCompleted` Kind=SendFailure），父方 join 拿到“父方恢复 未能完成此项任务”，没有 nudge；07:41:38 `控制流续做`（yij9q4）同形。
+
 验收：`requirements/interaction-authority/tests/024.test.mjs` 覆盖全部角色、无文本／只有 reasoning／真实工具调用及连续空终止不耗尽；`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `interaction-authority-024` 通过真实注册的 OMP `turn_end` hook 连续触发 35 个新空回合，确认每回合一条 agent-attributed nudge、同回合重放不重复、真实工具/正文/人工取消不误触发。

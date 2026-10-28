@@ -34,7 +34,7 @@ const barrierTenure = (extra = {}) => ({
   ...extra,
 })
 
-test('WHAT[work-020] a current-tenure user message keeps its original bytes', () => {
+test('WHAT[work-020] user messages on both sides of the barrier keep their original bytes', () => {
   const current = mark(userText('u-2', '补充约束: no cache invalidation'), { tenureId: 'next' })
   const rawMessages = [
     mark(userText('u-1', '设计缓存架构\n第二行'), { tenureId: 'old' }),
@@ -44,9 +44,11 @@ test('WHAT[work-020] a current-tenure user message keeps its original bytes', ()
     mark(assistantText('a-new', 'current tenure work', 'u-2'), { tenureId: 'next' }),
   ]
   const result = assemble(rawMessages, barrierTenure(), {})
-  assert.equal(result.messages[0], current)
-  assert.equal(msgText(result.messages[0]), '补充约束: no cache invalidation')
-  assert.equal(ids(result.messages).includes('u-1'), false)
+  assert.deepEqual(ids(result.messages), ['u-1', 'call', 'result', 'u-2', 'a-new'])
+  assert.equal(result.messages[0], rawMessages[0])
+  assert.equal(msgText(result.messages[0]), '设计缓存架构\n第二行')
+  assert.equal(result.messages[3], current)
+  assert.equal(msgText(result.messages[3]), '补充约束: no cache invalidation')
 })
 
 test('WHAT[work-020] neither an open tenure nor a successor view injects a synthetic-prev-* message', () => {
@@ -68,7 +70,7 @@ test('WHAT[work-020] neither an open tenure nor a successor view injects a synth
   assert.ok(!firstResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true))
   assert.ok(!laterResult.messages.some((m) => msgId(m).startsWith('synthetic-prev-') || m.info.synthetic === true))
   assert.deepEqual(ids(firstResult.messages), ['u-1'])
-  assert.deepEqual(ids(laterResult.messages), ['a-new'])
+  assert.deepEqual(ids(laterResult.messages), ['u-1', 'call', 'result', 'a-new'])
 })
 
 test('WHAT[work-020] assembled messages come only from U and current-tenure interactions', () => {
@@ -133,5 +135,5 @@ test('WHAT[work-020] synthetic rows are dropped by the barrier and never re-inje
   ]
   const result = assemble(rawMessages, barrierTenure(), {})
   assert.equal(result.messages.filter((message) => msgId(message).startsWith('synthetic-prev-')).length, 0)
-  assert.deepEqual(ids(result.messages), ['a-1'])
+  assert.deepEqual(ids(result.messages), ['u-1', 'call', 'result', 'a-1'])
 })

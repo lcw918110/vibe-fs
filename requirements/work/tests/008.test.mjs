@@ -16,7 +16,7 @@ const message = (id, role, extra = {}) => ({
   ...extra,
 })
 
-test('WHAT[work-008] the successor view hides the triggering review and everything before it', () => {
+test('WHAT[work-008] the successor view keeps user messages and the triggering review turn and hides every other row before it', () => {
   const messages = [
     message('u-old', 'user', { tenureId: 'old' }),
     message('a-old', 'assistant', { tenureId: 'old' }),
@@ -27,9 +27,8 @@ test('WHAT[work-008] the successor view hides the triggering review and everythi
   ]
   const before = JSON.stringify(messages)
   const kept = projection.tenure(messages, barrier)
-  assert.deepEqual(Array.from(kept), [5])
+  assert.deepEqual(Array.from(kept), [0, 3, 4, 5])
   assert.equal(JSON.stringify(messages), before)
-  assert.equal(kept.some((index) => messages[index].role === 'user'), false)
-  assert.equal(kept.some((index) => messages[index].toolCallId === 'review-1' || messages[index].resultFor === 'review-1'), false)
+  assert.deepEqual(Array.from(kept, (index) => messages[index].id), ['u-old', 'call', 'result', 'a-new'])
   assert.equal(messages.some((row) => row.role === 'synthetic_predecessor'), false)
 })

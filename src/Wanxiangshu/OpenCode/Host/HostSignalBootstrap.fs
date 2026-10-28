@@ -333,7 +333,21 @@ module HostSignalBootstrap =
                 match observation.Outcome, ModelRouting.tryReadExecution key with
                 | HostProviderTerminalOutcome.Cancelled _, Some _ ->
                     providerAttemptStopFence?SignalStop(SessionId.value observation.SessionId, ProviderRunIdentity.value observation.ProviderRun) |> ignore
-                    scope.Sessions.Quiescence.RevokeCurrentAttempt(observation.SessionId)
+
+                    // WHAT[delegation-040]: the late-consultation stop's own abort is
+                    // not an operator cancel. Revoking here left the session Revoked
+                    // forever: every later idle minted a permit TryConsume refused,
+                    // so the missing-final-report repair of the turn the stop
+                    // preserved was abandoned (SupersededBeforePhysicalSend) and the
+                    // parent join waited on a child nobody would wake again.
+                    if
+                        not (
+                            CompletedContinuationStops.contains
+                                observation.SessionId
+                                (PhysicalUserMessageId.value observation.PhysicalUserMessageId)
+                        )
+                    then
+                        scope.Sessions.Quiescence.RevokeCurrentAttempt(observation.SessionId)
 
                     FissionHost.routeAttemptAborted observation.SessionId ignore ignore
 
@@ -1320,12 +1334,89 @@ module HostSignalBootstrap =
                     | _ -> ()
                 }
 
+            /// managed-chat-execution-017: the execution a Host compaction
+            /// continuation continues — the live, non-terminal execution that
+            /// holds this session's model-routing lease.
+            let compactedExecution durable (sessionId: SessionId) =
+                ModelRouting.tryActivePhysical (SessionId.value sessionId)
+                |> Option.bind (fun previous ->
+                    (AgentJournal.snapshot durable).AgentProjections.ChatExecutions
+                    |> ChatExecutionProjection.byKey
+                        { SessionId = sessionId
+                          PhysicalUserMessageId = PhysicalUserMessageId.create previous })
+                |> Option.filter (fun state -> state.terminalDisposition.IsNone)
+
+            /// The session's latest unfinished execution, whether or not it
+            /// still holds a lease: whose parent waits on this run.
+            let unfinishedExecution durable (sessionId: SessionId) =
+                (AgentJournal.snapshot durable).AgentProjections.ChatExecutions
+                |> ChatExecutionProjection.current
+                |> List.filter (fun state -> state.key.SessionId = sessionId && state.terminalDisposition.IsNone)
+                |> List.tryLast
+
+            let failUninheritableContinuation durable (key: ChatExecutionKey) reason =
+                Diagnostic.emit
+                    "compaction-continuation-uninheritable"
+                    [ "session_id", SessionId.value key.SessionId
+                      "physical_user_message_id", PhysicalUserMessageId.value key.PhysicalUserMessageId
+                      "reason", reason ]
+
+                unfinishedExecution durable key.SessionId
+                |> Option.iter (fun state ->
+                    eventPort.NotifyTerminal
+                        key.SessionId
+                        (TerminalOutcome.Failed(
+                            TerminalStop.forAuthority
+                                state.acceptedEvidence.AuthorityRootUserMessageId
+                                ("host compaction continuation could not be admitted: " + reason)
+                        ))
+                    |> ignore)
+
+            /// managed-chat-execution-017: OpenCode never runs `chat.message` for
+            /// its post-compaction continuation, so the row reaches the provider
+            /// boundary with no Accepted record. It is not new authority: it is
+            /// accepted as a same-run continuation of the execution it compacted
+            /// (same logical run, authority root and identity), and the ordinary
+            /// continuation admission below hands the lease over. When nothing
+            /// live can be inherited, the parent waiting on the run is told the
+            /// run failed instead of waiting on a dead session.
+            let inheritCompactionContinuation durable messages (key: ChatExecutionKey) =
+                task {
+                    let exists =
+                        (AgentJournal.snapshot durable).AgentProjections.ChatExecutions
+                        |> ChatExecutionProjection.byKey key
+                        |> Option.isSome
+
+                    if not exists && ProviderWireCapture.isHostCompactionContinuation messages key.PhysicalUserMessageId then
+                        match compactedExecution durable key.SessionId with
+                        | None -> failUninheritableContinuation durable key "no live execution holds the session lease"
+                        | Some compacted ->
+                            let evidence =
+                                { compacted.acceptedEvidence with
+                                    PhysicalUserMessageId = key.PhysicalUserMessageId
+                                    Origin = PromptOrigin.Continuation PromptContinuationKind.BusyAgentNudge }
+
+                            match! ManagedChatAcceptance.accept durable key evidence with
+                            | Ok _ -> observePhysicalAdmission () key.SessionId key.PhysicalUserMessageId
+                            | Error error -> failUninheritableContinuation durable key (sprintf "%A" error)
+                }
+
             let ensureVisibleInputAdmission (output: obj) =
                 task {
                     let messages = ProviderWireDecode.messagesFromTransformOutput output
 
                     match journal, admissionTransaction, ProviderWireCapture.lastUserMessageId messages with
                     | Some durable, Some createTransaction, Some physicalId ->
+                        match ProviderWireDecode.projectionSessionIdFromMessages output with
+                        | Some sessionText ->
+                            do!
+                                inheritCompactionContinuation
+                                    durable
+                                    messages
+                                    { SessionId = SessionId.create sessionText
+                                      PhysicalUserMessageId = physicalId }
+                        | None -> ()
+
                         return!
                             messages
                             |> List.tryFind (fun message ->

@@ -90,6 +90,63 @@ module TurnReconcile =
         // never permission to reuse historical assistant state.
         findAssistantAfter messages physical
 
+    let private isAbortedAssistant (message: SessionMessage) =
+        CompletedTurnClassifier.isAbortErrorName message.ErrorName
+        || (message.Finish |> Option.exists (fun value -> value.Equals("aborted", System.StringComparison.OrdinalIgnoreCase)))
+
+    /// WHAT[delegation-039]: the late-consultation stop aborted the step this
+    /// answer woke. The answer was queued while the agent was still writing its
+    /// closing prose, so the Host loop ran straight into it and never went idle
+    /// on the report; the only turn after the answer is the stop's own empty
+    /// abort. The occasion is the finished report before the answer — exactly
+    /// the turn the stop judged finished — reconciled under its own physical
+    /// user. This is not a historical fallback: the stop is the recorded fact
+    /// that nothing after the report belongs to the run.
+    let private stoppedContinuationTerminal (messages: SessionMessage list) (floor: string option) (physical: string) =
+        // Only the stretch after the run's own physical (when known) may hold
+        // the report: an older work unit's turn is never this occasion.
+        let afterFloor =
+            match floor with
+            | Some address when messages |> List.exists (fun message -> message.Id = address) ->
+                messages |> List.skipWhile (fun message -> message.Id <> address) |> List.skip 1
+            | _ -> messages
+
+        let before = afterFloor |> List.takeWhile (fun message -> message.Id <> physical)
+
+        before
+        |> List.filter (fun message -> message.Role = "assistant")
+        |> List.tryLast
+        |> Option.filter (fun report -> report.Completed && not (isAbortedAssistant report))
+        |> Option.map (fun report ->
+            let reportPhysical =
+                report.ParentId
+                |> Option.filter (fun parent ->
+                    floor = Some parent
+                    || before |> List.exists (fun message -> message.Id = parent && message.Role = "user"))
+                |> Option.defaultValue physical
+
+            reportPhysical, report)
+
+    let private resolveOccasion (sessionId: SessionId) (messages: SessionMessage list) (physical: string) =
+        let stopped answer =
+            Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.contains sessionId answer
+
+        let plain assistant = Some(physical, assistant)
+
+        // The stop returns before the ordinary stages, so the stopped answer
+        // never becomes the bound physical: the abort shows up as the newest
+        // assistant after the run's own physical, parented by the answer.
+        match resolveAssistant messages physical with
+        | Some assistant when isAbortedAssistant assistant ->
+            match assistant.ParentId with
+            | Some answer when stopped answer ->
+                stoppedContinuationTerminal messages (Some physical) answer
+                |> Option.orElse (plain assistant)
+            | _ -> plain assistant
+        | Some assistant -> plain assistant
+        | None when stopped physical -> stoppedContinuationTerminal messages None physical
+        | None -> None
+
     /// Reconcile a full snapshot against an active run binding.
     ///
     /// `None` when the origin is unknown (no authority root) or no assistant
@@ -125,8 +182,8 @@ module TurnReconcile =
                     declaredPhysicalIsContinuationUser
                     inherited
                 |> Option.bind (fun physical ->
-                    resolveAssistant messages physical
-                    |> Option.map (fun assistant ->
+                    resolveOccasion binding.SessionId messages physical
+                    |> Option.map (fun (physical, assistant) ->
                         CompletedTurnClassifier.buildTurn
                             binding.SessionId
                             (PhysicalUserMessageId.create physical)

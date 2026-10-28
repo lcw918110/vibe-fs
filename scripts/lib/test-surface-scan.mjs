@@ -249,18 +249,6 @@ export const SURFACE_MANIFEST = [
     kind: 'pure',
   },
   {
-    module: 'Execution/Session/OpenCode/HorizonSurface.js',
-    owner: 'delegation',
-    laws: ['PARTICIPANT-HORIZON-004', 'PARTICIPANT-HORIZON-011'],
-    lawOwners: {
-      'PARTICIPANT-HORIZON-004': 'participant-horizon',
-      'PARTICIPANT-HORIZON-011': 'participant-horizon',
-    },
-    source: 'src/Wanxiangshu/Execution/Session/OpenCode/HorizonSurface.fs',
-    representation: 'json',
-    kind: 'pure',
-  },
-  {
     module: 'Execution/Session/OpenCode/HorizonCalibrationSurface.js',
     owner: 'participant-horizon',
     laws: ['PARTICIPANT-HORIZON-011'],

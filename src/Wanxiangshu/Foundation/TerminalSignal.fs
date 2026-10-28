@@ -110,3 +110,34 @@ module DegenerationInterrupts =
                 true
             else
                 false
+
+/// Late consultation answers the transform boundary stopped (WHAT[delegation-039]).
+///
+/// An answer queued while the agent was still writing its closing prose wakes
+/// the Host loop straight into that answer: the session never goes idle on the
+/// finished report, the stop aborts the queued step, and the only turn after
+/// the answer is an empty aborted one. Reconcile reads this record so the run's
+/// terminal is the finished report the stop preserved, not the abort it made.
+[<RequireQualifiedAccess>]
+module CompletedContinuationStops =
+    // DSL-MUTABLE: resource — per-session physical user ids whose provider step the late-consultation stop aborted
+    let private stopped =
+        System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>>()
+
+    let record (sessionId: SessionId) (physicalUserMessageId: string) : unit =
+        let key = SessionId.value sessionId
+
+        match stopped.TryGetValue key with
+        | true, set -> set.Add physicalUserMessageId |> ignore
+        | _ ->
+            let set = System.Collections.Generic.HashSet<string>()
+            set.Add physicalUserMessageId |> ignore
+            stopped[key] <- set
+
+    let contains (sessionId: SessionId) (physicalUserMessageId: string) : bool =
+        match stopped.TryGetValue(SessionId.value sessionId) with
+        | true, set -> set.Contains physicalUserMessageId
+        | _ -> false
+
+    let forget (sessionId: SessionId) : unit =
+        stopped.Remove(SessionId.value sessionId) |> ignore

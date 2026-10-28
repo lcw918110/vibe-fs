@@ -83,10 +83,20 @@ test('WHAT[provider-language-013] localized role prompt and fork child payload i
 test('WHAT[provider-language-013] horizon prose contains Chinese while the technical participant label survives', async () => {
   await withPreference('zh-CN', async () => {
     refreshGlobalLanguage()
-    const horizon = await import('../../../dist/Execution/Session/OpenCode/HorizonSurface.js')
-    assert.match(horizon.description(), /[\u4e00-\u9fff]/)
-    const roster = horizon.render([{ label: 'engineer', status: 'active', work: 'none', record: '' }], [])
-    assert.match(roster, /[\u4e00-\u9fff]/)
-    assert.match(roster, /engineer/)
+    const forkTool = await import('../../../dist/Execution/Delegation/Fork/OpenCode/ToolSurface.js')
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const directory = mkdtempSync(join(tmpdir(), 'wxs-horizon-zh-'))
+    const owner = 'manager-horizon-zh'
+    const runtime = await forkTool.createRuntime(directory, [{ sessionId: owner, agent: 'manager' }])
+    try {
+      const roster = await forkTool.executeHorizon(runtime, owner)
+      assert.match(roster, /[\u4e00-\u9fff]/)
+      assert.match(roster, /devops/)
+    } finally {
+      forkTool.disposeRuntime(runtime)
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

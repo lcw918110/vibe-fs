@@ -64,14 +64,15 @@ export function updateSourceDependency(directory = root) {
   console.log(`wanxiangli now follows origin/main at ${git(source, ['rev-parse', 'HEAD'])}; review and commit the gitlink and lockfile.`)
 }
 
-export function buildSourceDependency(directory = root) {
+export function buildSourceDependency(directory = root, { jobs = 1 } = {}) {
+  if (!Number.isInteger(jobs) || jobs < 1 || jobs > 4) throw new Error('--jobs must be an integer from 1 to 4')
   const source = checkSourceDependency(directory)
   const installed = path.join(directory, 'node_modules', 'wanxiangli')
   if (!fs.existsSync(installed) || fs.realpathSync(installed) !== fs.realpathSync(source)) {
     throw new Error('Run npm ci to replace the old installed tarball with the wanxiangli source link')
   }
   installSourceToolchain(source)
-  execFileSync(process.execPath, ['scripts/build.mjs'], { cwd: source, stdio: 'inherit' })
+  execFileSync(process.execPath, ['scripts/build.mjs', '--jobs', String(jobs)], { cwd: source, stdio: 'inherit' })
 }
 
 // npm ci 每次都会删掉并重装 wanxiangli/node_modules。只有安装输入（锁文件里除库自身版本号外的全部内容、

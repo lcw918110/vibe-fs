@@ -1,0 +1,168 @@
+常驻主项目 checker：测量与测试记录
+2026-10-28；未改动原 vibe-fs 工作区或运行产物，没有部署。
+
+条件
+
+最终主仓基于 upstream/master ca325944ae91c8036e46fd50cbb0b80c354b154e，
+库基于 upstream/main 1416a9bbf7138fdd7cf01cb4bd02d6841dc1aae3；
+主仓引用库常驻提交 d8c1dfe。此前三组测量基于 8d17ea5a6 / c0ae13f，
+新 upstream 仅修改库的延迟统计存储及主仓库引用。两边仍分别使用 .NET / JS Fable。
+Apple M3 Pro，18 GiB，Node 26.6.0，SDK 10.0.302，.NET Fable 5.13.0。
+基线是同一机器、独立副本中未修改的 upstream builder。
+
+测量使用独立 npm run build 命令。全量清除构建清单和成功标记，保留
+已恢复的 NuGet/npm 依赖；不会以安装时间冒充编译时间。无改动保留缓存。
+小改动每次用不同的源内容，避开旧产物缓存，并实际执行生成的函数。
+两处改动涉及 Digest 和 ModelRouting；实验改动均已恢复，未进入提交。
+
+初步全量三组（同一最终 checker；当时构建入口尚有两次重复工具链探测）：
+原方案 36.965 / 37.892 / 37.689 秒；常驻 30.962 / 31.601 / 30.891 秒。
+中位数减少约 18%。首次启动含适配器生成花 40.610 秒，没有冷启动优势。
+随后去掉同一阶段的重复工具链探测，保留构建前后独立复查。
+最终入口、最新 upstream 的全量复测单组：原方案 36.293 秒，
+常驻热 checker 30.229 秒，减少约 17%；首次启动为 40.580 秒，
+该首次启动还包含刚更新的 degeneration 模块构建。
+此组总 RSS 峰值为原方案 1530 MiB、常驻热 checker 2421 MiB。
+冷、热两次主仓 753 个 JS 及库 49 个 JS 均与最新 upstream 逐字节一致。
+
+最终入口小改动三组：
+原方案 6.626 / 7.528 / 7.045 秒；常驻 5.662 / 6.553 / 5.648 秒。
+中位数 7.045 → 5.662 秒，减少约 20%。
+无改动单次：0.736 → 0.965 秒；停止服务后的无改动为 0.724 秒，
+随后 status 仍报告 running=false。
+两处改动单次：11.120 → 9.113 秒；这次是首次使用该影响范围，不是热 checker 样本。
+
+RSS 约每 200 ms 采样一次，统计 npm 进程树与本工作树脱离客户端的服务
+进程树并集；包含之前保留的 worker，不是该次命令新分配的内存。
+全量三组峰值中位数：原方案 1372 MiB，常驻 2105 MiB。
+小改动三组峰值中位数：589 → 1569 MiB；无改动 220 → 687 MiB。
+小改动常驻峰值范围 1121–1987 MiB，受之前全量状态和 GC 影响。
+RSS 包括共享页，受 macOS 压缩和换出影响，不等同于存活堆或物理 footprint。
+默认 1536 MiB 是构建结束后的轮换阈值，不是瞬时峰值硬上限。
+早期试测命中过宽的进程匹配、以及未复用 checker 的样本未用于以上最终小改动结论。
+
+正确性
+
+753 个主仓 JS 产物与 upstream 逐字节一致；全量和每组小改动均比对全套。
+小改动仅改写对应应用模块及上游原有的 fable_modules 复制范围；
+其余应用模块的内容和修改时间保持不变。无改动的所有产物时间和内容不变。
+类型错误返回非零并丢弃 worker，上次全部 JS 字节与构建清单字节保持不变。
+恢复源码后，三个并发 npm 命令全部成功：一次恢复编译、两次 no-op。
+恢复后的 753 个 JS 产物再次与原 upstream 一致。
+
+020.test.mjs 七项真实编译测试全部通过，覆盖独立调用、源码同时间戳更新、
+工程顺序与选项、包暂存目录变化、实际 CLI 字节对照、并发首次启动、
+服务强杀、工作树隔离、轮换与空闲退出、同名同时间戳 DLL 替换和锁文件更新。
+其中暂存目录用例发现并修复了“同进程但未复用 checker”的缓存键错误。
+012.test.mjs 原有编译失败集成用例通过；已补充夹具工具链和服务回收。
+分发 005.test.mjs 的 17 项测试通过，原有一项 TODO 保留。
+两个旧夹具仍写旧工具链身份导致的新失败已修复，原断言没有放宽。
+
+完整诊断另发现旧 FCS 扫描禁令误拦实际构建适配器；已限定只有两个构建
+适配文件可使用编译器 API，保留所有扫描取证入口禁令，相关 3 项测试通过。
+这项是本次引入的兼容问题，已修复，不列为 upstream 既有问题。
+
+upstream 既有问题与范围
+
+用户已明确：只修本次引入的问题，既有问题单列，不扩大改动范围。
+原入口 npm run format-build-test 在格式检查阶段失败：106 个现有 F# 文件。
+源业务目录与 upstream 相同，没有运行全仓格式重写。
+npm run check：未修改 upstream 与本分支均为 174 项、4 类静态问题。
+库完整测试：本分支 1122 通过、32 失败、4 跳过；原 upstream 1105 通过、
+32 失败、4 跳过。失败身份完全一致，49 个库 JS 产物完全一致。
+库失败涉及旧警告断言、过时接口期望、ToolResultBound 行为和 session 测试语法。
+
+主仓默认单元测试在 172/788 文件完成时中断，不能称为完整通过。
+延长诊断时限后分批继续尚未启动的文件：788 个文件全部启动，783 个结束；
+5 个挂起：host-boundary/006、managed-chat-execution/006、010、015，
+以及 managed-session-lifecycle/019。保留失败，不跳过后冒充全绿。
+这 5 个文件在最新未修改 upstream 中独立运行，也全部触发监督器的无进展失败。
+已结束部分有 42 个文件报告失败，已在最新未修改 upstream 上逐一重跑。
+除已修复的 FCS 引用检查外，其他 97 个唯一失败标题在 upstream 全部复现
+（标题包含嵌套汇总，不作为测试用例总数）。upstream 复查完成 42/42 文件，
+监督器报告 498 通过、96 失败；没有将未完成文件计入通过。
+
+原 upstream 单独重跑 delegation/025：11 通过、10 失败，复现相同 settled/pending 断言。
+默认集成测试在 35/38 文件完成时达到 300 秒上限；分发测试因库已删除
+README.md 但仍被声明为打包文件而失败，未修改 upstream 同样失败。
+验证工具自身的集成组 291 项通过。原 upstream 延长时限的集成对照启动了
+全部 37 个文件，35 个结束；host-boundary/019、managed-chat-execution/015
+挂起，并复现先前 13 项业务失败及 verification-system/016 的失败。
+这不构成完整测试全绿；没有修改测试断言或业务代码来掩盖这些问题。
+最新库 degeneration 的 25 项测试通过；主仓 checker 与 latency-degeneration
+联合复测 51 项全部通过（启用了集成测试层，包括 7 项实际编译测试）。
+
+限制
+
+本次验证 macOS；Windows 进程与路径分支没有实测。
+没有实际升级 Node 二进制或开展数日的主仓常驻内存试验。
+不把专项测试通过、既有业务失败和部署成功混为一谈。
+详细命令日志、逐次计时、产物摘要和并发日志保留在本工作树 .fable-build/。
+
+2026-10-28：状态查询与使用记录后续
+
+原 PR #66 / 库 #5 已由 upstream 合并。本次基于主仓 06c10f8cd、库 0d86c38，
+保持十分钟，取消状态查询续期，新增有界本地记录；字段定义见 BUILDING.txt。
+常驻主仓测试 9 项通过；库常驻回归 21 项通过，rebase 后记录及延迟测试 29 项通过。
+最新干净全量构建的主仓 753 / 库 49 个 JS 与未修改 upstream 逐字节一致；
+无改动构建、状态查询不修改记录，无改动构建不重写主仓产物。
+
+同步最新 upstream 时额外发现既有增量工程选取问题：1350 项的影响范围工程
+包含 Execution/Fission/OpenCode/Tool.fs，却未包含 Execution/Tool/ToolResultText.fs，
+因而把 ToolResultText 解析到 Host/ToolContext.fs 中的同名模块；全量 1376 项
+工程则解析到 Execution/Tool/ToolResultText.fs。这产生一个 JS 文件的导入差异。
+使用独立 Fable CLI 编译同一份 1350 项工程也复现该选择，不依赖常驻状态。
+上一轮未修复此问题；原始对照保存在 .fable-build/usage-upstream-focused-cli.log。
+
+2026-10-28：按用户后续要求修复上述增量漏选
+
+Fission 工程补上 execution-tool-product 引用。单独编译这个闭包又暴露
+ToolRuntimeScope 缺少 HostJoinAttemptFactory：补上 sharedstatesurface 引用，
+并将后者原来的 hostturnobservedsurface 反向引用换成实际需要的 wait-contract
+和 delegation-recovery-runtime，避免环依赖。业务源文件和规划算法不变。
+回归位于 requirements/structured-workflow/tests/impact/012.test.mjs；运行：
+WXS_TIER_INTEGRATION=1 node --test requirements/structured-workflow/tests/impact/012.test.mjs
+规划检查和独立 CLI 实编译通过。Fission、PluginSessionScope、ToolResultText.fsi
+三个增量范围分别生成 537、342、712 个 JS，与干净全量对应文件逐字节一致。
+正常 npm run build 实测单模块、双模块真实字符串修改：每次增量的最终
+753 个 JS 均与同一源状态的全量参考构建逐字节一致。相对原基准只出现
+预期的一处、两处 JS 内容变化；双模块构建复用同一 checker。实验修改已
+手工还原，增量产物回到原基准。随后无改动构建保持全部 JS 字节、mtime
+及两仓使用记录不变。日志在 .fable-build/performance/fission-*.log。
+旧 tests/012.test.mjs 引用了 upstream 已删除的 scripts/owner-impact-report.mjs，
+整文件执行会中断；在未修改的 upstream 06c10f8cd 副本复现，未恢复旧报告工具。
+
+2026-10-28：CI / review 复查与 upstream 同步
+
+PR #67 的 0077d5749 CI（run 40631698152）在 format:check 失败，未进入构建。
+同期 upstream 前进至主仓 38867da64、库 359a1ec，造成子模块引用冲突。
+现有分支已同步，库使用 5daad07；冲突仅涉及库说明文档和主仓 gitlink，
+保留 upstream 文档内容及本功能说明，服务实现和增量依赖修复未变。
+同步后主仓 020 与 impact/012 共 11 项、库 012–016 共 21 项回归全部通过；
+三个真实增量闭包的 537 / 342 / 712 个 JS 仍与全量逐字节一致。
+本地同款 Fantomas 检查有 107 项失败，与未修改 upstream 副本清单完全相同；
+最新 upstream 与基准副本的 F# 源码和格式配置也相同。未修改无关业务格式。
+复查时两个 PR 均无 review 或行内意见。CI 既有失败不能算作完整套件通过。
+
+2026-10-28 可选并行构建
+
+主仓基于 upstream/master 89ab1f399，库基于 upstream/main 87de56a。
+主仓 --parallel / --jobs 1–4 转发到源码库；主项目 F# 仍为一次影响范围闭包编译。
+库并行实现、边界与性能表见 wanxiangli/scripts/BUILDING.txt。
+
+主仓实际 npm run build -- --parallel 编译了全部 49 个库模块，记录 jobs=2。
+主仓 753 个 JS 与此前 fission-baseline-hashes.json 完全相同。
+最新库源码的串行全量与主仓嵌套库的并行全量，49 个 JS 逐字节一致。
+让四个指定库模块的缓存失效后，从主入口 --jobs 4 重编，记录 jobs=4 / projects=4；
+额外进程均已退出，主仓和库产物仍一致。之后 --parallel 无改动构建保留
+753 + 49 个 JS 和两份 usage.json 的字节及 mtime（共 804 个文件）。
+
+WXS_TIER_INTEGRATION=1 下，structured-workflow/tests/020.test.mjs、
+impact/012.test.mjs、parallel/012.test.mjs 共 13 项通过，无跳过。
+三个实际增量范围分别有 537、342、712 个 JS 与全量逐字节相同。
+日志在 .fable-build/parallel-main-regression.log、parallel-main-build.log、
+parallel-main-jobs4.log、parallel-main-noop.log；未更改业务源码。
+
+库 scripts/tests/012–017 共 27 项通过；补充双模块实际改动后，017 的 6 项复跑通过。
+同步最新 upstream 后另通过 projection 的 8 项测试。未据此声称整个仓库测试全绿；
+先前记录的 upstream 格式与无关测试问题仍单列，不扩大此次修改范围。

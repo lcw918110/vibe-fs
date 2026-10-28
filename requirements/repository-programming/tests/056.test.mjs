@@ -122,14 +122,9 @@ test('WHAT[repository-programming-056] this.horizon serves the installed host ro
     ok: true,
     agents: [
       {
-        label: 'Ada',
+        label: 'stub-horizon-roster',
         status: 'still-away',
-        workState: 'none',
-        record: 'stub-horizon-roster',
-        turnsUsed: 0,
-        turnsLeft: 0,
-        timeUsedMs: 0,
-        timeLeftMs: 0,
+        pace: { turnsUsed: 2, turnsLeft: 3, timeUsedMs: 1000, timeLeftMs: 1500 },
       },
     ],
     ptys: [],
@@ -149,7 +144,7 @@ test('WHAT[repository-programming-056] this.horizon serves the installed host ro
     assert.equal(caseName(wired), 'Succeeded')
     const wiredDoc = render(wired)
     assert.match(wiredDoc, /status = "still-away"/, 'the host roster reaches the program as data')
-    assert.match(wiredDoc, /record = "stub-horizon-roster"/, 'the member returns the host envelope untouched')
+    assert.match(wiredDoc, /label = "stub-horizon-roster"/, 'the member returns the host envelope untouched')
     assert.match(wiredDoc, /ptys = \[\]/)
 
     clearDelegationHost(sessionId)

@@ -157,6 +157,42 @@ module ProviderWireCapture =
 
         flag || pluginSource
 
+    let private jsTrue (value: obj) (name: string) : bool =
+        not (isNull value)
+        && emitJsExpr (value, name) "$1 in Object($0) && $0[$1] === true"
+
+    let private hasCompactionContinueMarker (rawObj: obj) : bool =
+        ProviderWireDecode.rawPartsOf rawObj
+        |> List.exists (fun part -> jsTrue (ProviderWireDecode.readField part "metadata") "compaction_continue")
+
+    let private isCompactionSummary (rawObj: obj) : bool =
+        let info = ProviderWireDecode.infoObject rawObj
+
+        ProviderWireDecode.firstString info [ "role" ] = Some "assistant"
+        && (jsTrue info "summary"
+            || ProviderWireDecode.firstString info [ "mode" ] = Some "compaction"
+            || ProviderWireDecode.firstString info [ "agent" ] = Some "compaction")
+
+    /// managed-chat-execution-017: OpenCode writes the turn that follows an
+    /// automatic compaction straight into storage — the synthetic "Continue if
+    /// you have next steps" row (part metadata `compaction_continue`) or the
+    /// replay of the overflowed user message — and never runs `chat.message`
+    /// for it. Either way the row is the Host's continuation of the execution it
+    /// compacted: it carries the compaction marker, or it directly follows the
+    /// compaction summary in this request.
+    let isHostCompactionContinuation (rawMessages: obj list) (physicalUserMessageId: PhysicalUserMessageId) : bool =
+        let physical = PhysicalUserMessageId.value physicalUserMessageId
+
+        let rec scan (previous: obj option) (rest: obj list) =
+            match rest with
+            | [] -> false
+            | message :: _ when ProviderWireDecode.hostMessageId message = Some physical ->
+                hasCompactionContinueMarker message
+                || (previous |> Option.exists isCompactionSummary)
+            | message :: tail -> scan (Some message) tail
+
+        scan None rawMessages
+
     /// The last `role=user` message's wire address in a transform output.
     ///
     /// REVIEW-010's seal binds to the physical user message this request answers

@@ -11,54 +11,6 @@ open Wanxiangshu.Persistence.Journal
 /// the wire encoding and registration.
 module HorizonTool =
 
-    /// Provider prose paths for the horizon surfaces, owned by the adapter.
-    [<RequireQualifiedAccess>]
-    module Path =
-        [<Literal>]
-        val Description: string = "tool/horizon/description"
-
-        [<Literal>]
-        val Returned: string = "tool/horizon/returned"
-
-        [<Literal>]
-        val StillAway: string = "tool/horizon/still-away"
-
-        [<Literal>]
-        val DidNotReturn: string = "tool/horizon/did-not-return"
-
-        [<Literal>]
-        val Voided: string = "tool/horizon/voided"
-
-        [<Literal>]
-        val RemainsOpen: string = "tool/horizon/remains-open"
-
-        [<Literal>]
-        val Someone: string = "tool/horizon/someone"
-
-        [<Literal>]
-        val TerminalLabel: string = "tool/horizon/terminal-label"
-
-        [<Literal>]
-        val EmptyRoster: string = "tool/horizon/empty-roster"
-
-        [<Literal>]
-        val UnavailableFromContext: string = "tool/horizon/unavailable-from-context"
-
-        [<Literal>]
-        val CannotBeSeen: string = "tool/horizon/cannot-be-seen"
-
-        [<Literal>]
-        val LatestWork: string = "tool/horizon/latest-work"
-
-        [<Literal>]
-        val NoWorkYet: string = "tool/horizon/no-work-yet"
-
-        [<Literal>]
-        val LatestWorkUnavailable: string = "tool/horizon/latest-work-unavailable"
-
-        [<Literal>]
-        val Calibration: string = "tool/horizon/calibration"
-
     type HorizonRuntimeContext =
         { RuntimeFor: HostToolContext -> Result<HostForkRuntime, string>
           LogicalOwnerFor: SessionId -> SessionId
@@ -67,8 +19,7 @@ module HorizonTool =
 
     val spec: runtimeCtx: HorizonRuntimeContext -> ToolSpec
 
-    /// The same roster as data for `this.horizon()`: every horizon-visible
-    /// participant with the status the prose line reports, its work state, its
-    /// latest record body, and the four calibration numbers, plus the terminals
-    /// still open. Provider prose is never rendered.
+    /// The same roster as data for `this.horizon()`:
+    /// `{ ok, agents: [{ label, status, pace? }], ptys: [{ terminal }] }`, or
+    /// `{ ok: false, code: "horizon-unavailable" }`. Provider prose is never rendered.
     val rosterReceipt: language: string -> runtimeCtx: HorizonRuntimeContext -> context: HostToolContext -> Task<obj>

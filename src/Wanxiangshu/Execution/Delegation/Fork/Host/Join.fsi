@@ -12,6 +12,10 @@ module HostForkJoin =
     /// handles. Join admission and the horizon roster both answer through it.
     val currentProcessHandle: runtime: HostForkRuntime -> record: HandleRecord -> bool
 
+    /// Whether this process is running a charge for the agent behind this
+    /// handle — the run join would wait for.
+    val hasPendingRun: runtime: HostForkRuntime -> handle: Wanxiangshu.Foundation.Identity.HandleId -> bool
+
     val joinAvailable:
         runtime: HostForkRuntime ->
         maxCount: int ->

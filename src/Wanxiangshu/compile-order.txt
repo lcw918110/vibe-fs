@@ -1075,8 +1075,6 @@ Execution/Session/HorizonRoster.fsi
 Execution/Session/HorizonRoster.fs
 Execution/Session/OpenCode/HorizonTool.fsi
 Execution/Session/OpenCode/HorizonTool.fs
-Execution/Session/OpenCode/HorizonSurface.fsi
-Execution/Session/OpenCode/HorizonSurface.fs
 Execution/Session/OpenCode/HorizonCalibrationSurface.fsi
 Execution/Session/OpenCode/HorizonCalibrationSurface.fs
 Execution/Delegation/SyncDelegate/Batching.fsi

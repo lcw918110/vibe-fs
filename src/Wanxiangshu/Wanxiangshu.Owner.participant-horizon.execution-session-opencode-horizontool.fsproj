@@ -27,8 +27,6 @@
     <Compile Include="Execution/Session/HorizonRoster.fs"/>
     <Compile Include="Execution/Session/OpenCode/HorizonTool.fsi"/>
     <Compile Include="Execution/Session/OpenCode/HorizonTool.fs"/>
-    <Compile Include="Execution/Session/OpenCode/HorizonSurface.fsi"/>
-    <Compile Include="Execution/Session/OpenCode/HorizonSurface.fs"/>
     <Compile Include="Execution/Session/OpenCode/HorizonCalibrationSurface.fsi"/>
     <Compile Include="Execution/Session/OpenCode/HorizonCalibrationSurface.fs"/>
   </ItemGroup>

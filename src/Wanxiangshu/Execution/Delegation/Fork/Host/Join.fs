@@ -318,7 +318,7 @@ module HostForkJoin =
         | HandleLifecycle.Active
         | HandleLifecycle.Retired -> false
 
-    let private agentHasPendingRun (runtime: HostForkRuntime) (handle: HandleId) =
+    let hasPendingRun (runtime: HostForkRuntime) (handle: HandleId) =
         match HandleId.tryAgent handle with
         | Some handleId ->
             let agentId = AgentHandleId.value handleId
@@ -327,7 +327,7 @@ module HostForkJoin =
 
     let private handleIsActiveJoinTarget (runtime: HostForkRuntime) (record: HandleRecord) =
         currentProcessHandle runtime record
-        && (handleHasJoinableOutcome record || agentHasPendingRun runtime record.Handle)
+        && (handleHasJoinableOutcome record || hasPendingRun runtime record.Handle)
 
     let private journalHasActiveJoinHandles (runtime: HostForkRuntime) (durable: AgentJournal) =
         AgentJournal.handleProjection durable runtime.ParentId

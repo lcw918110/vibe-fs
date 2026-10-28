@@ -105,9 +105,8 @@ test('WHAT[participant-horizon-011] a restarted process voids the previous proce
 })
 
 test.todo('WHAT[participant-horizon-011] Join delivers the abandoned consequence and retires the handle; real scenario stalls at Join after successful cancellation, root cause still under investigation (GAP-080)')
-test.todo('WHAT[participant-horizon-011] latest durable record selection and corrupt-latest rejection must exercise journal/blob reads; a separately implemented HorizonSurface renderer is insufficient (GAP-079)')
 
-test('WHAT[participant-horizon-011] the same roster reaches a program as this.horizon data with the four numbers withheld when no delegated estimate exists', async () => {
+test('WHAT[participant-horizon-011] the same roster reaches a program as this.horizon data with no pace when no delegated estimate exists', async () => {
   await withForkRuntime(async ({ runtime, owner }) => {
     await placeEngineer(runtime, owner, 'Ada')
     const receipt = await forkTool.executeHorizonReceipt(runtime, owner)
@@ -116,21 +115,85 @@ test('WHAT[participant-horizon-011] the same roster reaches a program as this.ho
     assert.ok(Array.isArray(receipt.agents), 'the envelope carries the agents roster array')
     assert.ok(Array.isArray(receipt.ptys), 'the envelope carries the ptys roster array')
 
-    // The runtime-bound fixed DevOps may share this roster (participant-horizon-010),
-    // so the accepted child is located by her own Byname instead of by position.
     const participant = receipt.agents.find((row) => row.label === 'Ada')
     assert.ok(participant, 'the accepted child carries a row under her Byname')
-    assert.equal(participant.status, 'still-away')
-    assert.ok(
-      ['latest', 'none', 'unavailable'].includes(participant.workState),
-      `unexpected workState ${participant.workState}`,
+    assert.deepEqual(
+      participant,
+      { label: 'Ada', status: 'still-away' },
+      'a running charge with no delegated estimate carries no pace, never a row of zeros, and no id, target or report body',
     )
-    assert.equal(typeof participant.record, 'string')
-    // No delegated-tool estimate exists for this child, so the four calibration
-    // numbers are 0 rather than guessed from a neighbouring participant.
-    assert.equal(participant.turnsUsed, 0)
-    assert.equal(participant.turnsLeft, 0)
-    assert.equal(participant.timeUsedMs, 0)
-    assert.equal(participant.timeLeftMs, 0)
   })
+})
+
+test('WHAT[participant-horizon-011] the fixed DevOps at rest is idle, never returned or still away', async () => {
+  await withForkRuntime(async ({ runtime, owner }) => {
+    const roster = await forkTool.executeHorizon(runtime, owner)
+    assert.match(roster, /devops is at hand and idle/)
+    assert.doesNotMatch(roster, /devops (has returned|is still away)/)
+    assert.doesNotMatch(roster, /work record/, 'the roster no longer pads every row with an empty work record line')
+    const receipt = await forkTool.executeHorizonReceipt(runtime, owner)
+    assert.deepEqual(receipt.agents, [{ label: 'devops', status: 'idle' }])
+    assert.match(await forkTool.executeJoin(runtime, owner), /NothingToJoin|nothing away to receive/i, 'idle is nothing join would hand over')
+  })
+})
+
+// Field regression (wx, 2026-10-28, Manager ses_e7ed7cdb…): horizon said
+// "恢复缺口核实 已归来" 37 seconds after join had consumed that report, and
+// "devops 已归来" for a devops whose report join had already handed over. The
+// old roster read a process-local "completion cell settled" flag instead of the
+// ledger join drains. The roster now answers through join's own cut.
+test('WHAT[participant-horizon-011] returned means join hands it over; after join it is gone, and a fresh charge reads still away, never returned', async () => {
+  const realFork = await import('../../delegation/tests/support/real-fork.mjs')
+  const owner = 'manager-horizon-join-ledger'
+  await realFork.withRealFork(owner, async ({ hooks, createdIds, runtime }) => {
+    const terminals = await realFork.observeTerminals(runtime)
+    const horizon = async () => String(await hooks.tool.horizon.execute(
+      {},
+      { sessionID: owner, agent: 'manager', callID: `call-horizon-${Math.random()}`, messageID: 'msg-horizon' },
+    ))
+    try {
+      await realFork.forkCall(hooks, owner, 'Ada', 'FIRST-CHARGE')
+      const child = createdIds[0]
+      assert.match(await horizon(), /Ada is still away/)
+
+      await realFork.childTurn(hooks, runtime, child, `run-${child}-1`, 'FIRST ANSWER', 'FIRST ANSWER', terminals.awaitRun)
+      const returned = await horizon()
+      assert.match(returned, /Ada has returned/)
+      assert.doesNotMatch(returned, /FIRST ANSWER/, 'horizon does not hand over the report; join does')
+
+      assert.match(await realFork.joinCall(hooks, owner), /FIRST ANSWER/)
+      assert.doesNotMatch(await horizon(), /Ada/, 'a consumed report never reappears as returned')
+
+      await realFork.resumeCall(hooks, owner, 'Ada', 'SECOND-CHARGE')
+      const second = await horizon()
+      assert.match(second, /Ada is still away/)
+      assert.doesNotMatch(second, /Ada has returned/, 'a stale settled run of the previous charge is not a return')
+
+      // The field devops case: its report already went through join, yet the
+      // old roster still said "devops has returned" from the settled run cell.
+      const { injectAcceptedAssessment } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
+      await injectAcceptedAssessment(runtime, owner)
+      const devopsReceipt = String(await realFork.resumeCall(hooks, owner, 'devops', 'DEVOPS-CHARGE'))
+      assert.match(devopsReceipt, /ok = true/, devopsReceipt)
+      const devops = createdIds.find((id) => id !== child)
+      assert.ok(devops, `the devops child session is known: ${JSON.stringify(createdIds)}`)
+      assert.match(await horizon(), /devops is still away/)
+      await realFork.childTurn(hooks, runtime, devops, `run-${devops}-1`, 'DEVOPS ANSWER', 'DEVOPS ANSWER', terminals.awaitRun, 'devops')
+      assert.match(await horizon(), /devops has returned/)
+      assert.match(await realFork.joinCall(hooks, owner), /DEVOPS ANSWER/)
+      const after = await horizon()
+      assert.doesNotMatch(after, /devops has returned/, 'a report join already handed over is not a return')
+      assert.match(after, /devops is at hand and idle/)
+    } finally {
+      terminals.dispose()
+    }
+  })
+})
+
+test('WHAT[participant-horizon-011] the roster reads join\'s ledger, never a process-local completion cell', () => {
+  const source = readFileSync(new URL('../../../src/Wanxiangshu/Execution/Session/HorizonRoster.fs', import.meta.url), 'utf8')
+  assert.match(source, /JoinDrain\.orderedCandidates/, 'returned / did-not-return / voided come from the list join drains')
+  assert.match(source, /HostForkJoin\.currentProcessHandle/, 'the same process cut join uses')
+  assert.match(source, /HostForkJoin\.hasPendingRun/, 'still away means join would wait for a running charge')
+  assert.doesNotMatch(source, /CompletionCellSettled/, 'a settled in-process cell is not a durable return')
 })

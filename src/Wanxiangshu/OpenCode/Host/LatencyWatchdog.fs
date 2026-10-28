@@ -399,6 +399,20 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                             disposeQuietly recorded.Timer
                             Sampled recorded
                         | Some _, Some _ -> ForeignProviderRun
+                        | _ when recorded.Aborting ->
+                            // The interrupt is already in flight: whatever this
+                            // identity-less terminal was, the Host's AbortSession
+                            // (once accepted) still stopped the session loop and
+                            // owes a continuation. Park instead of dropping so the
+                            // abort receipt decides — same as a matched terminal
+                            // or a discarded failure while Aborting.
+                            measurements.Remove(sessionId) |> ignore
+                            parkInterrupted
+                                sessionId
+                                { recorded with
+                                    EndedFinal = false
+                                    SampledComplete = false }
+                            NoInFlightMeasurement
                         | _ ->
                             measurements.Remove(sessionId) |> ignore
                             disposeQuietly recorded.Timer

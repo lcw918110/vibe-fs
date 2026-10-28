@@ -90,3 +90,13 @@ module Roles =
     /// public fork / horizon vocabulary.
     let isInternal (role: Role) : bool =
         identity.isInternalRole (roleLabel role)
+
+    /// Manager, Orchestrator and Plan own long work. A tool-free natural stop
+    /// is never their end: while the work is open they are nudged on, and no
+    /// late answer may stop them. Engineer, DevOps and Advisor close in prose.
+    let isLongRunning (role: Role) : bool =
+        match role with
+        | Role.Manager
+        | Role.Orchestrator
+        | Role.Plan -> true
+        | _ -> false

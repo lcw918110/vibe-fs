@@ -253,9 +253,16 @@ test('WHAT[semantic-trace-002] later parts and reanchor copies cannot move a ret
     parts: [{ type: 'text', text: 'CURRENT_FOLLOWUP' }],
   }
   opening.tenureId = 'old'
-  retired.toolCallId = 'review-1'
+  retired.toolCallId = null
   retired.resultFor = null
   retired.tenureId = 'old'
+  const reviewCall = {
+    info: { id: 'review-call', role: 'assistant' },
+    parts: [{ type: 'text', text: 'review' }],
+    toolCallId: 'review-1',
+    resultFor: null,
+    tenureId: 'old',
+  }
   const reviewResult = {
     info: { id: 'review-result', role: 'assistant' },
     parts: [{ type: 'text', text: 'recorded' }],
@@ -266,7 +273,7 @@ test('WHAT[semantic-trace-002] later parts and reanchor copies cannot move a ret
   answer.tenureId = 'next'
   followup.tenureId = 'next'
   const result = PlanningSurface.assembleTenureMessages(
-    [opening, retired, reviewResult, answer, followup],
+    [opening, retired, reviewCall, reviewResult, answer, followup],
     {
       workId: 'trace-tenure', incumbencyId: 'inc-current', stage: '执行',
       openingCursor: 0n, isFreshHandover: false,
@@ -276,14 +283,14 @@ test('WHAT[semantic-trace-002] later parts and reanchor copies cannot move a ret
   )
   assert.deepEqual(
     result.messages.map((message) => message.info.id),
-    ['current-answer', 'user-followup'],
+    ['user-opening', 'review-call', 'review-result', 'current-answer', 'user-followup'],
   )
-  assert.equal(result.messages[0], answer)
-  assert.equal(result.messages[1], followup)
+  assert.equal(result.messages[0], opening)
+  assert.equal(result.messages[3], answer)
+  assert.equal(result.messages[4], followup)
   assert.equal(result.messages.includes(retired), false)
-  assert.equal(result.messages.includes(opening), false)
   assert.deepEqual(result.messages.flatMap((message) => message.parts.map((part) => part.text)), [
-    'CURRENT_ANSWER', 'CURRENT_FOLLOWUP',
+    'Original requirement', 'review', 'recorded', 'CURRENT_ANSWER', 'CURRENT_FOLLOWUP',
   ])
 })
 }

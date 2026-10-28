@@ -113,6 +113,31 @@ module AuthorityLifeClassification =
             |> Option.map (fun kind -> kind, Some coarseAgentOwnerLife)
         | None -> None
 
+    /// The closure kind and agent-owner life of an accepted root, keyed on the
+    /// root authority DU itself and total over it: a HumanRoot's kind follows from
+    /// its recorded role; an agent-owner root uses its proven life when it is one
+    /// of the known labels, and the documented coarse life otherwise. There is no
+    /// input for which this fails, so callers never need a "closure kind could
+    /// not be proven" rejection path. The label-based `closureFor` remains the
+    /// owner of the durable-data boundary, where a foreign payload may fail to
+    /// derive a kind.
+    let closureKindForRoot (kind: PromptRootAuthorityKind) (isManager: bool) (provenLife: string option) : string * string option =
+        match kind with
+        | PromptRootAuthorityKind.HumanRoot ->
+            (if isManager then "HumanRootManagerLife" else "HumanRootManagedRun"), None
+        | PromptRootAuthorityKind.AgentOwnerRoot ->
+            let life =
+                match provenLife with
+                | Some life when List.contains life agentOwnerLifeLabels -> life
+                | _ -> coarseAgentOwnerLife
+            let kind =
+                match life with
+                | "Child" -> "AgentOwnerChildWork"
+                | "Attached" -> "AgentOwnerAttachedWork"
+            // the label filter above leaves "InternalLeaf" as the only remaining label
+                | _ -> "AgentOwnerInternalLeaf"
+            kind, Some life
+
     /// The closure kind to record: the recorded one only while it belongs to
     /// this root kind, otherwise the kind the acceptance derives.
     ///

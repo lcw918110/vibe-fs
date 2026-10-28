@@ -3,7 +3,6 @@
 # Ordinary rules include matching paths. A leading ! excludes an exception from earlier includes.
 
 /src/Wanxiangshu/Execution/Session/OpenCode/HorizonTool.fs
-/src/Wanxiangshu/Execution/Session/OpenCode/HorizonSurface.fs
 /src/Wanxiangshu/OpenCode/Host/MessageVisibility.fs
 /src/Wanxiangshu/OpenCode/Host/MessageVisibilitySurface.fs
 /src/Wanxiangshu/OpenCode/Codec/ProjectionMessageEdit.fs

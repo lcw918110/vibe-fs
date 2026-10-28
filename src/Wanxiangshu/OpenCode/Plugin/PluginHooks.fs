@@ -1711,7 +1711,8 @@ module PluginHooks =
                         AdvisorSeat.clear (SessionId.value sessionId)
                         latencyWatchdog.Cancel (SessionId.value sessionId)
                         latencyWatchdog.ForgetDetector (SessionId.value sessionId)
-                        Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId)
+                        Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId
+                        Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.forget sessionId)
 
             /// The watchdog's boundaries use the exact provider-run identity:
             /// the assistant message's own id, present on both the provider

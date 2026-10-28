@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { compilerEvidenceReferences } from './support/compiler-evidence-scan.mjs'
@@ -17,6 +17,15 @@ test('WHAT[verification-system-018] compiler evidence guard rejects direct FCS u
   ]) assert.equal(compilerEvidenceReferences(source).length, 1, source)
 })
 
+test('WHAT[verification-system-018] the build adapter may use compiler APIs but cannot add evidence scans', () => {
+  const options = { allowCompilerApi: true }
+  assert.deepEqual(compilerEvidenceReferences('open FSharp.Compiler.SourceCodeServices\nload("Fable.Compiler.dll")', options), [])
+  for (const source of [
+    'scanCompilerObservationsV1()', 'scanDslCompilerEvidence()',
+    'runLocalityDependencyScan()', 'scanProductionLocalitySliceReportV1()', 'locality-symbol-uses',
+  ]) assert.equal(compilerEvidenceReferences(source, options).length, 1, source)
+})
+
 test('WHAT[verification-system-018] source and tooling contain no known compiler evidence entry points', () => {
   const root = fileURLToPath(new URL('../../..', import.meta.url))
   const hits = []
@@ -26,7 +35,9 @@ test('WHAT[verification-system-018] source and tooling contain no known compiler
       if (entry.isDirectory()) {
         if (!['obj', 'bin', 'node_modules', '.git'].includes(entry.name)) scan(path)
       } else if (/\.(?:mjs|cjs|js|fs|fsi|fsx|fsproj|sh|ps1|json)$/.test(entry.name)) {
-        for (const hit of compilerEvidenceReferences(readFileSync(path, 'utf8'))) hits.push({ path, ...hit })
+        const allowCompilerApi = ['scripts/compiler/Checker.fs', 'scripts/compiler/toolchain.mjs']
+          .includes(relative(root, path).replaceAll('\\', '/'))
+        for (const hit of compilerEvidenceReferences(readFileSync(path, 'utf8'), { allowCompilerApi })) hits.push({ path, ...hit })
       }
     }
   }

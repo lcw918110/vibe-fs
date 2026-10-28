@@ -66,6 +66,9 @@ module CompletedTurnSurface =
     let hasToolCallPart (parts: obj) : bool =
         CompletedTurnClassifier.hasToolCallPart (partsOf parts)
 
+    let hasRealToolCall (parts: obj) : bool =
+        CompletedTurnClassifier.hasRealToolCall (partsOf parts)
+
     let isAbortErrorName (name: string) : bool =
         CompletedTurnClassifier.isAbortErrorName (optionalText name)
 

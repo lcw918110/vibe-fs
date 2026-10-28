@@ -113,3 +113,59 @@ test('WHAT[latency-degeneration-011] a final Completed followed by a newer step 
   assert.equal(r.events.filter(e => e === 'continue').length, 1)
   r.watchdog.Dispose()
 })
+
+// An identity-less terminal while the interrupt is in flight parks the
+// measurement (same as a matched terminal or a failure discard): the abort
+// receipt still decides. Regression: the old catch-all dropped the
+// measurement, the receipt then found neither an in-flight measurement nor a
+// parked one, and an accepted AbortSession left the child stopped with no
+// continuation and no Failed return.
+test('WHAT[latency-degeneration-011] identity-less terminal while aborting: an accepted interrupt still continues once', async () => {
+  const r = rig()
+  try {
+    r.watchdog.Begin('engineer', 'run-1')
+    r.fire()
+    r.watchdog.Complete('engineer', undefined)
+    r.conclude(true)
+    await flush()
+    assert.equal(r.events.filter(e => e === 'continue').length, 1,
+      'the accepted AbortSession stopped the loop; the parked interrupt must resume it')
+    assert.equal(r.events.some(e => e.startsWith('returned:')), false)
+    assert.equal(r.events.filter(e => e === 'censored').length, 1,
+      'an identity-less terminal is no proof of delivery: the sample is censored, never complete')
+    r.watchdog.Dispose()
+  } finally { r.watchdog.Dispose() }
+})
+
+test('WHAT[latency-degeneration-011] identity-less terminal while aborting: a refused or failed receipt stops nothing and settles silently', async () => {
+  await Promise.all([false, Promise.reject(new Error('host down'))].map(async refuse => {
+    const r = rig()
+    try {
+      r.watchdog.Begin('engineer', 'run-1')
+      r.fire()
+      r.watchdog.Complete('engineer', undefined)
+      r.conclude(refuse)
+      await flush()
+      assert.equal(r.events.includes('continue'), false)
+      assert.equal(r.events.some(e => e.startsWith('returned:')), false,
+        'a refused interrupt stopped nothing; the identity-less terminal settled the request on its own')
+      assert.equal(r.watchdog.Snapshot().length, 0)
+    } finally { r.watchdog.Dispose() }
+  }))
+})
+
+test('WHAT[latency-degeneration-011] identity-less terminal while aborting: the parked measurement survives until the receipt, then clears', async () => {
+  const r = rig()
+  try {
+    r.watchdog.Begin('engineer', 'run-1')
+    r.fire()
+    r.watchdog.Complete('engineer', undefined)
+    assert.equal(r.watchdog.Snapshot().length, 0,
+      'the measurement itself is parked, not left armed')
+    r.conclude(true)
+    await flush()
+    assert.deepEqual(r.events.filter(e => e === 'censored' || e === 'continue'), ['censored', 'continue'])
+    assert.equal(r.events.includes('completed'), false)
+    r.watchdog.Dispose()
+  } finally { r.watchdog.Dispose() }
+})

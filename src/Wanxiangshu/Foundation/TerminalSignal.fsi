@@ -70,3 +70,10 @@ module DegenerationInterrupts =
     type Cursor =
         new: sessionId: SessionId -> Cursor
         member IsOwnAbort: unit -> bool
+
+/// Late consultation answers the transform boundary stopped (WHAT[delegation-039]).
+[<RequireQualifiedAccess>]
+module CompletedContinuationStops =
+    val record: sessionId: SessionId -> physicalUserMessageId: string -> unit
+    val contains: sessionId: SessionId -> physicalUserMessageId: string -> bool
+    val forget: sessionId: SessionId -> unit

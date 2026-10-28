@@ -6,15 +6,15 @@ open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Delegation.Fork
+open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host.Domain
 open Wanxiangshu.Participant.ManagedAgents
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Persistence.Journal
-open Wanxiangshu.Repository.Programming.Js
 
-/// horizon(): who remains at the caller's horizon, as prose or as data.
+/// horizon(): who stands at the caller's horizon, as prose or as data.
 /// Host-neutral; a host reaches it through `DelegationEnvironment`.
 module HorizonRoster =
 
@@ -28,6 +28,12 @@ module HorizonRoster =
 
         [<Literal>]
         let StillAway = "tool/horizon/still-away"
+
+        [<Literal>]
+        let Stalled = "tool/horizon/stalled"
+
+        [<Literal>]
+        let Idle = "tool/horizon/idle"
 
         [<Literal>]
         let DidNotReturn = "tool/horizon/did-not-return"
@@ -53,39 +59,47 @@ module HorizonRoster =
         [<Literal>]
         let CannotBeSeen = "tool/horizon/cannot-be-seen"
 
-        [<Literal>]
-        let LatestWork = "tool/horizon/latest-work"
+    [<RequireQualifiedAccess>]
+    type Standing =
+        | StillAway
+        | Stalled
+        | Returned
+        | DidNotReturn
+        | Voided
+        | Idle
 
-        [<Literal>]
-        let NoWorkYet = "tool/horizon/no-work-yet"
+    type Pace =
+        { TurnsUsed: int
+          TurnsLeft: int
+          TimeUsedMs: float
+          TimeLeftMs: float }
 
-        [<Literal>]
-        let LatestWorkUnavailable = "tool/horizon/latest-work-unavailable"
+    type Presence =
+        { Label: string
+          Standing: Standing
+          Pace: Pace option }
 
-        [<Literal>]
-        let Calibration = "tool/horizon/calibration"
-
-    /// One participant on the roster, as data.
-    type RosterAgent =
-        {
-            Label: string
-            /// returned | still-away | did-not-return | voided
-            Status: string
-            Target: string
-            /// latest | none
-            Work: string
-            LatestRecord: string
-            TurnsUsed: int
-            TurnsLeft: int
-            TimeUsedMs: float
-            TimeLeftMs: float
-        }
-
-    /// The roster as data: participants, then the open terminals' names
-    /// (empty when the runtime knows none).
     type Roster =
-        { Agents: RosterAgent list
+        { Participants: Presence list
           Terminals: string list }
+
+    let wireStatus standing =
+        match standing with
+        | Standing.StillAway -> "still-away"
+        | Standing.Stalled -> "stalled"
+        | Standing.Returned -> "returned"
+        | Standing.DidNotReturn -> "did-not-return"
+        | Standing.Voided -> "voided"
+        | Standing.Idle -> "idle"
+
+    let private prosePath standing =
+        match standing with
+        | Standing.StillAway -> Path.StillAway
+        | Standing.Stalled -> Path.Stalled
+        | Standing.Returned -> Path.Returned
+        | Standing.DidNotReturn -> Path.DidNotReturn
+        | Standing.Voided -> Path.Voided
+        | Standing.Idle -> Path.Idle
 
     /// The calling session's id text; empty when the host could not name it.
     let private callerText (host: DelegationEnvironment) =
@@ -93,10 +107,7 @@ module HorizonRoster =
         | Some session -> SessionId.value session
         | None -> ""
 
-    let private labeled language path label =
-        ProviderProse.render language path (Map [ "label", label ])
-
-    let private labelForHandle language (handle: HandleRecord) =
+    let private labelFor language (handle: HandleRecord) =
         if not (String.IsNullOrWhiteSpace handle.Byname) then
             handle.Byname.Trim()
         elif String.IsNullOrWhiteSpace handle.TargetAgent then
@@ -106,318 +117,115 @@ module HorizonRoster =
             |> Option.map (fun managed -> managed.Name)
             |> Option.defaultValue (handle.TargetAgent.Trim())
 
-    /// The one lifecycle→roster-status mapping the prose line and the data
-    /// envelope share, so the two horizons cannot disagree about a participant.
-    [<RequireQualifiedAccess>]
-    type private RosterStatus =
-        | Returned
-        | StillAway
-        | DidNotReturn
-        | Voided
+    /// The standing of one consequence join would hand over. Join's candidate
+    /// list holds only completions awaiting join and abandonments.
+    let private consequenceStanding (record: HandleRecord) =
+        match record.Lifecycle with
+        | HandleLifecycle.CompletedAwaitingJoin _ -> Some Standing.Returned
+        | HandleLifecycle.Abandoned HandleAbandonReason.Voided -> Some Standing.Voided
+        | HandleLifecycle.Abandoned _ -> Some Standing.DidNotReturn
+        | HandleLifecycle.Active
+        | HandleLifecycle.Retired -> None
 
-    let private prosePath status =
-        match status with
-        | RosterStatus.Returned -> Path.Returned
-        | RosterStatus.StillAway -> Path.StillAway
-        | RosterStatus.DidNotReturn -> Path.DidNotReturn
-        | RosterStatus.Voided -> Path.Voided
+    /// The fixed DevOps binding at rest: runtime-bound, never forked, with no
+    /// charge of its own. It stays in sight so the caller knows it can resume it.
+    let private isFixedDevOpsBinding (record: HandleRecord) =
+        record.Work.IsNone
+        && record.CanonicalRole = Role.DevOps
+        && record.Byname = "devops"
+        && record.TargetAgent = "devops"
+        && record.Lifecycle = HandleLifecycle.Active
+        && record.Ownership = HandleOwnership.DurableParentHandle
 
-    let private wireStatus status =
-        match status with
-        | RosterStatus.Returned -> "returned"
-        | RosterStatus.StillAway -> "still-away"
-        | RosterStatus.DidNotReturn -> "did-not-return"
-        | RosterStatus.Voided -> "voided"
-
-    let private activeStatus (runtimeRecord: AgentRecord option) : RosterStatus =
-        match runtimeRecord with
-        | Some record when record.CompletionCellSettled -> RosterStatus.Returned
-        | _ -> RosterStatus.StillAway
-
-    let private statusForHandle (runtimeRecord: AgentRecord option) (handle: HandleRecord) =
-        match handle.Lifecycle with
-        | HandleLifecycle.CompletedAwaitingJoin _ -> RosterStatus.Returned
-        | HandleLifecycle.Active -> activeStatus runtimeRecord
-        | HandleLifecycle.Abandoned HandleAbandonReason.Voided -> RosterStatus.Voided
-        | HandleLifecycle.Abandoned _
-        | HandleLifecycle.Retired -> RosterStatus.DidNotReturn
-
-    let private lineForHandle language (handle: HandleRecord) (runtimeRecord: AgentRecord option) : string =
-        labeled language (prosePath (statusForHandle runtimeRecord handle)) (labelForHandle language handle)
-
-    /// Latest delivered view for one participant. Horizon reads the delivered
-    /// view as it stands and does not advance the returned cursor.
-    let private deliveredView (journal: AgentJournal) (handle: HandleRecord) : string option =
-        let sessionId = SessionId.value handle.ChildSessionId
-
-        JsDeliveredValues.peekFence sessionId
-        |> Option.bind (fun fence ->
-            TaskDeliveryJournal.tryFindByFenceFields
-                journal
-                handle.ChildSessionId
-                fence.ProviderRun
-                (Some fence.ToolCallId)
-                None
-                None
-                None
-                None)
-        |> Option.map (fun witness -> witness.View)
-        |> Option.orElseWith (fun () -> JsDeliveredValues.tryPeekMaterial sessionId)
-
-    let private latestViewForHandle
-        language
-        (journal: AgentJournal)
-        (_snapshot: ProjectionSet)
-        (handle: HandleRecord)
-        : Task<string> =
-        let label = labelForHandle language handle
-
-        match deliveredView journal handle with
-        | None -> Task.FromResult(labeled language Path.NoWorkYet label)
-        | Some material ->
-            let text = ReturnedMaterial.fullText material
-            Task.FromResult(ProviderProse.render language Path.LatestWork (Map [ "label", label; "record", text ]))
-
-    let private viewData
-        (journal: AgentJournal)
-        (_snapshot: ProjectionSet)
-        (handle: HandleRecord)
-        : Task<string * string> =
-        match deliveredView journal handle with
-        | None -> Task.FromResult("none", "")
-        | Some material -> Task.FromResult("latest", ReturnedMaterial.fullText material)
-
-    /// The terminal name a pty is known by, when the runtime snapshot carries
-    /// one. The prose line names a generic terminal when it does not; the data
-    /// envelope stays empty rather than inventing a name.
-    let private tryTerminalLabel (record: PtyRecord) =
-        if String.IsNullOrWhiteSpace record.Command then
-            None
-        else
-            Some(record.Command.Trim())
-
-    let private lineForPty language (record: PtyRecord) : string =
-        let label =
-            match tryTerminalLabel record with
-            | Some label -> label
-            | None -> ProviderProse.render language Path.TerminalLabel Map.empty
-
-        labeled language Path.RemainsOpen label
-
-    let private unavailable language path =
-        [ ProviderProse.render language path Map.empty ]
-
-    /// The four calibration numbers for one participant, when both the
-    /// delegator's estimate and the participant's own start are known: turns
-    /// spent and left, and the wall-clock spent beside the time that remains at
-    /// the pace this participant has shown. Absent (never guessed) otherwise.
-    let private calibrationNumbers
-        (now: DateTimeOffset)
-        (journal: AgentJournal)
-        (handle: HandleRecord)
-        : (int * int * float * float) option =
-        let estimateState =
+    /// The four numbers of a running charge, when both the delegator's
+    /// estimate and the child's own start are known. Absent, never guessed.
+    let private paceOf (now: DateTimeOffset) (journal: AgentJournal) (handle: HandleRecord) : Pace option =
+        let estimate =
             AgentJournalPortAdapter.forDelegatedToolEstimate journal
             |> fun port -> DelegatedToolEstimateLedger.tryState port handle.ChildSessionId
 
         let startedAt =
             (AgentJournalPortAdapter.forSessionStartedAt journal).TryStartedAt handle.ChildSessionId
 
-        match estimateState, startedAt with
+        match estimate, startedAt with
         | Some state, Some bound ->
             let turnsUsed = DelegatedToolEstimateProjection.countedCallCount state
             let turnsLeft = DelegatedToolEstimateProjection.remaining state
             let timeUsedMs = (now - bound).TotalMilliseconds
-            Some(turnsUsed, turnsLeft, timeUsedMs, timeUsedMs * float turnsLeft / float (max 1 turnsUsed))
-        | _ -> None
 
-    let private calibrationLine
-        language
-        (now: DateTimeOffset)
-        (journal: AgentJournal)
-        (handle: HandleRecord)
-        : string option =
-        calibrationNumbers now journal handle
-        |> Option.map (fun (turnsUsed, turnsLeft, timeUsedMs, _) ->
-            HorizonCalibration.render
-                (ProviderLanguage.externalName language)
-                (labelForHandle language handle)
-                turnsUsed
-                turnsLeft
-                timeUsedMs)
-
-    /// The handles a horizon presents, in order: horizon-visible, established by
-    /// this process, and carrying the agent identity its caller knows it by.
-    /// Pty handles carry none and are listed from the runtime's pty table.
-    let private rosterEntries (runtime: HostForkRuntime) (handles: AgentLinkageProjection) =
-        HandleProjection.horizonVisible handles
-        |> List.filter (HostForkJoin.currentProcessHandle runtime)
-        |> List.choose (fun handle ->
-            HandleId.tryAgent handle.Handle
-            |> Option.map (fun handleId -> AgentHandleId.value handleId, handle))
-
-    let private appendHandleLines
-        language
-        journal
-        snapshot
-        (now: DateTimeOffset)
-        runtimeByAgentId
-        (agentLines: ResizeArray<string>)
-        (agentId: string)
-        (handle: HandleRecord)
-        : Task<unit> =
-        task {
-            agentLines.Add(lineForHandle language handle (Map.tryFind agentId runtimeByAgentId))
-
-            let! viewLine = latestViewForHandle language journal snapshot handle
-            agentLines.Add viewLine
-
-            calibrationLine language now journal handle |> Option.iter agentLines.Add
-        }
-
-    let private rosterInstructions language (lines: string list) =
-        if List.isEmpty lines then
-            ProviderProse.instructionLines language Path.EmptyRoster Map.empty
-        else
-            lines
-
-    let private appendHandleLinesForRoster
-        language
-        journal
-        snapshot
-        runtimeByAgentId
-        (runtime: HostForkRuntime)
-        agentLines
-        handles
-        =
-        let now = runtime.Now()
-
-        task {
-            for agentId, handle in rosterEntries runtime handles do
-                do! appendHandleLines language journal snapshot now runtimeByAgentId agentLines agentId handle
-        }
-
-    let private executeWithJournal language (host: DelegationEnvironment) (journal: AgentJournal) =
-        task {
-            let parentSessionId = SessionId.create (callerText host) |> host.LogicalOwnerFor
-
-            do! host.EnsureWorkDevOpsBound parentSessionId
-
-            match host.ForkRuntime() with
-            | Error _ -> return unavailable language Path.CannotBeSeen
-            | Ok runtime ->
-                let agents, ptys = runtime.List()
-                let snapshot = AgentJournal.snapshot journal
-
-                let durableHandles =
-                    AgentProjection.tryFind parentSessionId snapshot.AgentProjections
-                    |> Option.bind (fun session -> session.Handles)
-                    |> Option.defaultValue HandleProjection.empty
-
-                let runtimeByAgentId =
-                    agents |> List.map (fun record -> record.AgentId, record) |> Map.ofList
-
-                // DSL-MUTABLE: algorithm-scratch — agent line accumulator
-                let agentLines = ResizeArray<string>()
-
-                do!
-                    appendHandleLinesForRoster
-                        language
-                        journal
-                        snapshot
-                        runtimeByAgentId
-                        runtime
-                        agentLines
-                        durableHandles
-
-                let agentLines = agentLines |> Seq.toList
-
-                let ptyLines =
-                    ptys
-                    |> List.sortBy (fun record -> record.PtyId)
-                    |> List.map (lineForPty language)
-
-                let lines = List.append agentLines ptyLines
-                return rosterInstructions language lines
-        }
-
-    let instructions (host: DelegationEnvironment) : Task<string list> =
-        task {
-            let language = ProviderLanguageBinding.forSessionText (callerText host)
-
-            match host.Journal with
-            | None -> return unavailable language Path.UnavailableFromContext
-            | Some journal -> return! executeWithJournal language host journal
-        }
-
-    let private agentRow
-        (language: ProviderLanguage)
-        (journal: AgentJournal)
-        (snapshot: ProjectionSet)
-        (now: DateTimeOffset)
-        (runtimeByAgentId: Map<string, AgentRecord>)
-        (agentId: string)
-        (handle: HandleRecord)
-        : Task<RosterAgent> =
-        task {
-            let! workState, recordText = viewData journal snapshot handle
-
-            let turnsUsed, turnsLeft, timeUsedMs, timeLeftMs =
-                calibrationNumbers now journal handle |> Option.defaultValue (0, 0, 0.0, 0.0)
-
-            return
-                { Label = labelForHandle language handle
-                  Status = wireStatus (statusForHandle (Map.tryFind agentId runtimeByAgentId) handle)
-                  Target = handle.TargetAgent
-                  Work = workState
-                  LatestRecord = recordText
-                  TurnsUsed = turnsUsed
+            Some
+                { TurnsUsed = turnsUsed
                   TurnsLeft = turnsLeft
                   TimeUsedMs = timeUsedMs
-                  TimeLeftMs = timeLeftMs }
-        }
+                  TimeLeftMs = timeUsedMs * float turnsLeft / float (max 1 turnsUsed) }
+        | _ -> None
 
-    /// The same roster as data for `this.horizon()`: the participants this process
-    /// still has at the caller's horizon, each with the status the prose line
-    /// reports, its latest record body, and the four calibration numbers, plus
-    /// the terminals still open. It states data only — no provider prose is
-    /// rendered here. A horizon the caller cannot be shown is refused as data.
-    let private rosterRows
+    /// One row before rendering: the handle it belongs to (for ordering), and
+    /// the presence it states.
+    type private Row =
+        { Order: int
+          Handle: HandleId
+          Presence: Presence }
+
+    /// The roster rows of one parent, in creation order, read through the cut
+    /// join uses (`HostForkJoin.currentProcessHandle` and
+    /// `JoinDrain.orderedCandidates`).
+    let private rowsOf
         (language: ProviderLanguage)
         (journal: AgentJournal)
         (runtime: HostForkRuntime)
-        (parentSessionId: SessionId)
-        : Task<Roster> =
-        task {
-            let agents, ptys = runtime.List()
-            let snapshot = AgentJournal.snapshot journal
+        (handles: AgentLinkageProjection)
+        : Row list =
+        let visible = HostForkJoin.currentProcessHandle runtime
+        let now = runtime.Now()
 
-            let durableHandles =
-                AgentProjection.tryFind parentSessionId snapshot.AgentProjections
-                |> Option.bind (fun session -> session.Handles)
-                |> Option.defaultValue HandleProjection.empty
+        let row (record: HandleRecord) standing pace =
+            { Order = record.CreationOrder
+              Handle = record.Handle
+              Presence =
+                { Label = labelFor language record
+                  Standing = standing
+                  Pace = pace } }
 
-            let runtimeByAgentId =
-                agents |> List.map (fun record -> record.AgentId, record) |> Map.ofList
+        let consequences =
+            JoinDrain.orderedCandidates handles
+            |> List.filter visible
+            |> List.choose (fun record -> consequenceStanding record |> Option.map (fun s -> row record s None))
+            |> List.distinctBy (fun r -> r.Handle, r.Presence.Standing)
 
-            let now = runtime.Now()
+        let charges =
+            HandleProjection.activeHandles handles
+            |> List.filter visible
+            |> List.map (fun record ->
+                if HostForkJoin.hasPendingRun runtime record.Handle then
+                    row record Standing.StillAway (paceOf now journal record)
+                else
+                    row record Standing.Stalled None)
 
-            // DSL-MUTABLE: algorithm-scratch — agent row accumulator
-            let agentRows = ResizeArray<RosterAgent>()
+        let seen = (consequences @ charges) |> List.map (fun r -> r.Handle) |> Set.ofList
 
-            for agentId, handle in rosterEntries runtime durableHandles do
-                let! row = agentRow language journal snapshot now runtimeByAgentId agentId handle
-                agentRows.Add row
+        let idle =
+            handles.Handles
+            |> Map.toList
+            |> List.map snd
+            |> List.filter (fun binding ->
+                isFixedDevOpsBinding binding
+                && visible binding
+                && not (Set.contains binding.Handle seen))
+            |> List.map (fun binding -> row binding Standing.Idle None)
 
-            let ptyRows =
-                ptys
-                |> List.sortBy (fun record -> record.PtyId)
-                |> List.map (fun record -> tryTerminalLabel record |> Option.defaultValue "")
+        // A participant's consequences come before its running charge: the
+        // caller reads what already arrived first.
+        (consequences @ charges @ idle)
+        |> List.mapi (fun index r -> index, r)
+        |> List.sortBy (fun (index, r) -> r.Order, index)
+        |> List.map snd
 
-            return
-                { Agents = agentRows |> Seq.toList
-                  Terminals = ptyRows }
-        }
+    let private terminalName (record: PtyRecord) =
+        if String.IsNullOrWhiteSpace record.Command then
+            None
+        else
+            Some(record.Command.Trim())
 
     let private rosterWithJournal
         (language: ProviderLanguage)
@@ -432,16 +240,79 @@ module HorizonRoster =
             match host.ForkRuntime() with
             | Error _ -> return None
             | Ok runtime ->
-                let! roster = rosterRows language journal runtime parentSessionId
-                return Some roster
+                let _, ptys = runtime.List()
+
+                let handles =
+                    (AgentJournal.snapshot journal).AgentProjections
+                    |> AgentProjection.tryFind parentSessionId
+                    |> Option.bind (fun session -> session.Handles)
+                    |> Option.defaultValue HandleProjection.empty
+
+                return
+                    Some
+                        { Participants = rowsOf language journal runtime handles |> List.map (fun r -> r.Presence)
+                          Terminals =
+                            ptys
+                            |> List.sortBy (fun record -> record.PtyId)
+                            |> List.map (fun record -> terminalName record |> Option.defaultValue "") }
         }
 
     let roster (language: ProviderLanguage) (host: DelegationEnvironment) : Task<Roster option> =
-        task {
-            match host.Journal with
-            | None -> return None
-            | Some journal -> return! rosterWithJournal language host journal
-        }
+        match host.Journal with
+        | None -> Task.FromResult None
+        | Some journal -> rosterWithJournal language host journal
+
+    let private labeled language path label =
+        ProviderProse.render language path (Map [ "label", label ])
+
+    let private presenceLines language (presence: Presence) =
+        let standing = labeled language (prosePath presence.Standing) presence.Label
+
+        match presence.Pace with
+        | None -> [ standing ]
+        | Some pace ->
+            [ standing
+              HorizonCalibration.render
+                  (ProviderLanguage.externalName language)
+                  presence.Label
+                  pace.TurnsUsed
+                  pace.TurnsLeft
+                  pace.TimeUsedMs ]
+
+    let private terminalLine language (name: string) =
+        let label =
+            if String.IsNullOrWhiteSpace name then
+                ProviderProse.render language Path.TerminalLabel Map.empty
+            else
+                name
+
+        labeled language Path.RemainsOpen label
+
+    let private rosterLines language (roster: Roster) =
+        let lines =
+            (roster.Participants |> List.collect (presenceLines language))
+            @ (roster.Terminals |> List.map (terminalLine language))
+
+        if List.isEmpty lines then
+            ProviderProse.instructionLines language Path.EmptyRoster Map.empty
+        else
+            lines
+
+    let private seenLines language (roster: Roster option) =
+        roster
+        |> Option.map (rosterLines language)
+        |> Option.defaultWith (fun () -> [ ProviderProse.render language Path.CannotBeSeen Map.empty ])
+
+    let instructions (host: DelegationEnvironment) : Task<string list> =
+        let language = ProviderLanguageBinding.forSessionText (callerText host)
+
+        match host.Journal with
+        | None -> Task.FromResult [ ProviderProse.render language Path.UnavailableFromContext Map.empty ]
+        | Some journal ->
+            task {
+                let! roster = rosterWithJournal language host journal
+                return seenLines language roster
+            }
 
     let permits (role: Role) =
         OfficeCapability.isAllowed role ToolPermission.Horizon

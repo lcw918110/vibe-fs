@@ -5,28 +5,26 @@ import path from 'node:path'
 import test from 'node:test'
 
 {
-const { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import('node:fs')
+const { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync } = await import('node:fs')
 const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const { assertBuildFresh, collectOutputs, readManifest, writeManifest, MANIFEST_SCHEMA, collectCompilerInputs, collectArtifactInputs, computeDigest } = await import('../../../scripts/lib/build-state.mjs')
 const { resetOutputDirectory } = await import('../../../scripts/lib/owner-compile.mjs')
 const { runBuild, checkOutputsValid, determineBuildDecision, stagedBackupDirFor, stageDistForFullRebuild, restoreStagedDist, recoverStaleStagedDist } = await import('../../../scripts/build.mjs')
-const { execFileSync } = await import('node:child_process')
+const { toolchain } = await import('../../../scripts/compiler/toolchain.mjs')
+const { referenceKey } = await import('../../../scripts/compiler/references.mjs')
 
-const toolchainIdentity = () => {
-  let dotnetVer = 'unknown'
-  let fableVer = 'unknown'
-  try {
-    dotnetVer = execFileSync('dotnet', ['--version'], { encoding: 'utf8' }).trim()
-  } catch {}
-  try {
-    fableVer = execFileSync('dotnet', ['tool', 'run', 'fable', '--version'], { encoding: 'utf8' }).trim()
-  } catch {}
-  return `dotnet ${dotnetVer} / fable ${fableVer}`
+const toolchainIdentity = root => {
+  const identity = toolchain(root)
+  return `resident ${identity.sdk} / ${identity.key} / ${referenceKey([])}`
 }
 
 const writeOrphanScenario = (root) => {
   spawnSync('git', ['-C', root, 'init'])
+  mkdirSync(join(root, '.config'), { recursive: true })
+  for (const name of ['.config/dotnet-tools.json', 'global.json', 'package-lock.json']) {
+    copyFileSync(new URL('../../../' + name, import.meta.url), join(root, name))
+  }
   mkdirSync(join(root, 'src', 'Wanxiangshu'), { recursive: true })
   const distDir = join(root, 'dist')
   const orphan = join(distDir, 'Orphan', 'Legacy.js')
@@ -81,7 +79,7 @@ test('WHAT[distribution-005] no-op mode preserves manifest and generation', asyn
         generation: 7,
         compiler: {
           configuration: 'Debug',
-          toolIdentity: toolchainIdentity(),
+          toolIdentity: toolchainIdentity(root),
           inputDigest: computeDigest(compilerInputs),
           inputs: compilerInputs,
         },
@@ -262,7 +260,7 @@ test('WHAT[distribution-005] full rebuild staged swap clears orphans, restores p
         schema: MANIFEST_SCHEMA,
         generation: 1,
         compiler: {
-          toolIdentity: toolchainIdentity(),
+          toolIdentity: toolchainIdentity(root),
           inputDigest: computeDigest(compilerInputs),
           inputs: compilerInputs,
         },
@@ -393,7 +391,7 @@ test('WHAT[distribution-005] focused rebuild without compiler changes keeps dist
     const manifest = {
       schema: MANIFEST_SCHEMA,
       generation: 1,
-      compiler: { toolIdentity: toolchainIdentity(), inputDigest: 'recorded', inputs: [] },
+      compiler: { toolIdentity: toolchainIdentity(root), inputDigest: 'recorded', inputs: [] },
       generated: { inputDigest: 'recorded' },
       artifacts: { inputDigest: 'recorded' },
       outputs: collectOutputs(join(root, 'dist')),

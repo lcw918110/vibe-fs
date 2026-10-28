@@ -108,7 +108,8 @@ module OrdinaryTurnWorkflow =
 
     /// Roles that stop naturally deliver their outcome in prose and session views, so
     /// their completed turn is an ordinary terminal without requiring an explicit delivery
-    /// witness or nudging unfinished work (an empty answer still fails through AgentRunResult.IsValid).
+    /// witness or nudging unfinished work. An empty `stop` never reaches this: it is
+    /// TurnNeedsContinuation and earns the missing-final-report nudge (WHAT[interaction-authority-024]).
     let private deliversByProse (turn: ReconciledTurn) : bool =
         turn.Role = Some Role.Advisor
         || turn.Role = Some Role.Engineer
@@ -174,7 +175,7 @@ module OrdinaryTurnWorkflow =
                 && (turn.Finish |> Option.exists (fun finish ->
                     System.String.Equals(finish, "stop", System.StringComparison.OrdinalIgnoreCase)))
                 && System.String.IsNullOrWhiteSpace(CompletedTurnClassifier.partsText turn.Parts)
-                && not (CompletedTurnClassifier.hasToolCallPart turn.Parts)
+                && not (CompletedTurnClassifier.hasRealToolCall turn.Parts)
 
             if emptyStopped then
                 return Ordinary

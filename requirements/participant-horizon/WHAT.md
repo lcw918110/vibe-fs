@@ -50,15 +50,24 @@ Manager 的 system prompt、continuation、Schema、错误、工具描述及结�
 - `horizon()` 仅返回在场名册的 Byname 或 TerminalName，不暴露底层 id。
 - Bookkeeper 等内部角色以及已退役或非法的历史角色名（如 blogger、predictor、coder、inspector、browser、inquiry、distiller）严禁出现在可 fork 集合中。
 
-## [011] `horizon()` 是 pull-only snapshot
+## [011] `horizon()` 是与 join 同账的 pull-only snapshot
 
-`horizon()` 只在调用时读取当前快照，不轮询、推送或订阅。可见子智能体须提供最新已交付的 TOML 视图记录（不存在三段式 `WorkRecord`）；不可读时说明，不以旧记录代替。
+`horizon()` 只在调用时读取当前快照，不轮询、推送或订阅。名册只从 durable handle 投影读取，并经过与 join 相同的进程归属切分（`HostForkJoin.currentProcessHandle`）与同一份候选清单（`JoinDrain.orderedCandidates`），因此两者不得不一致：
 
-已 durable 建立的可见 child，在最终后果交付前不得消失。`Abandoned` 仍按 Byname 显示“未返回”，直至 Join 消费后果并将 handle 置为 `Retired`；仅 `Retired` 可移出名册。已作废（`voided`）的 child 同样在最终后果被报告前保持可见：作废结清父方的未解除义务，但它不是"什么都没发生"，名册在 Join 报告这一次 `voided` 后果之后才把该 handle 置为 `Retired` 并移出。
+- `returned`：有一份完成正等 join 收取；`did-not-return`：有一次放弃（取消、超时、宿主会话消失）等 join 报告；`voided`：有一次作废等 join 报告——作废结清父方义务但不是完成。三者恰是下一次 join 会交出的后果，join 交出后即不再出现。
+- `still-away`：本进程正在为它跑一项任务，join 会等它。
+- `stalled`：durable 上仍有未结清的任务，但本进程没有在跑它，join 不会等它；提示 resume。
+- `idle`：运行时绑定的固定 DevOps 在场待命，手上没有任务、也没有待报后果。
 
-名册中的每个子智能体，在其委任者 estimate 与自身会话起点两者都可读时另附四个数：已用/预计还剩的工具调用回合数，与已用/按它已显示出的节奏按比例估计还剩的 wall-clock 时间（剩余时间 = 已用回合的平均代价 × 剩余回合数，已用为 0 时以 1 计）。缺任一来源即不呈现这四个数，不以旧值或猜测顶替。
+状态不得取自进程内运行记录（例如已结算的完成格），因为 join 已收走或从未落账的东西不能被说成「已归来」。同一参与者可同时有多行（例如一条待报的作废与一项新的在跑任务）。
 
-同一份在场名册也以 `js.horizon()` 的数据信封（`agents`/`ptys`）取得，成员与四数遵循同一可见性规则。
+已 durable 建立的可见 child，在最终后果交付前不得消失；`Abandoned`/作废在 Join 报告并置为 `Retired` 之前一直显示；仅已交付的后果可移出名册。
+
+名册不复述报告正文：`returned` 的正文由 join 交付，在跑任务没有已交付的正文，已被 join 交付过的正文对调用方已知（[001]、[004]）。
+
+`still-away` 行在委任者 estimate 与自身会话起点两者都可读时另附四个数：已用/预计还剩的工具调用回合数，与已用/按它已显示出的节奏按比例估计还剩的 wall-clock 时间（剩余时间 = 已用回合的平均代价 × 剩余回合数，已用为 0 时以 1 计）。缺任一来源即不呈现这四个数，不以 0、旧值或猜测顶替。
+
+同一份名册也以 `js.horizon()` 的数据信封取得：`{ ok, agents: [{ label, status, pace? }], ptys: [{ terminal }] }`，成员、状态与四数遵循同一规则。
 
 ## [012] warm-start hints 只向有 repository 证据 authority 的角色准入
 

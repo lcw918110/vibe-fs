@@ -22,3 +22,5 @@ module Roles =
     val tryParseRole: string -> Role option
     val tryParseHistoricalRole: string -> Role option
     val isInternal: Role -> bool
+    /// Manager, Orchestrator and Plan own long work: a natural stop is never their end.
+    val isLongRunning: Role -> bool

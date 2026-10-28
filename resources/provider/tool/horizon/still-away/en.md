@@ -1,1 +1,1 @@
-{{label}} is still away.
+{{label}} is still away; join waits for its return.

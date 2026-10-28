@@ -147,9 +147,9 @@ module JsToolsBindings =
             | Some delegation -> box (delegation.Fission payload)
             | None -> box (task { return failureObj JsFailure.DelegationUnavailable })
 
-    /// `horizon()` returns the horizon roster as a data envelope (who is
-    /// still away, each participant's status/workState/record and the four
-    /// calibration numbers). Without an installed delegation host the member
+    /// `horizon()` returns the horizon roster as a data envelope (each
+    /// participant's Byname and status, and the pace of a running charge when
+    /// known). Without an installed delegation host the member
     /// refuses with DELEGATION_UNAVAILABLE instead of pretending.
     let makeHorizonMember (host: JsDelegationHost option) : (string * obj) =
         "horizon"

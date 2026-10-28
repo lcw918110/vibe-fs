@@ -1,0 +1,48 @@
+常驻 .NET Fable checker 接入
+
+范围：独立主仓和 wanxiangli 副本的 codex/checker-resident-20261027 分支。
+原仓和运行版本不动。主仓保持 .NET Fable，库保持 JS Fable。
+
+1. [完成] 主仓入口接入：工作树内串行、独立命令复用、公开 ClearCache、失败回收。
+2. [完成] 七项真实编译回归：源内容、顺序、选项、包暂存目录、引用 DLL、
+   工具链失效、并发首次启动、异常退出、轮换和工作树隔离。
+   与最新延迟模块联合复测 51 项通过；构建夹具及 FCS 引用检查已适配。
+3. [完成] 两仓基于当前 upstream：主仓 ca325944a，库 1416a9b。
+   保留新增 PackageExport 行为及已移除模块的产物清理。
+4. [完成] 主仓 753 / 库 49 个 JS 产物与最新 upstream 字节相同。
+   全量复测 36.293 → 30.229 秒；三轮小改动中位数 7.045 → 5.662 秒。
+   完整单元诊断尝试全部 788 文件，783 结束，5 挂起。
+   除已修复的 FCS 引用检查外，失败标题和 5 个挂起均在 upstream 复现。
+   完整套件没有全绿；原格式、静态、业务、打包和测试工具问题详见 RESULTS.txt。
+   用户已明确只修本次引入的问题，不扩大到既有业务失败。
+5. [完成] 两仓正式分支已推送，并创建关联 PR；先合库，再合主仓。
+   库：https://github.com/PamelaSprin47685ghall/wanxiangli/pull/5
+   主仓：https://github.com/PamelaSprin47685ghall/vibe-fs/pull/66
+   本工作树的测试服务已停止。原仓未改动，没有合并或部署。
+   原始库实验保留在本地 codex/checker-resident-evidence-20261027。
+
+首次启动仍初始化；每次检查前和完成后清项目缓存。
+限制 checker 数量、进程请求数和构建后内存，并在空闲时退出。
+每条 Node 构建命令重新读取构建脚本和输入，不常驻整个构建规划流程。
+
+2026-10-28 后续：保留十分钟，取消状态查询续期。
+[完成] 两仓本地编译间隔、真实复用与内存记录；轮询退出、跨重启统计、
+失败、并发、历史上限及不可写记录隔离已验证。原 PR 已合并，改走后续 PR。
+[完成] 按用户后续要求修复 upstream 增量漏选：补齐 ToolResultText、
+HostJoinAttemptFactory 的工程引用，收窄旧反向依赖。独立 CLI 的三个闭包
+与全量一致；正常入口单模块、多模块修改的全部 753 个 JS 与全量一致。
+实验改动已还原，无改动构建不重写产物或使用记录；详情见 RESULTS.txt。
+[完成] 后续 PR 已提交与关联，仍在同名分支；先合库，再合主仓。
+库：https://github.com/PamelaSprin47685ghall/wanxiangli/pull/6
+主仓：https://github.com/PamelaSprin47685ghall/vibe-fs/pull/67
+原仓和运行版本未动；本轮测试服务已停止。
+
+[完成] CI / review 复查：同步主仓 38867da64、库 359a1ec，解开子模块冲突；
+主仓 11 项、库 21 项相关回归通过。107 项格式失败与 upstream 相同，单列。
+
+[完成] 可选并行构建：主仓 --parallel / --jobs 入口转交独立库模块。
+实施计划见 wanxiangli/scripts/PARALLEL-PLAN.txt；主项目 F# 保持一次完整闭包编译。
+主仓 13 项相关回归无跳过通过；真实入口的两种并行度、产物一致和无改动已验证。
+库：https://github.com/PamelaSprin47685ghall/wanxiangli/pull/7
+主仓：https://github.com/PamelaSprin47685ghall/vibe-fs/pull/69
+两工作目录测试服务已停止；原仓和运行版本未动，无合并或部署。

@@ -16,6 +16,10 @@ module ProviderWireCapture =
     val wireMessageView: captured: CapturedWireMessage list -> ProviderWireProjection
     val lastUserMessageId: rawMessages: obj list -> PhysicalUserMessageId option
 
+    /// managed-chat-execution-017: the Host's own post-compaction continuation
+    /// of this request's trailing user row.
+    val isHostCompactionContinuation: rawMessages: obj list -> physicalUserMessageId: PhysicalUserMessageId -> bool
+
     val trySemanticTurnOfHostMessageId: messageId: string -> rawMessages: obj list -> int option
     val lastUserPromptKey: rawMessages: obj list -> PromptKey option
     val formalText: rawObj: obj -> string

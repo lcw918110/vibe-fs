@@ -99,8 +99,10 @@ function ompHistory(toolCallId, successorId) {
 
 function assertCut(body, stored, original) {
   const rendered = textsOf(body)
-  assert.match(rendered, new RegExp(KEPT))
-  for (const hidden of [PRE, REASON, RESULT, STRAY, OTHER, SYNTH]) {
+  for (const shown of [PRE, RESULT, KEPT, STRAY]) {
+    assert.match(rendered, new RegExp(shown))
+  }
+  for (const hidden of [REASON, OTHER, SYNTH]) {
     assert.equal(rendered.includes(hidden), false, hidden)
   }
   assert.deepEqual(stored, original)
@@ -144,7 +146,7 @@ function prepare(prefix) {
   return { workspace, stateRoot }
 }
 
-test('provider barrier: OpenCode apply hides the triggering review and everything before it', async () => {
+test('provider barrier: OpenCode apply keeps user messages and the triggering review, hides the rest before it', async () => {
   const { workspace, stateRoot } = prepare('wxs-oc-barrier-')
   const workId = 'ses-opencode-barrier'
   const toolCallId = 'call-relay'
@@ -171,7 +173,7 @@ test('provider barrier: OpenCode apply hides the triggering review and everythin
     await applyRelay(null, false, async () => {}, null, surface.inspected(stateRoot, workId), out)
     assert.equal(out.messages, request)
     assertCut(out.messages, stored, original)
-    assert.deepEqual(out.messages.map((message) => message.id), ['kept'])
+    assert.deepEqual(out.messages.map((message) => message.id), ['before', 'call', 'result', 'kept', 'stray'])
     console.log('opencode barrier excludes pre-barrier')
     console.log('opencode stored originals unchanged')
   } finally {
@@ -179,7 +181,7 @@ test('provider barrier: OpenCode apply hides the triggering review and everythin
   }
 })
 
-test('provider barrier: registered OMP context hook hides the triggering review', async () => {
+test('provider barrier: registered OMP context hook keeps user messages and the triggering review', async () => {
   const { workspace, stateRoot } = prepare('wxs-omp-barrier-')
   const workId = 'ses-omp-barrier'
   const toolCallId = 'call-relay'
@@ -235,7 +237,8 @@ test('provider barrier: registered OMP context hook hides the triggering review'
     assert.ok(reply?.messages, 'the context hook must return the cut request')
     assert.notEqual(reply.messages, stored)
     assertCut(reply.messages, stored, original)
-    assert.equal(textsOf(reply.messages).includes(toolCallId), false)
+    // OMP appends its own scope reminder after the cut view; it has no Host id.
+    assert.deepEqual(reply.messages.map((message) => message.id).filter(Boolean), ['before', 'call', 'result', 'kept', 'stray'])
     console.log('omp context excludes pre-barrier')
     console.log('omp stored originals unchanged')
   } finally {

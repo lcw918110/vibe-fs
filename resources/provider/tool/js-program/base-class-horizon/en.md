@@ -1,4 +1,6 @@
   async horizon() {
-    // Returns { ok, agents, ptys }: the horizon roster as data — each participant's status (returned | still-away | did-not-return | voided; a voided one can no longer return, so it is settled rather than completed). It does not push and does not poll.
+    // Returns { ok, agents: [{ label, status, pace? }], ptys: [{ terminal }] }: the horizon roster as data, read from the same ledger join reads.
+    // status: still-away (running; join waits) | stalled (open charge, nothing running) | returned | did-not-return | voided (join hands these over) | idle (at hand, no charge).
+    // pace (only while running, when known): { turnsUsed, turnsLeft, timeUsedMs, timeLeftMs }. It does not push and does not poll.
     // Example: const atHorizon = await this.horizon();
   }

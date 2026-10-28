@@ -9,6 +9,12 @@ open Wanxiangshu.Foundation.Identity
 
 module JoinDrain =
 
+    /// The consequences one drain pass would deliver, in join order: every
+    /// reportable abandonment and every completion awaiting join. The horizon
+    /// roster reads this same list so it can never announce a return that join
+    /// would not hand over, nor hide one it would.
+    val orderedCandidates: projection: AgentLinkageProjection -> HandleRecord list
+
     val reconcileFalseAborts: durable: AgentJournalPort -> parentId: SessionId -> Task<Result<unit, ForkError>>
 
     val drainFromJournalWhere:

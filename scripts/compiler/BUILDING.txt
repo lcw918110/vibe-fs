@@ -1,0 +1,72 @@
+常驻 .NET Fable checker
+
+继续运行 npm run build。每条命令重新读取构建输入和影响范围，
+同一工作树的编译服务会自动启动并保留 checker。多个命令串行执行，
+不同工作树使用不同服务。agent 不需要手工启动或连接 checker。
+
+node scripts/build.mjs --checker-status 查询服务，不启动服务。
+node scripts/build.mjs --checker-stop 等待排队工作结束后停止服务。
+无改动构建保留已有产物；服务已经停止时，也不会为无改动构建重启。
+
+每次重新取得工程、文件清单、顺序和编译选项，并在解析前及完成后
+等待 FCS ClearCache。只保留初始化；不跨构建复用已检查的项目结果。
+Fable 生成阶段和并行检查继续使用安装的 .NET Fable 实现。
+没有改用 JS 编译器，也不执行 dotnet build。
+
+首次使用或工具链变化时，使用当前 SDK 的 F# 编译器生成一个小型适配程序。
+Fable 程序集复制到本工作树 .fable-build/compiler/tools，
+不修改安装目录。必须先按原项目要求恢复 .NET 工具和包依赖。
+
+服务核对构建适配代码、SDK 身份、Fable 文件内容、锁文件及引用 DLL 内容。
+源码、项目和选项在每次请求中重新读取；工具链或依赖变化会淘汰旧状态。
+暂存目录路径变化不会单独新建 checker；当前有序源码总是传给新的检查。
+此用法与 Fable 5.13.0 在工程源码改变后保留相同选项 checker 的方式一致：
+https://github.com/fable-compiler/Fable/blob/5.13.0/src/Fable.Cli/Main.fs
+
+默认最多保留 4 个配置的 checker。完成 32 次编译，或构建后进程 RSS
+达到 1536 MiB，会在返回结果前退出编译进程；下次编译重新初始化。
+服务空闲十分钟退出。以下正整数环境变量可调整限额：
+WXS_CHECKER_BUILD_LIMIT、WXS_CHECKER_MEMORY_MIB、WXS_CHECKER_IDLE_MS。
+阈值限制跨构建积累，不是单次编译的峰值内存硬上限。
+
+失败不提交构建清单，并恢复上次成功产物。编译失败、连接中断或工具链
+在构建中变化时，会返回失败并丢弃 worker；修复输入后重跑普通命令。
+结果不明的已连接请求不会自动重发。退出或强杀服务后可重新运行构建。
+旧版本和新版本的 builder 不应同时在同一工作树运行。
+
+实际测量与测试边界见 RESULTS.txt。当前实测平台为 macOS / Node 26.6.0。
+Windows 分支尚未实测；发布 PR 不代表已部署到运行版本。
+
+使用记录（2026-10-28）
+
+--checker-status 不延长空闲期限，不写使用记录。默认仍为十分钟。
+.fable-build/compiler/usage.json 记录真正发给 worker 的编译请求；
+状态查询和无改动构建不计入。只保存在本机，不上传，不进入 Git。
+intervalMs 是两次编译开始之间的间隔，idleMs 是上次完成到本次开始的间隔；
+时间戳使用 Unix 毫秒，durationMs 不包含 worker 初始化或整个 npm 构建流程。
+记录跨服务重启保留，便于观察超过十分钟的间隔。
+
+totals 保存累计次数，samples 保存最近 256 次编译。reuse.created 统计新建
+checker，reused / reusedAcrossBuilds 统计复用 checker 的编译请求次数；
+主仓每次影响范围编译发一个项目请求，计数单位与库逐模块检查不同。
+workerMemory.rss 和 managedHeapBytes 分别为返回时 RSS 与未经强制 GC 的
+托管堆估计；serviceMemory 是 Node 服务收尾时的内存。单位均为字节。
+这些是快照，不是峰值、空闲采样或 macOS footprint。
+
+失败也记录；服务强杀留下 pending，下次编译标为 unknown。
+没有收到复用报告时累计 missingReuseReports，不推测丢失数据。
+记录损坏或不可写时保留现有文件，在服务日志报告并停用本服务的记录，
+不改变编译结果。修复文件后重启服务可恢复；清空记录应先停止服务再删除文件。
+
+可选并行构建
+
+npm run build -- --parallel 将 wanxiangli 的失效模块交给 2 个编译进程。
+npm run build -- --jobs 4 可指定 1–4 个；不传参数仍为串行。
+主仓入口自动向源码库传参，不需要 agent 手工启动服务或拆分构建命令。
+选项不能与 --plan、--checker-status、--checker-stop 混用。
+
+并行只用于独立库模块。主项目仍按完整的影响范围闭包执行一次 .NET Fable 编译，
+保持 canonical order 和名称绑定。主仓和库的发布锁继续串行化多个 agent 的请求。
+库中只保留第一个 checker 常驻；额外进程构建结束即退出，十分钟空闲规则不变。
+少量改动可能因初始化额外进程而变慢，默认串行更合适；全量可选 --parallel。
+测量和具体回收边界见 wanxiangli/scripts/BUILDING.txt。

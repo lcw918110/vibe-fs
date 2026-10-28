@@ -3,10 +3,12 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+// 注意：closureKindForRoot 的 kind 参数须传 DU 单例（PromptRootAuthorityKind.AgentOwnerRoot 等）；裸字符串因缺 .tag 会错落分支。
 import test from 'node:test'
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.js'
 import * as lifeClassification from '../../../dist/Interaction/Authority/LifeClassification.js'
+import * as origin from '../../../dist/Interaction/Authority/Origin.js'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import { withJournal, withSharedJournal, acceptOwner, rootSelection as durableRootSelection } from './support/authority.mjs'
@@ -20,6 +22,18 @@ test('WHAT[interaction-authority-018] 闭合种类区分根身份与交付见证
   assert.equal(lifeClassification.expectedClosureKind('AgentOwnerRoot', false, 'Attached'), 'AgentOwnerAttachedWork')
   assert.throws(() => lifeClassification.rootKindOfKind('Unknown'))
 })
+
+test('WHAT[interaction-authority-018] closureKindForRoot is total over the root-kind DU', () => {
+  const K = origin.PromptRootAuthorityKind
+  assert.deepEqual(lifeClassification.closureKindForRoot(K.HumanRoot, true, undefined), ['HumanRootManagerLife', undefined])
+  assert.deepEqual(lifeClassification.closureKindForRoot(K.HumanRoot, false, undefined), ['HumanRootManagedRun', undefined])
+  assert.deepEqual(lifeClassification.closureKindForRoot(K.AgentOwnerRoot, false, 'Attached'), ['AgentOwnerAttachedWork', 'Attached'])
+  assert.deepEqual(lifeClassification.closureKindForRoot(K.AgentOwnerRoot, false, 'InternalLeaf'), ['AgentOwnerInternalLeaf', 'InternalLeaf'])
+  assert.deepEqual(lifeClassification.closureKindForRoot(K.AgentOwnerRoot, false, 'Child'), ['AgentOwnerChildWork', 'Child'])
+  // no proven life, and any unknown life label, fall to the documented coarse life
+  assert.deepEqual(lifeClassification.closureKindForRoot(K.AgentOwnerRoot, false, undefined), ['AgentOwnerChildWork', 'Child'])
+  assert.deepEqual(lifeClassification.closureKindForRoot(K.AgentOwnerRoot, false, 'bogus'), ['AgentOwnerChildWork', 'Child'])
+});
 
 const hash = (value) => `H(${value})`
 

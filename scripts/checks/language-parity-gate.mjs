@@ -30,7 +30,7 @@ export const LLM_FACING_SOURCES = Object.freeze([
   'src/Wanxiangshu/Resources/PromptSurface.fs',
   'src/Wanxiangshu/Resources/PromptResources.fs',
   'src/Wanxiangshu/OpenCode/Host/ManagedAgentConfig.fs',
-  'src/Wanxiangshu/Execution/Session/OpenCode/HorizonSurface.fs',
+  'src/Wanxiangshu/Execution/Session/HorizonRoster.fs',
   'src/Wanxiangshu/Mission/Obligation/Todo/OpenCode/MagicTodoHostSurface.fs',
 ])
 

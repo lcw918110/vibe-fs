@@ -80,6 +80,7 @@ Long Stroke 必须在同一 OpenCode 进程的单次生命周期内，验证以�
 ## [018] FCS 扫描禁令
 
 全仓禁止自建 FCS（`FSharp.Compiler.Service`）扫描，禁止为扫描取证额外启动或插桩编译器。
+实际构建的常驻适配器可在 `scripts/compiler/Checker.fs` 与 `toolchain.mjs` 使用编译器 API；这些文件同样不得增加扫描取证入口。
 
 ## [019] 测试行为
 

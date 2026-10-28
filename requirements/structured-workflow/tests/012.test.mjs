@@ -3024,6 +3024,10 @@ integrationTest('WHAT[structured-workflow-012] build failure preserves prior val
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'build-manifest-retention-integration-'));
   try {
     execFileSync('git', ['init', '--quiet', fixtureRoot]);
+    mkdirSync(join(fixtureRoot, '.config'), { recursive: true });
+    for (const name of ['.config/dotnet-tools.json', 'global.json', 'package-lock.json']) {
+      writeFileSync(join(fixtureRoot, name), readFileSync(join(ROOT, name)));
+    }
     const srcDir = join(fixtureRoot, 'src/Wanxiangshu');
     const distDir = join(fixtureRoot, 'dist');
     const buildStateDir = join(fixtureRoot, '.fable-build');
@@ -3101,6 +3105,8 @@ integrationTest('WHAT[structured-workflow-012] build failure preserves prior val
     assert.equal(manifestStatAfter.mtimeMs, manifestStatBefore.mtimeMs, 'manifest mtime must not be updated on failure');
     assert.deepEqual(readdirSync(distDir), distFilesBefore, 'dist file set must remain unchanged');
   } finally {
+    const { requestCompiler } = await import('../../../scripts/compiler/client.mjs');
+    await requestCompiler(fixtureRoot, { op: 'stop' });
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });

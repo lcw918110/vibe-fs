@@ -84,3 +84,8 @@ transform 在 provider 启动边界拒绝某个 exact execution 时（例如 att
 - 禁止以 session-wide release、计数减一、idle/time 猜测代替 exact settlement；禁止调用 provider；禁止终结同一 session 的其他 execution；原始拒绝异常仍按既有 hook 失败路径上报，不得被定夺吞没。
 - terminal 提交未知时保留显式未知，不释放；诊断不改变定夺。
 
+## [017] 宿主压缩后的续轮继承被压缩执行的受理
+
+宿主自动压缩上下文后自行写入的续轮（`metadata.compaction_continue` 的合成「Continue…」行，或紧随压缩摘要重放的用户行）不经过 `chat.message`，到达 provider 启动边界时没有 `Accepted` 记录。它不是新的权威：系统在该边界把它受理为被压缩执行的同 run 续轮——继承同一 `LogicalRunId`、Authority Root 与身份种子，origin 为续轮——并由普通续轮准入把该执行持有的 lease 交给它；被压缩的那一步按同 run 续轮常规被取代，不向父方发布终态。
+
+无可继承的活执行（会话不再持有 lease，或继承受理失败）时，不伪造执行，原始 `accepted-execution-missing` 拒绝照旧上抛；同时必须向等待该 run 的父方发布一次 `Failed` 终态（按该会话未终结执行的 Authority Root），不得让父方 join 静默空等。非压缩续轮的未受理行不适用本条。
