@@ -180,7 +180,10 @@ test('WHAT[dispatch-protocol-015] actual ingress cannot reinterpret a malformed 
   const { withExecutablePlugin } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
   const dispatch = await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
   await withExecutablePlugin(async (hooks, _directory, _children, runtime) => {
-    const output = (session, physical) => ({ message: { sessionID: session, id: physical, agent: 'engineer', role: 'user', model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] })
+    // The real Host fills the message model it selected (the configured declared
+    // value); the plugin reads it to select the committed lease and never writes back.
+    const output = (session, physical) => ({ message: { sessionID: session, id: physical, agent: 'engineer', role: 'user',
+      model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] })
     await hooks['chat.message']({ sessionID: 'valid-carrier-control', messageID: 'valid-physical', agent: 'engineer' }, output('valid-carrier-control', 'valid-physical'))
     assert.notEqual(dispatch.projectionObservation(runtime.journal, 'valid-carrier-control').activeLogicalRun, null)
     try {
@@ -205,7 +208,8 @@ test('WHAT[dispatch-protocol-015] malformed explicit agent cannot inherit identi
     assert.equal(sent.ok, true)
     try {
       await hooks['chat.message']({ sessionID: 'carrier-child', messageID: 'carrier-physical', agent: 7, metadata: { wanxiangshu_prompt_key: sent.key } }, {
-        message: { sessionID: 'carrier-child', id: 'carrier-physical', agent: 'engineer', role: 'user' }, parts: [],
+        message: { sessionID: 'carrier-child', id: 'carrier-physical', agent: 'engineer', role: 'user',
+          model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [],
       })
     } catch (error) {
       assert.match(String(error), /carrier|malformed|invalid|identity|prompt/i)

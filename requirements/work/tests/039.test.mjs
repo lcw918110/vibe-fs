@@ -220,7 +220,7 @@ test('WHAT[work-039] a definite refusal writes DeliveryRejected and does not sen
     const effects = host.reviewEffects({
       park: async () => ({ ok: true }),
       send: async () => ({ ok: true }),
-      open: async () => ({ ok: false, reason: 'host refused the manager session' }),
+      open: async () => ({ ok: false, reason: 'host refused the manager session', refused: true }),
       draft: async () => {
         drafts += 1
         return { ok: true }

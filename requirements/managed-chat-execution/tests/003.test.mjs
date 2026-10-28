@@ -11,24 +11,24 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     const outputs = Array.from({ length: 2 }, () => ({
       message: {
         id: input.messageID, sessionID: input.sessionID, role: 'user', agent: input.agent,
-        model: { providerID: 'host', modelID: 'placeholder' },
+        model: { providerID: 'fixture', modelID: 'engineer-model' },
       },
       parts: [],
     }))
     const admissions = await Promise.allSettled(outputs.map((output) => hooks['chat.message'](input, output)))
     assert.deepEqual(admissions.map((admission) => admission.status), ['fulfilled', 'fulfilled'])
     for (const output of outputs) {
-      // execution-model-routing-008: the host-selected model is the only truth;
-      // admission validates it against the committed lease and never rewrites it.
-      assert.deepEqual({ ...output.message.model }, { providerID: 'host', modelID: 'placeholder' })
+      assert.deepEqual({ ...output.message.model }, { providerID: 'fixture', modelID: 'engineer-model' },
+        'the plugin only verifies the host-provided model; it never writes a committed target back')
     }
     const capacity = routing.sharedCapacitySnapshot()
     assert.equal(capacity.executions.filter((execution) => execution.sessionId === input.sessionID).length, 1)
     assert.equal(capacity.tokens.filter((token) => token.owner.sessionId === input.sessionID).length, 1)
     const replay = { message: { id: input.messageID, sessionID: input.sessionID, role: 'user', agent: input.agent,
-      model: { providerID: 'host', modelID: 'placeholder' } }, parts: [] }
+      model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] }
     await hooks['chat.message'](input, replay)
-    assert.deepEqual({ ...replay.message.model }, { providerID: 'host', modelID: 'placeholder' })
+    assert.deepEqual({ ...replay.message.model }, { providerID: 'fixture', modelID: 'engineer-model' },
+      'a replay of the same physical message carries the same host-declared model and keeps it unchanged')
     const replayCapacity = routing.sharedCapacitySnapshot()
     assert.equal(replayCapacity.executions.filter((execution) => execution.sessionId === input.sessionID).length, 1)
     assert.equal(replayCapacity.tokens.filter((token) => token.owner.sessionId === input.sessionID).length, 1)
@@ -37,10 +37,10 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     })
     for (const agent of ['manager', 42]) {
       const conflict = { message: { id: input.messageID, sessionID: input.sessionID, role: 'user', agent,
-        model: { providerID: 'host', modelID: 'placeholder' } }, parts: [] }
+        model: { providerID: 'host', modelID: 'conflict-placeholder' } }, parts: [] }
       await assert.rejects(hooks['chat.message']({ ...input, agent }, conflict),
         agent === 'manager' ? /IntentRejected.*AcceptedParticipantConflict/ : /IntentRejected.*MalformedIdentityCarrier/)
-      assert.deepEqual(conflict.message.model, { providerID: 'host', modelID: 'placeholder' })
+      assert.deepEqual(conflict.message.model, { providerID: 'host', modelID: 'conflict-placeholder' })
       assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, input.sessionID, input.messageID), {
         phase: 'Accepted', disposition: null,
       })
@@ -50,9 +50,10 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     await assert.rejects(hooks['chat.message'](input, foreignCarrier), /IntentRejected.*MalformedIdentityCarrier/)
     assert.deepEqual(foreignCarrier.message.model, { providerID: 'host', modelID: 'foreign-placeholder' })
     const fresh = { message: { id: 'msg-fresh-human', sessionID: input.sessionID, role: 'user', agent: input.agent,
-      model: { providerID: 'host', modelID: 'fresh-placeholder' } }, parts: [] }
+      model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] }
     await hooks['chat.message']({ ...input, messageID: fresh.message.id }, fresh)
-    assert.deepEqual({ ...fresh.message.model }, { providerID: 'host', modelID: 'fresh-placeholder' })
+    assert.deepEqual({ ...fresh.message.model }, { providerID: 'fixture', modelID: 'engineer-model' },
+      'the host fills the configured declared model; the plugin verifies it and writes nothing back')
     assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, input.sessionID, input.messageID), {
       phase: 'Accepted', disposition: null,
     })
@@ -61,7 +62,7 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     runtime.pushHostMessage(input.sessionID, {
       info: {
         id: 'assistant-fresh-human', sessionID: input.sessionID, parentID: fresh.message.id,
-        role: 'assistant', agent: input.agent, providerID: 'host', modelID: 'fresh-placeholder',
+        role: 'assistant', agent: input.agent, providerID: 'provider', modelID: 'engineer-model',
         time: { created: 2 },
       },
       parts: [],
@@ -104,34 +105,32 @@ test('WHAT[managed-chat-execution-003] an exact admission joining after committe
       : get(args)
     await hooks['chat.message']({ sessionID: 'ses-late-admission', messageID: 'msg-late-root', agent: 'engineer' }, {
       message: { id: 'msg-late-root', sessionID: 'ses-late-admission', role: 'user', agent: 'engineer',
-        model: { providerID: 'host', modelID: 'late-root' } }, parts: [],
+        model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [],
     })
     const input = { sessionID: 'ses-late-admission', messageID: 'msg-late-admission', agent: 'engineer' }
     const output = () => ({
       message: { id: input.messageID, sessionID: input.sessionID, role: 'user', agent: input.agent,
-        model: { providerID: 'host', modelID: 'late-admission' } },
+        model: { providerID: 'fixture', modelID: 'engineer-model' } },
       parts: [],
     })
     const first = output()
     const second = output()
+    const late = output()
+    // The current contract has no model write-back to hook: the plugin only
+    // reads the host-provided model and verifies the committed lease. The late
+    // public hook therefore joins the same in-process admission flight while
+    // the second admission's Host projection is still open — scheduled on the
+    // microtask queue before either admission's continuations can settle it.
+    let lateAdmission
+    queueMicrotask(() => { lateAdmission = hooks['chat.message'](input, late) })
     const initial = await Promise.allSettled([hooks['chat.message'](input, first), hooks['chat.message'](input, second)])
     assert.deepEqual(initial.map((admission) => admission.status), ['fulfilled', 'fulfilled'])
-    for (const projected of [first, second]) {
-      assert.deepEqual({ ...projected.message.model }, { providerID: 'host', modelID: 'late-admission' })
+    assert.ok(lateAdmission, 'the late public hook joins the open admission flight')
+    await lateAdmission
+    for (const projected of [first, second, late]) {
+      assert.deepEqual({ ...projected.message.model }, { providerID: 'fixture', modelID: 'engineer-model' },
+        'every joined admission keeps its own host-provided model; the plugin verifies and never rewrites it')
     }
-    // A late exact joiner after the committed Host projection carries the same
-    // host-selected model and replays idempotently. The physical message has
-    // already landed, so a replay is classified already-accepted and passes
-    // through unmanaged: execution-model-routing-008 makes the host-selected
-    // model the only truth and the runtime no longer polices drift
-    // (execution-model-routing-009); the host message object stays untouched.
-    const late = output()
-    await hooks['chat.message'](input, late)
-    assert.deepEqual({ ...late.message.model }, { providerID: 'host', modelID: 'late-admission' })
-    const drifted = output()
-    drifted.message.model = { providerID: 'host', modelID: 'drifted-model' }
-    await hooks['chat.message'](input, drifted)
-    assert.deepEqual({ ...drifted.message.model }, { providerID: 'host', modelID: 'drifted-model' })
     const capacity = routing.sharedCapacitySnapshot()
     assert.equal(capacity.executions.filter((execution) => execution.sessionId === input.sessionID).length, 1)
     assert.equal(capacity.tokens.filter((token) => token.owner.sessionId === input.sessionID).length, 1)

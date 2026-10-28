@@ -316,13 +316,7 @@ test('WHAT[managed-session-lifecycle-018] actual plugin dispose detaches capacit
     const sessionId = 'ses-dispose-accepted'
     const physicalUserMessageId = 'msg-dispose-accepted'
     await hooks['chat.message']({ sessionID: sessionId, messageID: physicalUserMessageId, agent: 'engineer' }, {
-      message: {
-        id: physicalUserMessageId,
-        sessionID: sessionId,
-        role: 'user',
-        agent: 'engineer',
-        model: { providerID: 'provider', modelID: 'engineer-model' },
-      },
+      message: { id: physicalUserMessageId, sessionID: sessionId, role: 'user', agent: 'engineer', model: { providerID: 'host', modelID: 'placeholder' } },
       parts: [],
     })
     const before = status.query(runtime.journal, sessionId, physicalUserMessageId)
