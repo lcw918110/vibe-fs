@@ -1421,7 +1421,10 @@ module HostSignalBootstrap =
                         |> ChatExecutionProjection.byKey key
                         |> Option.isSome
 
-                    if not exists && ProviderWireCapture.isHostCompactionContinuation messages key.PhysicalUserMessageId then
+                    if
+                        not exists
+                        && ProviderWireCapture.isHostCompactionContinuation messages key.PhysicalUserMessageId
+                    then
                         match compactedExecution durable key.SessionId with
                         | None -> failUninheritableContinuation durable key "no live execution holds the session lease"
                         | Some compacted ->
