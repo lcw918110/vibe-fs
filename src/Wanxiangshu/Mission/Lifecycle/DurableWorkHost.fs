@@ -464,6 +464,7 @@ module DurableWorkHost =
           Outcome: string
           Expected: string
           Fence: HostRunFence
+          StopEffectId: string option
           ProjectionCut: bool }
 
     /// One committed AdvanceCommitted fact: which tenure moved authority from
@@ -549,8 +550,9 @@ module DurableWorkHost =
                       Outcome = textOf round?outcome
                       Expected = textOf round?milestone
                       Fence =
-                        { ProviderRunId = ""
-                          ToolCallId = "" }
+                        { ProviderRunId = textOf round?providerRunId
+                          ToolCallId = textOf round?toolCallId }
+                      StopEffectId = optionalText (textOf round?stopEffectId)
                       ProjectionCut = false })
         |> List.ofArray
 
