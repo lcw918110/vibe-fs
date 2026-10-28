@@ -117,6 +117,33 @@ module HostSessionNudge =
         (onAccepted: ContinuationAcceptanceObserver)
         (onRefused: string -> unit)
         : Task<Result<PromptKey, string>> =
+        let observeVerdict verdict =
+            match verdict with
+            | Wanxiangshu.Host.Ports.DeliveryVerdict.Refused reason -> onRefused reason
+            | _ -> ()
+
+        let observeResult result =
+            match result with
+            | Wanxiangshu.Foundation.Outcome.SendOutcome.Retryable reason
+            | Wanxiangshu.Foundation.Outcome.SendOutcome.Fatal reason -> onRefused reason
+            | _ -> ()
+
+        let observeSend sending =
+            task {
+                try
+                    let! result = sending
+                    observeResult result
+                with _ ->
+                    ()
+            }
+
+        let forwardLate (late: (Wanxiangshu.Host.Ports.DeliveryVerdict -> Task) option) verdict =
+            task {
+                match late with
+                | Some original -> do! original verdict
+                | None -> ()
+            }
+
         task {
             match isFissionReplaced journal sessionId, journal, tryActiveProfile journal sessionId with
             | true, _, _ -> return Error "Session is retired by Fission"
@@ -128,14 +155,11 @@ module HostSessionNudge =
                         member _.SendPrompt(sessionId, request, metadata, late) =
                             let listener verdict : Task =
                                 task {
-                                    match verdict with
-                                    | Wanxiangshu.Host.Ports.DeliveryVerdict.Refused reason ->
-                                        onRefused reason
-                                    | _ -> ()
-                                    match late with
-                                    | Some original -> do! original verdict
-                                    | None -> ()
-                                } :> Task
+                                    observeVerdict verdict
+                                    do! forwardLate late verdict
+                                }
+                                :> Task
+
                             let sending =
                                 sessionPort.SendPrompt(
                                     sessionId,
@@ -144,22 +168,18 @@ module HostSessionNudge =
                                 )
                             // The initial Host send verdict is also asynchronous.
                             // Observe it independently; never delay PromptDispatcher.
-                            (task {
-                                try
-                                    let! result = sending
-                                    match result with
-                                    | Wanxiangshu.Foundation.Outcome.SendOutcome.Retryable reason
-                                    | Wanxiangshu.Foundation.Outcome.SendOutcome.Fatal reason ->
-                                        onRefused reason
-                                    | _ -> ()
-                                with _ -> ()
-                            }) |> ignore<Task<unit>>
+                            observeSend sending |> ignore<Task<unit>>
+
                             sending
+
                         member _.SubscribeFutureTerminal(sessionId, listener) =
                             sessionPort.SubscribeFutureTerminal(sessionId, listener)
+
                         member _.SubscribeTerminal(sessionId, listener) =
                             sessionPort.SubscribeTerminal(sessionId, listener) }
+
                 let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
+
                 return!
                     rt.SendContinuation
                         port

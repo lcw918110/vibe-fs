@@ -66,12 +66,7 @@ module JsRuntimeSurface =
 
     /// Test hook: install a process-live delegation host for one session. The
     /// delegate callback takes `(name, payload, carry)`.
-    let installDelegationHost
-        (sessionId: string)
-        (delegation: obj)
-        (fission: obj)
-        (horizon: obj)
-        : unit =
+    let installDelegationHost (sessionId: string) (delegation: obj) (fission: obj) (horizon: obj) : unit =
         let host: JsDelegationHost =
             { Delegate = fun name payload -> unbox<Task<obj>> (emitJsExpr (delegation, name, payload) "$0($1,$2)")
               Fission = fun payload -> unbox<Task<obj>> (emitJsExpr (fission, payload) "$0($1)")
@@ -88,10 +83,10 @@ module JsRuntimeSurface =
                                    code = "DELEGATION_UNAVAILABLE"
                                    reason = "review is not wired in this runtime surface" |}
                     } }
-        activeTurnBridge?acquire(sessionId, box host, null) |> ignore
 
-    let clearDelegationHost (sessionId: string) : unit =
-        activeTurnBridge?clearSession sessionId
+        activeTurnBridge?acquire (sessionId, box host, null) |> ignore
+
+    let clearDelegationHost (sessionId: string) : unit = activeTurnBridge?clearSession sessionId
 
 
     /// Test hook: record a carry array for presentation.

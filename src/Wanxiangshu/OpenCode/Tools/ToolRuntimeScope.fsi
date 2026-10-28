@@ -72,7 +72,10 @@ type ToolRuntimeScope =
 
     member Negotiate: recipient: string * questions: string -> string
     member SendNegotiationSteer: recipient: string * answer: string * receipt: string -> Task<Result<unit, string>>
-    member SendAdvisorSteer: recipient: string * answer: string * processId: string * isCurrent: (unit -> bool) -> Task<Result<unit, string>>
+
+    member SendAdvisorSteer:
+        recipient: string * answer: string * processId: string * isCurrent: (unit -> bool) -> Task<Result<unit, string>>
+
     member AttachQuestionNotifier: notify: (string -> Task<Result<unit, string>>) -> unit
     member IsWaitingForUser: sessionId: string -> bool
     /// LC-017: the pending question's exact fence for a waiting session.

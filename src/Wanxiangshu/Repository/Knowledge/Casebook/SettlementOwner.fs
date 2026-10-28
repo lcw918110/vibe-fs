@@ -47,16 +47,15 @@ type CasebookSettlementOwner(onConflict: CasebookSemanticCutIncident -> unit) =
             nullArg "onConflict"
 
     let inner =
-        SettlementInterop.createOwner
-            SettlementInterop.settlementOwnerCtor
-            (fun raw -> onConflict (unbox<CasebookSemanticCutIncident> raw))
+        SettlementInterop.createOwner SettlementInterop.settlementOwnerCtor (fun raw ->
+            onConflict (unbox<CasebookSemanticCutIncident> raw))
 
     member _.Observe(failure: CasebookAppendFailure) : CasebookSettlementOutcome =
         let eventId, kind, incident = SettlementInterop.classifyFailure failure
-        let tag: string = inner?Observe(eventId, kind, incident)
+        let tag: string = inner?Observe (eventId, kind, incident)
         SettlementInterop.decodeOutcome tag
 
     member _.Redeliver(incident: CasebookSemanticCutIncident) : CasebookSettlementOutcome =
         let eventId = SettlementInterop.eventKey incident.Failure.EventId
-        let tag: string = inner?Redeliver(eventId, box incident)
+        let tag: string = inner?Redeliver (eventId, box incident)
         SettlementInterop.decodeOutcome tag

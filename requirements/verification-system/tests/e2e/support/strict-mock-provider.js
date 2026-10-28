@@ -26,6 +26,7 @@ import {
 import { faultBody } from './delivery-plan.js';
 import { wireOf } from './provider-wire.js';
 import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { StrictMockSignals } from './strict-mock-signals.js';
 import { respond } from './strict-mock-responses.js';
 import {
@@ -361,6 +362,7 @@ export class StrictMockProvider {
           if (a !== b) diffs.push(`msg[${i}] ${prevW[i].role}:${a} != ${nextW[i].role}:${b}`);
         }
         if (prevW.length !== nextW.length) diffs.push(`len ${prevW.length} != ${nextW.length}`);
+        if (process.env.WXS_SEAL_DUMP) writeFileSync(process.env.WXS_SEAL_DUMP, JSON.stringify({ prev: prevW.slice(1), next: nextW.slice(1) }, null, 1));
         // system 内容差异定位
         const prevSys = Array.from(prevW[0]?.parts ?? [])[0]?.text ?? '';
         const nextSys = Array.from(nextW[0]?.parts ?? [])[0]?.text ?? '';

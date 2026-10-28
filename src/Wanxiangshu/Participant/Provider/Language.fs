@@ -127,8 +127,7 @@ module GlobalProviderLanguage =
     /// language of the next request even mid-session.
     let refresh (resolve: unit -> ProviderLanguage) : unit =
         let lib = providerLanguageStore
-        lib?refresh (fun () -> ProviderLanguage.externalName (resolve ()))
-        |> ignore
+        lib?refresh (fun () -> ProviderLanguage.externalName (resolve ())) |> ignore
 
     let current () : ProviderLanguage =
         let lib = providerLanguageStore

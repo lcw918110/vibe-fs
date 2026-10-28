@@ -92,11 +92,10 @@ module LifecycleSurface =
         let command =
             DurableWorkHost.command
                 "BindDevOps"
-                [ "trigger", box "Ask"
-                  "devopsId", box devopsId
-                  "target", targetValue ]
+                [ "trigger", box "Ask"; "devopsId", box devopsId; "target", targetValue ]
 
-        let receipt = DurableWorkHost.execute dir workId (workId + ":bind:" + devopsId) command
+        let receipt =
+            DurableWorkHost.execute dir workId (workId + ":bind:" + devopsId) command
 
         if
             receipt.Status = "Committed"
@@ -105,7 +104,12 @@ module LifecycleSurface =
         then
             box {| ok = true; error = "" |}
         else
-            let reason = if receipt.Reason = "" then receipt.Status else receipt.Reason
+            let reason =
+                if receipt.Reason = "" then
+                    receipt.Status
+                else
+                    receipt.Reason
+
             box {| ok = false; error = reason |}
 
     let bindDevOps (store: obj) (workId: string) (devopsId: string) (target: obj) : Task<obj> =

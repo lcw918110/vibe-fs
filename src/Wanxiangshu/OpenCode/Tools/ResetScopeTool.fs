@@ -41,6 +41,7 @@ module ResetScopeTool =
     let private latestAcceptedPrompt (snapshot: ISessionSnapshotPort) (child: SessionId) : Task<string option> =
         task {
             let! fetched = snapshot.GetMessages child
+
             return
                 fetched
                 |> Result.toOption
@@ -57,17 +58,25 @@ module ResetScopeTool =
                 |> Option.filter (String.IsNullOrWhiteSpace >> not)
         }
 
-    let private outstandingPromptNotice (snapshotPort: ISessionSnapshotPort option) (handle: HandleRecord) : Task<string> =
+    let private outstandingPromptNotice
+        (snapshotPort: ISessionSnapshotPort option)
+        (handle: HandleRecord)
+        : Task<string> =
         task {
             let! prompt =
                 snapshotPort
                 |> Option.map (fun snapshot -> latestAcceptedPrompt snapshot handle.ChildSessionId)
                 |> Option.defaultValue (Task.FromResult None)
-            let text =
-                prompt
-                |> Option.defaultValue "最近一次派出指令全文：Host 没有提供可验证的已接受提示词快照。"
-            return "## " + handle.Byname + " · " + SessionId.value handle.ChildSessionId
-                   + "\n" + text
+
+            let text = prompt |> Option.defaultValue "最近一次派出指令全文：Host 没有提供可验证的已接受提示词快照。"
+
+            return
+                "## "
+                + handle.Byname
+                + " · "
+                + SessionId.value handle.ChildSessionId
+                + "\n"
+                + text
         }
 
     let rec private collectOutstanding (snapshotPort: ISessionSnapshotPort option) handles : Task<string list> =
@@ -80,12 +89,19 @@ module ResetScopeTool =
                 return current :: remaining
         }
 
-    let private outstandingReminder (journal: AgentJournal) (snapshotPort: ISessionSnapshotPort option) (sessionId: SessionId) : Task<string> =
+    let private outstandingReminder
+        (journal: AgentJournal)
+        (snapshotPort: ISessionSnapshotPort option)
+        (sessionId: SessionId)
+        : Task<string> =
         task {
             let pending = pendingChildHandles journal sessionId
             let! notices = collectOutstanding snapshotPort pending
-            if List.isEmpty notices then return ""
-            else return "\n\n尚未归队的外派工作（最近一次已接受的指令全文）：\n" + String.concat "\n\n" notices
+
+            if List.isEmpty notices then
+                return ""
+            else
+                return "\n\n尚未归队的外派工作（最近一次已接受的指令全文）：\n" + String.concat "\n\n" notices
         }
 
     let private commitArchivedScope
@@ -140,8 +156,8 @@ module ResetScopeTool =
                     outboundViewStore?discardSealed (ctx.SessionId) |> ignore
                     Surface.resetScopeState ctx.SessionId 0
                     let nextScopeNumber = Set.count epoch.ReanchoredScopes + 1
-                    scopeProgress?reset(ctx.SessionId, string nextScopeNumber) |> ignore
-                    advisorProcessQueue?reset(ctx.SessionId, string nextScopeNumber) |> ignore
+                    scopeProgress?reset (ctx.SessionId, string nextScopeNumber) |> ignore
+                    advisorProcessQueue?reset (ctx.SessionId, string nextScopeNumber) |> ignore
 
                     if not (Set.isEmpty epoch.ReanchoredScopes) then
                         Surface.beginAskPreviousScope ctx.SessionId
@@ -164,7 +180,8 @@ module ResetScopeTool =
         : Task<string> =
         task {
             let objective = args.Text "newScopeObjective"
-            let rawSnap: obj = outboundViewStore?tryGetSealed(ctx.SessionId)
+            let rawSnap: obj = outboundViewStore?tryGetSealed (ctx.SessionId)
+
             if isNullOrUndefined rawSnap then
                 return "resetScope failed: no sealed outbound view snapshot captured for this session."
             else
@@ -181,7 +198,12 @@ module ResetScopeTool =
             |> Option.exists (PrefixEpochProjection.isScopeReanchored (ToolCallId.value callId))
         | _ -> false
 
-    let private execute (journalOpt: AgentJournal option) (snapshotPort: ISessionSnapshotPort option) (args: HostToolArguments) (ctx: HostToolContext) : Task<string> =
+    let private execute
+        (journalOpt: AgentJournal option)
+        (snapshotPort: ISessionSnapshotPort option)
+        (args: HostToolArguments)
+        (ctx: HostToolContext)
+        : Task<string> =
         if resetAlreadyCommitted journalOpt ctx then
             Task.FromResult("Scope reset. Objective: " + args.Text "newScopeObjective")
         elif Surface.negotiationRequired ctx.SessionId then
@@ -195,7 +217,11 @@ module ResetScopeTool =
         else
             executeCommitted journalOpt snapshotPort args ctx
 
-    let spec (factory: HostToolFactory) (journal: AgentJournal option) (snapshotPort: ISessionSnapshotPort option) : ToolSpec =
+    let spec
+        (factory: HostToolFactory)
+        (journal: AgentJournal option)
+        (snapshotPort: ISessionSnapshotPort option)
+        : ToolSpec =
         { Name = Surface.ResetScopeTool
           Description =
             "End the current Scope, preserve operator and available assistant prose plus critical consultation calls/results, retire the old Scope's thinking and ordinary tool process, and return accepted outstanding delegation prompts. Never call it after you have written your closing report in prose: it opens a next Scope with a new objective, and the final-turn prose is what your Commissioner receives."

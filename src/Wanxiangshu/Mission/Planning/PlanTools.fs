@@ -145,7 +145,8 @@ module PlanTools =
         ignore execSessionId
         ignore observedPrompt
         ignore blockers
-        retired (): Result<DeliverResult, string>
+        retired ()
+        : Result<DeliverResult, string>
 
     let bindObservedExecutionSession
         (gitCommonDir: string)
@@ -157,7 +158,8 @@ module PlanTools =
         ignore workId
         ignore operationId
         ignore execSessionId
-        retired (): Result<unit, string>
+        retired ()
+        : Result<unit, string>
 
     // work-028: at most one pending ask delegation per work. The tracker
     // is process-local memory — crash recovery has no hanging ask state
@@ -166,10 +168,9 @@ module PlanTools =
     let private planAskGate: obj = jsNative
 
     let private tryBeginPendingAsk (workId: string) : bool =
-        unbox<bool> (planAskGate?tryBegin(workId))
+        unbox<bool> (planAskGate?tryBegin (workId))
 
-    let private clearPendingAsk (workId: string) : unit =
-        planAskGate?clear(workId) |> ignore
+    let private clearPendingAsk (workId: string) : unit = planAskGate?clear (workId) |> ignore
 
     // Snapshot has no delivered mark. Do not treat delivery authorization as already delivered.
     let private validateAskWork

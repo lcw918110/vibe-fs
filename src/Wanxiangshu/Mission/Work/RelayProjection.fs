@@ -45,6 +45,37 @@ module RelayProjection =
     let private nonBlank (value: string option) =
         value |> Option.filter (String.IsNullOrWhiteSpace >> not)
 
+    /// The successor's anchors after a Relayed retirement: the active authority
+    /// root and the loop-gate nudge accepted for that retirement.
+    let private relayAnchor
+        (journal: AgentJournal)
+        (sessionId: SessionId)
+        (retirement: DurableWorkHost.HostRetirement)
+        =
+        let projections = (AgentJournal.snapshot journal).AgentProjections
+        let sessionProjection = AgentProjection.tryFind sessionId projections
+
+        let authority =
+            sessionProjection |> Option.bind (fun session -> session.PromptAuthority)
+
+        let activeRoot =
+            authority
+            |> Option.bind (fun value -> value.ActiveLogicalRun)
+            |> Option.map (fun profile -> AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
+
+        let gatePhysical =
+            authority
+            |> Option.bind (fun value ->
+                PromptAuthority.gateNudgeAcceptedPhysical
+                    sessionId
+                    PromptAuthority.ContinuationKind.ManagerGuard
+                    (ManagerLoopGate.gateKind (RetirementId.create retirement.RetirementId))
+                    (ProviderRunIdentity.create retirement.Fence.ProviderRunId)
+                    value)
+            |> Option.map PhysicalUserMessageId.value
+
+        nonBlank activeRoot, nonBlank gatePhysical
+
     /// The retired attempt is decided from the unified lifecycle work: an S4
     /// work whose current tenure was Relayed, with a durable retirement cut.
     /// The request is stale unless it belongs to the successor (the loop-gate
@@ -60,26 +91,7 @@ module RelayProjection =
         |> List.tryFindBack (fun retirement -> retirement.ProjectionCut && retirement.Outcome = "Relayed")
         |> Option.map (fun retirement ->
             let projections = (AgentJournal.snapshot journal).AgentProjections
-            let sessionProjection = AgentProjection.tryFind sessionId projections
-
-            let authority =
-                sessionProjection |> Option.bind (fun session -> session.PromptAuthority)
-
-            let activeRoot =
-                authority
-                |> Option.bind (fun value -> value.ActiveLogicalRun)
-                |> Option.map (fun profile -> AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
-
-            let gatePhysical =
-                authority
-                |> Option.bind (fun value ->
-                    PromptAuthority.gateNudgeAcceptedPhysical
-                        sessionId
-                        PromptAuthority.ContinuationKind.ManagerGuard
-                        (ManagerLoopGate.gateKind (RetirementId.create retirement.RetirementId))
-                        (ProviderRunIdentity.create retirement.Fence.ProviderRunId)
-                        value)
-                |> Option.map PhysicalUserMessageId.value
+            let activeRoot, gatePhysical = relayAnchor journal sessionId retirement
 
             let accepted (id: string option) =
                 id
@@ -96,8 +108,8 @@ module RelayProjection =
                 | Some cut -> List.contains cut.ToolCallId message.ToolCallIds
                 | None -> false
 
-            { ActiveRoot = nonBlank activeRoot
-              GatePhysical = nonBlank gatePhysical
+            { ActiveRoot = activeRoot
+              GatePhysical = gatePhysical
               AcceptedRequest = acceptedRequest
               Messages =
                 messages
@@ -112,3 +124,32 @@ module RelayProjection =
         | _ -> RelayProjectionDisposition.Unchanged
 
     let disposition (work: DurableWorkHost.InspectedWork option) = dispositionAfterProjection work
+
+    /// Durable ownership for the successor's own messages after a relay. A
+    /// physical user message belongs to the successor when its accepted
+    /// ChatExecution names the active authority root, or when it is the
+    /// loop-gate nudge accepted for the Relayed retirement. Everything else
+    /// stays unattributed.
+    let successorOwns
+        (journal: AgentJournal)
+        (sessionId: SessionId)
+        (work: DurableWorkHost.InspectedWork)
+        : string -> bool =
+        match work.Retirements |> List.tryLast with
+        | None -> fun _ -> false
+        | Some retirement ->
+            let activeRoot, gatePhysical = relayAnchor journal sessionId retirement
+            let projections = (AgentJournal.snapshot journal).AgentProjections
+
+            let acceptedRoot (physicalId: string) =
+                ChatExecutionProjection.byKey
+                    { ChatExecutionKey.SessionId = sessionId
+                      PhysicalUserMessageId = PhysicalUserMessageId.create physicalId }
+                    projections.ChatExecutions
+                |> Option.map (fun execution ->
+                    AuthorityRootUserMessageId.value execution.acceptedEvidence.AuthorityRootUserMessageId)
+                |> nonBlank
+
+            fun physicalId ->
+                gatePhysical = Some physicalId
+                || (activeRoot.IsSome && acceptedRoot physicalId = activeRoot)

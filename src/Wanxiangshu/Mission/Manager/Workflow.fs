@@ -63,7 +63,9 @@ module ManagerWorkflow =
         task {
             let! workOpt = lifecycleWork directory (SessionId.value sessionId)
 
-            return workOpt |> Option.exists Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority
+            return
+                workOpt
+                |> Option.exists Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority
         }
 
     // Algorithm H reads the Manager milestone plus tenure, review state, and obligations.
@@ -153,7 +155,8 @@ module ManagerWorkflow =
         | Some activeId, Some successorId, Some retirement, obligations when
             activeId = successorId
             && retirement.Outcome = "Relayed"
-            && Array.isEmpty obligations ->
+            && Array.isEmpty obligations
+            ->
             Some retirement.RetirementId
         | _ -> None
 
@@ -167,6 +170,24 @@ module ManagerWorkflow =
             |> Option.map (fun event -> string event?providerRunId)
             |> Option.defaultValue "")
 
+    let private continuedRetirement
+        commonDir
+        sessionIdText
+        (current: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork)
+        =
+        match current.ActiveId, current.Reviewed with
+        | Some activeId, false ->
+            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.useWork commonDir sessionIdText (fun live ->
+                let frames: obj array = unbox (live?history ())
+
+                frames
+                |> Array.collect (fun frame -> unbox<obj array> frame?events)
+                |> Array.tryFindBack (fun event -> string event?``type`` = "WorkContinued")
+                |> Option.filter (fun event -> string event?incumbencyId = activeId)
+                |> Option.bind (fun _ -> current.Retirements |> List.tryLast)
+                |> Option.map (fun retirement -> retirement.RetirementId))
+        | _ -> None
+
     let private successorPromptContext
         (workspaceDirectory: string option)
         (sessionIdText: string)
@@ -177,12 +198,17 @@ module ManagerWorkflow =
             | Some workspace ->
                 let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
 
-                match
+                let work =
                     Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir sessionIdText
-                    |> Option.bind unreviewedSuccessor
-                with
-                | None -> return None
-                | Some retirementId -> return Some(retirementId, providerRunOfLastRetirement commonDir sessionIdText)
+
+                let continued = work |> Option.bind (continuedRetirement commonDir sessionIdText)
+
+                let retirement =
+                    (work |> Option.bind unreviewedSuccessor) |> Option.orElse continued
+
+                return
+                    retirement
+                    |> Option.map (fun id -> id, providerRunOfLastRetirement commonDir sessionIdText)
         }
 
     /// Read-only probe (the `loopSignalOf` / `publishReviewOf` pattern): the

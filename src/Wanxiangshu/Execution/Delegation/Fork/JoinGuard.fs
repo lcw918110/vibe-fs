@@ -73,9 +73,16 @@ module HostJoinGuard =
         : string option =
         let sid = SessionId.value sessionId
         let run = ProviderRunIdentity.value terminalProviderRun
-        let hasClaim () = hasOutstandingJoinClaim port journal sessionId terminalProviderRun
+
+        let hasClaim () =
+            hasOutstandingJoinClaim port journal sessionId terminalProviderRun
+
         let reserved: obj = reservationStore?tryReserve (nudgeKeys, sid, run, hasClaim)
-        if isNull reserved then None else Some(unbox<string> reserved)
+
+        if isNull reserved then
+            None
+        else
+            Some(unbox<string> reserved)
 
     let private releaseNudgeKey (nudgeKeys: HashSet<string>) (key: string) : unit =
         reservationStore?release (nudgeKeys, key) |> ignore

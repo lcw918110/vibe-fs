@@ -502,6 +502,7 @@ module ModelRoutingSurface =
         (participant: string)
         (lenderSessionId: string)
         (purpose: obj)
+        (hostTarget: obj)
         : Task<obj> =
         task {
             let! acquisition =
@@ -518,7 +519,10 @@ module ModelRoutingSurface =
                          None
                      else
                          Some lenderSessionId)
-                    None
+                    (if isNullish hostTarget then
+                         None
+                     else
+                         Some(targetOf hostTarget))
 
             let! completed = awaitAdmission acquisition
             return acquireAdmissionObject completed
@@ -820,9 +824,11 @@ module ModelRoutingSurface =
 
     let setDurableDevopsResolver (runtime: obj) (resolver: obj) : unit =
         let fn = unbox<string -> obj> resolver
-        (runtimeOf runtime).SetDurableDevopsResolver(fun sid ->
-            let res = fn sid
-            if isNull res then None else Some(string res))
+
+        (runtimeOf runtime)
+            .SetDurableDevopsResolver(fun sid ->
+                let res = fn sid
+                if isNull res then None else Some(string res))
 
     /// Seed the fixed DevOps target from a durable road's 'provider/model:reasoning'
     /// string. Decoding is fail-closed and the write reuses the same binding path a

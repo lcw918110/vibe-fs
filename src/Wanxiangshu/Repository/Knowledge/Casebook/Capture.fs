@@ -60,7 +60,10 @@ type AccessTracker() =
     member _.recordMove(source: string, destination: string) : unit = inner.RecordMove(source, destination)
     member _.recordGrep(pattern: string, path: string) : unit = inner.RecordGrep(pattern, path)
     member _.recordGlob(pattern: string) : unit = inner.RecordGlob(pattern)
-    member _.recordAttemptedMutation(path: string, committed: bool) : unit = inner.RecordAttemptedMutation(path, committed)
+
+    member _.recordAttemptedMutation(path: string, committed: bool) : unit =
+        inner.RecordAttemptedMutation(path, committed)
+
     member _.getRelatedPaths() : string array = inner.GetRelatedPaths()
 
     member _.RecordRead(path: string, contentHash: string) : unit = inner.RecordRead(path, contentHash)
@@ -70,7 +73,10 @@ type AccessTracker() =
     member _.RecordMove(source: string, destination: string) : unit = inner.RecordMove(source, destination)
     member _.RecordGrep(pattern: string, path: string) : unit = inner.RecordGrep(pattern, path)
     member _.RecordGlob(pattern: string) : unit = inner.RecordGlob(pattern)
-    member _.RecordAttemptedMutation(path: string, committed: bool) : unit = inner.RecordAttemptedMutation(path, committed)
+
+    member _.RecordAttemptedMutation(path: string, committed: bool) : unit =
+        inner.RecordAttemptedMutation(path, committed)
+
     member _.GetRelatedPaths() : string list = inner.GetRelatedPaths() |> Array.toList
 
 /// CASE-003 / KR-003 / KR-014: typed observation capture and substantive access.

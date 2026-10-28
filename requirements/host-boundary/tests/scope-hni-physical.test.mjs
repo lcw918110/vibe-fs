@@ -74,6 +74,43 @@ test('WHAT[context-compression-039] OpenCode prompts for a first chargeable esti
   clearSessionState(sid)
 })
 
+test('WHAT[context-compression-039] repeated OpenCode transform does not duplicate its request-only steer', async () => {
+  const sid = 'ses_scope_repeat_039'
+  clearSessionState(sid)
+  try {
+    const messages = [user('u-repeat', 'work', 1)]
+    await outbound(sid, messages)
+    await outbound(sid, messages)
+    assert.equal(messages.filter(message => message.steering === true).length, 1)
+  } finally {
+    clearSessionState(sid)
+  }
+})
+
+test('WHAT[host-boundary-011] repeated provider projection keeps synthetic separators out of transcript anchoring', async () => {
+  const pair = await import('../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js')
+  const projection = await import('../../../dist/OpenCode/Host/HostMessageProjection.js')
+  const sid = 'ses_scope_repeat_separator_011'
+  clearSessionState(sid)
+  const messages = [user('u-repeat-separator', 'work', 1)]
+  const caps = safeCaps()
+  caps.InjectPairGuideline = async (_session, _started, out) => {
+    const result = await pair.tryInject(sid, 'guidance', out.messages)
+    assert.equal(result.ok, true, result.error)
+    out.messages.splice(0, out.messages.length, ...result.value)
+  }
+  caps.SanitizeMessages = (_session, out) => projection.sanitizeOutputMessages(out)
+  try {
+    const out = { messages }
+    await normalTransform(caps, sid, {}, out)
+    assert.equal(messages.filter(message => message.info?.role === 'assistant').length, 1)
+    await normalTransform(caps, sid, {}, out)
+    assert.equal(messages.filter(message => message.steering === true).length, 1)
+  } finally {
+    clearSessionState(sid)
+  }
+})
+
 test('WHAT[context-compression-039] OpenCode applies a reset and preserves critical calls, later work and a new progress-baseline steer', async () => {
   const sid = 'ses_scope_039_reset'
   clearSessionState(sid)
@@ -1146,7 +1183,7 @@ test('WHAT[host-boundary-011] physically registered Advisor provider hook exclud
     const onlyReasoning=assistant('a-thought-011',{type:'reasoning',text:'No final prose in this run'})
     const u2=user('a-user-012','Please provide the missing observation.',102)
     await hooks['chat.message']({sessionID:sid,agent:'advisor',messageID:'a-user-012'},
-      {message:{...u2.info,sessionID:sid},parts:u2.parts})
+      {message:{...u2.info,sessionID:sid,model:{providerID:'fixture',modelID:'advisor-model'}},parts:u2.parts})
     const providerAssistant={info:{id:'assistant-provider-011',sessionID:sid,parentID:'a-user-012',
       role:'assistant',agent:'advisor',providerID:'fixture',modelID:'advisor-model',time:{created:103}},parts:[]}
     runtime.pushHostMessage(sid,providerAssistant)

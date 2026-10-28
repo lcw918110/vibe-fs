@@ -180,7 +180,7 @@ test('WHAT[dispatch-protocol-015] actual ingress cannot reinterpret a malformed 
   const { withExecutablePlugin } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
   const dispatch = await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
   await withExecutablePlugin(async (hooks, _directory, _children, runtime) => {
-    const output = (session, physical) => ({ message: { sessionID: session, id: physical, agent: 'engineer', role: 'user' }, parts: [] })
+    const output = (session, physical) => ({ message: { sessionID: session, id: physical, agent: 'engineer', role: 'user', model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] })
     await hooks['chat.message']({ sessionID: 'valid-carrier-control', messageID: 'valid-physical', agent: 'engineer' }, output('valid-carrier-control', 'valid-physical'))
     assert.notEqual(dispatch.projectionObservation(runtime.journal, 'valid-carrier-control').activeLogicalRun, null)
     try {

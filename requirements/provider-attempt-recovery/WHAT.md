@@ -91,3 +91,7 @@ Host 停止自动重试的唯一证据是确切 `(SessionId, ProviderRunIdentity
 session-only idle 是唤醒，不能证明同 session 所有已接受输入都已被 Host 停止。在线 sweep 必须由公开 Host snapshot 的最新已完成 assistant 的 exact `parentID` 确认停止的物理执行，只定夺它自己的未启动义务。已被 owner 明确取代的旧 assistant idle 不定夺新输入，不铸造新输入的 idle permit；尚未保存到 Host 或仍在容量排队的已接受 successor 由其准入 owner 和独立 recovery sweep 负责。
 
 定夺必须终局：有 typed resume capability 时，用确切已接受 material 恢复执行；否则将该执行结为终态并报告该 turn 失败。本义务不发送新文本、不生成替换 PromptClaim，也不放宽 [003] 的单次物理发送约束。
+
+## [025] 上游仅含思考无正文的错误统一并入可修复续行
+
+当上游模型 API 返回仅含 `reasoning` 思考部分而无正式正文的错误或结束响应时，终态分类器将其统一视为需要续行修复的未完成态（`TurnFailed` 或 `TurnNeedsContinuation`），`formalContentUnusable` 判定正式正文不可用，并触发 Engineer / DevOps 的交互修复催促。

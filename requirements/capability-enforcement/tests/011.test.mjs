@@ -248,12 +248,12 @@ const { withPlugin } = await import("../../verification-system/tests/support/plu
 const TOOL_NAMES = [
   'fork', 'resume', 'commission', 'join', 'horizon', 'fission',
   'bash-honeypot', 'assume',
-  'review', 'fetch', 'deliver',
+  'review', 'fetch',
   'todowrite-for-engineer', 'todowrite-for-devops', 'todowrite-for-manager', 'todowrite-for-orchestrator',
 ]
 // 面 B（宿主权限目录）：`fork` / `resume` / `commission` 仍留在权限目录里，
-// 权限对象仍为它们出条目；只有 `devops` 离开了权限目录，它的权限键不存在。
-const PERMISSION_CATALOG_REMOVED_TOOLS = ['devops']
+// 权限对象仍为它们出条目；`devops` / `deliver` 已离开权限目录，它们的权限键不存在。
+const PERMISSION_CATALOG_REMOVED_TOOLS = ['devops', 'deliver']
 
 const ROLE_NAMES = ['orchestrator', 'manager', 'engineer', 'devops']
 
@@ -261,7 +261,7 @@ const COGNITIVE_TOOLS = []
 
 const ALLOWED = {
   orchestrator: ['commission', 'join', 'horizon', 'todowrite-for-orchestrator', 'assume', ...COGNITIVE_TOOLS],
-  manager: ['fork', 'resume', 'join', 'horizon', 'review', 'deliver', 'todowrite-for-manager', 'assume', ...COGNITIVE_TOOLS],
+  manager: ['fork', 'resume', 'join', 'horizon', 'review', 'todowrite-for-manager', 'assume', ...COGNITIVE_TOOLS],
   engineer: ['fission', 'fetch', 'bash-honeypot', 'todowrite-for-engineer', 'assume', ...COGNITIVE_TOOLS],
   devops: [
     'join', 'horizon', 'todowrite-for-devops',

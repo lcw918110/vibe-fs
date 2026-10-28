@@ -39,8 +39,7 @@ module SharedAgentJournal =
             | Some inst ->
                 let target = unbox<AgentJournal> inst
                 task { do! (target :> IAsyncDisposable).DisposeAsync() } :> Task
-            | None ->
-                Task.FromResult(()) :> Task
+            | None -> Task.FromResult(()) :> Task
 
     let acquire
         (directory: string)
@@ -65,7 +64,6 @@ module SharedAgentJournal =
         | Some target ->
             let released = sharedPool.ReleaseTarget(box target)
             Helpers.handleReleaseTarget released
-        | None ->
-            Task.FromResult(()) :> Task
+        | None -> Task.FromResult(()) :> Task
 
     let release (journal: AgentJournal option) = releaseAsync journal |> ignore

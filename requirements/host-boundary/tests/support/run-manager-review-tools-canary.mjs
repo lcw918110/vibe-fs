@@ -44,6 +44,7 @@ const CANCEL_ARGUMENTS = {
   name: 'cancel-review',
   intent: '等待评审程序，取消时保留真实终态。',
   program: 'class Js extends JsProgram { async run() { await new Promise(() => {}); return null; } }',
+  remainingScopeTurnsEstimate: 3,
   contract: CONTRACT_TOKEN,
 };
 const EXECUTOR_THROW_SENTINEL = 'T180-EXECUTOR-THROW-SENTINEL';
@@ -211,6 +212,7 @@ const provider = await startHttpServer(async (request, response) => {
           name: 'read-review-sample',
           intent: '等待读取结果，保留评审工具真实回执。',
           program: "class Js extends JsProgram { async run() { return await this.reviewOnly.cat('fixture-sample.txt'); } }",
+          remainingScopeTurnsEstimate: 3,
           contract: CONTRACT_TOKEN,
         }),
       };
@@ -241,6 +243,7 @@ const provider = await startHttpServer(async (request, response) => {
           name: 'missing-review-file',
           intent: '等待读取失败回执，不把拒绝改写为成功。',
           program: "class Js extends JsProgram { async run() { return await this.reviewOnly.cat('nonexistent-missing-file.txt'); } }",
+          remainingScopeTurnsEstimate: 3,
           contract: CONTRACT_TOKEN,
         }),
       };
@@ -281,6 +284,7 @@ const provider = await startHttpServer(async (request, response) => {
           name: 'executor-rejection',
           intent: '保留执行器拒绝事实并观察宿主处理。',
           program: `class Js extends JsProgram { async run() { return '${EXECUTOR_THROW_SENTINEL}'; } }`,
+          remainingScopeTurnsEstimate: 3,
           contract: CONTRACT_TOKEN,
         }),
       };

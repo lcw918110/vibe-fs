@@ -109,7 +109,10 @@ module ToolRegistry =
         | _ -> ""
 
     let private reviewDraft root sessionId office (note: string) =
-        if String.IsNullOrEmpty note then savedReviewDraft root sessionId office else note
+        if String.IsNullOrEmpty note then
+            savedReviewDraft root sessionId office
+        else
+            note
 
     /// The optional `note` of `this.review(findings, note)`. Absent or empty
     /// leaves the draft to the canonical plan file.
@@ -125,6 +128,26 @@ module ToolRegistry =
         (findings: obj)
         (note: obj)
         : Task<obj> =
+        let awaitProduced produced =
+            if produced <> null && emitJsExpr produced "typeof $0.then === 'function'" then
+                unbox<Task<obj>> produced
+            else
+                Task.FromResult produced
+
+        let renderReply (reply: obj) =
+            let status = string reply?status
+
+            if status = "Committed" || status = "Replayed" || status = "Observed" then
+                createObj
+                    [ "ok", box true
+                      "kind", reply?kind
+                      "milestone", reply?milestone
+                      "wait", reply?wait
+                      "incumbencyId", reply?incumbencyId
+                      "blockers", reply?blockers ]
+            else
+                createObj [ "ok", box false; "reason", reply?reason ]
+
         task {
             match runtime.WorkspaceDirectory, ctx.ProviderRunId, ctx.ToolCallId, reviewNote note with
             | _, _, _, Error reason -> return reviewRefusal "INVALID_ARGUMENT" reason
@@ -163,31 +186,13 @@ module ToolRegistry =
                         draft
                         (runtime.ReviewPorts ctx)
 
-                let! reply =
-                    if
-                        produced <> null
-                        && emitJsExpr produced "typeof $0.then === 'function'"
-                    then
-                        unbox<Task<obj>> produced
-                    else
-                        Task.FromResult produced
-
-                let status = string reply?status
-
-                if status = "Committed" || status = "Replayed" || status = "Observed" then
-                    return
-                        createObj
-                            [ "ok", box true
-                              "kind", reply?kind
-                              "milestone", reply?milestone
-                              "wait", reply?wait
-                              "incumbencyId", reply?incumbencyId
-                              "blockers", reply?blockers ]
-                else
-                    return createObj [ "ok", box false; "reason", reply?reason ]
+                let! reply = awaitProduced produced
+                return renderReply reply
             | _ ->
                 return
-                    reviewRefusal "review-unavailable" "review requires an owning provider call and a Plan or Manager role"
+                    reviewRefusal
+                        "review-unavailable"
+                        "review requires an owning provider call and a Plan or Manager role"
         }
 
     let create
@@ -427,13 +432,14 @@ module ToolRegistry =
                     // The durable witness is committed by now: the
                     // registration only records the committed attempt, so the
                     // transform hook's delivery adjudication can stop it.
-                    deliveryAttemptLedger?recordEstablished(
-                        createObj [
-                            "sessionId" ==> SessionId.value witness.SessionId
-                            "providerRun" ==> ProviderRunIdentity.value witness.ProviderRun
-                            "callId" ==> ToolCallId.value witness.ToolCallId
-                        ],
-                        box (PhysicalUserMessageId.value witness.PhysicalUserMessageId)) |> ignore)
+                    deliveryAttemptLedger?recordEstablished (
+                        createObj
+                            [ "sessionId" ==> SessionId.value witness.SessionId
+                              "providerRun" ==> ProviderRunIdentity.value witness.ProviderRun
+                              "callId" ==> ToolCallId.value witness.ToolCallId ],
+                        box (PhysicalUserMessageId.value witness.PhysicalUserMessageId)
+                    )
+                    |> ignore)
             )
 
         /// The formal prose and the physical input of the assistant message
@@ -618,7 +624,9 @@ module ToolRegistry =
         let scopeProgressEpoch (ctx: HostToolContext) =
             journal
             |> Option.bind (fun durable ->
-                AgentProjection.tryFind (SessionId.create ctx.SessionId) (AgentJournal.snapshot durable).AgentProjections)
+                AgentProjection.tryFind
+                    (SessionId.create ctx.SessionId)
+                    (AgentJournal.snapshot durable).AgentProjections)
             |> Option.bind (fun session -> session.PrefixEpoch)
             |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
             |> Option.defaultValue "0"
@@ -634,9 +642,7 @@ module ToolRegistry =
                         return
                             (work
                              |> Option.forall (fun current ->
-                                 current.ActiveId.IsSome
-                                 && not current.Reviewed
-                                 && current.BlockerDigest.IsNone))
+                                 current.ActiveId.IsSome && not current.Reviewed && current.BlockerDigest.IsNone))
                             && not frozen
                     }
 
@@ -726,23 +732,25 @@ module ToolRegistry =
                                     return devopsAnswer outcome
                                 }
 
+                            let dispatchDevops payload =
+                                task {
+                                    let! gitCommonDir = askGitCommonDir workspaceDirectory
+
+                                    if String.IsNullOrWhiteSpace gitCommonDir then
+                                        return
+                                            refusalWithReason
+                                                "devops-failed"
+                                                "devops failed: git common directory is missing"
+                                    else
+                                        return! askDevops payload gitCommonDir
+                                }
+
                             let devopsDelegate (payload: obj) : Task<obj> =
                                 task {
                                     if not (devopsDispatchAllowed (runtime.IsWaitingForUser ctx.SessionId)) then
-                                        return
-                                            refusalWithReason
-                                                "devops-refused"
-                                                "a question is waiting for the user"
+                                        return refusalWithReason "devops-refused" "a question is waiting for the user"
                                     else
-                                        let! gitCommonDir = askGitCommonDir workspaceDirectory
-
-                                        if String.IsNullOrWhiteSpace gitCommonDir then
-                                            return
-                                                refusalWithReason
-                                                    "devops-failed"
-                                                    "devops failed: git common directory is missing"
-                                        else
-                                            return! askDevops payload gitCommonDir
+                                        return! dispatchDevops payload
                                 }
 
                             // The commit-side fact of a delivery: the live cell
@@ -828,7 +836,7 @@ module ToolRegistry =
                                   Review = fun findings note -> reviewMember runtime ctx findings note }
 
                             let leaseToken =
-                                activeTurnBridge?acquire(
+                                activeTurnBridge?acquire (
                                     ctx.SessionId,
                                     box host,
                                     box (fun question -> runtime.AskUser(ctx, question))
@@ -844,7 +852,7 @@ module ToolRegistry =
 
                                     return outcome
                                 finally
-                                    activeTurnBridge?release(ctx.SessionId, leaseToken) |> ignore
+                                    activeTurnBridge?release (ctx.SessionId, leaseToken) |> ignore
                             } })
 
         let generatedJsSpecs () =

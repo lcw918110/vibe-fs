@@ -56,3 +56,35 @@ Advisor 的双语 system prompt 只使用自身的聊天指引，不继承工作
 验收分别见 `wanxiangli/src/scope-progress/tests/001–003.test.mjs`、`requirements/advisor/tests/004.test.mjs`／`006.test.mjs`、`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `advisor-031` 和 `delegation-negotiation-005/035–037`。其中自治协议测试不能冒称真实 Provider 或重启恢复已经通过。
 
 **已知边界（2026-10-26 评审记录）**：OMP 最终建议 steer 发出后 30 秒内没有观察到对应 `message_start`，宿主移除待确认回执并按 Unknown 返回；`AdvisorFlow` 保留当前 Process，因此本 Scope 后续触发合并为等待，直到 resetScope 或进程重启后恢复，迟到的 `message_start` 也不再补记第五阶段。这样不会重复计费，但会让本 Scope 余下时间没有新的 Advisor 咨询。专席历史取同一 Session 跨 Scope 最近 12 组已确认问答，作为一段散文前缀交给零工具请求，不是真正的多轮消息。投递回执 `[receipt:…]` 只用于宿主匹配物理接纳，OMP 在请求副本里从 agent steer 去掉，原始历史保留。
+
+## [008] 最终建议物理接纳观察（Await vs Detached）
+
+生产环境中 Advisor 最终建议 steer 走 `Await` 模式等待真实 `PhysicalAccepted` 确认后才完成结算，而普通协商 steer 保持 `Detached`；仅凭 SDK 排队回执不视为送达完成，投递结果 `AcceptanceUnknown` 保留未决认领且不误计为成功接纳。
+
+## [009] BusyNudge Await 接纳等待预算与超时 Unknown 边界
+
+`BusyNudge.sendObservedAwait` 严格等待持久 `PhysicalAccepted` 后才返回成功并通知观察者，且遵循显式声明的接纳等待预算（而非 10 秒默认准入上限）；未知落地结果或超出预算后才到达的物理接纳均报告为 `Acceptance unknown`（绝不谎报 Completed），迟到的真实落地仍结算持久认领但不会逆转已超时的等待结论。
+
+## [010] ToolRuntimeScope 最终建议送达与源 Scope 演进围栏
+
+`ToolRuntimeScope.SendAdvisorSteer` 在 `PhysicalAccepted` 确认前绝不提前结算，且在物理确认到达时再次核验源 Scope 是否仍然活跃；若发送期间源 Scope 已演进退休，即使物理消息落地也拒绝判定成功。
+
+## [011] 四阶段 AdvisorFlow 全链路物理确认与陈旧 Scope 拦截
+
+完整四阶段 `AdvisorFlow` 必须在全部四次模型问答与最终 steer 的持久 `PhysicalAccepted` 均确认后才写入 `Finished(Completed)` 并释放活跃队列；若投递期间 Scope 已推进，不写入 `Finished` 并保留未决状态。
+
+## [012] OpenCode 冷恢复仅认领已证明的当前 Scope 且不重发未知模型请求
+
+OpenCode 在 `chat.params` 边界仅对已证明存在活跃 Scope 的会话恢复未决 Advisor 流程，对已提交 `StageBegan` 但未确认回答的阶段保持 `Unknown` 且绝不二次发送付费模型请求。
+
+## [013] ScopeReanchored 持久事实在内存清空后单独确立冷恢复 Scope 身份
+
+当进程重启导致 `ScopeProgress` 内存状态清空时，已提交的 `ScopeReanchored` 持久日志可独立提供真实当前 Scope 身份以恢复未决 Advisor 流程，且不伪造上一轮计费估计。
+
+## [014] OpenCode todowrite 计费估计与 ResetDue 的 SQLite 持久恢复及非法输入隔离
+
+真实 `todowrite` 计费估计与零预算 `ResetDue` 锁存状态持久化于 SQLite，内存丢失后可从可信 Scope 身份与 SQLite 账本精确重建；准入校验失败的非法程序调用不计费、不触发 Advisor。
+
+## [015] 多工作区并行插件实例的 SQLite 进度账本严格隔离
+
+同时存活的多个 OpenCode 插件工作区各自绑定独立的 SQLite 状态根，任一插件的初始化或调用绝不篡改或串写另一工作区会话的进度账本。

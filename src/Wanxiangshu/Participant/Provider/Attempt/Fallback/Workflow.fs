@@ -180,7 +180,7 @@ module ProviderRecoveryWorkflow =
                 observeRecoveryAcceptance durable input.Turn authorization observer
 
             let! hostStopped =
-                providerAttemptStopFence?WaitForStop(
+                providerAttemptStopFence?WaitForStop (
                     SessionId.value input.Turn.SessionId,
                     ProviderRunIdentity.value input.Turn.ProviderRun,
                     30000
@@ -257,7 +257,7 @@ module ProviderRecoveryWorkflow =
         }
         :> Task
 
-    let private defaultPromptOptions : SessionPromptOptions =
+    let private defaultPromptOptions: SessionPromptOptions =
         { Model = None
           Agent = None
           Directory = None
@@ -272,7 +272,12 @@ module ProviderRecoveryWorkflow =
             | _ -> return false
         }
 
-    let private notifyIfNudgeFailed (eventPort: IEventObservationPort) (turn: ReconciledTurn) (error: string) (sent: bool) =
+    let private notifyIfNudgeFailed
+        (eventPort: IEventObservationPort)
+        (turn: ReconciledTurn)
+        (error: string)
+        (sent: bool)
+        =
         match sent with
         | false -> notifyFailure eventPort turn error
         | true -> ()
@@ -326,7 +331,9 @@ module ProviderRecoveryWorkflow =
             match hasCapacity, recoveryContext with
             | false, _ -> notifyFailure eventPort turn "All candidate providers exhausted (zero capacity)"
             | true, None ->
-                let prompt = ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+                let prompt =
+                    ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+
                 let! sent = nudgeDirectly sessionPort turn prompt
                 notifyIfNudgeFailed eventPort turn error sent
             | true, Some(ownerSessionId, requestKind, current) ->
@@ -408,7 +415,9 @@ module ProviderRecoveryWorkflow =
             match hasCapacity, recoveryContext with
             | false, _ -> return RetryVerdict.Terminal "All candidate providers exhausted (zero capacity)"
             | true, None ->
-                let prompt = ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+                let prompt =
+                    ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+
                 let! sent = nudgeDirectly sessionPort turn prompt
                 return verdictOfNudge error sent
             | true, Some(ownerSessionId, requestKind, current) ->

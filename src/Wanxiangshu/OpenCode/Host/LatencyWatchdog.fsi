@@ -83,10 +83,12 @@ module LatencyWatchdogFactory =
         now: (unit -> float) ->
         schedule: (float -> (unit -> unit) -> IDisposable) ->
         abort: (string -> System.Threading.Tasks.Task<bool>) ->
-        continueObserved: (string -> string -> (unit -> unit) -> (string -> unit) -> System.Threading.Tasks.Task<string>) ->
+        continueObserved:
+            (string -> string -> (unit -> unit) -> (string -> unit) -> System.Threading.Tasks.Task<string>) ->
         managed: (string -> bool) ->
         text: (string -> string) ->
         diagnostic: (string -> string -> unit) ->
         returnFailure: (string -> string -> unit) ->
         dropObserver: (string -> unit) ->
-        detector: RequestLatencyDetector -> LatencyWatchdog
+        detector: RequestLatencyDetector ->
+            LatencyWatchdog

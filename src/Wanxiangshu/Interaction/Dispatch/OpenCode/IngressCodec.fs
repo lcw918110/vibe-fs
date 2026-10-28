@@ -215,7 +215,9 @@ module PromptIngressCodec =
              |> List.choose agentOf
              |> List.exists (fun agent -> agent.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
           ModeIsCompaction =
-            ([ readString message "mode"; readString input "mode"; readString (childObject input "info") "mode" ]
+            ([ readString message "mode"
+               readString input "mode"
+               readString (childObject input "info") "mode" ]
              |> List.choose id
              |> List.exists (fun mode -> mode.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
           HasParts = messageParts.Length > 0

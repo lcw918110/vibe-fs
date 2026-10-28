@@ -1102,7 +1102,8 @@ type SyncDelegateRuntime
 
         cleanupDelegateDraft (sessionKey sessionId)
 
-        RuntimeDeferredInterop.deferredStore?clearSession (sessionKey sessionId) |> ignore
+        RuntimeDeferredInterop.deferredStore?clearSession (sessionKey sessionId)
+        |> ignore
 
     member _.Dispose() =
         let retiredDelegates = store.ClearAll()

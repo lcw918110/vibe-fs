@@ -180,7 +180,7 @@ test('WHAT[work-027] Engineer/DevOps natural stop completes cleanly without requ
       runtime.pushHostMessage(session, user)
       await hooks['chat.message'](
         { sessionID: session, messageID: physical, agent: name },
-        { message: user, parts: user.parts },
+        { message: user.info, parts: user.parts },
       )
 
       const run = `run-${session}`

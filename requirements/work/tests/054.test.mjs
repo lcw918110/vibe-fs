@@ -3,13 +3,17 @@ import test from 'node:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isEligible, isReviewFinished } from '../../../dist/Mission/Planning/PlanKernelSeam.js'
+import { isReviewFinished } from '../../../dist/Mission/Planning/Surface.js'
 import * as hostModule from '../../../dist/Mission/Lifecycle/DurableWorkHost.js'
 
 const host = hostModule.DurableWorkHost ?? hostModule
 const submitReview = host.submitReview
 const reviewEffects = host.reviewEffects
 const inspected = host.inspected
+const isEligible = (root, workId, incumbencyId) => {
+  const work = inspected(root, workId)
+  return Boolean(work && work.ActiveId === incumbencyId && (work.Wait === 'AwaitReview' || work.Wait === 'AwaitEmptyReview' || work.Wait === 'ConfirmEffect'))
+}
 
 const readDist = (path) => readFileSync(new URL('../../../' + path, import.meta.url), 'utf8')
 

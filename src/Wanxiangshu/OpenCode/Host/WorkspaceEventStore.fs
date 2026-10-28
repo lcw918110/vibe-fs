@@ -56,17 +56,15 @@ module WorkspaceEventStore =
         match String.IsNullOrWhiteSpace commonDir with
         | true -> failwith "WorkspaceEventStore.acquire: commonDir is empty"
         | false ->
-            let storeObj = sharedPool.Acquire(commonDir, fun dir -> box (deferredStore dir))
+            let storeObj = sharedPool.Acquire(commonDir, (fun dir -> box (deferredStore dir)))
             let store = unbox<IEventStore> storeObj
             rememberCommonDir store commonDir
             store
 
     let tryCurrent (commonDir: string) : IEventStore option =
-        sharedPool.TryCurrent(commonDir)
-        |> Option.map unbox<IEventStore>
+        sharedPool.TryCurrent(commonDir) |> Option.map unbox<IEventStore>
 
-    let release (commonDir: string) =
-        sharedPool.Release(commonDir) |> ignore
+    let release (commonDir: string) = sharedPool.Release(commonDir) |> ignore
 
     let bootPort (commonDir: string) : IJournalEventStoreBoot =
         let store = acquire commonDir

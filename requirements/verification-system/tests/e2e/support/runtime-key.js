@@ -127,8 +127,17 @@ const insertedReplayPairLength = (messages, index) => {
 
 const scopeReminderTexts = new Set([
   '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]',
+  '[系统：估计第一个细粒度任务状态闭环所需的 turnBudget。先调用 resetScope 初始化该闭环，再执行其他工作。]',
   '[System: Before any resetScope initialization, call negotiate(questions: string) NOW. Ask the delegator all questions needed to clarify this assignment. Group related questions into the single plural questions argument. Once the call is accepted, negotiation is complete and the timeline continues: do not wait for any answer, and call resetScope promptly. If the delegator’s answer is obtained, it may arrive later as a user steer; it never blocks the timeline. You may negotiate again at any time; later calls never delay resetScope.]',
+  '[系统：先调用 negotiate(questions: string) 向委托者澄清本次任务。把需要确认的多个具体问题集中写入 questions 参数；调用一经受理即视为协商完成，时序继续，不必也不要等待答复；之后即可调用 resetScope 初始化 scope。若取得委托者答复，可能随后作为 steer 补到，不阻塞时序。后续可以继续提问，不影响正常的 resetScope。]',
   '[System: You have received the handoff from the previous scope. You must now call askPreviousScope(questions) first to clarify specific questions with the previous scope based on the handoff and current objective. The call acknowledges sending immediately; continue your work without waiting. Answers will arrive later as a user steer.]',
+  '[系统：你已经收到前一 Scope 的交接。现在必须先调用 askPreviousScope(questions)，由你根据交接及当前目标，自行向前一 Scope 确认需要澄清的具体问题。调用受理后不必等待答复，可继续工作；回答随后作为 steer 到达。]',
+  'The current Scope has no estimate of remaining billable rounds yet. Submit remainingScopeTurnsEstimate in this todowrite.',
+  '当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中提交 remainingScopeTurnsEstimate。',
+  'The current Scope has no estimate of remaining billable rounds yet. Submit remainingScopeTurnsEstimate in this todowrite as a nonnegative number; fractions are fine. Each charged round should lower it by at least 0.1 from the previous charged round. Report what you actually expect, not a number tuned to the rule.',
+  '当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中把 remainingScopeTurnsEstimate 报成非负实数，允许小数。每个计费回合的估计应比上一个计费回合至少下降 0.1。报你真实预期，不为迎合规则而调数字。',
+  'You reported that the current Scope needs 0 more billable rounds. Call resetScope now, with the handoff text of the previous Scope and the objective of the new Scope.',
+  '你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。',
 ]);
 
 export const isScopeReminderText = (text) => scopeReminderTexts.has(text);

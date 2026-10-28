@@ -142,11 +142,20 @@ module HostMessageProjection =
             let reasoningText = rawParts |> Array.tryPick reasoningFromPart
             withFallbackTextPart raw rawParts (fallbackText role reasoningText)
 
+    let private requestSeparators: obj = emitJsExpr () "new WeakSet()"
+
+    let isRequestSeparator (message: obj) : bool =
+        emitJsExpr (requestSeparators, message) "$0.has($1)"
+
     let private createAssistantDotMessage () : obj =
-        createObj
-            [ "info", box (createObj [ "role", box "assistant" ])
-              "role", box "assistant"
-              "parts", box [| createObj [ "type", box "text"; "text", box "." ] |] ]
+        let message =
+            createObj
+                [ "info", box (createObj [ "role", box "assistant" ])
+                  "role", box "assistant"
+                  "parts", box [| createObj [ "type", box "text"; "text", box "." ] |] ]
+
+        emitJsExpr (requestSeparators, message) "$0.add($1)" |> ignore
+        message
 
     let private isUserRole (raw: obj) : bool =
         if isNull raw then
@@ -174,10 +183,13 @@ module HostMessageProjection =
 
     let private isReasoningOnlyAssistant (raw: obj) : bool =
         let parts = readParts raw
+
         let onlyNonProse =
-            parts |> Array.forall (fun part ->
+            parts
+            |> Array.forall (fun part ->
                 let kind = partKind part
                 kind = "reasoning" || kind = "thinking" || kind = "text")
+
         readRole raw = "assistant"
         && onlyNonProse
         && not (hasNonEmptyText raw parts)
@@ -185,18 +197,25 @@ module HostMessageProjection =
 
     let private userContentParts (raw: obj) : obj array =
         let parts = readParts raw
-        if parts.Length > 0 then parts
-        else
+
+        let contentParts () =
             let content = readField raw "content"
-            if isNull content then [||]
+
+            if isNull content then
+                [||]
             elif emitJsExpr content "typeof $0 === 'string'" then
                 [| createObj [ "type", box "text"; "text", content ] |]
-            else [||]
+            else
+                [||]
+
+        if parts.Length > 0 then parts else contentParts ()
 
     let private mergeUserMessages (first: obj) (second: obj) : obj =
         let separator = createObj [ "type", box "text"; "text", box "\n\n" ]
+
         let both =
             Array.concat [| userContentParts first; [| separator |]; userContentParts second |]
+
         let merged = emitJsExpr second "Object.assign({}, $0)"
         emitJsExpr (merged, both) "$0.parts = $1; delete $0.content;" |> ignore
         merged

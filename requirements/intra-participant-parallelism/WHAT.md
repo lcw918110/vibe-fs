@@ -78,3 +78,7 @@ fission 是同一 logical participant 换一条执行道，不是委派：每条
 
 成员签名上 `this.fission(payload)` 只有 payload 一个形参，不带 `carry`：拉取或换道动作不承载委派材料。可带 `carry` 的是委派成员 `fork`、`resume`、`commission`、`devops`、`advisor`、`dag`；`join` 与 `horizon` 同 fission 一样不带。
 
+## [019] 裂变终态与 clearOwner 后迟到物理回调的安全拒绝
+
+Group 达成 `FissionConverged` 或 `Failed` 终态并执行 `clearOwner` 清理进程本地注册表后，任何迟到抵达的 PTY 或子会话物理完成回调均无法恢复已清除的映射，且被 `FissionGroupLaw` 严格拒绝（`ConflictingGroup` / `ConflictingLaneWork` / `TerminalAlreadySet`），绝不复活已结清的 group 或篡改既有终态。
+

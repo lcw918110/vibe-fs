@@ -12,16 +12,27 @@ import { startHttpServer, stopHttpServer, readRequestBody } from '../../../verif
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
 const plugin = path.join(repoRoot, 'dist/OpenCode/Plugin/Plugin.js')
 const scenario = fs.mkdtempSync(path.join(os.tmpdir(), 'wxs-pre-provider-join-'))
+const wrapperPlugin = path.join(scenario, 'pre-provider-reject-plugin.mjs')
 const host = new ProcessHost()
 let managerRequests = 0
 let childRequests = 0
 let providerRequests = 0
 let joinResult = null
 let session
-const routingSource = `export const routingProtocol = 2
-export const hasTheoreticalCapacity = (role) => role !== 'engineer'
-export default function route(role) {
-  return role === 'engineer' ? null : { model: 'test/test-model', reasoning: 'none' }
+const wrapperSource = `import pluginModule from ${JSON.stringify(plugin)}
+export default {
+  id: pluginModule.id,
+  server: async (input) => {
+    const hooks = await pluginModule.server(input)
+    const originalChatParams = hooks['chat.params']
+    hooks['chat.params'] = async (inObj, outObj) => {
+      if (inObj?.agent === 'engineer') {
+        throw new Error('forced pre-provider failure on engineer capacity')
+      }
+      return await originalChatParams(inObj, outObj)
+    }
+    return hooks
+  },
 }
 `
 const provider = await startHttpServer(async (request, response) => {
@@ -38,6 +49,7 @@ const provider = await startHttpServer(async (request, response) => {
     if (managerRequests === 1) return call('todowrite-for-manager', {
       name: 'pre-provider-fork',
       intent: '等待派工回执，保留预请求阶段的拒绝事实。',
+      remainingScopeTurnsEstimate: 3,
       program: 'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Worker", charge: "Do not modify files. Return one short report." }, []); } }',
     })
     if (managerRequests === 2) return call('join', {})
@@ -57,9 +69,10 @@ const api = async (method, pathname, body) => {
 try {
   fs.mkdirSync(path.join(scenario, 'workspace'))
   fs.mkdirSync(path.join(scenario, 'xdg/config/opencode'), { recursive: true })
-  fs.writeFileSync(path.join(scenario, 'xdg/config/opencode/opencode.jsonc'), JSON.stringify({ plugin: [plugin] }))
+  fs.writeFileSync(wrapperPlugin, wrapperSource, 'utf8')
+  fs.writeFileSync(path.join(scenario, 'xdg/config/opencode/opencode.jsonc'), JSON.stringify({ plugin: [wrapperPlugin] }))
   await initGitWorkspace(path.join(scenario, 'workspace'))
-  await host.start({ scenarioDir: scenario, providerUrl: `${provider.url}/v1`, pluginPaths: [plugin], routingSource })
+  await host.start({ scenarioDir: scenario, providerUrl: `${provider.url}/v1`, pluginPaths: [wrapperPlugin] })
   const created = await api('POST', '/api/session', { agent: 'manager', model: { providerID: 'test', id: 'test-model' } })
   session = created?.id ?? created?.data?.id ?? created?.data?.data?.id
   assert.ok(session)
@@ -71,7 +84,8 @@ try {
   while (!joinResult && Date.now() < deadline) await delay(50)
   assert.equal(childRequests, 0, 'rejected admission must never call the child provider')
   assert.ok(joinResult, `parent join did not return; manager requests=${managerRequests}`)
-  assert.match(JSON.stringify(joinResult), /ERROR|failed|Failed|capacity|Capacity|never started/i)
+  const joinText = String(joinResult.content ?? '').split('\0')[0]
+  assert.match(joinText, /capacity|never started/i, 'join must report the intended admission failure, not an unrelated failure')
   const eventsDirectory = path.join(scenario, 'workspace/.Herdchestra/wanxiangshu/events')
   const facts = fs.readdirSync(eventsDirectory).filter(name => name.endsWith('.ndjson')).flatMap(name =>
     fs.readFileSync(path.join(eventsDirectory, name), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line).payload?.Fact),

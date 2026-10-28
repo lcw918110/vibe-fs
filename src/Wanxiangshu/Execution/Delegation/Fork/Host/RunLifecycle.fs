@@ -94,30 +94,39 @@ module HostForkRunLifecycle =
         (onAccepted: ContinuationAcceptanceObserver)
         (evidence: PromptAuthority.AcceptedDispatch)
         =
+        let continuationRoot () =
+            match capturedActiveProfile with
+            | Some profile -> Ok profile.AuthorityRootUserMessageId
+            | None ->
+                match
+                    PromptAuthorityProjectionQueries.activeProfile
+                        childId
+                        (AgentJournal.snapshot durable).AgentProjections
+                with
+                | Some profile when profile.IdentitySeed = evidence.IdentitySeed ->
+                    Ok profile.AuthorityRootUserMessageId
+                | Some _ -> Error "Active child authority profile does not match accepted continuation identity seed"
+                | None -> Error "Managed delegation continuation accepted but active child authority profile is missing"
+
         let rootResult =
             match evidence.Origin with
-            | PromptAuthority.PromptOrigin.Continuation _ ->
-                match capturedActiveProfile with
-                | Some profile -> Ok profile.AuthorityRootUserMessageId
-                | None ->
-                    match PromptAuthorityProjectionQueries.activeProfile childId (AgentJournal.snapshot durable).AgentProjections with
-                    | Some profile when profile.IdentitySeed = evidence.IdentitySeed ->
-                        Ok profile.AuthorityRootUserMessageId
-                    | Some _ -> Error "Active child authority profile does not match accepted continuation identity seed"
-                    | None -> Error "Managed delegation continuation accepted but active child authority profile is missing"
-            | _ ->
-                Ok(PhysicalUserMessageId.promoteToAuthorityRoot evidence.PhysicalUserMessageId)
+            | PromptAuthority.PromptOrigin.Continuation _ -> continuationRoot ()
+            | _ -> Ok(PhysicalUserMessageId.promoteToAuthorityRoot evidence.PhysicalUserMessageId)
+
+        let effectiveSeed =
+            match evidence.Origin with
+            | PromptAuthority.PromptOrigin.Continuation _ -> evidence.IdentitySeed
+            | _ -> identitySeed
+
+        let acceptedRoot root =
+            match PromptAuthority.identitySeedOwner effectiveSeed with
+            | Some(parentId, _, _) ->
+                acceptedBindingOutcome durable parentId childId root evidence.PhysicalUserMessageId
+            | None -> AgentOwnerDispatchOutcome.Rejected "child assignment has no exact owner identity"
 
         match rootResult with
         | Error err -> AgentOwnerDispatchOutcome.Rejected err
-        | Ok root ->
-            let effectiveSeed =
-                match evidence.Origin with
-                | PromptAuthority.PromptOrigin.Continuation _ -> evidence.IdentitySeed
-                | _ -> identitySeed
-            match PromptAuthority.identitySeedOwner effectiveSeed with
-            | Some(parentId, _, _) -> acceptedBindingOutcome durable parentId childId root evidence.PhysicalUserMessageId
-            | None -> AgentOwnerDispatchOutcome.Rejected "child assignment has no exact owner identity"
+        | Ok root -> acceptedRoot root
 
     let issueCurrentOwnerIdentitySeed
         (journal: AgentJournal option)
@@ -159,22 +168,27 @@ module HostForkRunLifecycle =
         =
         let projections = (AgentJournal.snapshot durable).AgentProjections
 
+        let profileMatches (evidence: PromptAuthority.AcceptedDispatch) =
+            let capturedMatches =
+                match capturedActiveProfile with
+                | Some captured -> captured.IdentitySeed = evidence.IdentitySeed
+                | None -> false
+
+            let durableMatches =
+                match PromptAuthorityProjectionQueries.activeProfile childId projections with
+                | Some current -> current.IdentitySeed = evidence.IdentitySeed
+                | None -> false
+
+            capturedMatches || durableMatches
+
         match PromptAuthorityProjectionQueries.dispatchStatusFor childId payloadDigest projections with
         | PromptAuthorityProjectionQueries.DispatchStatus.Accepted evidence when evidence.IdentitySeed = identitySeed ->
             DurableDispatchObservation.Accepted evidence
         | PromptAuthorityProjectionQueries.DispatchStatus.Accepted evidence when
             (match evidence.Origin with
-             | PromptAuthority.PromptOrigin.Continuation _ ->
-                 let capturedMatches =
-                     match capturedActiveProfile with
-                     | Some captured -> captured.IdentitySeed = evidence.IdentitySeed
-                     | None -> false
-                 let durableMatches =
-                     match PromptAuthorityProjectionQueries.activeProfile childId projections with
-                     | Some current -> current.IdentitySeed = evidence.IdentitySeed
-                     | None -> false
-                 capturedMatches || durableMatches
-             | _ -> false) ->
+             | PromptAuthority.PromptOrigin.Continuation _ -> profileMatches evidence
+             | _ -> false)
+            ->
             DurableDispatchObservation.Accepted evidence
         | PromptAuthorityProjectionQueries.DispatchStatus.Accepted _ -> DurableDispatchObservation.IdentityMismatch
         | PromptAuthorityProjectionQueries.DispatchStatus.Pending ->
@@ -224,7 +238,8 @@ module HostForkRunLifecycle =
         =
         let payloadDigest = HostDigest.sha256Hex prompt
 
-        let accepted = acceptedOutcome durable childId capturedActiveProfile identitySeed onAccepted
+        let accepted =
+            acceptedOutcome durable childId capturedActiveProfile identitySeed onAccepted
 
         match durableDispatchObservation durable childId capturedActiveProfile payloadDigest identitySeed with
         | DurableDispatchObservation.Accepted evidence -> accepted evidence
@@ -232,10 +247,21 @@ module HostForkRunLifecycle =
             AgentOwnerDispatchOutcome.Rejected "Durable child dispatch identity witness does not match this owner run"
         | DurableDispatchObservation.Dispatchable -> AgentOwnerDispatchOutcome.Rejected error
         | DurableDispatchObservation.Pending claim ->
-            classifyPendingSend durable childId capturedActiveProfile payloadDigest identitySeed claim onAccepted accepted error
+            classifyPendingSend
+                durable
+                childId
+                capturedActiveProfile
+                payloadDigest
+                identitySeed
+                claim
+                onAccepted
+                accepted
+                error
 
     let private classifySendSuccess durable childId capturedActiveProfile identitySeed prompt onAccepted =
-        match durableDispatchObservation durable childId capturedActiveProfile (HostDigest.sha256Hex prompt) identitySeed with
+        match
+            durableDispatchObservation durable childId capturedActiveProfile (HostDigest.sha256Hex prompt) identitySeed
+        with
         | DurableDispatchObservation.Accepted evidence ->
             acceptedOutcome durable childId capturedActiveProfile identitySeed onAccepted evidence
         | DurableDispatchObservation.Pending _ ->
@@ -288,7 +314,15 @@ module HostForkRunLifecycle =
                     None
                     None
 
-            return interpretDispatchResult durable childId capturedActiveProfile dispatchIdentitySeed prompt onAccepted sent
+            return
+                interpretDispatchResult
+                    durable
+                    childId
+                    capturedActiveProfile
+                    dispatchIdentitySeed
+                    prompt
+                    onAccepted
+                    sent
         }
 
     let private chooseView delivered observed =
@@ -480,72 +514,105 @@ module HostForkRunLifecycle =
         not (isNull x) && box x <> emitJsExpr () "undefined"
 
     let internal tryGetRun (store: obj) (agentId: string) : PendingHostRun option =
-        let p: obj = store?tryGetPayload(agentId)
+        let p: obj = store?tryGetPayload (agentId)
+
         if isJsDefined p then
-            Some (unbox<PendingHostRun> p)
+            Some(unbox<PendingHostRun> p)
         else
             None
 
-    let internal containsRun (store: obj) (agentId: string) : bool =
-        store?containsAgent(agentId) = true
+    let internal containsRun (store: obj) (agentId: string) : bool = store?containsAgent (agentId) = true
 
-    let internal pendingRunCount (store: obj) : int =
-        unbox<int> store?count
+    let internal pendingRunCount (store: obj) : int = unbox<int> store?count
 
     let internal allRuns (store: obj) : PendingHostRun list =
-        let all: obj array = store?allPayloads()
+        let all: obj array = store?allPayloads ()
+
         all
         |> Seq.choose (fun item ->
-            if isJsDefined item then Some (unbox<PendingHostRun> item) else None)
+            if isJsDefined item then
+                Some(unbox<PendingHostRun> item)
+            else
+                None)
         |> Seq.toList
 
     let internal allRunsAsDictionary (store: obj) : Dictionary<string, PendingHostRun> =
         let d = Dictionary<string, PendingHostRun>()
+
         for run in allRuns store do
             d.[run.AgentId] <- run
+
         d
 
     let internal removeRunByAgentId (store: obj) (agentId: string) : unit =
-        store?removeByAgentId(agentId) |> ignore
+        store?removeByAgentId (agentId) |> ignore
 
-    let internal drainAllRuns (store: obj) : {| Run: PendingHostRun; Subscription: IDisposable option |} list =
-        let drained: obj array = store?drainAll()
-        drained
-        |> Seq.choose (fun item ->
-            if not (isJsDefined item) then None
+    let internal drainAllRuns
+        (store: obj)
+        : {| Run: PendingHostRun
+             Subscription: IDisposable option |} list
+        =
+        let drained: obj array = store?drainAll ()
+
+        let payload (item: obj) =
+            let p = item?payload
+
+            if not (isJsDefined p) then
+                None
             else
-                let p = item?payload
-                if not (isJsDefined p) then None
-                else
-                    let run = unbox<PendingHostRun> p
-                    let s = item?subscription
-                    let sub = if isJsDefined s then Some (unbox<IDisposable> s) else None
-                    Some {| Run = run; Subscription = sub |})
+                let run = unbox<PendingHostRun> p
+                let s = item?subscription
+                let sub = if isJsDefined s then Some(unbox<IDisposable> s) else None
+                Some {| Run = run; Subscription = sub |}
+
+        drained
+        |> Seq.choose (fun item -> if not (isJsDefined item) then None else payload item)
         |> Seq.toList
 
     let internal drainCancelledRuns (store: obj) (agentIds: string list) : IDisposable list =
         let cancelledSet = Set.ofList agentIds
-        let drainedSubs: obj array = store?drainCancelled(agentIds |> List.toArray)
+        let drainedSubs: obj array = store?drainCancelled (agentIds |> List.toArray)
         let subs = ResizeArray<IDisposable>()
-        for item in drainedSubs do
+
+        let addSubscription item =
             if isJsDefined item then
                 subs.Add(unbox<IDisposable> item)
 
-        for run in allRuns store do
+        let settleClaimed (run: PendingHostRun) (verdict: obj) =
+            if verdict?claimed = true then
+                run.Finished <- true
+                addSubscription verdict?subscription
+
+                AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "ParentCancelled")
+                |> ignore
+
+        let settleRun (run: PendingHostRun) =
             if Set.contains run.AgentId cancelledSet then
-                let verdict: obj = store?settleParentCancelled(run.AgentId, run.Token)
-                if verdict?claimed = true then
-                    run.Finished <- true
-                    let s = verdict?subscription
-                    if isJsDefined s then
-                        subs.Add(unbox<IDisposable> s)
-                    AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "ParentCancelled") |> ignore
+                let verdict: obj = store?settleParentCancelled (run.AgentId, run.Token)
+                settleClaimed run verdict
+
+        for item in drainedSubs do
+            addSubscription item
+
+        for run in allRuns store do
+            settleRun run
+
         subs |> Seq.toList
 
     let private claimPendingRun (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
-        lock gate (fun () ->
-            let verdict: obj = pendingRuns?claim(run.AgentId, run.Token)
+        let claim () =
+            let verdict: obj = pendingRuns?claim (run.AgentId, run.Token)
+
             if verdict?claimed = true then
+                run.Finished <- true
+                true, run.Subscription
+            else
+                false, None
+
+        lock gate (fun () ->
+            if emitJsExpr pendingRuns "typeof $0?.claim === 'function'" then
+                claim ()
+            elif not run.Finished then
                 run.Finished <- true
                 true, run.Subscription
             else
@@ -581,7 +648,10 @@ module HostForkRunLifecycle =
 
     let private removeClaimedRun (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
         lock gate (fun () ->
-            pendingRuns?removeClaimed(run.AgentId, run.Token) |> ignore)
+            if emitJsExpr pendingRuns "typeof $0?.removeClaimed === 'function'" then
+                pendingRuns?removeClaimed (run.AgentId, run.Token) |> ignore
+            elif emitJsExpr pendingRuns "typeof $0?.Remove === 'function'" then
+                pendingRuns?Remove (run.AgentId) |> ignore)
 
     let private resolveFinalCommittedOutcome
         (journal: AgentJournal option)
@@ -1118,14 +1188,21 @@ module HostForkRunLifecycle =
               Finished = false }
 
         lock gate (fun () ->
-            let existing: obj = pendingRuns?tryGetPayload(agentId)
-            if not (obj.ReferenceEquals(existing, null)) && not (emitJsExpr existing "$0 === undefined") then
+            let existing: obj = pendingRuns?tryGetPayload (agentId)
+
+            if
+                not (obj.ReferenceEquals(existing, null))
+                && not (emitJsExpr existing "$0 === undefined")
+            then
                 let oldRun = unbox<PendingHostRun> existing
                 oldRun.Finished <- true
                 oldRun.Subscription |> Option.iter (fun s -> s.Dispose())
-                AsyncSupport.trySetResult oldRun.Source (AgentCompletion.abandoned oldRun.AgentId "Superseded") |> ignore
 
-            pendingRuns?register(agentId, run.Token, (SessionId.value childId), (string role), run) |> ignore)
+                AsyncSupport.trySetResult oldRun.Source (AgentCompletion.abandoned oldRun.AgentId "Superseded")
+                |> ignore
+
+            pendingRuns?register (agentId, run.Token, (SessionId.value childId), (string role), run)
+            |> ignore)
 
         // DSL-MUTABLE: algorithm-scratch — install-time replay window flag
         let mutable armed = false
@@ -1174,7 +1251,7 @@ module HostForkRunLifecycle =
         let disposeImmediately =
             lock gate (fun () ->
                 run.Subscription <- Some subscription
-                pendingRuns?attachSubscription(run.AgentId, run.Token, subscription) |> ignore
+                pendingRuns?attachSubscription (run.AgentId, run.Token, subscription) |> ignore
                 armed <- true
                 run.Finished)
 
@@ -1190,7 +1267,8 @@ module HostForkRunLifecycle =
     let settleParentCancelled (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
         let claimed, subscriptionToDispose =
             lock gate (fun () ->
-                let verdict: obj = pendingRuns?settleParentCancelled(run.AgentId, run.Token)
+                let verdict: obj = pendingRuns?settleParentCancelled (run.AgentId, run.Token)
+
                 if verdict?claimed = true then
                     run.Finished <- true
                     true, run.Subscription
@@ -1201,7 +1279,8 @@ module HostForkRunLifecycle =
             subscriptionToDispose
             |> Option.iter (fun subscription -> subscription.Dispose())
 
-            AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "ParentCancelled") |> ignore
+            AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "ParentCancelled")
+            |> ignore
 
     let failRun
         (gate: obj)

@@ -421,3 +421,15 @@ Plan 的编程面（`todowrite-for-plan`）携带 `js.ask(question)`：程序内
 工作期的 Manager 不因某次空账获得或失去资格。任期仍活跃、且没有真实资源阻塞时，Fork、Resume、Join 与后续 review 保持可用。收尾仍有真实阻塞时不得结案。已完成后再 review 拒绝。
 
 证明：`wanxiangli/src/lifecycle/tests/006.test.mjs` 与 `tests/007.test.mjs` 核对阻塞、结案与一次操作员重开。
+
+## [053] review 取代主仓 deliver 作为唯一生命周期入口（第二宿主保留 wxs_deliver）
+
+OpenCode 工具目录、角色权限表与 Plan/Manager 双语提示词统一以 `review` 作为生命周期评审、接力与收尾入口，不再暴露旧 `deliver` 工具或资格术语；单次 `review` 按义务台账更新推进执行、接力或完成收尾。第二宿主适配入口仍保留 `wxs_deliver` 委派移交能力，`wanxiangli/delivery` 的 `handOff` 原样交回部件正文。
+
+## [054] review 外部效果门与单次幂等执行（park / send / stop / open+draft）
+
+`ReviewShell` 与 `DurableWorkHost.submitReview` 通过注入的 `reviewEffects` 驱动宿主端口：首任空账 `Asked` 恰好 park 提问一次（「我需要干什么？」）；清空台账 `Relayed` 恰好向后任发送继任提示一次；`收尾` 阶段结案 `Completed` 恰好中断当前 attempt 一次；`待执行` 阶段启动 `Launched` 恰好创建一次 Manager 会话并投递一次底稿；重放同一请求保持 `Replayed` 且不重复触发外部副作用。
+
+## [055] 工作测试套件与辅助夹具彻底移除旧 S1–S3 序列与 Promoted 探针
+
+`work` 规范测试夹具与全套用例彻底清除旧 `S1,S2,S3` 阶段名、`Promoted` 评审结果及历史 probe 辅助函数，统一使用里程碑中文阶段名与 `review` 语义接口。

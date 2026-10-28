@@ -17,7 +17,7 @@ module JoinGuardSurface =
     let private reservationStore: obj = jsNative
 
     type private ReservationCapability() =
-        let keys: HashSet<string> = unbox (reservationStore?createScope())
+        let keys: HashSet<string> = unbox (reservationStore?createScope ())
 
         member _.Keys = keys
 
@@ -74,7 +74,7 @@ module JoinGuardSurface =
 
             let keys: HashSet<string> =
                 if isNull reservations then
-                    unbox (reservationStore?createScope())
+                    unbox (reservationStore?createScope ())
                 else
                     (unbox<ReservationCapability> reservations).Keys
 

@@ -30,9 +30,7 @@ module ReviewShell =
         ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) path substitutions
 
     let private rejected reason =
-        ToolResultText.tomlObjectWithInstructions
-            [ reason ]
-            [ "recorded", ToolResultText.TBool false ]
+        ToolResultText.tomlObjectWithInstructions [ reason ] [ "recorded", ToolResultText.TBool false ]
 
     let private accepted (reply: obj) =
         let kind = string reply?kind
@@ -41,8 +39,7 @@ module ReviewShell =
 
         ToolResultText.tomlObjectWithInstructions
             [ sprintf "kind = %s\nmilestone = %s\nwait = %s" kind milestone wait ]
-            [ "recorded", ToolResultText.TBool true
-              "kind", ToolResultText.TString kind ]
+            [ "recorded", ToolResultText.TBool true; "kind", ToolResultText.TString kind ]
 
     let private updatesOf (findings: ReviewFindings) : obj =
         ReviewFindings.values findings
@@ -77,12 +74,9 @@ module ReviewShell =
         |> box
 
     let private officeOf (scope: ToolRuntimeScope) (context: HostToolContext) =
-        if scope.IsRole(context, Role.Plan) then
-            Ok "Plan"
-        elif scope.IsRole(context, Role.Manager) then
-            Ok "Manager"
-        else
-            Error "review is admitted only for Plan and Manager"
+        if scope.IsRole(context, Role.Plan) then Ok "Plan"
+        elif scope.IsRole(context, Role.Manager) then Ok "Manager"
+        else Error "review is admitted only for Plan and Manager"
 
     let private fenceOf (context: HostToolContext) =
         match context.ProviderRunId, context.ToolCallId with
@@ -96,14 +90,11 @@ module ReviewShell =
         (args: HostToolArguments)
         (context: HostToolContext)
         : obj =
-        if String.IsNullOrWhiteSpace gitCommonDir then
-            createObj [ "status", box "Conflict"; "kind", box ""; "reason", box "git common directory is missing" ]
-        else
+        let submit () =
             match Model.tryParse args.Raw, officeOf scope context, fenceOf context with
             | Error reason, _, _
             | _, Error reason, _
-            | _, _, Error reason ->
-                createObj [ "status", box "Conflict"; "kind", box ""; "reason", box reason ]
+            | _, _, Error reason -> createObj [ "status", box "Conflict"; "kind", box ""; "reason", box reason ]
             | Ok findings, Ok office, Ok(providerRunId, toolCallId) ->
                 DurableWorkHost.submitReview
                     gitCommonDir
@@ -116,6 +107,14 @@ module ReviewShell =
                     (blockersOf scope context.SessionId (providerRunId + ":" + toolCallId))
                     (digestOf args.Raw)
                     (scope.ReviewPorts context)
+
+        if String.IsNullOrWhiteSpace gitCommonDir then
+            createObj
+                [ "status", box "Conflict"
+                  "kind", box ""
+                  "reason", box "git common directory is missing" ]
+        else
+            submit ()
 
     let spec (factory: HostToolFactory) (scope: ToolRuntimeScope) : ToolSpec =
         let findingSchema =

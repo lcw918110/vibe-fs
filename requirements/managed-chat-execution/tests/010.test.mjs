@@ -68,7 +68,9 @@ const executionCount = (session, physical) =>
   ).length
 
 const acquireLease = (session, physical) =>
-  routing.acquireSharedExecutionAdmission(session, physical, 'engineer', 'engineer', null, 'normal')
+  routing.acquireSharedExecutionAdmission(session, physical, 'engineer', 'engineer', null, 'normal', {
+    model: 'fixture/engineer-model', reasoning: '',
+  })
 
 const withPlugin = async (action) => {
   const workspace = mkdtempSync(join(tmpdir(), 'wxs-chat-drain-'))
@@ -220,7 +222,8 @@ test('WHAT[managed-chat-execution-010] actual Host session deletion settles ever
   let deliverEvent
   await withExecutablePlugin(async (hooks, directory, createdIds, runtime) => {
     const admit = (sessionId, physical) => hooks['chat.message']({ sessionID: sessionId, messageID: physical, agent: 'engineer' }, {
-      message: { id: physical, sessionID: sessionId, role: 'user', agent: 'engineer' }, parts: [],
+      message: { id: physical, sessionID: sessionId, role: 'user', agent: 'engineer',
+        model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [],
     })
     await admit('ses-deleted', 'msg-deleted-first')
     await admit('ses-deleted', 'msg-deleted-next')

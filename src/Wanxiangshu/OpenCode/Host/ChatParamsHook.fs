@@ -244,6 +244,7 @@ module ChatParamsHook =
         =
         if not (isExplicitlyUnmanagedAgent input) then
             applyTurnParams turnOpt input output
+
         handleInput journal input output
 
     /// Host invokes chat.params as a native two-argument JS function. The boxed

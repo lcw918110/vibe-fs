@@ -89,11 +89,12 @@ module StaticTools =
         knownToolNames
         |> List.map (fun name ->
             name,
-            (role <> Role.Advisor && (name = "negotiate"
-             || (name = "askPreviousScope" && Set.contains ToolPermission.ResetScope allowed)
-             || OfficeCapability.admitsUtility role name
-             || (permissionOfToolName role name
-                 |> Option.exists (fun permission -> Set.contains permission allowed)))))
+            (role <> Role.Advisor
+             && (name = "negotiate"
+                 || (name = "askPreviousScope" && Set.contains ToolPermission.ResetScope allowed)
+                 || OfficeCapability.admitsUtility role name
+                 || (permissionOfToolName role name
+                     |> Option.exists (fun permission -> Set.contains permission allowed)))))
         |> Map.ofList
         |> AblationGate.filterToolPermissionMap registry
 

@@ -172,8 +172,9 @@ module OrdinaryTurnWorkflow =
 
             let emptyStopped =
                 turn.Observation.IsNone
-                && (turn.Finish |> Option.exists (fun finish ->
-                    System.String.Equals(finish, "stop", System.StringComparison.OrdinalIgnoreCase)))
+                && (turn.Finish
+                    |> Option.exists (fun finish ->
+                        System.String.Equals(finish, "stop", System.StringComparison.OrdinalIgnoreCase)))
                 && System.String.IsNullOrWhiteSpace(CompletedTurnClassifier.partsText turn.Parts)
                 && not (CompletedTurnClassifier.hasRealToolCall turn.Parts)
 

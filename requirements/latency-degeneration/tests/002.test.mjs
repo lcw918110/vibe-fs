@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { interruptAttemptAdapterProbe } from '../../../dist/OpenCode/Host/SessionsSurface.js'
 
-test('WHAT[latency-degeneration-007] interrupting a Provider attempt retains a managed child session for its next continuation',async()=>{
+test('WHAT[latency-degeneration-002] interrupting a Provider attempt retains a managed child session for its next continuation',async()=>{
   const physical=await interruptAttemptAdapterProbe()
   assert.equal(physical.created,true)
   assert.equal(physical.childInterrupted,true)
@@ -13,13 +13,13 @@ test('WHAT[latency-degeneration-007] interrupting a Provider attempt retains a m
     'the external operator owns interruptions of a user-facing root Session')
 })
 
-test('WHAT[latency-degeneration-007] production latency watchdog uses the attempt interruption port, not session termination',()=>{
+test('WHAT[latency-degeneration-002] production latency watchdog uses the attempt interruption port, not session termination',()=>{
   const source=readFileSync(new URL('../../../src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs',import.meta.url),'utf8')
   const beginning=source.indexOf('let latencyPorts: LatencyWatchdogPorts')
   const end=source.indexOf('let latencyWatchdog =',beginning)
   assert.ok(beginning>0&&end>beginning)
   const wiring=source.slice(beginning,end)
-  assert.match(wiring,/Abort = fun sessionId ->[\s\S]*?sessionPort\.InterruptAttempt/)
+  assert.match(wiring,/Abort\s*=\s*fun sessionId ->[\s\S]*?sessionPort\.InterruptAttempt/)
   assert.doesNotMatch(wiring,/sessionPort\.AbortSession/,
     'a watchdog must not tear down the session it needs to resume')
   assert.match(wiring,/HostSessionNudge\.sendContinuationDetachedObservedResult/,
@@ -27,14 +27,14 @@ test('WHAT[latency-degeneration-007] production latency watchdog uses the attemp
   const sender=readFileSync(new URL('../../../src/Wanxiangshu/Interaction/Dispatch/SessionNudge.fs',import.meta.url),'utf8')
   assert.match(sender,/PromptDispatcher\.AwaitMode\.Detached/,
     'the Host sender must dispatch without blocking on physical acceptance')
-  assert.match(wiring,/Notify = fun _ ->/, 'physical event callback must be installed')
+  assert.match(wiring,/Notify\s*=\s*fun _ ->/, 'physical event callback must be installed')
   assert.match(wiring,/accepted \(\)/, 'acceptance notification must settle continuation')
   assert.match(wiring,/onLateRefused/, 'a late definite Host refusal must reach the failure-return port')
   assert.match(wiring,/\n\s+acceptance\n/,
     'the Host sender must receive a physical acceptance observer, not merely an SDK receipt')
 })
 
-test('WHAT[latency-degeneration-007] post-interrupt continuation waits for true PhysicalAccepted, not a queued SDK receipt', async()=>{
+test('WHAT[latency-degeneration-002] post-interrupt continuation waits for true PhysicalAccepted, not a queued SDK receipt', async()=>{
   const dispatcher=await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
   const {withJournal, hostPort, prepareAcceptanceObserver, acceptObservedPhysical, ownAcceptanceRegistration}=
     await import('../../dispatch-protocol/tests/support/authority.mjs')
@@ -74,7 +74,7 @@ test('WHAT[latency-degeneration-007] post-interrupt continuation waits for true 
 })
 
 
-test('WHAT[latency-degeneration-009] real detached sender returns without waiting but only emits resumed on genuine PhysicalAccepted',async()=>{
+test('WHAT[latency-degeneration-002] real detached sender returns without waiting but only emits resumed on genuine PhysicalAccepted',async()=>{
   const dispatcher=await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
   const {withJournal,hostPort,prepareAcceptanceObserver,acceptObservedPhysical,ownAcceptanceRegistration}=
     await import('../../dispatch-protocol/tests/support/authority.mjs')

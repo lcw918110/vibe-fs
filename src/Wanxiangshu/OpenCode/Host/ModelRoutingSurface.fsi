@@ -12,6 +12,7 @@ module ModelRoutingSurface =
         participant: string ->
         lenderSessionId: string ->
         purpose: obj ->
+        hostTarget: obj ->
             Task<obj>
 
     val sharedExecutionAdmissionTarget: token: obj -> obj

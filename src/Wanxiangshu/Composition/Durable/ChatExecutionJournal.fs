@@ -35,36 +35,44 @@ module private FlightInterop =
     [<Import("ManagedChatExecutionFlight", "wanxiangli/chat-execution")>]
     let flightCtor: obj = jsNative
 
-    let create () : obj =
-        createNew flightCtor [||]
+    let create () : obj = createNew flightCtor [||]
 
 type private ManagedChatExecutionFlight'() =
     let inner: obj = FlightInterop.create ()
 
     member _.BeginFlight(runtimeId: string, sessionId: string, physicalUserMessageId: string, work: obj) : unit =
-        inner?beginFlight(runtimeId, sessionId, physicalUserMessageId, work)
+        inner?beginFlight (runtimeId, sessionId, physicalUserMessageId, work)
 
     member _.Finish(runtimeId: string, sessionId: string, physicalUserMessageId: string) : bool =
-        inner?finish(runtimeId, sessionId, physicalUserMessageId)
+        inner?finish (runtimeId, sessionId, physicalUserMessageId)
 
     member _.TryGet(runtimeId: string, sessionId: string, physicalUserMessageId: string) : obj option =
-        let res: obj = inner?get(runtimeId, sessionId, physicalUserMessageId)
+        let res: obj = inner?get (runtimeId, sessionId, physicalUserMessageId)
         if isNull res then None else Some res
 
-    member _.Clear() : unit =
-        inner?clear()
+    member _.Clear() : unit = inner?clear ()
 
     member _.Run(runtimeId: RuntimeId, key: ChatExecutionKey, operation: unit -> Task<'value>) : Task<'value> =
         let rid = RuntimeId.value runtimeId
         let sid = SessionId.value key.SessionId
         let msgId = PhysicalUserMessageId.value key.PhysicalUserMessageId
 
-        let preceding : Task =
-            let existing: obj = inner?get(rid, sid, msgId)
-            if isNull existing then AsyncSupport.completedTask () else unbox<Task> existing
+        let preceding: Task =
+            let existing: obj = inner?get (rid, sid, msgId)
+
+            if isNull existing then
+                AsyncSupport.completedTask ()
+            else
+                unbox<Task> existing
 
         // DSL-MUTABLE: single-flight
         let mutable marker: Task = null
+
+        let finishIfCurrent () =
+            let cur: obj = inner?get (rid, sid, msgId)
+
+            if Object.ReferenceEquals(cur, marker) then
+                inner?finish (rid, sid, msgId) |> ignore
 
         let started =
             Defer.defer (fun () ->
@@ -73,13 +81,11 @@ type private ManagedChatExecutionFlight'() =
                         do! preceding
                         return! operation ()
                     finally
-                        let cur: obj = inner?get(rid, sid, msgId)
-                        if Object.ReferenceEquals(cur, marker) then
-                            inner?finish(rid, sid, msgId) |> ignore
+                        finishIfCurrent ()
                 })
 
         marker <- started :> Task
-        inner?beginFlight(rid, sid, msgId, marker)
+        inner?beginFlight (rid, sid, msgId, marker)
         started
 
 module private ManagedChatExecutionFlight' =

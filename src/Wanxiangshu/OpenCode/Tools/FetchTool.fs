@@ -127,7 +127,10 @@ module FetchTool =
         (shelfmark: string)
         : System.Threading.Tasks.Task<string> =
         let factory = fun () -> box (runFetch owner language workspaceRoot store shelfmark)
-        let promise = fetchFlightRegistry?getOrCreate (workspaceRoot, shelfmark, box store, factory)
+
+        let promise =
+            fetchFlightRegistry?getOrCreate (workspaceRoot, shelfmark, box store, factory)
+
         unbox<System.Threading.Tasks.Task<string>> promise
 
     let spec

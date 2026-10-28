@@ -43,30 +43,32 @@ module PluginTransforms =
         | StopDelivery of DeliveryAttemptFence
 
     type NormalTransformCapabilities =
-        { BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
-          StopCompletedContinuation:
-              string option -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option -> obj -> Task<bool>
-          BindSessionStartedAt: string option -> Task<DateTimeOffset option>
-          ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
-          ApplyTenureIsolation: string option -> obj -> Task<unit>
-          CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
-          RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
-          ApplyCompanion: string option -> obj -> obj -> Task<unit>
-          ApplyXWire: obj -> Task
-          FreezeProviderAttemptPlan:
-              string option -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option -> Task<unit>
-          InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
-          SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
-          SanitizeMessages: string option -> obj -> unit
-          /// Advisor is pure chat: no Pair Hint plan, steer or estimate request.
-          IsPureChatSession: string option -> bool
-          AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
-          StopAfterDelivery:
-              string option
-                  -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option
-                  -> DeliveryAttemptFence
-                  -> obj
-                  -> Task<unit> }
+        {
+            BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
+            StopCompletedContinuation:
+                string option -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option -> obj -> Task<bool>
+            BindSessionStartedAt: string option -> Task<DateTimeOffset option>
+            ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
+            ApplyTenureIsolation: string option -> obj -> Task<unit>
+            CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
+            RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
+            ApplyCompanion: string option -> obj -> obj -> Task<unit>
+            ApplyXWire: obj -> Task
+            FreezeProviderAttemptPlan:
+                string option -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option -> Task<unit>
+            InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
+            SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
+            SanitizeMessages: string option -> obj -> unit
+            /// Advisor is pure chat: no Pair Hint plan, steer or estimate request.
+            IsPureChatSession: string option -> bool
+            AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
+            StopAfterDelivery:
+                string option
+                    -> Wanxiangshu.Foundation.Identity.PhysicalUserMessageId option
+                    -> DeliveryAttemptFence
+                    -> obj
+                    -> Task<unit>
+        }
 
     type TransformBranchCapabilities = { RegisterOwned: string -> unit }
 

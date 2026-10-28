@@ -127,13 +127,15 @@ type PluginRecoveryScope(journal: AgentJournal option) =
         let p = PhysicalUserMessageId.value physicalUserMessageId
         let ps = SessionId.value plan.Authority.SessionId
         let pp = PhysicalUserMessageId.value plan.PhysicalUserMessageId
+
         let isEqual (a: obj) (b: obj) =
             PendingAttemptPlanAdmission.areSemanticallyEqual (unbox<PendingAttemptPlan> a) (unbox<PendingAttemptPlan> b)
 
-        let res: obj = store?FreezePending(s, p, ps, pp, box plan, isEqual)
+        let res: obj = store?FreezePending (s, p, ps, pp, box plan, isEqual)
+
         match string res?kind with
-        | "Admitted" -> PendingAttemptPlanAdmission.Admitted (unbox<PendingAttemptPlan> res?plan)
-        | "ReplayedExisting" -> PendingAttemptPlanAdmission.ReplayedExisting (unbox<PendingAttemptPlan> res?existing)
+        | "Admitted" -> PendingAttemptPlanAdmission.Admitted(unbox<PendingAttemptPlan> res?plan)
+        | "ReplayedExisting" -> PendingAttemptPlanAdmission.ReplayedExisting(unbox<PendingAttemptPlan> res?existing)
         | "IdentityMismatch" ->
             PendingAttemptPlanAdmission.IdentityMismatch(
                 SessionId.create (string res?expectedSession),
@@ -152,10 +154,12 @@ type PluginRecoveryScope(journal: AgentJournal option) =
         (physicalUserMessageId: PhysicalUserMessageId)
         : PendingAttemptPlan option =
         let res: obj =
-            store?TryPending(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId)
+            store?TryPending (SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId)
 
-        if RecoveryStoreInterop.isAbsent res then None
-        else Some (unbox<PendingAttemptPlan> res)
+        if RecoveryStoreInterop.isAbsent res then
+            None
+        else
+            Some(unbox<PendingAttemptPlan> res)
 
     /// Bind the frozen pre-inference decision to the exact assistant run exposed
     /// by a later Host observation. Repeated observations are idempotent by the
@@ -168,12 +172,16 @@ type PluginRecoveryScope(journal: AgentJournal option) =
         let s = SessionId.value sessionId
         let p = PhysicalUserMessageId.value physicalUserMessageId
         let r = ProviderRunIdentity.value providerRun
+
         let bindFn (pendingObj: obj) : obj =
             box (AttemptPlanner.bindProviderRun providerRun (unbox<PendingAttemptPlan> pendingObj))
 
-        let res: obj = store?TryBindAttemptPlan(s, p, r, bindFn)
-        if RecoveryStoreInterop.isAbsent res then None
-        else Some (unbox<AttemptPlan> res)
+        let res: obj = store?TryBindAttemptPlan (s, p, r, bindFn)
+
+        if RecoveryStoreInterop.isAbsent res then
+            None
+        else
+            Some(unbox<AttemptPlan> res)
 
     /// Owning CE consumes the frozen plan exactly once on terminal reconciliation.
     /// Provisional/unknown turns must use TryAttemptPlan (peek) to keep the plan alive;
@@ -181,38 +189,48 @@ type PluginRecoveryScope(journal: AgentJournal option) =
     /// Returns None if already consumed or never recorded.
     member this.ConsumeAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) : AttemptPlan option =
         let res: obj =
-            store?ConsumeAttemptPlan(SessionId.value sessionId, ProviderRunIdentity.value providerRun)
+            store?ConsumeAttemptPlan (SessionId.value sessionId, ProviderRunIdentity.value providerRun)
 
-        if RecoveryStoreInterop.isAbsent res then None
-        else Some (unbox<AttemptPlan> res)
+        if RecoveryStoreInterop.isAbsent res then
+            None
+        else
+            Some(unbox<AttemptPlan> res)
 
     member this.TryAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) : AttemptPlan option =
         let res: obj =
-            store?TryAttemptPlan(SessionId.value sessionId, ProviderRunIdentity.value providerRun)
+            store?TryAttemptPlan (SessionId.value sessionId, ProviderRunIdentity.value providerRun)
 
-        if RecoveryStoreInterop.isAbsent res then None
-        else Some (unbox<AttemptPlan> res)
+        if RecoveryStoreInterop.isAbsent res then
+            None
+        else
+            Some(unbox<AttemptPlan> res)
 
     member _.PublishManualChatIntervention(request: ManualInterventionRequest) : unit =
         let sid = SessionId.value request.ExecutionState.key.SessionId
-        let phys = PhysicalUserMessageId.value request.ExecutionState.key.PhysicalUserMessageId
-        store?PublishManualIntervention(sid, phys, box request) |> ignore
+
+        let phys =
+            PhysicalUserMessageId.value request.ExecutionState.key.PhysicalUserMessageId
+
+        store?PublishManualIntervention (sid, phys, box request) |> ignore
 
     member _.ManualChatInterventions() : ManualInterventionRequest[] =
-        let arr: obj array = store?ManualInterventions()
-        if RecoveryStoreInterop.isAbsent arr then [||]
-        else arr |> Array.map unbox<ManualInterventionRequest>
+        let arr: obj array = store?ManualInterventions ()
+
+        if RecoveryStoreInterop.isAbsent arr then
+            [||]
+        else
+            arr |> Array.map unbox<ManualInterventionRequest>
 
     member _.RevokeManualIntervention(key: ChatExecutionKey) : unit =
         let sid = SessionId.value key.SessionId
         let phys = PhysicalUserMessageId.value key.PhysicalUserMessageId
-        store?RevokeManualIntervention(sid, phys) |> ignore
+        store?RevokeManualIntervention (sid, phys) |> ignore
 
     /// Session deletion drops arming and attempt plans for this session.
     member this.ClearSession(sessionId: string) : unit =
-        store?ClearSession(sessionId) |> ignore
+        store?ClearSession (sessionId) |> ignore
 
     /// Drops attempt plans whose key prefix matches (used for a session and
     /// its linked keys during session deletion). Prefer ConsumeAttemptPlan.
     member this.ClearAttemptPlansFor(key: string) : unit =
-        store?ClearAttemptPlansFor(key) |> ignore
+        store?ClearAttemptPlansFor (key) |> ignore

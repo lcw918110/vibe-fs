@@ -172,10 +172,11 @@ type internal SyncDelegateCallStore() =
     let callResources = Dictionary<string, SyncDelegateCall>()
     let callToId = Dictionary<SyncDelegateCall, string>(HashIdentity.Reference)
     let invocationResources = Dictionary<string, SyncDelegateInvocation>()
-    let invocationToKey = Dictionary<SyncDelegateInvocation, string>(HashIdentity.Reference)
 
-    let cleanKey (s: string) =
-        if isNull s then "" else s.Trim()
+    let invocationToKey =
+        Dictionary<SyncDelegateInvocation, string>(HashIdentity.Reference)
+
+    let cleanKey (s: string) = if isNull s then "" else s.Trim()
 
     let failInvocationByKey (invKey: string) (error: string) =
         match invocationResources.TryGetValue invKey with
@@ -231,32 +232,44 @@ type internal SyncDelegateCallStore() =
     member _.ObserveProviderToolCall
         (owner: SessionId, providerRun: ProviderRunIdentity, role: SyncDelegateRole, callId: ToolCallId)
         : unit =
-        batchStore?observeProviderToolCall(sessionKey owner, providerRunKey providerRun, roleName role, callKey callId)
+        batchStore?observeProviderToolCall (sessionKey owner, providerRunKey providerRun, roleName role, callKey callId)
 
     member _.TryObservedBatch
         (owner: SessionId, providerRun: ProviderRunIdentity, role: SyncDelegateRole, currentCall: ToolCallId)
         : SyncDelegateBatch option =
         let orderObj: obj =
-            batchStore?tryObservedBatch(sessionKey owner, providerRunKey providerRun, roleName role, callKey currentCall)
+            batchStore?tryObservedBatch (
+                sessionKey owner,
+                providerRunKey providerRun,
+                roleName role,
+                callKey currentCall
+            )
 
         if isNull orderObj || isAbsent orderObj then
             None
         else
             let order = unbox<string array> orderObj
+
             Some
                 { ProviderRun = providerRun
                   CallOrder = order |> Array.toList |> List.map ToolCallId.create
                   CurrentCall = currentCall }
 
     member _.TryPeekCallByDelegate(delegateSession: SessionId) : SyncDelegateCall option =
-        let callIdObj: obj = batchStore?tryPeekCallByDelegate(sessionKey delegateSession)
-        if isAbsentOrNull callIdObj then None
-        else findCall (unbox<string> callIdObj)
+        let callIdObj: obj = batchStore?tryPeekCallByDelegate (sessionKey delegateSession)
+
+        if isAbsentOrNull callIdObj then
+            None
+        else
+            findCall (unbox<string> callIdObj)
 
     member _.TryPopCallByDelegate(delegateSession: SessionId) : SyncDelegateCall option =
-        let callIdObj: obj = batchStore?tryPopCallByDelegate(sessionKey delegateSession)
-        if isAbsentOrNull callIdObj then None
-        else popCallResource (unbox<string> callIdObj)
+        let callIdObj: obj = batchStore?tryPopCallByDelegate (sessionKey delegateSession)
+
+        if isAbsentOrNull callIdObj then
+            None
+        else
+            popCallResource (unbox<string> callIdObj)
 
     member _.TryPopExactCall(call: SyncDelegateCall) : SyncDelegateCall option =
         let cKey =
@@ -265,20 +278,24 @@ type internal SyncDelegateCallStore() =
                 | true, k -> k
                 | false, _ -> "")
 
-        if String.IsNullOrEmpty cKey then
-            None
-        else
-            let callIdObj: obj = batchStore?tryPopExactCall(sessionKey call.Delegate, cKey)
-            if isAbsentOrNull callIdObj then None
+        let popExact () =
+            let callIdObj: obj = batchStore?tryPopExactCall (sessionKey call.Delegate, cKey)
+
+            if isAbsentOrNull callIdObj then
+                None
             else
                 lock gate (fun () ->
                     callResources.Remove cKey |> ignore
                     callToId.Remove call |> ignore)
+
                 call.Acceptance.Close()
                 Some call
 
+        if String.IsNullOrEmpty cKey then None else popExact ()
+
     member _.FailCall(call: SyncDelegateCall, error: string) : unit =
         call.Acceptance.Close()
+
         let cKey =
             lock gate (fun () ->
                 match callToId.TryGetValue call with
@@ -287,8 +304,10 @@ type internal SyncDelegateCallStore() =
                     callToId.Remove call |> ignore
                     k
                 | false, _ -> "")
+
         if not (String.IsNullOrEmpty cKey) then
-            batchStore?tryPopExactCall(sessionKey call.Delegate, cKey) |> ignore
+            batchStore?tryPopExactCall (sessionKey call.Delegate, cKey) |> ignore
+
         AsyncSupport.trySetResult call.Answer (Error error) |> ignore
 
     member _.Admit(invocation: SyncDelegateInvocation) : SyncDelegateAdmission =
@@ -312,7 +331,7 @@ type internal SyncDelegateCallStore() =
             | None -> null
 
         let verdictObj: obj =
-            batchStore?admit(scopeKey invocation.OwnerScope, roleName invocation.Role, invKey, batchObj)
+            batchStore?admit (scopeKey invocation.OwnerScope, roleName invocation.Role, invKey, batchObj)
 
         let verdictKind = unbox<string> verdictObj?verdict
 
@@ -321,20 +340,18 @@ type internal SyncDelegateCallStore() =
             lock gate (fun () ->
                 invocationResources.Remove invKey |> ignore
                 invocationToKey.Remove invocation |> ignore)
+
             SyncDelegateAdmission.Rejected(rejection (unbox<string> verdictObj?reason))
-        | "single" ->
-            SyncDelegateAdmission.Ready [ invocation ]
-        | "wait" ->
-            SyncDelegateAdmission.Waiting
+        | "single" -> SyncDelegateAdmission.Ready [ invocation ]
+        | "wait" -> SyncDelegateAdmission.Waiting
         | "ready" ->
             let orderedKeys = unbox<string array> verdictObj?invocations
             let orderedInvocations = lookupInvocations orderedKeys
             SyncDelegateAdmission.Ready orderedInvocations
-        | other ->
-            invalidOp ("wanxiangli/delegate-batch returned an unexpected admission: " + other)
+        | other -> invalidOp ("wanxiangli/delegate-batch returned an unexpected admission: " + other)
 
     member _.ReleaseAdmission(ownerScope: ReuseScopeId, role: SyncDelegateRole) : unit =
-        batchStore?releaseAdmission(scopeKey ownerScope, roleName role)
+        batchStore?releaseAdmission (scopeKey ownerScope, roleName role)
 
     member _.CancelScope(scope: ReuseScopeId) : unit =
         let sKey = scopeKey scope
@@ -346,6 +363,7 @@ type internal SyncDelegateCallStore() =
         lock gate (fun () ->
             for invKey in cancelledInvocations do
                 failInvocationByKey invKey "Sync delegate call was cancelled"
+
             for cKey in cancelledCalls do
                 failCallByKey cKey "Sync delegate call was cancelled")
 
@@ -359,6 +377,7 @@ type internal SyncDelegateCallStore() =
             invocations: SyncDelegateInvocation list
         ) : Result<SyncDelegateCall * IDisposable, string> =
         let cKey = Guid.NewGuid().ToString("N")
+
         let invKeys =
             lock gate (fun () ->
                 invocations
@@ -372,7 +391,7 @@ type internal SyncDelegateCallStore() =
                         k))
 
         let resObj: obj =
-            batchStore?beginCall(
+            batchStore?beginCall (
                 sessionKey owner,
                 scopeKey ownerScope,
                 roleName role,
@@ -382,16 +401,14 @@ type internal SyncDelegateCallStore() =
                 cKey
             )
 
-        let isOk =
-            if isAbsentOrNull resObj then false
-            else
-                match resObj?ok with
-                | null -> false
-                | v -> unbox<bool> v
+        let readOk () =
+            match resObj?ok with
+            | null -> false
+            | v -> unbox<bool> v
 
-        if not isOk then
-            Error(parseDispatchError resObj)
-        else
+        let isOk = if isAbsentOrNull resObj then false else readOk ()
+
+        let createCall () =
             let answer =
                 TaskCompletionSource<Result<string, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
 
@@ -418,47 +435,60 @@ type internal SyncDelegateCallStore() =
                 callResources.[cKey] <- call
                 callToId.[call] <- cKey)
 
+            let disposeCall () =
+                let stillOwned = removeOwnedCall cKey call
+                batchStore?tryPopExactCall (sessionKey delegateSession, cKey) |> ignore
+                call.Acceptance.Close()
+
+                if stillOwned then
+                    this.FailCall(call, "Sync delegate call scope disposed")
+
             let registration =
                 { new IDisposable with
-                    member _.Dispose() =
-                        let stillOwned = removeOwnedCall cKey call
-                        batchStore?tryPopExactCall(sessionKey delegateSession, cKey) |> ignore
-                        call.Acceptance.Close()
-                        if stillOwned then
-                            this.FailCall(call, "Sync delegate call scope disposed") }
+                    member _.Dispose() = disposeCall () }
 
             Ok(call, registration)
 
+        if not isOk then
+            Error(parseDispatchError resObj)
+        else
+            createCall ()
+
     member _.TryTakeDeletedDelegate(scope: ReuseScopeId) : SessionId option =
-        let sidObj: obj = retiredRegistry?tryTake(scopeKey scope)
+        let sidObj: obj = retiredRegistry?tryTake (scopeKey scope)
+
         if isNull sidObj || isAbsent sidObj then
             None
         else
-            Some (SessionId.create (unbox<string> sidObj))
+            Some(SessionId.create (unbox<string> sidObj))
 
     member _.TryGetDeletedDelegate(scope: ReuseScopeId) : SessionId option =
-        let sidObj: obj = retiredRegistry?tryGet(scopeKey scope)
+        let sidObj: obj = retiredRegistry?tryGet (scopeKey scope)
+
         if isNull sidObj || isAbsent sidObj then
             None
         else
-            Some (SessionId.create (unbox<string> sidObj))
+            Some(SessionId.create (unbox<string> sidObj))
 
     member _.PutDeletedDelegate(scope: ReuseScopeId, delegateSessionId: SessionId) : SessionId option =
-        let prevObj: obj = retiredRegistry?stage(scopeKey scope, sessionKey delegateSessionId)
+        let prevObj: obj =
+            retiredRegistry?stage (scopeKey scope, sessionKey delegateSessionId)
+
         if isNull prevObj || isAbsent prevObj then
             None
         else
-            Some (SessionId.create (unbox<string> prevObj))
+            Some(SessionId.create (unbox<string> prevObj))
 
     member _.ClearDeletedDelegate(scope: ReuseScopeId) : SessionId option =
-        let sidObj: obj = retiredRegistry?clear(scopeKey scope)
+        let sidObj: obj = retiredRegistry?clear (scopeKey scope)
+
         if isNull sidObj || isAbsent sidObj then
             None
         else
-            Some (SessionId.create (unbox<string> sidObj))
+            Some(SessionId.create (unbox<string> sidObj))
 
     member _.ClearAll() : SessionId list =
-        let settlement: obj = batchStore?clearAll()
+        let settlement: obj = batchStore?clearAll ()
 
         let cancelledCalls = unbox<string array> settlement?cancelledCalls
         let cancelledInvocations = unbox<string array> settlement?cancelledInvocations
@@ -466,8 +496,9 @@ type internal SyncDelegateCallStore() =
         lock gate (fun () ->
             for invKey in cancelledInvocations do
                 failInvocationByKey invKey "SyncDelegate runtime disposed"
+
             for cKey in cancelledCalls do
                 failCallByKey cKey "SyncDelegate runtime disposed")
 
-        let retiredArr: string array = unbox<string array> (retiredRegistry?clearAll())
+        let retiredArr: string array = unbox<string array> (retiredRegistry?clearAll ())
         retiredArr |> Array.toList |> List.map SessionId.create

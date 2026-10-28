@@ -177,11 +177,34 @@ module RelayNarrativeTransform =
 
     let private explicitCall (part: obj) =
         match stringField part "type" |> Option.map (fun kind -> kind.ToLowerInvariant()) with
-        | Some ("toolcall" | "tool-call" | "tool_call") ->
+        | Some("toolcall" | "tool-call" | "tool_call") ->
             stringField part "id" |> Option.orElse (stringField part "callId")
         | _ -> None
 
-    let private tenureMessage (message: obj) =
+    /// OpenCode keeps the result inside the call part, so a settled `tool`
+    /// part decodes as the result only. It still carries the call.
+    let private settledCall (part: obj) =
+        let state = readField part "state"
+        let status = if isNull state then None else stringField state "status"
+
+        match stringField part "type", status with
+        | Some "tool", Some("completed" | "error") -> stringField part "callID"
+        | _ -> None
+
+    /// The physical user message a Host message answers to: a user message is
+    /// its own anchor, an assistant step points at it through `parentID`.
+    let private physicalAnchor (message: obj) =
+        match roleText message with
+        | "user" -> ProviderWireDecode.hostMessageId message
+        | _ -> ProviderWireDecode.firstString (ProviderWireDecode.infoObject message) [ "parentID" ]
+
+    /// A message with no explicit tenure mark gets the successor tenure only
+    /// when durable acceptance evidence owns its physical anchor.
+    let private tenureOf (successor: string) (owns: string -> bool) (message: obj) =
+        stringField message "tenureId"
+        |> Option.orElse (physicalAnchor message |> Option.filter owns |> Option.map (fun _ -> successor))
+
+    let private tenureMessage (successor: string) (owns: string -> bool) (message: obj) =
         let parts = ProviderWireDecode.rawPartsOf message @ contentParts message
         let decoded = parts |> List.choose ProviderWireDecode.decodePart
 
@@ -191,6 +214,7 @@ module RelayNarrativeTransform =
                 | WireToolCall(id, _, _) -> Some(ToolCallId.value id)
                 | _ -> None)
             |> Option.orElse (parts |> List.tryPick explicitCall)
+            |> Option.orElse (parts |> List.tryPick settledCall)
 
         let answered =
             decoded
@@ -201,55 +225,78 @@ module RelayNarrativeTransform =
                 match roleText message with
                 | "toolResult"
                 | "tool" -> stringField message "toolCallId"
-                | _ -> None)
+                | _ -> None
+            )
 
-        let tenureId = stringField message "tenureId"
+        let tenureId = tenureOf successor owns message
         let identified = ProviderWireDecode.hostMessageId message
 
         createObj
-            [ "id", (match identified with Some id -> box id | None -> null)
+            [ "id",
+              (match identified with
+               | Some id -> box id
+               | None -> null)
               "role", box (roleText message)
               "synthetic", box (emitJsExpr message " $0.synthetic === true")
               "semantic", box true
               "cursor", null
-              "toolCallId", (match call with Some id -> box id | None -> null)
-              "resultFor", (match answered with Some id -> box id | None -> null)
-              "tenureId", (match tenureId with Some id -> box id | None -> null) ]
+              "toolCallId",
+              (match call with
+               | Some id -> box id
+               | None -> null)
+              "resultFor",
+              (match answered with
+               | Some id -> box id
+               | None -> null)
+              "tenureId",
+              (match tenureId with
+               | Some id -> box id
+               | None -> null) ]
 
     /// Keep the successor's own messages after the committed review barrier.
     /// Returns None when this work has no barrier for the active tenure, so the
     /// caller leaves the request array alone. The returned messages are the
     /// original objects.
     let cutVisible
+        (owns: string -> bool)
         (messages: obj array)
         (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option)
         : obj array option =
-        match work with
-        | None -> None
-        | Some inspected ->
-            match inspected.BarrierToolCallId, inspected.SuccessorTenureId, inspected.ActiveId with
-            | Some callId, Some successor, Some active when active = successor ->
-                let neutral = messages |> Array.map tenureMessage
-                let barrier =
-                    createObj [ "toolCallId", box callId; "successorTenureId", box successor ]
+        let barrierOf (inspected: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
+            inspected.BarrierToolCallId, inspected.SuccessorTenureId, inspected.ActiveId
 
-                let kept = unbox<obj array> (tenureRule.tenure (box neutral, barrier))
-                let indexes = kept |> Array.map (fun item -> int (unbox<float> item))
-                let span = [| 0 .. messages.Length - 1 |]
+        match work |> Option.map barrierOf with
+        | Some(Some callId, Some successor, Some active) when active = successor ->
+            let neutral = messages |> Array.map (tenureMessage successor owns)
 
-                if indexes.Length = span.Length && Array.forall2 (fun index value -> index = value) indexes span then
-                    None
-                else
-                    Some(indexes |> Array.map (fun index -> messages.[index]))
-            | _ -> None
+            let barrier =
+                createObj [ "toolCallId", box callId; "successorTenureId", box successor ]
+
+            let kept = unbox<obj array> (tenureRule.tenure (box neutral, barrier))
+            let indexes = kept |> Array.map (fun item -> int (unbox<float> item))
+            let span = [| 0 .. messages.Length - 1 |]
+
+            if
+                indexes.Length = span.Length
+                && Array.forall2 (fun index value -> index = value) indexes span
+            then
+                None
+            else
+                Some(indexes |> Array.map (fun index -> messages.[index]))
+        | _ -> None
 
 
-    let private cutRequest (outObj: obj) work =
+
+    let private cutRequest (owns: string -> bool) (outObj: obj) work =
         let messages = ProviderWireDecode.messagesFromTransformOutput outObj |> Array.ofList
 
-        match cutVisible messages work with
+        match cutVisible owns messages work with
         | None -> ()
         | Some kept -> HostMessageProjection.replaceMessagesInPlace outObj (Array.toList kept)
+
+    let private cutUnlessStopped disposition durable sessionId outObj work =
+        if disposition <> RelayProjectionDisposition.RetiredAttemptStopped then
+            cutRequest (RelayProjection.successorOwns durable sessionId work) outObj (Some work)
 
     let apply
         (journal: AgentJournal option)
@@ -268,13 +315,11 @@ module RelayNarrativeTransform =
                 let! disposition =
                     project durable interruptAttempt (SessionId.create value) acceptedRequest (Some work) outObj
 
-                match disposition with
-                | RelayProjectionDisposition.RetiredAttemptStopped -> ()
-                | _ -> cutRequest outObj (Some work)
+                cutUnlessStopped disposition durable (SessionId.create value) outObj work
 
                 return disposition
             | _, _, Some work ->
-                cutRequest outObj (Some work)
+                cutRequest (fun _ -> false) outObj (Some work)
                 return RelayProjectionDisposition.Unchanged
             | _ -> return RelayProjectionDisposition.Unchanged
         }

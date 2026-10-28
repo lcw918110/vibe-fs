@@ -53,13 +53,19 @@ const withRealProse = async (body) => {
     await acceptAuthorityRoot(runtime, SESSION, 'engineer')
 
     const root = {
-      info: { id: rootId, role: 'user', sessionID: SESSION, time: { created: 1 } },
+      info: {
+        id: rootId,
+        role: 'user',
+        sessionID: SESSION,
+        model: { providerID: 'provider', modelID: 'engineer-model' },
+        time: { created: 1 },
+      },
       parts: [{ type: 'text', text: 'Do the work.' }],
     }
     runtime.pushHostMessage(SESSION, root)
     await hooks['chat.message'](
       { sessionID: SESSION, messageID: rootId, agent: 'engineer' },
-      { message: root, parts: root.parts },
+      { message: root.info, parts: root.parts },
     )
 
     // 助手散文是「交付正文」的来源：它提供材料，本身不构成见证。

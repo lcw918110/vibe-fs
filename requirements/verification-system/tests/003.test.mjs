@@ -103,12 +103,12 @@ test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two e
     ['manager-loop.2', 'continue.0'],
   );
 
-  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'deliver'];
+  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'review'];
   // The Manager provider surface carries independent assume + todowrite-for-manager.
   const managerTools = [
     'assume',
     'horizon', 'join', 'todowrite-for-manager',
-    'skill', 'deliver',
+    'skill', 'review',
   ];
   const request = (turn, step) => ({
     messages: [
@@ -155,7 +155,7 @@ test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two e
   assert.equal(reopened1?.step, 1);
   assert.equal(reopened1?.optional, true);
   assert.equal(reopened1?.internal, true);
-  assert.equal(reopened1?.respond?.tool, 'deliver');
+  assert.equal(reopened1?.respond?.tool, 'review');
 
   assert.equal(
     resolveEntry(loopRequest(assessUser, 0), result.scenario.entries, bindings, context).matched?.id,

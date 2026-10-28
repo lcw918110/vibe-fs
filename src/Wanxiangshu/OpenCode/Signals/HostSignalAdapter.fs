@@ -64,6 +64,7 @@ type HostSignalRouter
                     { SessionId = completed.SessionId
                       PhysicalUserMessageId = completed.PhysicalUserMessageId
                       ProviderRun = completed.ProviderRun }))
+
         match onExactAssistantObservation, observedIdentity with
         | Some observe, Some started ->
             let terminal =

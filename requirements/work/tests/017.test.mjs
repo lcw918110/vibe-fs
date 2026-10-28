@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Work } from 'wanxiangli/work'
 
-const bind = (work, id, target) =>
+const bindWork = (work, id, target) =>
   work.execute(id, { type: 'BindDevOps', trigger: 'Ask', devopsId: 'dev-1', target })
 
 test('WHAT[work-017] the first DevOps binding wins and an Advance command writes nothing', () => {
@@ -23,7 +23,7 @@ test('WHAT[work-017] the first DevOps binding wins and an Advance command writes
   )
   assert.deepEqual(work.records(), before)
 
-  const bound = bind(work, 'bind-1', 'model-a')
+  const bound = bindWork(work, 'bind-1', 'model-a')
   assert.equal(bound.status, 'Applied', bound.reason)
   assert.equal(bound.result.kind, 'DevOpsBound')
   assert.equal(work.inspect().devopsId, 'dev-1')
@@ -32,10 +32,10 @@ test('WHAT[work-017] the first DevOps binding wins and an Advance command writes
   assert.equal(work.history().filter((frame) => frame.events.some((event) => event.type === 'DevOpsBound')).length, 1)
   assert.equal(work.history().some((frame) => frame.events.some((event) => event.type === 'IncumbencyRetired')), false)
 
-  const same = bind(work, 'bind-2', 'model-a')
+  const same = bindWork(work, 'bind-2', 'model-a')
   assert.equal(same.status, 'Observed')
   assert.equal(same.result.kind, 'DevOpsBound')
-  const conflict = bind(work, 'bind-3', 'model-b')
+  const conflict = bindWork(work, 'bind-3', 'model-b')
   assert.equal(conflict.status, 'Conflict')
   assert.equal(conflict.reason, 'DevOps binding conflict')
   assert.equal(work.history().filter((frame) => frame.events.some((event) => event.type === 'DevOpsBound')).length, 1)

@@ -73,6 +73,7 @@ module HostForkBusyNudge =
             let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create j)
             let syntheticPrompt = LlmFacing.renderInstruction prompt
             let port = DispatchSessionPort.ofSessionPort sessions
+
             let dispatchPort =
                 match observer with
                 | None -> port
@@ -104,7 +105,9 @@ module HostForkBusyNudge =
             match journal with
             | None ->
                 return Error "Busy nudge requires an AgentJournal: PROMPT-005 admits no sender outside the Dispatcher"
-            | Some j -> return! sendWithProfile sessions j childId profile directory prompt None PromptDispatcher.AwaitMode.Detached
+            | Some j ->
+                return!
+                    sendWithProfile sessions j childId profile directory prompt None PromptDispatcher.AwaitMode.Detached
         }
 
     /// Same durable busy-guidance send, with the Host PhysicalAccepted callback.
@@ -121,7 +124,16 @@ module HostForkBusyNudge =
         match journal with
         | None ->
             Task.FromResult(Error "Busy nudge requires AgentJournal; negotiation steer cannot bypass prompt authority")
-        | Some j -> sendWithProfile sessions j childId profile directory prompt (Some observer) PromptDispatcher.AwaitMode.Detached
+        | Some j ->
+            sendWithProfile
+                sessions
+                j
+                childId
+                profile
+                directory
+                prompt
+                (Some observer)
+                PromptDispatcher.AwaitMode.Detached
 
     /// Advisor final steer may settle only after a real PhysicalAccepted receipt.
     /// This is not the detached confirmation semantics of negotiate/busy guidance.

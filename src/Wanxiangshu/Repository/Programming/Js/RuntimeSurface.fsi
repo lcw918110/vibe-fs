@@ -18,8 +18,7 @@ module JsRuntimeSurface =
     /// Test hook: install a process-live delegation host for one session.
     /// The delegate callback takes `(name, payload, carry)`; every
     /// other callback returns a data envelope object (never prose).
-    val installDelegationHost:
-        sessionId: string -> delegation: obj -> fission: obj -> horizon: obj -> unit
+    val installDelegationHost: sessionId: string -> delegation: obj -> fission: obj -> horizon: obj -> unit
 
     val clearDelegationHost: sessionId: string -> unit
     /// Test hook: the raw value handed over through delivery.

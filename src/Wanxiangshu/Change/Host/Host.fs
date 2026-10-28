@@ -10,6 +10,7 @@ open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Session
+open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -261,6 +262,35 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         | Error error -> Task.FromResult(Error error)
         | Ok(relay, record) -> awaitLoopSignalFromRelay jobId relay record
 
+    let continueCompleted commonDir sessionId requestId stopped stopEffectId =
+        match stopped, stopEffectId with
+        | true, Some effectId ->
+            DurableWorkHost.execute
+                commonDir
+                sessionId
+                ("observed-stop:" + effectId)
+                (DurableWorkHost.command "Confirm" [ "effectId", box effectId; "outcome", box "Observed" ])
+            |> ignore
+        | _ -> ()
+
+        let receipt =
+            DurableWorkHost.execute
+                commonDir
+                sessionId
+                requestId
+                (DurableWorkHost.command "ContinueWork" [ "continuationId", box requestId ])
+
+        let current = DurableWorkHost.inspected commonDir sessionId
+
+        match current |> Option.bind (fun value -> value.ActiveId) with
+        | Some activeId when
+            receipt.Status = "Committed"
+            || receipt.Status = "Replayed"
+            || receipt.Status = "Observed"
+            ->
+            Ok(IncumbencyId.create activeId)
+        | _ -> Error(sprintf "Manager continuation failed: %s %s" receipt.Status receipt.Reason)
+
     /// The continuation the road owes after its last committed retirement.
     ///
     /// A Relayed tenure hands the road to the successor incumbency it opened, and
@@ -288,14 +318,36 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
             let requestId =
                 "hand-off:" + ManagerJobId.value jobId + ":" + retirement.RetirementId
 
-            return!
-                DeliveredTenureHandOff.continuation
-                    commonDir
-                    (SessionId.value record.ManagerSessionId)
-                    work
-                    retirement
-                    (deps.ObservedHeadCursor record.ManagerSessionId)
-                    requestId
+            match retirement.Outcome, work.ActiveId with
+            | "Completed", None ->
+                let stopped =
+                    deps.Journal
+                    |> Option.exists (fun journal ->
+                        (AgentJournal.snapshot journal).AgentProjections.ChatExecutions
+                        |> ChatExecutionProjection.current
+                        |> List.exists (fun execution ->
+                            execution.key.SessionId = record.ManagerSessionId
+                            && execution.terminalDisposition.IsSome
+                            && (execution.startedEvidence
+                                |> Option.exists (fun started ->
+                                    ProviderRunIdentity.value started.ProviderRun = retirement.Fence.ProviderRunId))))
+
+                return!
+                    continueCompleted
+                        commonDir
+                        (SessionId.value record.ManagerSessionId)
+                        requestId
+                        stopped
+                        retirement.StopEffectId
+            | _ ->
+                return!
+                    DeliveredTenureHandOff.continuation
+                        commonDir
+                        (SessionId.value record.ManagerSessionId)
+                        work
+                        retirement
+                        (deps.ObservedHeadCursor record.ManagerSessionId)
+                        requestId
         }
 
     let finalizeRegisteredWorktree (agentId: string) =

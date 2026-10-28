@@ -264,13 +264,10 @@ module private RegistryMapping =
     let decodeOwnerPair (item: obj) : (SessionId * AttachmentKind) option =
         let ownerText = unbox<string> item?owner
         let kindText = unbox<string> item?kind
-        parseKind kindText
-        |> Option.map (fun kind -> SessionId.create ownerText, kind)
+        parseKind kindText |> Option.map (fun kind -> SessionId.create ownerText, kind)
 
     let decodeOwnerPairs (items: obj array) : (SessionId * AttachmentKind) list =
-        items
-        |> Array.choose decodeOwnerPair
-        |> Array.toList
+        items |> Array.choose decodeOwnerPair |> Array.toList
 
 open RegistryMapping
 
@@ -284,37 +281,40 @@ type AttachmentLeaseRegistry() =
     let store: obj = emitJsExpr registryClass "new $0()"
 
     member _.Bind(owner: SessionId, kind: AttachmentKind, lease: AttachmentLeaseCore.Lease) : unit =
-        store?bind(SessionId.value owner, AttachmentLeaseCore.kindKey kind, encodeLease lease)
+        store?bind (SessionId.value owner, AttachmentLeaseCore.kindKey kind, encodeLease lease)
 
     member _.TryFind(owner: SessionId, kind: AttachmentKind) : AttachmentLeaseCore.Lease option =
-        let found: obj = store?tryFind(SessionId.value owner, AttachmentLeaseCore.kindKey kind)
+        let found: obj =
+            store?tryFind (SessionId.value owner, AttachmentLeaseCore.kindKey kind)
+
         match box found with
         | null -> None
         | _ -> Some(decodeLease found)
 
     member _.Remove(owner: SessionId, kind: AttachmentKind) : bool =
-        unbox<bool> (store?remove(SessionId.value owner, AttachmentLeaseCore.kindKey kind))
+        unbox<bool> (store?remove (SessionId.value owner, AttachmentLeaseCore.kindKey kind))
 
     member _.TryFindByChild(child: SessionId) : (SessionId * AttachmentKind) list =
-        let items: obj array = store?tryFindByChild(SessionId.value child)
+        let items: obj array = store?tryFindByChild (SessionId.value child)
         decodeOwnerPairs items
 
     member _.Snapshot() : (SessionId * AttachmentKind) list =
-        let items: obj array = store?snapshot()
+        let items: obj array = store?snapshot ()
         decodeOwnerPairs items
 
     member _.RemoveByChild(child: SessionId) : (SessionId * AttachmentKind) list =
-        let items: obj array = store?removeByChild(SessionId.value child)
+        let items: obj array = store?removeByChild (SessionId.value child)
         decodeOwnerPairs items
 
     member _.Ensure
         (owner: SessionId, kind: AttachmentKind, start: unit -> Task<Result<AttachmentLeaseCore.Lease, string>>)
         : Task<Result<AttachmentLeaseCore.Lease, string>> =
-        let inFlight: obj = store?ensure(SessionId.value owner, AttachmentLeaseCore.kindKey kind, start)
+        let inFlight: obj =
+            store?ensure (SessionId.value owner, AttachmentLeaseCore.kindKey kind, start)
+
         unbox<Task<Result<AttachmentLeaseCore.Lease, string>>> inFlight
 
     member _.FinishEnsure(owner: SessionId, kind: AttachmentKind) : unit =
-        store?finishEnsure(SessionId.value owner, AttachmentLeaseCore.kindKey kind)
+        store?finishEnsure (SessionId.value owner, AttachmentLeaseCore.kindKey kind)
 
-    member _.Clear() : unit =
-        store?clear()
+    member _.Clear() : unit = store?clear ()

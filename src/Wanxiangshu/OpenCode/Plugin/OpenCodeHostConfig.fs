@@ -26,7 +26,8 @@ module private LiveHostConfigInterop =
 /// the live object, never a stale snapshot.
 type LiveHostConfig(config: obj) =
 
-    let store = LiveHostConfigInterop.createStore LiveHostConfigInterop.storeClass config
+    let store =
+        LiveHostConfigInterop.createStore LiveHostConfigInterop.storeClass config
 
     let safeString (rawVal: obj) : string =
         if isNull rawVal then "" else string rawVal
@@ -38,8 +39,10 @@ type LiveHostConfig(config: obj) =
             HostSettingValue.Text(safeString rawVal)
 
     let parseGapPath (res: obj) : string list =
-        if isNull res?gapPath then []
-        else Array.toList (unbox<string array> res?gapPath)
+        if isNull res?gapPath then
+            []
+        else
+            Array.toList (unbox<string array> res?gapPath)
 
     let mapReadResult (res: obj) : Result<HostSettingValue option, HostError> =
         if not (unbox<bool> res?ok) then
@@ -53,16 +56,8 @@ type LiveHostConfig(config: obj) =
 
     let settingToObj (s: RequiredSetting) : obj =
         match s.Value with
-        | HostSettingValue.Bool b ->
-            createObj
-                [ "path" ==> List.toArray s.Path
-                  "kind" ==> "bool"
-                  "value" ==> box b ]
-        | HostSettingValue.Text t ->
-            createObj
-                [ "path" ==> List.toArray s.Path
-                  "kind" ==> "text"
-                  "value" ==> box t ]
+        | HostSettingValue.Bool b -> createObj [ "path" ==> List.toArray s.Path; "kind" ==> "bool"; "value" ==> box b ]
+        | HostSettingValue.Text t -> createObj [ "path" ==> List.toArray s.Path; "kind" ==> "text"; "value" ==> box t ]
 
     let mapApplyResult (res: obj) : Result<SettingGap option, HostError> =
         if not (unbox<bool> res?ok) then
@@ -76,15 +71,14 @@ type LiveHostConfig(config: obj) =
 
     /// Adopt the config object the host just delivered. The port instance stays
     /// the same, so the product keeps reading the live config.
-    member _.Accept(nextConfig: obj) : unit =
-        store.accept(nextConfig)
+    member _.Accept(nextConfig: obj) : unit = store.accept (nextConfig)
 
     interface IHostConfigPort with
         member _.Read(path: string list) : Result<HostSettingValue option, HostError> =
-            let res = store.read(List.toArray path)
+            let res = store.read (List.toArray path)
             mapReadResult res
 
         member _.Apply(settings: RequiredSetting list) : Result<SettingGap option, HostError> =
             let settingsArray = settings |> List.map settingToObj |> List.toArray
-            let res = store.apply(settingsArray)
+            let res = store.apply (settingsArray)
             mapApplyResult res

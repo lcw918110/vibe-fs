@@ -90,45 +90,57 @@ type InjectedSessionPort
             match familyParent with
             | Some fp -> fp (SessionId.create sid) |> Option.map SessionId.value
             | None -> None
+
         createNew FamilyTreeInterop.sessionFamilyTreeClass (box parentLookup)
 
     let resolveFamilyRoot (port: IOpenCodePort) (targetId: SessionId) : Task<Result<SessionId, string>> =
         task {
             let stepQuery (curr: string) =
                 task {
-                    let! parentRes = port.GetSessionParent (SessionId.create curr)
+                    let! parentRes = port.GetSessionParent(SessionId.create curr)
+
                     match parentRes with
                     | Ok parentOpt ->
-                        return box {| ok = true; parent = parentOpt |> Option.map SessionId.value; error = null |}
+                        return
+                            box
+                                {| ok = true
+                                   parent = parentOpt |> Option.map SessionId.value
+                                   error = null |}
                     | Error err ->
-                        return box {| ok = false; parent = None; error = err |}
+                        return
+                            box
+                                {| ok = false
+                                   parent = None
+                                   error = err |}
                 }
 
-            let! resObj = familyTree?resolveFamilyRoot(SessionId.value targetId, stepQuery)
+            let! resObj = familyTree?resolveFamilyRoot (SessionId.value targetId, stepQuery)
+
             if resObj?ok = true then
                 let rootStr: string = resObj?root
-                return Ok (SessionId.create rootStr)
+                return Ok(SessionId.create rootStr)
             else
                 let errStr: string = resObj?error
                 return Error errStr
         }
 
     let familyRoot (sessionId: SessionId) =
-        let rStr: string = familyTree?familyRootOf(SessionId.value sessionId)
+        let rStr: string = familyTree?familyRootOf (SessionId.value sessionId)
         SessionId.create rStr
 
     let managedChild (sessionId: SessionId) =
-        familyTree?isManagedChild(SessionId.value sessionId) : bool
+        familyTree?isManagedChild (SessionId.value sessionId): bool
 
     let registerChild (parentId: SessionId) (childId: SessionId) =
-        familyTree?registerChild(SessionId.value parentId, SessionId.value childId) |> ignore
+        familyTree?registerChild (SessionId.value parentId, SessionId.value childId)
+        |> ignore
 
     let detachChild (childId: SessionId) =
-        familyTree?detachChild(SessionId.value childId) |> ignore
+        familyTree?detachChild (SessionId.value childId) |> ignore
 
     let isAbortOk (res: Result<unit, string>) =
         match res with
-        | Ok () -> true
+        | Ok() -> true
         | Error _ -> false
 
     let abortOneChild (childId: SessionId) : Task<bool> =
@@ -143,14 +155,14 @@ type InjectedSessionPort
     let abortChildren (parentId: SessionId) =
         task {
             let parentKey = SessionId.value parentId
-            let childrenArray: string array = familyTree?childrenToAbort(parentKey)
+            let childrenArray: string array = familyTree?childrenToAbort (parentKey)
 
             for childKey in childrenArray do
                 let childId = SessionId.create childKey
                 let! isAborted = abortOneChild childId
-                familyTree?settleAbortOne(parentKey, childKey, isAborted) |> ignore
+                familyTree?settleAbortOne (parentKey, childKey, isAborted) |> ignore
 
-            familyTree?endAbort(parentKey) |> ignore
+            familyTree?endAbort (parentKey) |> ignore
         }
 
     let routeSendOptions (_sessionId: SessionId) (opts: SessionPromptOptions) =

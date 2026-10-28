@@ -26,7 +26,7 @@ const returned=result=>{
   return result.fields[0]
 }
 
-test('WHAT[latency-degeneration-009] the production HostSessionNudge forwards a real late Refused after a detached claim',async()=>{
+test('WHAT[latency-degeneration-005] the production HostSessionNudge forwards a real late Refused after a detached claim',async()=>{
   await withJournal('degeneration-late-refused-009',async handle=>{
     const context=await prepareAcceptanceObserver(handle,'continuation','late-refusal')
     let late
@@ -54,7 +54,7 @@ test('WHAT[latency-degeneration-009] the production HostSessionNudge forwards a 
   })
 })
 
-test('WHAT[latency-degeneration-009] the real detached sender receives physical acceptance without blocking on its Host enqueue receipt',async()=>{
+test('WHAT[latency-degeneration-005] the real detached sender receives physical acceptance without blocking on its Host enqueue receipt',async()=>{
   await withJournal('degeneration-sender-accepted-009',async handle=>{
     const context=await prepareAcceptanceObserver(handle,'continuation','late-accepted')
     let key
@@ -81,7 +81,7 @@ test('WHAT[latency-degeneration-009] the real detached sender receives physical 
 })
 
 
-test('WHAT[latency-degeneration-009] an initial definite SDK refusal returns through the real Sender without physical acceptance',async()=>{
+test('WHAT[latency-degeneration-005] an initial definite SDK refusal returns through the real Sender without physical acceptance',async()=>{
   const {Outcome_SendOutcome}=await import('../../../dist/Foundation/Outcome.js')
   await withJournal('degeneration-direct-refused-009',async handle=>{
     const context=await prepareAcceptanceObserver(handle,'continuation','direct-refused')
@@ -100,7 +100,7 @@ test('WHAT[latency-degeneration-009] an initial definite SDK refusal returns thr
   })
 })
 
-test('WHAT[latency-degeneration-009] ambiguous SDK delivery is not a definite refusal or fabricated PhysicalAccepted',async()=>{
+test('WHAT[latency-degeneration-005] ambiguous SDK delivery is not a definite refusal or fabricated PhysicalAccepted',async()=>{
   const {Outcome_SendOutcome}=await import('../../../dist/Foundation/Outcome.js')
   await withJournal('degeneration-outcome-unknown-009',async handle=>{
     const context=await prepareAcceptanceObserver(handle,'continuation','unknown')

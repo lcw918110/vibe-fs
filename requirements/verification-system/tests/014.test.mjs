@@ -42,6 +42,7 @@ import {
   HUMANROOT_MANAGER_LOOP_CANARY_PROMPT,
   assertHumanRootManagerLoop,
   assertManagerLoopAuthorityPreserved,
+  continuedOriginator,
 } from './e2e/support/long-stroke-oracles.mjs'
 import { WAIT_FACT_WINDOW_MS } from './e2e/support/time-budget.js'
 import {
@@ -52,6 +53,34 @@ import {
   assertManagerToolSurface,
   collectManagerProviderToolEvidence,
 } from './e2e/support/manager-tool-surface-evidence.mjs'
+
+test('WHAT[verification-system-014] 系统续办后的发起者与普通继任者分别识别', () => {
+  const event = (type, payload = {}) => ({ type, payload })
+  assert.equal(continuedOriginator([event('WorkContinued', { incumbencyId: 'a' })]), true)
+  assert.equal(continuedOriginator([event('WorkContinued', { incumbencyId: 'a' }), event('Reviewed', { incumbencyId: 'a' })]), false)
+  assert.equal(continuedOriginator([event('WorkContinued', { incumbencyId: 'a' }), event('IncumbencyOpened', { incumbencyId: 'b' })]), false)
+  assert.equal(continuedOriginator([]), false)
+})
+
+test('WHAT[verification-system-014] Manager 的物理工具面只接受现行生命周期入口', () => {
+  const sessionID = 'manager-session'
+  const request = (tools) => ({ sessionID, tools: tools.map((name) => ({ name })) })
+  const inspect = (tools) => collectManagerProviderToolEvidence({ provider: { requests: [request(tools)] } })
+  const current = ['todowrite-for-manager', 'join', 'horizon', 'assume', 'review']
+  assert.equal(assertManagerToolSurface({ managerProviderWire: inspect(current) }).ok, true)
+  assert.throws(() => assertManagerToolSurface({ managerProviderWire: inspect(current.filter((name) => name !== 'review')) }))
+  assert.throws(() => assertManagerToolSurface({ managerProviderWire: inspect([...current, 'deliver']) }))
+})
+
+test('WHAT[verification-system-014] Long Stroke 不再声明退役的生命周期工具', () => {
+  const source = readFileSync(new URL('./e2e/scenarios/long-stroke.toml', import.meta.url), 'utf8')
+  const result = compileScenario(source, { name: 'long-stroke.toml' })
+  assert.equal(result.ok, true, result.ok ? '' : result.problems.join('\n'))
+  for (const entry of result.scenario.entries) {
+    assert.ok(!entry.tools?.includes('deliver'), `${entry.id} 不得要求退役工具 deliver`)
+    assert.notEqual(entry.respond?.tool, 'deliver', `${entry.id} 不得调用退役工具 deliver`)
+  }
+})
 
 test('WHAT[verification-system-014] the Long Stroke entry satisfies the watchdog-feed guard', () => {
   // VERIFICATION-SYSTEM-014 requires the Layer 4 Long Stroke environment to be driven
@@ -84,8 +113,8 @@ test('WHAT[verification-system-014] the compiled Long Stroke scenario preserves 
   assert.deepEqual(result.scenario.faults.filter((fault) => fault.kind === 'provider-error' && fault.status === 400)
     .map((fault) => fault.entryId), ['manager-loop.2', 'continue.0'])
 
-  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'deliver']
-  const managerTools = ['todowrite-for-manager', 'join', 'horizon', 'assume', 'deliver']
+  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'review']
+  const managerTools = ['todowrite-for-manager', 'join', 'horizon', 'assume', 'review']
   const request = (turn, step, tools) => ({
     messages: [{ role: 'user', content: turn },
       ...Array.from({ length: step }, (_, index) => ({ role: 'assistant', content: `reply-${index}` }))],
@@ -111,7 +140,7 @@ test('WHAT[verification-system-014] the compiled Long Stroke scenario preserves 
     '# rather than trusting any inherited claim.\n' +
     '#\n' +
     "# During assessment, you may directly use the review-only read tool todowrite-for-manager, or entrust read-only work to Engineer to establish facts about the predecessor's work"
-  for (const [step, tool] of [[0, 'todowrite-for-manager'], [1, 'deliver']]) {
+  for (const [step, tool] of [[0, 'todowrite-for-manager'], [1, 'review']]) {
     const id = `manager-reopened-loop.${step}`
     const entry = byId.get(id)
     assert.deepEqual({ step: entry?.step, optional: entry?.optional, internal: entry?.internal, tool: entry?.respond?.tool },
@@ -164,10 +193,7 @@ const preFlowCanaries = async (scenario) => {
   })
   assert.ok(humanrootPrompt.ok, `humanroot-manager prompt failed: ${JSON.stringify(humanrootPrompt.data)}`)
 
-  // The successor iteration appends the owner-controlled assess resource, so its two
-  // deliveries are answered by the assess-resource family instead of the reusable
-  // authority-turn family. One delivery of each step is what the two iterations produce.
-  for (const id of ['humanroot-loop.0', 'humanroot-loop.1', 'manager-reopened-loop.0', 'manager-reopened-loop.1']) {
+  for (const id of ['humanroot-loop.0', 'humanroot-loop.1', 'successor-tenure.1']) {
     await scenario.provider.waitForExpectationAttempt(id, 1, WAIT_FACT_WINDOW_MS)
   }
   await assertHumanRootManagerLoop(scenario, humanrootSessionId)

@@ -165,7 +165,7 @@ module SyncDelegateBatchRules =
             | None -> null
 
         let res: obj =
-            SyncDelegateDeferredInterop.deferredStore?stage(
+            SyncDelegateDeferredInterop.deferredStore?stage (
                 sessionId,
                 ToolCallId.value callId,
                 charge,
@@ -173,15 +173,16 @@ module SyncDelegateBatchRules =
                 estObj
             )
 
-        let isOk =
-            not (SyncDelegateDeferredInterop.isAbsent res)
-            && unbox<bool> res?ok
+        let isOk = not (SyncDelegateDeferredInterop.isAbsent res) && unbox<bool> res?ok
+
+        let failureReason () =
+            if SyncDelegateDeferredInterop.isAbsent res then
+                "unknown"
+            else
+                string res?reason
 
         if not isOk then
-            let reason =
-                if SyncDelegateDeferredInterop.isAbsent res then "unknown"
-                else string res?reason
-            failwith (sprintf "Failed to stage deferred inspection: %s" reason)
+            failwith (sprintf "Failed to stage deferred inspection: %s" (failureReason ()))
         else
             sprintf "Engineer charge accepted and deferred for batch execution: %s" charge
 
@@ -190,67 +191,76 @@ module SyncDelegateBatchRules =
             let items: obj array =
                 unbox<obj array> (SyncDelegateDeferredInterop.deferredStore?takePending sessionId)
 
+            let settle () =
+                task {
+                    let calls =
+                        items
+                        |> Array.map (fun item ->
+                            let est =
+                                if SyncDelegateDeferredInterop.isAbsent item?estimate then
+                                    None
+                                else
+                                    Some(unbox<int> item?estimate)
+
+                            { CallId = ToolCallId.create (unbox<string> item?callId)
+                              Charge = unbox<string> item?charge
+                              Keywords = unbox<string> item?keywords
+                              Estimate = est })
+                        |> Array.toList
+
+                    let callOrder = calls |> List.map (fun c -> c.CallId)
+                    let combinedCharge = calls |> List.map (fun c -> c.Charge) |> String.concat "\n"
+
+                    let invoke (call: DeferredCall) =
+                        let batch =
+                            { ProviderRun = ProviderRunIdentity.create "deferred-batch"
+                              CallOrder = callOrder
+                              CurrentCall = call.CallId }
+
+                        let preparePrompt () =
+                            Task.FromResult(LlmFacing.instructions (calls |> List.map (fun c -> c.Charge)))
+
+                        runtime.InvokeBatchPrepared(
+                            sessionId,
+                            SyncDelegateRole.Engineer,
+                            combinedCharge,
+                            batch,
+                            preparePrompt,
+                            ?expectedToolCalls = call.Estimate
+                        )
+
+                    let tasks = calls |> List.map invoke
+                    let! results = promiseAll (List.toArray tasks)
+                    let lang = ProviderLanguageBinding.forSessionText sessionId
+
+                    for i in 0 .. calls.Length - 1 do
+                        let rendered = renderInvocationOutput lang results.[i]
+
+                        SyncDelegateDeferredInterop.deferredStore?recordReplacedResult (
+                            ToolCallId.value calls.[i].CallId,
+                            rendered,
+                            sessionId
+                        )
+                        |> ignore
+                }
+
             if items.Length > 0 then
-                let calls =
-                    items
-                    |> Array.map (fun item ->
-                        let est =
-                            if SyncDelegateDeferredInterop.isAbsent item?estimate then
-                                None
-                            else
-                                Some (unbox<int> item?estimate)
-                        { CallId = ToolCallId.create (unbox<string> item?callId)
-                          Charge = unbox<string> item?charge
-                          Keywords = unbox<string> item?keywords
-                          Estimate = est })
-                    |> Array.toList
-
-                let callOrder = calls |> List.map (fun c -> c.CallId)
-                let combinedCharge = calls |> List.map (fun c -> c.Charge) |> String.concat "\n"
-
-                let invoke (call: DeferredCall) =
-                    let batch =
-                        { ProviderRun = ProviderRunIdentity.create "deferred-batch"
-                          CallOrder = callOrder
-                          CurrentCall = call.CallId }
-
-                    let preparePrompt () =
-                        Task.FromResult(LlmFacing.instructions (calls |> List.map (fun c -> c.Charge)))
-
-                    runtime.InvokeBatchPrepared(
-                        sessionId,
-                        SyncDelegateRole.Engineer,
-                        combinedCharge,
-                        batch,
-                        preparePrompt,
-                        ?expectedToolCalls = call.Estimate
-                    )
-
-                let tasks = calls |> List.map invoke
-                let! results = promiseAll (List.toArray tasks)
-                let lang = ProviderLanguageBinding.forSessionText sessionId
-
-                for i in 0 .. calls.Length - 1 do
-                    let rendered = renderInvocationOutput lang results.[i]
-                    SyncDelegateDeferredInterop.deferredStore?recordReplacedResult(
-                        ToolCallId.value calls.[i].CallId,
-                        rendered,
-                        sessionId
-                    ) |> ignore
+                do! settle ()
         }
 
     let hasReplacedResults () : bool =
-        unbox<bool> (SyncDelegateDeferredInterop.deferredStore?hasReplacedResults())
+        unbox<bool> (SyncDelegateDeferredInterop.deferredStore?hasReplacedResults ())
 
     let tryReplacedResult (callId: string) : string option =
         let repObj: obj = SyncDelegateDeferredInterop.deferredStore?tryReplacedResult callId
+
         if isNull repObj || SyncDelegateDeferredInterop.isAbsent repObj then
             None
         else
-            Some (unbox<string> repObj)
+            Some(unbox<string> repObj)
 
     let clearSession (sessionId: string) : unit =
         SyncDelegateDeferredInterop.deferredStore?clearSession sessionId |> ignore
 
     let clearAll () : unit =
-        SyncDelegateDeferredInterop.deferredStore?clearAll() |> ignore
+        SyncDelegateDeferredInterop.deferredStore?clearAll () |> ignore

@@ -68,7 +68,7 @@ test('WHAT[latency-degeneration-013] a tool starting while the interrupt is in f
   r.watchdog.Dispose()
 })
 
-test('WHAT[latency-degeneration-014] novice protection: an infinite threshold arms no timer but still samples', async () => {
+test('WHAT[latency-degeneration-013] novice protection: an infinite threshold arms no timer but still samples', async () => {
   const r = rig(Number.POSITIVE_INFINITY)
   r.watchdog.Begin('engineer', 'run-1')
   assert.equal(r.timers.length, 0, 'no timer is scheduled with an infinite threshold')

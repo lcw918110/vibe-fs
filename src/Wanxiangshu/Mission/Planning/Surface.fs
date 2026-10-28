@@ -17,7 +17,11 @@ module PlanningSurface =
         let optionalText (name: string) =
             let item = tenureObj?(name)
 
-            if isNull item || jsTypeof item <> "string" || String.IsNullOrEmpty(unbox<string> item) then
+            if
+                isNull item
+                || jsTypeof item <> "string"
+                || String.IsNullOrEmpty(unbox<string> item)
+            then
                 None
             else
                 Some(unbox<string> item)
@@ -201,6 +205,7 @@ module PlanningSurface =
         ignore execSessionId
         ignore observedPrompt
         ignore blockers
+
         box
             {| ok = false
                delivered = false

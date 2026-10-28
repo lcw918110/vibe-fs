@@ -125,7 +125,7 @@ module RuntimePath =
             let key = workspace |> resolvePath |> outsideGit
 
             let primaryTask =
-                unbox<Task<string>> (runtimePathStore.getOrCompute (key, fun (k: string) -> box (primaryWorktree k)))
+                unbox<Task<string>> (runtimePathStore.getOrCompute (key, (fun (k: string) -> box (primaryWorktree k))))
 
             let! primary = primaryTask
 

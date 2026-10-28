@@ -145,8 +145,7 @@ module HostCompactionPolicy =
         : CompactionGateVerdict =
         match unavailable with
         | Some setting -> CompactionGateVerdict.SettingUnavailable setting
-        | None when pseudoRunsOnFirstTurn > 0 ->
-            CompactionGateVerdict.Satisfied
+        | None when pseudoRunsOnFirstTurn > 0 -> CompactionGateVerdict.Satisfied
         | None -> CompactionGateVerdict.Satisfied
 
     /// The `HostContractUnsupported` message for a failed gate.

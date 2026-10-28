@@ -159,9 +159,8 @@ module OpenCodePortAdapter =
                     // rule in PluginTransforms; no other origin is reclassified.
                     let deliveryFields =
                         match opts.Metadata with
-                        | Some metadata when
-                            emitJsExpr metadata "$0?.wanxiangshu_origin === 'BusyAgentNudge'"
-                            -> [ "delivery", box "steer" ]
+                        | Some metadata when emitJsExpr metadata "$0?.wanxiangshu_origin === 'BusyAgentNudge'" ->
+                            [ "delivery", box "steer" ]
                         | _ -> []
 
                     let bodyFields =

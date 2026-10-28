@@ -146,19 +146,17 @@ type PluginRuntimeScope
     /// first admission can await it (crash-reconciliation-020 ordering: the void
     /// settlement must land before the next handoff reads the durable authority).
     member _.TrackDurabilityActivation(work: Task) : unit =
-        lock durabilityActivationGate (fun () ->
-            durabilityActivationWorks <- work :: durabilityActivationWorks)
+        lock durabilityActivationGate (fun () -> durabilityActivationWorks <- work :: durabilityActivationWorks)
         ()
 
     /// Await every durability-activation recovery work registered so far. The
     /// tracked tasks never fault (failures are captured into the background
     /// failure slot), so awaiting cannot throw.
     member _.AwaitDurabilityActivation() : Task =
-        let pending =
-            lock durabilityActivationGate (fun () -> durabilityActivationWorks)
+        let pending = lock durabilityActivationGate (fun () -> durabilityActivationWorks)
 
-        task {
-            if pending.Length > 0 then
+        let awaitPending () =
+            task {
                 for work in pending do
                     do! work
 
@@ -166,11 +164,12 @@ type PluginRuntimeScope
                     durabilityActivationWorks <-
                         durabilityActivationWorks
                         |> List.filter (fun work ->
-                            not (
-                                List.exists (fun awaited ->
-                                    obj.ReferenceEquals(work, awaited))
-                                    pending
-                            )))
+                            not (List.exists (fun awaited -> obj.ReferenceEquals(work, awaited)) pending)))
+            }
+
+        task {
+            if pending.Length > 0 then
+                do! awaitPending ()
         }
         :> Task
 

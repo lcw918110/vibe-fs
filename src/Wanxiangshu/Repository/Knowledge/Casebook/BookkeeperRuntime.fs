@@ -262,7 +262,13 @@ module BookkeeperRuntime =
                     return Error(sprintf "bookkeeper identity seed rejected: %A" rejection)
                 | Ok participantIdentity ->
                     let promptText = Decisions.envelope kind ownerKey q a observations extraTranscript
-                    bookkeeperLedger?authorize (childKey, ParticipantIdentity.selectedAgent participantIdentity, promptText) |> ignore
+
+                    bookkeeperLedger?authorize (
+                        childKey,
+                        ParticipantIdentity.selectedAgent participantIdentity,
+                        promptText
+                    )
+                    |> ignore
 
                     return!
                         sendBookkeeperPrompt
@@ -343,8 +349,7 @@ module BookkeeperRuntime =
     let bindSession (sessionId: string) (txId: string) (ownerSessionId: string) : unit =
         bookkeeperLedger?bind (sessionId, txId, ownerSessionId)
 
-    let unbindSession (sessionId: string) : unit =
-        bookkeeperLedger?unbind (sessionId)
+    let unbindSession (sessionId: string) : unit = bookkeeperLedger?unbind (sessionId)
 
     let tryConsumePromptAuthorization
         (sessionId: SessionId)
@@ -379,6 +384,7 @@ module BookkeeperRuntime =
         : Task<Result<string * string, string>> =
         task {
             let activeRuntime = lock runtimeGate (fun () -> runtime)
+
             match activeRuntime with
             | None -> return Error "bookkeeper runtime unavailable"
             | Some active ->

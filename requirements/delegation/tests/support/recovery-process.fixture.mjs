@@ -54,7 +54,7 @@ try {
   assert.notEqual(retryPrompt.promptKey, initialPrompt.promptKey)
   assert.equal(sync.promptOrigin(runtime, owner, 'Engineer', 1), 'ProviderRetryAttempt')
   assert.equal(sync.returnPromptOutcome(runtime, owner, 'Engineer', 1, dispatch.admittedWithReceipt('retry-host-receipt')), true)
-  assert.equal(await failed, true)
+  assert.equal(await pendingAfterTurn(failed), 'pending')
   assert.equal(sync.promptClaimState(runtime, owner, 'Engineer', 1).kind, 'Pending')
   assert.equal(await pendingAfterTurn(completion), 'pending', 'a receipt does not complete the invocation')
 
@@ -74,6 +74,7 @@ try {
     assert.equal(result.value.physicalUserMessageId, initial.physicalUserMessageId)
   } else {
     successor = await sync.confirmManagedPromptPhysical(runtime, owner, 'Engineer', 1, 'actual-retry-physical')
+    assert.equal(await failed, true)
     assert.equal(successor.ok, true, JSON.stringify(successor))
     assert.equal(successor.origin, 'ProviderRetryAttempt')
     assert.notEqual(successor.physicalUserMessageId, initial.physicalUserMessageId)
@@ -117,6 +118,7 @@ try {
     assert.equal(secondAdmission.physicalUserMessageId, secondAccepted.physicalUserMessageId)
     if (lateAcceptance) {
       successor = await sync.confirmManagedPromptPhysical(runtime, owner, 'Engineer', 1, 'late-retry-physical')
+      assert.equal(await failed, false, '迟到的恢复观察不能认领已经完成并被复用的调用')
       assert.equal(successor.ok, true, JSON.stringify(successor))
       assert.equal(successor.origin, 'ProviderRetryAttempt')
       assert.notEqual(successor.physicalUserMessageId, initial.physicalUserMessageId)
@@ -136,8 +138,9 @@ try {
       secondAccepted.physicalUserMessageId, secondAccepted.authorityRootUserMessageId, secondFailedRun, 'second confirmed failure')
     await sync.awaitPromptCount(runtime, owner, 'Engineer', 4)
     assert.equal(sync.returnPromptOutcome(runtime, owner, 'Engineer', 3, dispatch.admittedWithReceipt('second-retry-receipt')), true)
-    assert.equal(await secondFailed, true)
+    assert.equal(await pendingAfterTurn(secondFailed), 'pending')
     const secondSuccessor = await sync.confirmManagedPromptPhysical(runtime, owner, 'Engineer', 3, 'second-retry-physical')
+    assert.equal(await secondFailed, true)
     assert.equal(secondSuccessor.ok, true, JSON.stringify(secondSuccessor))
     assert.notEqual(secondSuccessor.physicalUserMessageId, secondAccepted.physicalUserMessageId)
     assert.equal(secondSuccessor.origin, 'ProviderRetryAttempt')

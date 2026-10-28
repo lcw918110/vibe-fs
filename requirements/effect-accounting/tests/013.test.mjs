@@ -72,7 +72,7 @@ const withRealPlugin = async (body, session = SESSION) => {
     runtime.pushHostMessage(session, root)
     await hooks['chat.message'](
       { sessionID: session, messageID: rootId, agent: 'engineer' },
-      { message: root, parts: root.parts },
+      { message: { ...root.info, agent: 'engineer', model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: root.parts },
     )
 
     runtime.pushHostMessage(session, {

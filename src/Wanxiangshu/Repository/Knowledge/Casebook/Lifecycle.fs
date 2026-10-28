@@ -32,12 +32,12 @@ module CasebookLifecycle =
 
         member _.Drain(sessionId: string) : Observation list =
             let items = inner.Drain(sessionId)
+
             items
             |> Array.toList
             |> List.map (fun o -> Observation.FileRead(string o?path, string o?contentHash))
 
-        member _.Count(sessionId: string) : int =
-            inner.Count(sessionId)
+        member _.Count(sessionId: string) : int = inner.Count(sessionId)
 
     let collector = CasebookObservationCollector()
 

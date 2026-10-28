@@ -1,28 +1,15 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+// WHAT[execution-model-routing-001]/[005]: the wanxiangshu.mjs scheduler is
+// retired. Model selection belongs to the host; the plugin passes the
+// host-selected model through untouched, so the environment only provides two
+// workspace directories whose host configs differ.
 export const createEnvironment = (initPlugin) => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-routing-shared-'))
   const home = join(root, 'home')
-  const routingDir = join(home, '.config', 'opencode')
-  mkdirSync(routingDir, { recursive: true })
-  writeFileSync(
-    join(routingDir, 'wanxiangshu.mjs'),
-    `export const routingProtocol = 2
-export const hasTheoreticalCapacity = () => true
-export default function route(role, running) {
-  if (role === 'engineer' || role === 'coder') {
-    const occupied = running.filter((item) => item.model === 'provider/model-a' && item.reasoning === 'none').length
-    return occupied === 0
-      ? { model: 'provider/model-a', reasoning: 'none' }
-      : { model: 'provider/model-b', reasoning: 'none' }
-  }
-  throw new Error('unexpected role: ' + role)
-}\n`,
-    'utf8',
-  )
 
   return {
     home,
@@ -48,19 +35,20 @@ export const managedConfig = () => {
   return { agent }
 }
 
-export const messageOutput = (sessionID, agent, messageID = `msg_${sessionID}`) => ({
+export const messageOutput = (sessionID, agent, model, messageID = `msg_${sessionID}`) => ({
   message: {
     id: messageID,
     role: 'user',
     sessionID,
     agent,
-    model: { providerID: 'host', modelID: 'placeholder' },
+    model,
   },
   parts: [],
 })
 
 export const routeMessage = async (hooks, sessionID, agent = 'engineer', messageID = `msg_${sessionID}`) => {
-  const output = messageOutput(sessionID, agent, messageID)
+  const model = { providerID: 'host', modelID: sessionID.endsWith('_a') ? 'root-model' : 'worktree-model' }
+  const output = messageOutput(sessionID, agent, model, messageID)
   await hooks['chat.message']({ sessionID, agent }, output)
   return output.message.model
 }

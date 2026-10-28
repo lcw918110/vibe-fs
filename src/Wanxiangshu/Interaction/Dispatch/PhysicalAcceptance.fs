@@ -29,41 +29,50 @@ module PromptPhysicalAcceptance =
 
     let register (promptKey: PromptKey) (callback: PhysicalUserMessageId -> unit) : IDisposable =
         let cb = fun (pid: string) -> callback (PhysicalUserMessageId.create pid)
-        let rawSub = pa?register(PromptKey.value promptKey, cb)
+        let rawSub = pa?register (PromptKey.value promptKey, cb)
+
         { new IDisposable with
             member _.Dispose() = callDispose rawSub }
 
     let cancel (promptKey: PromptKey) : unit =
-        pa?cancel(PromptKey.value promptKey) |> ignore
+        pa?cancel (PromptKey.value promptKey) |> ignore
 
     let accepted (promptKey: PromptKey) (physicalUserMessageId: PhysicalUserMessageId) : unit =
-        pa?accepted(PromptKey.value promptKey, PhysicalUserMessageId.value physicalUserMessageId) |> ignore
+        pa?accepted (PromptKey.value promptKey, PhysicalUserMessageId.value physicalUserMessageId)
+        |> ignore
 
     let rejected (promptKey: PromptKey) (reason: string) : unit =
-        pa?rejected(PromptKey.value promptKey, reason) |> ignore
+        pa?rejected (PromptKey.value promptKey, reason) |> ignore
 
-    let internal beginConfirmation (promptKey: PromptKey) (timeoutMs: int option) : Task<PromptPhysicalOutcome option> * IDisposable =
-        let pair: obj = pa?beginConfirmation(PromptKey.value promptKey, timeoutMs)
+    let internal beginConfirmation
+        (promptKey: PromptKey)
+        (timeoutMs: int option)
+        : Task<PromptPhysicalOutcome option> * IDisposable =
+        let pair: obj = pa?beginConfirmation (PromptKey.value promptKey, timeoutMs)
         let rawTask = unbox<Task<obj option>> (tupleFst pair)
         let rawSub = tupleSnd pair
+
         let subscription =
             { new IDisposable with
                 member _.Dispose() = callDispose rawSub }
 
+        let convertRaw (raw: obj) =
+            let kind = unbox<string> (raw?kind)
+
+            if kind = "Accepted" then
+                let pid = unbox<string> (raw?physicalUserMessageId)
+                Some(PromptPhysicalOutcome.Accepted(PhysicalUserMessageId.create pid))
+            else
+                let reason = unbox<string> (raw?reason)
+                Some(PromptPhysicalOutcome.Rejected reason)
+
         let convertedTask =
             task {
                 let! (rawOpt: obj option) = rawTask
+
                 match rawOpt with
-                | Some raw when not (isNull raw) ->
-                    let kind = unbox<string> (raw?kind)
-                    if kind = "Accepted" then
-                        let pid = unbox<string> (raw?physicalUserMessageId)
-                        return Some (PromptPhysicalOutcome.Accepted (PhysicalUserMessageId.create pid))
-                    else
-                        let reason = unbox<string> (raw?reason)
-                        return Some (PromptPhysicalOutcome.Rejected reason)
-                | _ ->
-                    return None
+                | Some raw when not (isNull raw) -> return convertRaw raw
+                | _ -> return None
             }
 
         convertedTask, subscription

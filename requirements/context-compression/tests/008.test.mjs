@@ -18,7 +18,7 @@ test('WHAT[context-compression-008] work session plans use the ordinary work req
 test('WHAT[context-compression-008] compaction advances the wire epoch without resetting scope progress', async () => {
   const assert = (await import('node:assert/strict')).default
   const prefix = await import('../../../dist/Context/Prefix/Surface.js')
-  const { ScopeProgress } = await import('../../../wanxiangli/dist/scope-progress/AdvisorFlow.js')
+  const { ScopeProgress } = await import('wanxiangli/scope-progress')
   const progress = ScopeProgress()
   const session = 'scope-compaction-008'
   const scopeId = (state) => String(prefix.reanchoredScopes(state).length)

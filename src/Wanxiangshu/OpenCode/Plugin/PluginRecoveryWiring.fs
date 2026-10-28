@@ -95,6 +95,7 @@ module PluginRecoveryWiring =
 
             ignore observed
             ignore retirementBlockers
+
             Wanxiangshu.Foundation.Diagnostic.emit
                 "plan-delivery-recovery-retired"
                 [ "work_id", workId
@@ -123,12 +124,14 @@ module PluginRecoveryWiring =
         ignore gitCommonDir
         ignore snapshots
         ignore retirementBlockers
+
         Wanxiangshu.Foundation.Diagnostic.emit
             "plan-delivery-recovery-retired"
             [ "work_id", workId
               "operation_id", operationId
               "exec_session_id", execSessionId
               "reason", "review is the only lifecycle entry" ]
+
         Task.FromResult(()) :> Task
 
     let private discoverUnboundDelivery
@@ -269,39 +272,39 @@ module PluginRecoveryWiring =
         let recovery () =
             scope.RunBackgroundTracked(fun () ->
                 task {
-                        // crash-reconciliation-020: the child work the previous process
-                        // left behind can no longer be delivered, so it is voided
-                        // (Abandoned(Voided)) — the obligation stays visible until
-                        // join reports the void once and retires it.
+                    // crash-reconciliation-020: the child work the previous process
+                    // left behind can no longer be delivered, so it is voided
+                    // (Abandoned(Voided)) — the obligation stays visible until
+                    // join reports the void once and retires it.
+                    match boot.Journal with
+                    | Some journal -> do! ChildWorkRecovery.settleOrphanedChildRuns journal
+                    | None -> ()
+
+                    // provider-attempt-recovery-024: the abandoned stale requests
+                    let! recoveryWorks =
                         match boot.Journal with
-                        | Some journal -> do! ChildWorkRecovery.settleOrphanedChildRuns journal
-                        | None -> ()
+                        | Some journal -> inspectRecoveryWorks journal boot.WorkspaceDirectory
+                        | None -> Task.FromResult [||]
 
-                        // provider-attempt-recovery-024: the abandoned stale requests
-                        let! recoveryWorks =
-                            match boot.Journal with
-                            | Some journal -> inspectRecoveryWorks journal boot.WorkspaceDirectory
-                            | None -> Task.FromResult [||]
+                    match boot.Journal with
+                    | Some journal ->
+                        do!
+                            reconcilePendingDeliveries
+                                recoveryWorks
+                                boot.WorkspaceDirectory
+                                snapshotPort
+                                discoveryPort
+                                retirementBlockers
+                    | None -> ()
 
-                        match boot.Journal with
-                        | Some journal ->
-                            do!
-                                reconcilePendingDeliveries
-                                    recoveryWorks
-                                    boot.WorkspaceDirectory
-                                    snapshotPort
-                                    discoveryPort
-                                    retirementBlockers
-                        | None -> ()
+                    do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded)
 
-                        do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded)
+                    do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.CapacityProjectionReplayed)
 
-                        do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.CapacityProjectionReplayed)
-
-                        // crash-reconciliation-018: the load-phase normalization above owes
-                        // one restart status guidance to the next real user instruction.
-                        scope.MarkRestartGuidancePending()
-                    })
+                    // crash-reconciliation-018: the load-phase normalization above owes
+                    // one restart status guidance to the next real user instruction.
+                    scope.MarkRestartGuidancePending()
+                })
 
         // crash-reconciliation-020: the same recovery must be observable by the
         // next handoff's identity judgment, which can happen before (or without)

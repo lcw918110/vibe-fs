@@ -3,7 +3,7 @@ import test from 'node:test'
 import { PendingRunStore } from 'wanxiangli/handle-lifecycle'
 import * as join from '../../../dist/Execution/Delegation/Fork/JoinSurface.js'
 
-test('WHAT[delegation-025] completion claimed with exact causal token and rejects duplicate claim', () => {
+test('WHAT[delegation-035] completion claimed with exact causal token and rejects duplicate claim', () => {
   const store = new PendingRunStore()
   const token = { id: 'run-token-1' }
   const runPayload = {
@@ -46,7 +46,7 @@ test('WHAT[delegation-025] completion claimed with exact causal token and reject
   assert.equal(store.allPayloads().length, 0)
 })
 
-test('WHAT[delegation-031] parent cancellation cascades atomic settlement and clears pending runs without orphan handles', () => {
+test('WHAT[delegation-035] parent cancellation cascades atomic settlement and clears pending runs without orphan handles', () => {
   const store = new PendingRunStore()
   const token1 = { id: 'tok-eng' }
   const token2 = { id: 'tok-devops' }
@@ -84,7 +84,7 @@ test('WHAT[delegation-031] parent cancellation cascades atomic settlement and cl
   assert.equal(store.allPayloads().length, 0)
 })
 
-test('WHAT[delegation-026] HostForkRuntime integrates PendingRunStore with initial zero counts and probe observation', async () => {
+test('WHAT[delegation-035] HostForkRuntime integrates PendingRunStore with initial zero counts and probe observation', async () => {
   const probe = join.createJoinProbe()
   const counts = join.joinProbeCounts(probe)
 

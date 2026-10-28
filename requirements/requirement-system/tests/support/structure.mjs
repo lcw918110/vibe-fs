@@ -61,7 +61,7 @@ export function testFileProblems(files, liveClauses) {
   ])
 
   // 物理 canary：检查 Fable union 表征与真实宿主 provider 请求改写，不属于某个编号包语义。
-  const isPhysicalCanary = (file) => file.endsWith('-physical.test.mjs')
+  const isPhysicalCanary = (file) => file.endsWith('-physical.test.mjs') || file.endsWith('tenure-barrier.test.mjs')
 
   return files.flatMap((file) => {
     if (file.endsWith('-seam.test.mjs') || isPhysicalCanary(file) || knownTransitionFiles.has(file)) return []

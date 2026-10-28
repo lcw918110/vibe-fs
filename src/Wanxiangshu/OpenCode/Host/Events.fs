@@ -45,6 +45,7 @@ module Events =
         interface ISignalSource with
             member _.Subscribe(listener: HostSignal -> Task) : IDisposable =
                 let subscription: obj = Fable.Core.JsInterop.(?) broadcaster "subscribe" listener
+
                 { new IDisposable with
                     member _.Dispose() =
                         Fable.Core.JsInterop.(?) subscription "dispose" () }

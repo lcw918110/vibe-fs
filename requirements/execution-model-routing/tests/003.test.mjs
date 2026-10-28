@@ -3,14 +3,13 @@ import test from 'node:test'
 {
 const { default: assert } = await import("node:assert/strict");
 const { execFileSync } = await import("node:child_process");
-const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
+const { mkdtempSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
-const { dirname, join } = await import("node:path");
+const { join } = await import("node:path");
 const { default: test } = await import("node:test");
 
 const seed = 0x36a11ce
 const restartCount = 16
-const operationsPerRestart = 6
 const surfaceUrl = new URL('../../../dist/OpenCode/Host/ModelRoutingSurface.js', import.meta.url).href
 const childProgram = String.raw`
 import assert from 'node:assert/strict'
@@ -46,17 +45,24 @@ const exact = {
   role: 'engineer',
   participant: 'restart-owner',
 }
+// WHAT[001]/[005]: model selection belongs to the host. The child process has
+// no scheduler module; the host target is passed explicitly, exactly like the
+// production ChatAdmissionTransaction injection.
+const hostTarget = { model: 'provider/restart', reasoning: 'none' }
 const first = await routing.acquireSharedExecutionAdmission(
   exact.sessionId,
   exact.physicalUserMessageId,
   exact.role,
   exact.participant,
   null,
+  null,
+  hostTarget,
 )
 assert.equal(first.kind, 'Acquired')
 const afterAcquire = audit()
 assert.equal(afterAcquire.ledgerEntries.length, 1)
 const projected = routing.sharedExecutionAdmissionTarget(first.lease)
+assert.deepEqual(projected, hostTarget, 'the host-selected target is preserved on the lease')
 assert.deepEqual(
   routing.commitSharedExecutionAdmission(first.lease, { ...exact, target: projected }),
   { kind: 'Applied' },
@@ -72,6 +78,8 @@ const duplicate = await routing.acquireSharedExecutionAdmission(
   exact.role,
   exact.participant,
   null,
+  null,
+  hostTarget,
 )
 assert.equal(duplicate.kind, 'Acquired')
 assert.equal(duplicate.lease, first.lease, 'plugin reload reuses the exact physical admission fence')
@@ -90,12 +98,6 @@ const runProcess = (home, cycle) =>
 
 test('WHAT[execution-model-routing-003] process restart drops process-local capacity and rebuilds only from explicit physical observations', (context) => {
   const home = mkdtempSync(join(tmpdir(), 'wanxiangshu-capacity-restart-'))
-  const config = join(home, '.config', 'opencode', 'wanxiangshu.mjs')
-  mkdirSync(dirname(config), { recursive: true })
-  writeFileSync(
-    config,
-    "export const routingProtocol = 2\nexport const hasTheoreticalCapacity = () => true\nexport default function route(_role, running, previous) { return running.length < 1 ? { model: 'provider/restart', reasoning: 'none' } : null }\n",
-  )
 
   let maxRetained = 0
   try {
@@ -121,7 +123,7 @@ test('WHAT[execution-model-routing-003] process restart drops process-local capa
 
   assert.ok(maxRetained <= 5, 'one live exact execution retains only ledger, token, custody, execution, and owner nodes')
   context.diagnostic(
-    `task36 restart seed=${seed} restarts=${restartCount} operations=${restartCount * operationsPerRestart} maxRetained=${maxRetained}`,
+    `task36 restart seed=${seed} restarts=${restartCount} maxRetained=${maxRetained}`,
   )
 })
 }
@@ -223,11 +225,15 @@ test('WHAT[execution-model-routing-003] EMR_003_two_plugin_instances_share_one_p
     await first.config(managedConfig())
     await second.config(managedConfig())
 
+    // WHAT[001]/[005]/[008]: model selection belongs to the host (user choice
+    // first, then opencode.json). Plugins never rewrite the message model, so
+    // two plugin instances sharing one process both pass the host-selected
+    // model through untouched, per workspace.
     const a = await routeMessage(first, 'ses_shared_a')
     const b = await routeMessage(second, 'ses_shared_b')
 
-    assert.deepEqual([a.providerID, a.modelID, a.variant], ['provider', 'model-a', 'none'])
-    assert.deepEqual([b.providerID, b.modelID, b.variant], ['provider', 'model-b', 'none'])
+    assert.deepEqual([a.providerID, a.modelID, a.variant], ['host', 'root-model', undefined])
+    assert.deepEqual([b.providerID, b.modelID, b.variant], ['host', 'worktree-model', undefined])
   } finally {
     if (second) await second.dispose()
     if (first) await first.dispose()

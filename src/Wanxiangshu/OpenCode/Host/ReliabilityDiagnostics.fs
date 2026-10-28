@@ -105,10 +105,11 @@ type ReliabilityCounters() =
     let store: obj = ReliabilityInterop.createStore ()
 
     member _.Record(observation: ReliabilityObservation) : unit =
-        store?Record(ReliabilityInterop.observationKey observation)
+        store?Record (ReliabilityInterop.observationKey observation)
 
     member _.Snapshot() : ReliabilityCounterSnapshot =
-        let raw: obj = store?Snapshot()
+        let raw: obj = store?Snapshot ()
+
         { IdentityConflicts = unbox<int64> raw?identityConflicts
           QueueFull = unbox<int64> raw?queueFull
           FatalSettlements = unbox<int64> raw?fatalSettlements
@@ -170,10 +171,16 @@ type ReliabilitySnapshot =
 module ReliabilityDiagnostics =
 
     let private isAcceptedWithoutTerminal (source: ExecutionReliabilitySource) =
-        if source.Lifecycle = DurableExecutionLifecycle.AcceptedBeforeProvider then 1 else 0
+        if source.Lifecycle = DurableExecutionLifecycle.AcceptedBeforeProvider then
+            1
+        else
+            0
 
     let private isProviderStartedWithoutTerminal (source: ExecutionReliabilitySource) =
-        if source.Lifecycle = DurableExecutionLifecycle.ProviderStarted then 1 else 0
+        if source.Lifecycle = DurableExecutionLifecycle.ProviderStarted then
+            1
+        else
+            0
 
     let private logicalRunAttempt (logicalRunId: LogicalRunId, attempts: int) =
         { LogicalRunId = logicalRunId
@@ -189,10 +196,8 @@ module ReliabilityDiagnostics =
 
         { Counters = counters.Snapshot()
           Execution =
-            { AcceptedWithoutTerminal =
-                projected |> Array.sumBy isAcceptedWithoutTerminal
-              ProviderStartedWithoutTerminal =
-                projected |> Array.sumBy isProviderStartedWithoutTerminal
+            { AcceptedWithoutTerminal = projected |> Array.sumBy isAcceptedWithoutTerminal
+              ProviderStartedWithoutTerminal = projected |> Array.sumBy isProviderStartedWithoutTerminal
               PhysicalAttemptsByLogicalRun =
                 projected
                 |> Array.countBy _.LogicalRunId

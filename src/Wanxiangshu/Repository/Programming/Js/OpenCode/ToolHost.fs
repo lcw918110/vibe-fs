@@ -25,7 +25,8 @@ module JsToolSpec =
     let private progressRefusal (receipt: obj) : string option =
         if isNull receipt?ok || not (unbox<bool> receipt?ok) then
             Some("Scope progress refused: " + string receipt?reason)
-        else None
+        else
+            None
 
     /// Build a ToolSpec for one generated surface.
     ///
@@ -49,12 +50,18 @@ module JsToolSpec =
         let readCheck = JsToolPolicy.defaultReadCheck surface.RoleName readCheck
 
         let inputOf (args: HostToolArguments) : (obj * float) option =
-            if not (hasOnlyAllowedArguments args.Raw) then None
+            if not (hasOnlyAllowedArguments args.Raw) then
+                None
             else
-            match args.OptionalText "name", args.OptionalText "program", args.OptionalText "intent", args.OptionalNonNegativeNumber "remainingScopeTurnsEstimate" with
-            | Some name, Some program, Some intent, Ok(Some estimate) ->
-                Some(createObj [ "name" ==> name; "program" ==> program; "intent" ==> intent ], estimate)
-            | _ -> None
+                match
+                    args.OptionalText "name",
+                    args.OptionalText "program",
+                    args.OptionalText "intent",
+                    args.OptionalNonNegativeNumber "remainingScopeTurnsEstimate"
+                with
+                | Some name, Some program, Some intent, Ok(Some estimate) ->
+                    Some(createObj [ "name" ==> name; "program" ==> program; "intent" ==> intent ], estimate)
+                | _ -> None
 
         let callFenceOf (ctx: HostToolContext) =
             match ctx.ProviderRunId, ctx.ToolCallId with
@@ -73,8 +80,16 @@ module JsToolSpec =
         let recordProgress (ctx: HostToolContext) (estimate: float) =
             match callFenceOf ctx with
             | None -> None
-            | Some (providerRun, toolCallId) ->
-                let receipt: obj = scopeProgress?record(ctx.SessionId, epochOf ctx, ProviderRunIdentity.value providerRun, ToolCallId.value toolCallId, estimate)
+            | Some(providerRun, toolCallId) ->
+                let receipt: obj =
+                    scopeProgress?record (
+                        ctx.SessionId,
+                        epochOf ctx,
+                        ProviderRunIdentity.value providerRun,
+                        ToolCallId.value toolCallId,
+                        estimate
+                    )
+
                 progressRefusal receipt
 
         let runProgramCall (ctx: HostToolContext) (input: obj) (declaration: obj) =
@@ -133,12 +148,12 @@ module JsToolSpec =
             [ "name", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argNameProse ()) factory
               "program", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argProgramProse ()) factory
               "intent", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argIntentProse ()) factory
-              "remainingScopeTurnsEstimate", ToolHostCodec.nonNegativeNumberSchemaDescribed
-                  (JsToolPolicy.argEstimateProse ()) factory ]
+              "remainingScopeTurnsEstimate",
+              ToolHostCodec.nonNegativeNumberSchemaDescribed (JsToolPolicy.argEstimateProse ()) factory ]
           Execute =
             fun args ctx ->
                 match inputOf args with
-                | Some (input, estimate) -> launchAccepted ctx input estimate
+                | Some(input, estimate) -> launchAccepted ctx input estimate
                 | None -> Task.FromResult(JsToolPolicy.missingProgramResult ()) }
 
     let create

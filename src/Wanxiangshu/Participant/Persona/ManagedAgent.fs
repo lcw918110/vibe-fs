@@ -93,13 +93,16 @@ module ManagedAgent =
             false
         else
             let trimmed = value.Trim()
-            tryParse trimmed |> Option.isSome || ManagedAgentCatalog.isBookkeeperName trimmed
+
+            tryParse trimmed |> Option.isSome
+            || ManagedAgentCatalog.isBookkeeperName trimmed
 
     let isFunctionalName (value: string) : bool =
         if isNull value then
             false
         else
             let normalized = value.Trim().ToLowerInvariant()
+
             normalized = "title"
             || normalized = "compaction"
             || normalized = "summary"

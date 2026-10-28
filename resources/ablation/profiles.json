@@ -53,7 +53,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-06": {
@@ -109,7 +110,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-07": {
@@ -165,7 +167,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-08": {
@@ -221,7 +224,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-09": {
@@ -277,7 +281,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-10": {
@@ -333,7 +338,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-11": {
@@ -389,7 +395,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-12": {
@@ -445,7 +452,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-13": {
@@ -501,7 +509,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-14": {
@@ -557,7 +566,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-15": {
@@ -613,7 +623,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-16": {
@@ -669,7 +680,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-17": {
@@ -725,7 +737,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-18": {
@@ -781,7 +794,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-19": {
@@ -837,7 +851,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-20": {
@@ -893,7 +908,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-21": {
@@ -949,7 +965,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-22": {
@@ -1005,7 +1022,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-23": {
@@ -1061,7 +1079,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-24": {
@@ -1117,7 +1136,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-25": {
@@ -1173,7 +1193,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-26": {
@@ -1229,7 +1250,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-27": {
@@ -1285,7 +1307,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-28": {
@@ -1341,7 +1364,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-29": {
@@ -1397,7 +1421,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-30": {
@@ -1453,7 +1478,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-31": {
@@ -1509,7 +1535,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-32": {
@@ -1565,7 +1592,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-33": {
@@ -1621,7 +1649,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-34": {
@@ -1677,7 +1706,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-35": {
@@ -1733,7 +1763,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-36": {
@@ -1789,7 +1820,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-37": {
@@ -1845,7 +1877,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-38": {
@@ -1901,7 +1934,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-39": {
@@ -1957,7 +1991,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-40": {
@@ -2013,7 +2048,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-41": {
@@ -2069,7 +2105,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "ablated",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-42": {
@@ -2125,7 +2162,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-43": {
@@ -2181,7 +2219,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-44": {
@@ -2237,7 +2276,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-45": {
@@ -2293,7 +2333,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-46": {
@@ -2349,7 +2390,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-47": {
@@ -2405,7 +2447,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-48": {
@@ -2461,7 +2504,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-49": {
@@ -2517,7 +2561,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "ablated",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-50": {
@@ -2573,7 +2618,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-51": {
@@ -2629,7 +2675,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-52": {
@@ -2685,7 +2732,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-53": {
@@ -2741,7 +2789,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-54": {
@@ -2797,7 +2846,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-55": {
@@ -2853,7 +2903,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "station-56": {
@@ -2909,7 +2960,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "ablated"
+        "work": "ablated",
+        "latency-degeneration": "ablated"
       }
     },
     "production": {
@@ -2965,7 +3017,8 @@
         "feature-ablation": "active",
         "cognitive-workspace": "active",
         "sphinx-v2": "active",
-        "work": "active"
+        "work": "active",
+        "latency-degeneration": "active"
       }
     }
   }

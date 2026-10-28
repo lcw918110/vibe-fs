@@ -67,7 +67,7 @@ test('WHAT[host-boundary-021] HostSignalBootstrap delegates policy to published 
   assert.match(bootstrapSource, /PromptIngress\.resolveDecision/)
   assert.match(bootstrapSource, /ChatAdmissionTransaction\.production/)
   assert.match(bootstrapSource, /ChatAdmissionTransaction\.execute/)
-  assert.match(bootstrapSource, /createTransaction \(ModelRouting\.projectHostModel output\)/)
+  assert.match(bootstrapSource, /createTransaction selected validateModel/)
   assert.doesNotMatch(bootstrapSource, /PromptIngress\.create(?:Decision)?Hook/)
   assert.doesNotMatch(bootstrapSource, /ModelRouting\.routeChatExecution/)
   assert.doesNotMatch(bootstrapSource, /ModelRouting\.projectRoutedModel/)

@@ -42,7 +42,9 @@ const executionCount = (session, physical) =>
   ).length
 
 const acquireLease = (session, physical) =>
-  routing.acquireSharedExecutionAdmission(session, physical, 'engineer', 'engineer', null, 'normal')
+  routing.acquireSharedExecutionAdmission(session, physical, 'engineer', 'engineer', null, 'normal', {
+    model: 'fixture/engineer-model', reasoning: '',
+  })
 
 const withPlugin = async (action) => {
   const workspace = mkdtempSync(join(tmpdir(), 'wxs-chat015-'))

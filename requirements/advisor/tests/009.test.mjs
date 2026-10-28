@@ -59,7 +59,7 @@ test('WHAT[advisor-009] actual BusyNudge Await wrapper waits for durable Physica
   })
 })
 
-test('WHAT[advisor-005] accepted observation budget is honored instead of the 10 second admission default', async () => {
+test('WHAT[advisor-009] accepted observation budget is honored instead of the 10 second admission default', async () => {
   await withJournal('advisor-host-budget', async handle => {
     const { context, session, journal, profile } = await setup(handle, 'advisor-host-budget')
     let promptKey
@@ -112,7 +112,7 @@ test('WHAT[advisor-009] actual BusyNudge Await wrapper preserves unknown landing
   })
 })
 
-test('WHAT[advisor-005] an acceptance that arrives after the stated budget is reported Unknown, never Completed', async () => {
+test('WHAT[advisor-009] an acceptance that arrives after the stated budget is reported Unknown, never Completed', async () => {
   await withJournal('advisor-host-budget-expired', async handle => {
     const { context, session, journal, profile } = await setup(handle, 'advisor-host-expired')
     let promptKey

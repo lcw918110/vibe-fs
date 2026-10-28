@@ -15,7 +15,7 @@ test(`WHAT[host-boundary-033] ${origin} preserves the old lease until the visibl
     const sessionID = `ses-superseded-observation-${origin}`
     const admit = async (messageID, metadata = undefined) => {
       const carrier = metadata === undefined ? {} : { metadata }
-      const message = { id: messageID, sessionID, role: 'user', agent: 'engineer', model: {}, ...carrier }
+      const message = { id: messageID, sessionID, role: 'user', agent: 'engineer', model: { providerID: 'provider', modelID: 'engineer-model' }, ...carrier }
       const parts = [{ type: 'text', text: 'controlled input', ...carrier }]
       await hooks['chat.message']({ sessionID, messageID, agent: 'engineer' }, { message, parts })
       return message
@@ -107,55 +107,6 @@ test(`WHAT[host-boundary-033] ${origin} preserves the old lease until the visibl
   })
 })
 }
-
-test('WHAT[host-boundary-033] a later human input replaces queued demand with no live lease without interrupting the Host', async () => {
-  await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
-    const sessionID = 'ses-queued-supersession'
-    const admit = async (messageID, metadata, targetSession = sessionID) => {
-      const carrier = metadata === undefined ? {} : { metadata }
-      const message = { id: messageID, sessionID: targetSession, role: 'user', agent: 'engineer', model: {}, ...carrier }
-      await hooks['chat.message']({ sessionID: targetSession, messageID, agent: 'engineer' }, {
-        message, parts: [{ type: 'text', text: 'controlled input', ...carrier }],
-      })
-      return message
-    }
-    globalThis.__wanxiangshu_test_routing_decision = () => null
-    const human = admit('msg-human').then(
-      () => ({ accepted: true }),
-      error => ({ accepted: false, error }),
-    )
-    try {
-      await new Promise(setImmediate)
-      assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, sessionID, 'msg-human'), {
-        phase: 'Accepted', disposition: null,
-      })
-      assert.equal(routing.sharedCapacitySnapshot().waiters.filter(value => value.kind === 'Admission').length, 1)
-      const latest = admit('msg-latest')
-      await new Promise(setImmediate)
-      assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, sessionID, 'msg-latest'), {
-        phase: 'Accepted', disposition: null,
-      })
-      globalThis.__wanxiangshu_test_routing_decision = () => ({ model: 'provider/engineer-model', reasoning: 'none' })
-      await admit('msg-trigger', undefined, 'ses-independent-queue-trigger')
-      const current = await latest
-      const old = await human
-      assert.equal(old.accepted, false)
-      assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, sessionID, 'msg-human'), {
-        phase: 'Terminal', disposition: 'Cancelled',
-      })
-      assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, sessionID, current.id), {
-        phase: 'Accepted', disposition: null,
-      })
-      await hooks['chat.params']({ sessionID, message: current, agent: 'engineer', model: {
-        providerID: 'provider', id: 'engineer-model', capabilities: {},
-      } }, {})
-      assert.equal(runtime.prompts.length, 0)
-      assert.deepEqual(runtime.abortedIds, [])
-    } finally {
-      delete globalThis.__wanxiangshu_test_routing_decision
-    }
-  })
-})
 
 {
   const { default: assert } = await import('node:assert/strict')

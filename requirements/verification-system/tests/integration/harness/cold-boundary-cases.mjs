@@ -481,13 +481,32 @@ export const coldBoundaryCases = [
         'no tenure boundary: the same wire movement stays fail-closed',
       );
 
-      // The admission is still the strip SHAPE, never a blanket exemption: a rewritten
-      // user, a changed plan or a changed system prompt stays undeclared even across the
-      // boundary.
+      // The admission is a journal-proven projection SHAPE, never a blanket exemption.
+      // Without the durable boundary the same wire movement stays fail-closed; with it,
+      // a clean re-open (no pre-barrier message survives) is the successor projection.
+      // Content beyond the shape is the strict matcher's and the long-stroke oracle's
+      // job — the wire alone cannot tell a rewritten row from a dropped one plus a new
+      // one, so no claim is asserted here beyond the shape.
       const rewrittenUser = body('test-model', [SYSTEM, user('DIFFERENT'), user('Round 2')]);
-      assertEq(decide(MANAGER_RETIRED, rewrittenUser, null, true).broken, 'undeclared');
-      const retooled = body('test-model', MANAGER_NEXT.messages, ['todowrite-for-engineer', 'fetch']);
-      assertEq(decide(MANAGER_RETIRED, retooled, null, true).broken, 'undeclared');
+      assertEq(decide(MANAGER_RETIRED, rewrittenUser, null, false).broken, 'undeclared');
+      assertEq(decide(MANAGER_RETIRED, rewrittenUser, null, true).resealed, 'successor-strip');
+      // work-008: the successor hides every pre-barrier message and re-opens with its own
+      // tenure's traffic under the same plan and system prompt.
+      const reminder = user('[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]');
+      const tenureRetired = body('test-model', [SYSTEM, ...MANAGER_TRAFFIC, reminder]);
+      const cleanSuccessor = body('test-model', [SYSTEM, user('继任「执行」'), assistant('...'), reminder]);
+      assertEq(decide(tenureRetired, cleanSuccessor, null, true).resealed, 'successor-strip');
+      assertEq(decide(tenureRetired, cleanSuccessor, null, false).broken, 'undeclared');
+      assertEq(decide(tenureRetired, cleanSuccessor, at('manager-loop'), true).resealed, 'manager-loop');
+      assertEq(decide(tenureRetired, cleanSuccessor, at('manager-loop'), false).broken, 'manager-loop-rewrote-fixed');
+      // A surviving pre-barrier row is a carry-over, not a projection — even across the
+      // boundary it stays a break (the users-subsequence admission only covers the
+      // ordinary strip that keeps user input; here the assistant row leaks back).
+      const assistantCarry = body('test-model', [SYSTEM, assistant('assessment evidence'), user('继任「执行」'), reminder]);
+      assertEq(decide(tenureRetired, assistantCarry, null, true).broken, 'undeclared');
+      // A changed tool plan or system prompt stays undeclared even across the boundary.
+      const retooled = body('test-model', tenureRetired.messages, ['todowrite-for-engineer', 'fetch']);
+      assertEq(decide(tenureRetired, retooled, null, true).broken, 'undeclared');
       const resystemed = body('test-model', [
         { role: 'system', content: 'Other.' },
         user('Round 1'),

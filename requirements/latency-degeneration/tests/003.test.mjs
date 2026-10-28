@@ -11,7 +11,7 @@ const message=(id,created,completed,finish,error)=>({
     ...(finish?{finish}:{}),...(error?{error}:{})}},
 })
 
-test('WHAT[latency-degeneration-008] real scope reset tool-calls is end of LLM request, not start of a long tool timeout', async()=>{
+test('WHAT[latency-degeneration-003] real scope reset tool-calls is end of LLM request, not start of a long tool timeout', async()=>{
   const source=readFileSync(new URL('../../../src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs',import.meta.url),'utf8')
   const anchor=source.slice(source.indexOf('let settleLatencyWatchdog raw ='),source.indexOf('let observeEvent raw ='))
   assert.match(anchor,/tryDecodeProviderStepEnd/,
@@ -45,7 +45,7 @@ test('WHAT[latency-degeneration-008] real scope reset tool-calls is end of LLM r
   assert.deepEqual(censored,[])
 })
 
-test('WHAT[latency-degeneration-008] exact provider error/abort drops its timer without billing a complete sample or cancelling successor',async()=>{
+test('WHAT[latency-degeneration-003] exact provider error/abort drops its timer without billing a complete sample or cancelling successor',async()=>{
   const c=[],timers=[]
   let now=0
   const wd=make(()=>now,(ms,fire)=>{const t={fire,disposed:false,Dispose(){this.disposed=true}};timers.push(t);return t},

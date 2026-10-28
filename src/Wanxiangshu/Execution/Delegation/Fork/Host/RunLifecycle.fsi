@@ -82,7 +82,12 @@ module HostForkRunLifecycle =
     val internal allRuns: store: obj -> PendingHostRun list
     val internal allRunsAsDictionary: store: obj -> Dictionary<string, PendingHostRun>
     val internal removeRunByAgentId: store: obj -> agentId: string -> unit
-    val internal drainAllRuns: store: obj -> {| Run: PendingHostRun; Subscription: IDisposable option |} list
+
+    val internal drainAllRuns:
+        store: obj ->
+            {| Run: PendingHostRun
+               Subscription: IDisposable option |} list
+
     val internal drainCancelledRuns: store: obj -> agentIds: string list -> IDisposable list
 
     val complete:
@@ -110,8 +115,7 @@ module HostForkRunLifecycle =
         authorityRoot: AuthorityRootUserMessageId ->
             PendingHostRun
 
-    val settleParentCancelled:
-        gate: obj -> pendingRuns: obj -> run: PendingHostRun -> unit
+    val settleParentCancelled: gate: obj -> pendingRuns: obj -> run: PendingHostRun -> unit
 
     val failRun:
         gate: obj ->

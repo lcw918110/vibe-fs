@@ -271,7 +271,7 @@ test('WHAT[latency-degeneration-001] Abort 与完成竞态只记一个完整样�
   assert.equal(state.abortCalls.length, 1)
 })
 
-test('WHAT[latency-degeneration-004] idle precedes abort receipt without losing the continuation', async () => {
+test('WHAT[latency-degeneration-001] idle precedes abort receipt without losing the continuation', async () => {
   const detector = fakeDetector()
   const { ports, state } = makePorts()
   const watchdog = createLatencyWatchdog(
@@ -293,7 +293,7 @@ test('WHAT[latency-degeneration-004] idle precedes abort receipt without losing 
   assert.equal(watchdog.Snapshot().length, 0)
 })
 
-test('WHAT[latency-degeneration-002] 到点中断成立记删失样本并发续行文本，快照字段符合契约', async () => {
+test('WHAT[latency-degeneration-001] 到点中断成立记删失样本并发续行文本，快照字段符合契约', async () => {
   const detector = fakeDetector()
   const { ports, state } = makePorts()
   const watchdog = createLatencyWatchdog(
@@ -334,7 +334,7 @@ test('WHAT[latency-degeneration-002] 到点中断成立记删失样本并发续�
   assert.equal(watchdog.Snapshot().length, 0, 'measurement was removed after interrupt')
 })
 
-test('WHAT[latency-degeneration-003] 中断被拒保留在途（解除武装），随后真实完成仍记完整样本', async () => {
+test('WHAT[latency-degeneration-001] 中断被拒保留在途（解除武装），随后真实完成仍记完整样本', async () => {
   const detector = fakeDetector()
   const { ports, state } = makePorts()
   const watchdog = createLatencyWatchdog(
@@ -371,7 +371,7 @@ test('WHAT[latency-degeneration-003] 中断被拒保留在途（解除武装）�
   assert.equal(detector.completed()[0].durationMs, threshold + 1200)
 })
 
-test('WHAT[latency-degeneration-004] Complete 幂等，不同 run 的完成事件不破坏在途测量', async () => {
+test('WHAT[latency-degeneration-001] Complete 幂等，不同 run 的完成事件不破坏在途测量', async () => {
   const detector = fakeDetector()
   const { ports, state } = makePorts()
   const watchdog = createLatencyWatchdog(
@@ -402,7 +402,7 @@ test('WHAT[latency-degeneration-004] Complete 幂等，不同 run 的完成事�
   assert.equal(detector.completed().length, 1)
 })
 
-test('WHAT[latency-degeneration-005] Cancel 与 OnIdle 清理在途且不记样本，ForgetDetector 转发', async () => {
+test('WHAT[latency-degeneration-001] Cancel 与 OnIdle 清理在途且不记样本，ForgetDetector 转发', async () => {
   const detector = fakeDetector()
   const { ports, state } = makePorts()
   const watchdog = createLatencyWatchdog(
@@ -437,7 +437,7 @@ test('WHAT[latency-degeneration-005] Cancel 与 OnIdle 清理在途且不记样�
   assert.equal(watchdog.Snapshot().length, 0)
 })
 
-test('WHAT[latency-degeneration-006] 非受管不启动，Dispose 幂等且之后 Begin 无效', async () => {
+test('WHAT[latency-degeneration-001] 非受管不启动，Dispose 幂等且之后 Begin 无效', async () => {
   const detector = fakeDetector()
   const { ports, state } = makePorts()
   const watchdog = createLatencyWatchdog(
@@ -756,7 +756,7 @@ test('WHAT[latency-degeneration-001] 物理接线验证：真实事件下的 Abo
   assert.equal(state.continueCalls.length, 0, 'no continuation prompt sent')
 })
 
-test('WHAT[latency-degeneration-004] 物理接线验证：实际续行接线与 resources 双语文件无缝读取', async () => {
+test('WHAT[latency-degeneration-001] 物理接线验证：实际续行接线与 resources 双语文件无缝读取', async () => {
   assert.equal(ProviderLanguageSurface.exists('zh-CN', 'runtime/latency-degeneration'), true)
   assert.equal(ProviderLanguageSurface.exists('en', 'runtime/latency-degeneration'), true)
 

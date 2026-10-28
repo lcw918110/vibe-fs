@@ -31,6 +31,7 @@ module FissionLaunch =
 
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let private fissionRuntime: obj = jsNative
+
     [<Emit("$0 === undefined")>]
     let private isUndefined (_v: obj) : bool = jsNative
 
@@ -631,7 +632,14 @@ module FissionLaunch =
             | Ok laneId ->
                 port.RegisterLane laneId physicalParent directory
 
-                fissionRuntime?bindLane (groupId, SessionId.value owner, lane.Index, parsedCount, SessionId.value laneId)
+                fissionRuntime?bindLane (
+                    groupId,
+                    SessionId.value owner,
+                    lane.Index,
+                    parsedCount,
+                    SessionId.value laneId
+                )
+
                 return Ok laneId
         }
 

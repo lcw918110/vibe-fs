@@ -47,7 +47,12 @@ module JsDeliveredValues =
         let viewObj = view |> Option.defaultValue null
         let alreadyArr = already |> Set.toArray
         let pieces: obj array = unbox (store?select (sessionId, viewObj, alreadyArr))
-        pieces |> Array.toList |> List.map (fun p -> { Key = string p?key; Text = string p?text })
+
+        pieces
+        |> Array.toList
+        |> List.map (fun p ->
+            { Key = string p?key
+              Text = string p?text })
 
     let private fenceObjOf (fence: DeliveryFence option) : obj =
         match fence with
@@ -57,12 +62,7 @@ module JsDeliveredValues =
                   "toolCallId" ==> ToolCallId.value f.ToolCallId ]
         | None -> null
 
-    let materialize
-        (sessionId: string)
-        (carry: obj)
-        (fence: DeliveryFence option)
-        (assistant: string option)
-        : string =
+    let materialize (sessionId: string) (carry: obj) (fence: DeliveryFence option) (assistant: string option) : string =
         let fenceObj = fenceObjOf fence
         let assistantStr = assistant |> Option.defaultValue ""
         let res: obj = store?materialize (sessionId, carry, fenceObj, assistantStr)
@@ -71,11 +71,12 @@ module JsDeliveredValues =
         ReturnedMaterial.encode body carryList
 
     let private encodeHandoffResult (res: obj) : string option =
-        if isNull res || jsTypeof res = "undefined" then None
+        if isNull res || jsTypeof res = "undefined" then
+            None
         else
             let body = unbox<string array> res?body |> Array.toList
             let carryList = unbox<string array> res?carry |> Array.toList
-            Some (ReturnedMaterial.encode body carryList)
+            Some(ReturnedMaterial.encode body carryList)
 
     let tryTakeMaterialWith (sessionId: string) (assistant: string option) : string option =
         let assistantObj = assistant |> Option.toObj
@@ -94,11 +95,7 @@ module JsDeliveredValues =
         let res: obj = store?tryTakeMaterialForCall (sessionId, run, call, assistantObj)
         encodeHandoffResult res
 
-    let ownsCell
-        (sessionId: string)
-        (providerRun: ProviderRunIdentity)
-        (toolCallId: ToolCallId)
-        : bool =
+    let ownsCell (sessionId: string) (providerRun: ProviderRunIdentity) (toolCallId: ToolCallId) : bool =
         let run = ProviderRunIdentity.value providerRun
         let call = ToolCallId.value toolCallId
         unbox<bool> (store?ownsCell (sessionId, run, call))
@@ -114,7 +111,10 @@ module JsDeliveredValues =
         let call = ToolCallId.value toolCallId
         let bodyTexts = ReturnedMaterial.body material |> List.toArray
         let carryTexts = ReturnedMaterial.carry material |> List.toArray
-        let res: obj = store?tryTakeWitnessMaterial (sessionId, run, call, bodyTexts, carryTexts, assistant)
+
+        let res: obj =
+            store?tryTakeWitnessMaterial (sessionId, run, call, bodyTexts, carryTexts, assistant)
+
         encodeHandoffResult res
 
     let tryTakeMaterial (sessionId: string) : string option =
@@ -132,11 +132,17 @@ module JsDeliveredValues =
 
     let peekView (sessionId: string) : obj option =
         let res: obj = store?peekView sessionId
-        if isNull res || jsTypeof res = "undefined" then None else Some res
+
+        if isNull res || jsTypeof res = "undefined" then
+            None
+        else
+            Some res
 
     let peekFence (sessionId: string) : DeliveryFence option =
         let res: obj = store?peekFence sessionId
-        if isNull res || jsTypeof res = "undefined" then None
+
+        if isNull res || jsTypeof res = "undefined" then
+            None
         else
             Some
                 { ProviderRun = ProviderRunIdentity.create (string res?providerRun)

@@ -245,6 +245,27 @@ const managerLoopKeepsAuthority = (previousWire, nextWire) => {
   return true;
 };
 
+// work-008: the committed barrier hides everything at or before the cut. Measured on the
+// Long Stroke release tier: a successor tenure re-opens with ONLY its own traffic — after
+// the trailing scope-reminder retirement both wires share zero messages, so no verbatim
+// tail can be demanded. The wire-level claims that remain are the ones the projection may
+// not move: same tools plan, same system prompt, and no pre-barrier message carried into
+// the successor. The boundary itself is journal-proven (`stripAdmitted`), and the
+// successor's content is the strict matcher's and the long-stroke oracle's job — a wire
+// shape alone cannot tell a rewritten row from a dropped one plus a new one.
+const successorHidesPredecessor = (previousWire, nextWire) => {
+  if (!sameProviderPlan(previousWire, nextWire)) return false;
+  const normalizedPrevious = withoutHostModelBanner(previousWire);
+  const normalizedNext = withoutHostModelBanner(nextWire);
+  const systemOf = (wire) => (wire.messages ?? []).filter((message) => message?.role === 'system');
+  if (!isDeepStrictEqual(systemOf(normalizedPrevious), systemOf(normalizedNext))) return false;
+  const bodyOf = (wire) => (wire.messages ?? []).filter((message) => message?.role !== 'system');
+  const predecessor = bodyOf(normalizedPrevious);
+  const successor = bodyOf(normalizedNext);
+  if (predecessor.length === 0 || successor.length === 0) return false;
+  return successor.every((message) => !predecessor.some((old) => isDeepStrictEqual(old, message)));
+};
+
 /**
  * Decide one chat request against the session's seal.
  *
@@ -289,7 +310,9 @@ export function sealDecision({ previousWire, body, boundary, stripAdmitted = fal
     // The caller establishes that boundary from the durable journal, so this admission is
     // never taken from the wire alone — and even then the strip has to satisfy the same
     // structural claims the `manager-loop` boundary makes.
-    return stripAdmitted && managerLoopKeepsAuthority(withoutGuidanceOccurrences(previousWire), nextWire)
+    if (!stripAdmitted) return { broken: 'undeclared' };
+    const predecessor = withoutGuidanceOccurrences(previousWire);
+    return managerLoopKeepsAuthority(predecessor, nextWire) || successorHidesPredecessor(predecessor, nextWire)
       ? { resealed: 'successor-strip' }
       : { broken: 'undeclared' };
   }
@@ -328,6 +351,7 @@ export function sealDecision({ previousWire, body, boundary, stripAdmitted = fal
     // rewrite of the fixed parts.
     case 'manager-loop':
       return managerLoopKeepsAuthority(previous, nextWire)
+          || (stripAdmitted && successorHidesPredecessor(previous, nextWire))
         ? { resealed: 'manager-loop' }
         : { broken: 'manager-loop-rewrote-fixed' };
 

@@ -33,7 +33,7 @@ const activateDurability = async (hooks, suffix) => {
   await hooks['chat.message'](
     { sessionID, agent: 'manager' },
     {
-      message: { id: `msg-${sessionID}`, sessionID, role: 'user', agent: 'manager' },
+      message: { id: `msg-${sessionID}`, sessionID, role: 'user', agent: 'manager', model: { providerID: 'fixture', modelID: 'manager-model' } },
       parts: [{ id: `part-${sessionID}`, type: 'text', text: 'activate durable recovery' }],
     },
   )

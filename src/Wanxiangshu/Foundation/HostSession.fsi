@@ -10,12 +10,14 @@ type ProviderAttemptSource =
       ProviderRun: ProviderRunIdentity }
 
 type ContinuationAcceptanceObserver =
-    { Notify: PhysicalUserMessageId -> unit
-      AttachDisposable: System.IDisposable -> unit
-      /// How long the caller is willing to wait for PhysicalAccepted. A busy
-      /// target lands the message only after its current turn ends, so callers
-      /// that know this state a larger budget than the admission default.
-      Budget: int option }
+    {
+        Notify: PhysicalUserMessageId -> unit
+        AttachDisposable: System.IDisposable -> unit
+        /// How long the caller is willing to wait for PhysicalAccepted. A busy
+        /// target lands the message only after its current turn ends, so callers
+        /// that know this state a larger budget than the admission default.
+        Budget: int option
+    }
 
 type ISessionQuiescenceGate =
     abstract BeginProviderAttempt: sessionId: SessionId -> unit

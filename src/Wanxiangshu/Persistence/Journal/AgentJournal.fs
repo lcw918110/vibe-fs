@@ -148,6 +148,7 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
     /// Projection and revision read under one lock so Join cannot observe a split.
     member this.SnapshotWithRevision: ProjectionSet * JournalRevision =
         lock gate (fun () -> this.Snapshot, revision)
+
     /// Register one restart-recovery body without running it. The first
     /// `RunOrAwaitRecovery` caller starts it; every caller awaits the same
     /// work, so a handoff cannot race the recovery it must observe.
@@ -166,6 +167,13 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
     /// completion (all callers). No recovery registered is a no-op.
     member _.RunOrAwaitRecovery() : Task =
         task {
+            let awaitPrevious () =
+                task {
+                    match previousRecovery with
+                    | Some previous -> do! previous
+                    | None -> ()
+                }
+
             let work =
                 lock gate (fun () ->
                     match startedRecovery, pendingRecovery with
@@ -173,10 +181,7 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
                     | None, Some start ->
                         let started =
                             task {
-                                match previousRecovery with
-                                | Some previous -> do! previous
-                                | None -> ()
-
+                                do! awaitPrevious ()
                                 do! start ()
                             }
 

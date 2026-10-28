@@ -50,7 +50,8 @@ module ModelRouting =
             lease: ExecutionAdmissionLease -> Result<ModelRoutingTarget, ExecutionAdmissionRejection>
 
         member internal ContinueExecutionAdmission:
-            previous: ExecutionAdmissionLease * physicalUserMessageId: string * ?selectedTarget: ModelRoutingTarget -> Task<ExecutionAdmissionAcquisition>
+            previous: ExecutionAdmissionLease * physicalUserMessageId: string * ?selectedTarget: ModelRoutingTarget ->
+                Task<ExecutionAdmissionAcquisition>
 
         member internal RetainContinuationInput:
             previous: ExecutionAdmissionLease * physicalUserMessageId: string -> ModelRoutingTarget
@@ -177,7 +178,10 @@ module ModelRouting =
     val internal tryReadExecution: key: ChatExecutionKey -> ExecutionAdmissionLease option
 
     val internal continueExecutionAdmission:
-        previous: ExecutionAdmissionLease -> physicalId: PhysicalUserMessageId -> target: ModelRoutingTarget -> Task<ExecutionAdmissionAcquisition>
+        previous: ExecutionAdmissionLease ->
+        physicalId: PhysicalUserMessageId ->
+        target: ModelRoutingTarget ->
+            Task<ExecutionAdmissionAcquisition>
 
     val internal retainContinuationInput:
         previous: ExecutionAdmissionLease -> key: ChatExecutionKey -> ModelRoutingTarget

@@ -37,7 +37,9 @@ module PlanKernelSeam =
         Array.isEmpty (activeObligations gitCommonDir workId)
 
     let private waiting (work: DurableWorkHost.InspectedWork) =
-        work.Wait = "AwaitReview" || work.Wait = "AwaitEmptyReview" || work.Wait = "ConfirmEffect"
+        work.Wait = "AwaitReview"
+        || work.Wait = "AwaitEmptyReview"
+        || work.Wait = "ConfirmEffect"
 
     let isReviewFinished (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
         match inspected gitCommonDir workId with

@@ -342,6 +342,13 @@
       "borrowed_surface": []
     },
     {
+      "id": "latency-degeneration",
+      "package": "latency-degeneration",
+      "station": 60,
+      "kind": "package",
+      "borrowed_surface": []
+    },
+    {
       "id": "delegation.sync-delegate",
       "package": "delegation",
       "station": 42,

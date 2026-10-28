@@ -23,16 +23,16 @@ type MessageVisibilityHub(timerPort: ITimerPort) =
 
     /// Wake every waiter whose session just published a message lifecycle event.
     member _.Notify(sessionId: SessionId) : unit =
-        inner?Notify(SessionId.value sessionId)
+        inner?Notify (SessionId.value sessionId)
 
     /// Resolves on the next `message.updated` for the session, or when the
     /// deadline budget expires without one. A settled waiter never stays registered.
     member _.AwaitChange (sessionId: SessionId) (budgetMilliseconds: int) : Task<unit> =
-        inner?AwaitChange(SessionId.value sessionId, budgetMilliseconds)
+        inner?AwaitChange (SessionId.value sessionId, budgetMilliseconds)
 
     /// Pending waiter count for one session — leak-detection probe.
     member _.PendingCount(sessionId: SessionId) : int =
-        inner?PendingCount(SessionId.value sessionId)
+        inner?PendingCount (SessionId.value sessionId)
 
 /// Raw-event intake for the hub: any `message.updated` is a potential
 /// projection change for its session.

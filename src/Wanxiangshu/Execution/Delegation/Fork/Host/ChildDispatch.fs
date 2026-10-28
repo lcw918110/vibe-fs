@@ -137,7 +137,10 @@ module HostForkChildDispatch =
             let cancelled =
                 HostForkRunLifecycle.allRuns pendingRuns
                 |> List.choose (fun run ->
-                    if not (isFixedDevOps run.AgentId) then Some run.AgentId else None)
+                    if not (isFixedDevOps run.AgentId) then
+                        Some run.AgentId
+                    else
+                        None)
 
             for agentId in cancelled do
                 HostForkRunLifecycle.removeRunByAgentId pendingRuns agentId)

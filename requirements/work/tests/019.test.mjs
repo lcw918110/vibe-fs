@@ -159,7 +159,12 @@ test('WHAT[work-019] 有任期且评审尚未接纳时只读与观察放行，�
     // deliver binds the invocation to the current physical user message.
     // Without one the call fails before Algorithm E3 can answer.
     await hooks['chat.message']({ sessionID, agent: 'manager' }, {
-      message: { id: 'user-root', role: 'user', agent: 'manager' },
+      message: {
+        id: 'user-root',
+        role: 'user',
+        agent: 'manager',
+        model: { providerID: 'provider', modelID: 'manager-model' },
+      },
       parts: [{ type: 'text', text: 'Deliver the requested behavior and verification.' }],
     })
     // 评审未接纳：todowrite-for-manager 评审专用只读工具放行（before 门禁通过）。

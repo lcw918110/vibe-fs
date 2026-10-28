@@ -3,7 +3,7 @@
 // OMP registers the context handler inside activateOnOmp.
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { activateOnOmp } from '../../../dist/Omp/Adapter.js'
@@ -132,7 +132,9 @@ function review(stateRoot, workId, id, updates) {
 }
 
 function prepare(prefix) {
-  const workspace = mkdtempSync(join(tmpdir(), prefix))
+  const raw = mkdtempSync(join(tmpdir(), prefix))
+  // stateRootSync canonicalizes through realpath; macOS resolves /var to /private/var.
+  const workspace = realpathSync(raw)
   mkdirSync(join(workspace, '.Herdchestra'))
   const stateRoot = stateRootSync(workspace)
   if (!stateRoot.startsWith(workspace) || !stateRoot.endsWith(`${join('', '.Herdchestra')}`) && !stateRoot.endsWith('.Herdchestra')) {
@@ -244,4 +246,54 @@ test('provider barrier: registered OMP context hook keeps user messages and the 
   } finally {
     rmSync(workspace, { recursive: true, force: true })
   }
+})
+
+test('WHAT[work-008] durable ownership selects successor replies while user messages remain visible', async () => {
+  const { cutVisible } = await import('../../../dist/Mission/Work/OpenCode/NarrativeTransform.js')
+  const toolCallId = 'call-relay'
+  const successor = 'tenure-next'
+  const work = {
+    BarrierToolCallId: toolCallId,
+    SuccessorTenureId: successor,
+    ActiveId: successor,
+  }
+  const plain = (id, role, body, info = {}) => ({ info: { id, role, ...info }, parts: [{ type: 'text', text: body }] })
+  const history = [
+    plain('before', 'user', PRE),
+    { info: { id: 'call', role: 'assistant' }, parts: [{ type: 'tool', tool: 'review', callID: toolCallId, state: { status: 'pending', input: {} } }] },
+    { info: { id: 'result', role: 'tool' }, parts: [{ type: 'tool-result', callID: toolCallId, output: RESULT }] },
+    plain('owned-user', 'user', KEPT),
+    plain('owned-reply', 'assistant', 'successor reply', { parentID: 'owned-user' }),
+    plain('stray', 'user', STRAY),
+    plain('stray-reply', 'assistant', 'stray reply', { parentID: 'stray' }),
+    { ...plain('owned-other', 'user', OTHER), tenureId: 'someone-else' },
+  ]
+  const owned = new Set(['owned-user', 'owned-other', 'before'])
+  const ids = (kept) => kept.map((message) => message.info.id)
+
+  const kept = cutVisible((id) => owned.has(id), history, work)
+  assert.deepEqual(ids(kept), ['before', 'call', 'result', 'owned-user', 'owned-reply', 'stray', 'owned-other'])
+
+  const nothingOwned = cutVisible(() => false, history, work)
+  assert.deepEqual(ids(nothingOwned), ['before', 'call', 'result', 'owned-user', 'stray', 'owned-other'])
+
+  const notSuccessor = cutVisible(() => true, history, { ...work, ActiveId: 'tenure-old' })
+  assert.equal(notSuccessor, undefined)
+})
+
+test('WHAT[work-008] a settled OpenCode tool part is its own result for the barrier', async () => {
+  const { cutVisible } = await import('../../../dist/Mission/Work/OpenCode/NarrativeTransform.js')
+  const work = { BarrierToolCallId: 'call_3', SuccessorTenureId: 'S', ActiveId: 'S' }
+  const user = (id, body) => ({ info: { id, role: 'user' }, parts: [{ type: 'text', text: body }] })
+  const history = [
+    user('old', PRE),
+    { info: { id: 'call', role: 'assistant', parentID: 'old' },
+      parts: [{ type: 'tool', tool: 'review', callID: 'call_3', state: { status: 'completed', input: {}, output: RESULT } }] },
+    user('next', KEPT),
+    { info: { id: 'reply', role: 'assistant', parentID: 'next' }, parts: [{ type: 'text', text: 'reply' }] },
+  ]
+  assert.equal(cutVisible((id) => id === 'next', history, work), undefined)
+  const pending = structuredClone(history)
+  pending[1].parts[0].state.status = 'running'
+  assert.deepEqual(cutVisible((id) => id === 'next', pending, work), [])
 })

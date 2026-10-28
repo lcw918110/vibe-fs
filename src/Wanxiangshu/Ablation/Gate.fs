@@ -28,16 +28,21 @@ module AblationGate =
         current |> Option.ofObj |> Option.map unbox<AblationRegistry>
 
     let private modeWire (registry: AblationRegistry) (nodeId: string) : string =
-        AblationRegistry.modeFor (AblationNodeId.create nodeId) registry |> AblationMode.wire
+        AblationRegistry.modeFor (AblationNodeId.create nodeId) registry
+        |> AblationMode.wire
 
     let private isActiveNode (registry: AblationRegistry) (nodeId: string) : bool =
         AblationRegistry.isActive (AblationNodeId.create nodeId) registry
 
     let private tryToolNodeWire (toolName: string) : string =
-        AblationToolMap.tryNode toolName |> Option.map AblationNodeId.value |> Option.toObj
+        AblationToolMap.tryNode toolName
+        |> Option.map AblationNodeId.value
+        |> Option.toObj
 
     let private tryFactNodeWire (factTag: string) : string =
-        AblationFactMap.tryNode factTag |> Option.map AblationNodeId.value |> Option.toObj
+        AblationFactMap.tryNode factTag
+        |> Option.map AblationNodeId.value
+        |> Option.toObj
 
     let toolDenied (registry: AblationRegistry) (toolName: string) : bool =
         state?toolDenied (modeWire registry, tryToolNodeWire, toolName)

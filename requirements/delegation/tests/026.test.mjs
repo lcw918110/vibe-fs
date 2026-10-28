@@ -42,7 +42,7 @@ const toolModule = {
 const waitForPromptCount = (runtime, count) => forkTool.awaitPromptCount(runtime, count)
 const ownerDescriptor = (sessionId) => [{ sessionId, agent: 'manager' }]
 
-test('WHAT[delegation-021] late consultation stops only after a tool-free completed turn', async () => {
+test('WHAT[delegation-026] late consultation stops only after a tool-free completed turn', async () => {
   await withRealFork('manager-consultation-boundary', async ({ hooks, runtime }) => {
     for (const kind of ['askPreviousScope', 'negotiate', 'advisor']) {
       const sid = `consult-${kind}`

@@ -647,7 +647,10 @@ type HostForkRuntime
         lock gate (fun () ->
             HostForkRunLifecycle.allRuns pendingRuns
             |> List.choose (fun run ->
-                if not run.Finished then Some (run.AgentId, run.ChildId) else None))
+                if not run.Finished then
+                    Some(run.AgentId, run.ChildId)
+                else
+                    None))
 
     member _.SnapshotOutstandingPtyRuns() =
         lock gate (fun () -> HostPtyOwnership.unsettledIds ptyOwnership ptyScopeId)
@@ -782,7 +785,10 @@ type HostForkRuntime
                 for item in drained do
                     let run = item.Run
                     run.Finished <- true
-                    AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "HostDetached") |> ignore
+
+                    AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "HostDetached")
+                    |> ignore
+
                     item.Subscription |> Option.iter (fun s -> subs.Add s)
 
                 children.Clear()
@@ -795,7 +801,8 @@ type HostForkRuntime
 
                 subs |> Seq.toList)
 
-        subscriptions |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
+        subscriptions
+        |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
 
     member private this.DrainCancelledCallbacks(agentIds: string list, retainedAgents: string list) : Task<unit> =
         let cancelled = Set.ofList agentIds
@@ -804,7 +811,8 @@ type HostForkRuntime
         let subscriptions =
             lock gate (fun () -> HostForkRunLifecycle.drainCancelledRuns pendingRuns agentIds)
 
-        subscriptions |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
+        subscriptions
+        |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
 
         task {
             if List.isEmpty retainedAgents then
@@ -1173,7 +1181,9 @@ type HostForkRuntime
         | Some childId -> Some childId
         | None -> this.TryChildFromDurable agentId |> Option.map (fun (childId, _, _) -> childId)
 
-    member _.PendingRunCount = lock gate (fun () -> HostForkRunLifecycle.pendingRunCount pendingRuns)
+    member _.PendingRunCount =
+        lock gate (fun () -> HostForkRunLifecycle.pendingRunCount pendingRuns)
+
     member _.PendingCompletionCount = runtime.PendingCompletionCount
     member _.IsCancelled = runtime.IsCancelled
     member internal _.IsCancelling = lock cancelGate (fun () -> cancelTask.IsSome)

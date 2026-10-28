@@ -86,8 +86,12 @@ module DispatchSessionPort =
                 let carrier = metadata |> Option.defaultWith (fun () -> createObj [])
                 carrier?wanxiangshu_consultation_steer <- box true
                 port.SendPrompt(sessionId, request, Some carrier, late)
-            member _.SubscribeFutureTerminal(sessionId, listener) = port.SubscribeFutureTerminal(sessionId, listener)
-            member _.SubscribeTerminal(sessionId, listener) = port.SubscribeTerminal(sessionId, listener) }
+
+            member _.SubscribeFutureTerminal(sessionId, listener) =
+                port.SubscribeFutureTerminal(sessionId, listener)
+
+            member _.SubscribeTerminal(sessionId, listener) =
+                port.SubscribeTerminal(sessionId, listener) }
 
     /// Build a dispatch port over the neutral P-02 send port and the product
     /// terminal source. `metadata` is a product side channel with no neutral

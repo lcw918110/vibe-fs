@@ -974,6 +974,8 @@ OpenCode/Host/SharedState.fsi
 OpenCode/Host/SharedState.fs
 OpenCode/Host/SharedStateSurface.fsi
 OpenCode/Host/SharedStateSurface.fs
+OpenCode/Host/JoinAttemptFactory.fsi
+OpenCode/Host/JoinAttemptFactory.fs
 OpenCode/Host/PluginSessionScope.fsi
 OpenCode/Host/PluginSessionScope.fs
 OpenCode/Host/PluginRecoveryScope.fsi

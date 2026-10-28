@@ -187,46 +187,16 @@ flow = [
   # child in the run); the legacy `HandleCompleted` case is not written any more.
   { waitFact = { name = "HandleWorkCompleted", gte = 1 }, timeoutMs = 60000 },
 
-  # Bounded current-action cursors are verified by durable retirement and the
-  # Host cognitive-tool canary (assume) rather than one incidental transport step number.
-  # HumanRoot preflow baseline: +2 IncumbencyRetired(Continue+Accepted) / +2 IncumbencyOpened.
-  # A Continue retirement is followed by another ordinary IncumbencyOpened event
-  # and a physically observed provider request; Accepted exits.
-  { waitFact = { name = "IncumbencyRetired", gte = 3 }, timeoutMs = 60000 },
-  { waitFact = { name = "IncumbencyOpened", gte = 4 }, timeoutMs = 60000 },
-
-  # Iteration #2 independently audits the current snapshot at 8×10 and retires
-  # with Outcome Continue. Every iteration starts from the same typed authority
-  # user messages and current workspace.
-  # That quality candidate reaches Change; the stale target forces rebase and the
-  # deliberately conflicting target edit yields the machine ConflictDetected fact.
-  # The Manager owner opens iteration #2 through the same manager-assess resource.
-  # Durable facts order every later incarnation; prompt text never encodes an index.
-  { waitFact = { name = "Reviewed", gte = 4 }, timeoutMs = 60000 },
+  # The Manager work relays once, then its successor completes the work. The
+  # HumanRoot canary already contributed one Relayed and one Completed retirement.
+  # Change takes the completed work as its candidate; the stale target forces a
+  # rebase, and the deliberately conflicting target edit yields ConflictDetected.
   { waitFact = { name = "IncumbencyRetired", gte = 4 }, timeoutMs = 60000 },
   { waitFact = { name = "CandidateReady", eq = 1 }, timeoutMs = 60000 },
   { waitFact = { name = "ConflictDetected", gte = 1 }, timeoutMs = 60000 },
-
-  # Iteration #3 is a fresh IncumbencyOpened on the same authority. Its low
-  # assessment assigns a fresh Conflict Resolver child to repair the conflict,
-  # then retires with Outcome Continue. A retired iteration
-  # never resumes; each iteration-first carries only the current iteration, with
-  # the exact owner-controlled assessment resource after the authority prefix.
-  { waitFact = { name = "IncumbencyOpened", gte = 5 }, timeoutMs = 60000 },
-  { waitFact = { name = "Reviewed", gte = 5 }, timeoutMs = 60000 },
   { wait = "engineer-resolve.0", timeoutMs = 60000 },
   { wait = "engineer-resolve.1", timeoutMs = 60000 },
   { awaitIdle = { after = "engineer-resolve.1" }, timeoutMs = 60000 },
-  # The conflict repair uses the same manager-work resource and a fresh owned handle;
-  # the owner harvests and retires it without an external continuation prompt.
-  { waitFact = { name = "IncumbencyRetired", gte = 5 }, timeoutMs = 60000 },
-
-  # Iteration #4 independently re-audits the repaired snapshot at 8×10 from the
-  # same authority. A fresh certificate (Outcome Accepted) is required before
-  # rebase completion/publish can proceed; Accepted exits with no further iteration.
-  { waitFact = { name = "IncumbencyOpened", gte = 6 }, timeoutMs = 60000 },
-  { waitFact = { name = "Reviewed", gte = 6 }, timeoutMs = 60000 },
-  { waitFact = { name = "IncumbencyRetired", gte = 6 }, timeoutMs = 60000 },
   { waitFact = { name = "RebasedCandidateReady", gte = 1 }, timeoutMs = 90000 },
   { waitFact = { name = "Published", eq = 1 }, timeoutMs = 90000 },
 
@@ -265,36 +235,21 @@ user = "HUMANROOT_MANAGER_LOOP_CANARY: run the independent HumanRoot manager ass
   [[turn.step]]
   respond = { type = "title", text = "HumanRoot Manager Loop Canary" }
 
-# ONE reusable HumanRoot loop family: same lane/authority/steps reused for both
-# iterations. The binder returns low review on first delivery (Continue) and
-# perfect on second (Accepted); step-1 deliver is identical. Provider-visible
-# user stays the original authority because the wake is stripped.
-# The retirement is the two-stage deliver of work-006: the first call commits the
-# confirmation and does not end, a second call with a different toolCallId reads
-# the review outcome and retires. Step 2 is that closing call; it never injects a
-# user message, so the same turn keeps owning the cursor.
+# The first review records an obligation. The next review clears it and opens
+# the successor. The binder supplies the null value, which TOML cannot encode.
 [[turn]]
 id = "humanroot-loop"
 lane = "humanroot-manager"
 user = "HUMANROOT_MANAGER_LOOP_CANARY: run the independent HumanRoot manager assessment check."
-tools = ["todowrite-for-manager", "deliver"]
+tools = ["todowrite-for-manager", "review"]
 
   [[turn.step]]
   runtimeStep = 0
-  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "HumanRoot canary first audit finds one material issue remains.", args = { name = "humanroot-review-gap", planB = "等待首轮评审回执，保留当前评审任期。", program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":\"close the remaining gap\"}]); } }" } }
+  respond = { type = "tool-call", tool = "review", prefixText = "HumanRoot canary first audit finds one material issue remains.", args = { findings = [{ key = "target-gap", value = "close the remaining gap" }] } }
 
   [[turn.step]]
   runtimeStep = 1
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "humanroot-review-clear", planB = "等待次轮评审回执，保留已解决的结论。", program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":null}]); } }" } }
-
-  [[turn.step]]
-  runtimeStep = 2
-  respond = { type = "tool-call", tool = "deliver", args = {} }
-
-  [[turn.step]]
-  runtimeStep = 3
-  optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
 [[turn]]
 id = "title"
@@ -312,7 +267,7 @@ user = "Ship publish_proof.txt to the target branch through the long stroke."
 tools = ["todowrite-for-orchestrator", "join"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "commission-long-stroke", planB = "等待委任回执，保留长行程工作树与路线。", program = "class Js extends JsProgram { async run() { return await this.commission({\"calling\":\"lead\",\"name\":\"Long Stroke Road\",\"charge\":\"Run the long stroke: ship publish_proof.txt — join-wake, provider fallback, accept the assessment obligation then retire so publish can proceed.\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "commission-long-stroke", intent = "等待委任回执，保留长行程工作树与路线。", remainingScopeTurnsEstimate = 19, program = "class Js extends JsProgram { async run() { return await this.commission({\"calling\":\"lead\",\"name\":\"Long Stroke Road\",\"charge\":\"Run the long stroke: ship publish_proof.txt — join-wake, provider fallback, accept the assessment obligation then retire so publish can proceed.\"}, []); } }" } }
 
   [[turn.step]]
   respond = { type = "tool-call", tool = "join" }
@@ -325,7 +280,7 @@ tools = ["todowrite-for-orchestrator", "join"]
   # then ends the turn with an explicit deliver(reportMapping) so the handoff is settled.
   [[turn.step]]
   optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "deliver-long-stroke", planB = "等待交付结算，保留长行程发布结果。", program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "deliver-long-stroke", intent = "等待交付结算，保留长行程发布结果。", remainingScopeTurnsEstimate = 18, program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
 
 # EXEC-016 / INTERACTION-AUTHORITY-014: conditional protocol declaration only.
 # Ordinary Orchestrator completion receives JoinGuard exactly when a join obligation
@@ -412,15 +367,15 @@ user = "# The account is not yet ready to entrust."
 id = "manager-loop"
 lane = "manager"
 user = ["# ", "Run the long stroke: ship publish_proof.txt — join-wake, provider fallback, accept the assessment obligation then retire so publish can proceed."]
-tools = ["todowrite-for-manager", "join", "horizon", "deliver"]
+tools = ["todowrite-for-manager", "join", "horizon", "review"]
 
   [[turn.step]]
   runtimeStep = 0
-  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "The workspace needs implementation work before it can publish: completeness is not yet full because publish_proof.txt has not been established in the current delivery.", args = { name = "manager-review-gap", planB = "等待首轮评审回执，保留当前评审任期。", program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":\"close the remaining gap\"}]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "The workspace needs implementation work before it can publish: completeness is not yet full because publish_proof.txt has not been established in the current delivery.", args = { name = "manager-review-gap", intent = "等待首轮评审回执，保留当前评审任期。", remainingScopeTurnsEstimate = 17, program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":\"close the remaining gap\"}]); } }" } }
 
   [[turn.step]]
   runtimeStep = 1
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-writer", planB = "等待派工回执，保留发布证明写入任务。", program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Writer\",\"charge\":\"Write publish_proof.txt.\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-writer", intent = "等待派工回执，保留发布证明写入任务。", remainingScopeTurnsEstimate = 16, program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Writer\",\"charge\":\"Write publish_proof.txt.\"}, []); } }" } }
 
   [[turn.step]]
   runtimeStep = 2
@@ -429,12 +384,12 @@ tools = ["todowrite-for-manager", "join", "horizon", "deliver"]
   [[turn.step]]
   runtimeStep = 3
   optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "manager-review-clear", planB = "等待次轮评审回执，保留已解决结论。", program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":null}]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "manager-review-clear", intent = "等待次轮评审回执，保留已解决结论。", remainingScopeTurnsEstimate = 15, program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":null}]); } }" } }
 
   [[turn.step]]
   runtimeStep = 4
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
 # A successor incarnation whose last provider-visible user message is the
 # owner-controlled manager-assess resource. The ladder mirrors manager-loop —
@@ -447,17 +402,17 @@ internal = true
 # The ordinal sentence is the leader; the declared fragment stays the stable
 # tail so the successor number never has to be re-pinned per iteration.
 user = ["# You are the ", "entrust read-only work to Engineer to establish facts about the predecessor's work"]
-tools = ["todowrite-for-manager", "join", "horizon", "deliver"]
+tools = ["todowrite-for-manager", "join", "horizon", "review"]
 
   [[turn.step]]
   runtimeStep = 0
   optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "Independent audit of this tenure snapshot finds every required quality dimension complete and supported by the current workspace evidence.", args = { name = "reopened-review-pass", planB = "等待继任评审回执，保留当前审计结论。", program = "class Js extends JsProgram { async run() { return await this.review([]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "Independent audit of this tenure snapshot finds every required quality dimension complete and supported by the current workspace evidence.", args = { name = "reopened-review-pass", intent = "等待继任评审回执，保留当前审计结论。", remainingScopeTurnsEstimate = 14, program = "class Js extends JsProgram { async run() { return await this.review([]); } }" } }
 
   [[turn.step]]
   runtimeStep = 1
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 2
@@ -470,12 +425,12 @@ tools = ["todowrite-for-manager", "join", "horizon", "deliver"]
   [[turn.step]]
   runtimeStep = 3
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 4
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
 # A fresh Manager terminal can race with the externally injected interruption
 # while its child is still outstanding. INTERACTION-AUTHORITY-014 then requires
@@ -486,12 +441,12 @@ id = "manager-join-guard"
 internal = true
 optional = true
 user = "# Delegated work you sent out has not come back yet. Continue the work."
-tools = ["todowrite-for-manager", "join", "horizon", "assume", "deliver"]
+tools = ["todowrite-for-manager", "join", "horizon", "assume", "review"]
 forbiddenTools = ["todowrite-for-orchestrator"]
 
   [[turn.step]]
   runtimeStep = 1
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 2
@@ -499,11 +454,11 @@ forbiddenTools = ["todowrite-for-orchestrator"]
 
   [[turn.step]]
   runtimeStep = 3
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 4
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-finisher", planB = "等待派工回执，保留收尾工程师工作。", program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Finisher\",\"charge\":\"Ensure publish_proof.txt contains exactly: Published by long-stroke canary\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-finisher", intent = "等待派工回执，保留收尾工程师工作。", remainingScopeTurnsEstimate = 13, program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Finisher\",\"charge\":\"Ensure publish_proof.txt contains exactly: Published by long-stroke canary\"}, []); } }" } }
 
   [[turn.step]]
   runtimeStep = 5
@@ -511,7 +466,7 @@ forbiddenTools = ["todowrite-for-orchestrator"]
 
   [[turn.step]]
   runtimeStep = 6
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "resume-proof-finisher", planB = "等待接力回执，保留复用子会话工作。", program = "class Js extends JsProgram { async run() { return await this.resume({\"name\":\"Proof Finisher\",\"charge\":\"Verify the reused subagent received this second charge and publish_proof.txt is exact.\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "resume-proof-finisher", intent = "等待接力回执，保留复用子会话工作。", remainingScopeTurnsEstimate = 12, program = "class Js extends JsProgram { async run() { return await this.resume({\"name\":\"Proof Finisher\",\"charge\":\"Verify the reused subagent received this second charge and publish_proof.txt is exact.\"}, []); } }" } }
 
   [[turn.step]]
   runtimeStep = 7
@@ -519,11 +474,11 @@ forbiddenTools = ["todowrite-for-orchestrator"]
 
   [[turn.step]]
   runtimeStep = 8
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 9
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 10
@@ -562,7 +517,7 @@ user = [
 # The work face keeps the programming entry, and that entry still carries `this.review`.
 # A delivery with a non-empty obligation ledger is only observed, so the ladder must be
 # able to clear the ledger before `deliver`.
-tools = ["todowrite-for-manager", "join", "assume", "deliver"]
+tools = ["todowrite-for-manager", "join", "assume", "review"]
 
   # Delivery 1 is the nudge itself; later deliveries re-anchor the same resource after
   # the Manager answers, so any bounded runtime cursor may land here. The binder maps
@@ -576,52 +531,52 @@ tools = ["todowrite-for-manager", "join", "assume", "deliver"]
   [[turn.step]]
   runtimeStep = 1
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 2
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 3
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 4
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 5
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 6
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 7
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 8
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 9
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 10
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   # The Manager stays awake until its work closes, so the nudge cursor is bounded
   # only by the run itself (sources: work/manager-continue). Every cursor past the
@@ -629,77 +584,77 @@ tools = ["todowrite-for-manager", "join", "assume", "deliver"]
   [[turn.step]]
   runtimeStep = 11
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 12
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 13
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 14
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 15
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 16
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 17
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 18
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 19
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 20
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 21
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 22
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 23
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 24
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 25
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
 # The same nudge is also rendered as an instruction comment, so the semantic turn
 # starts with `#`. Both renderings are the same continuation.
@@ -710,12 +665,12 @@ id = "manager-current-action-preamble"
 internal = true
 optional = true
 user = "The current user task has not been completed or durably handed over."
-tools = ["todowrite-for-manager", "join", "assume", "deliver"]
+tools = ["todowrite-for-manager", "join", "assume", "review"]
 
   [[turn.step]]
   runtimeStep = 0
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
 [[turn]]
 id = "manager-current-action-comment"
@@ -725,42 +680,42 @@ user = [
   "# The current user task has not been completed or durably handed over.",
   "The gaps confirmed by review are now entrusted to you.",
 ]
-tools = ["todowrite-for-manager", "join", "assume", "deliver"]
+tools = ["todowrite-for-manager", "join", "assume", "review"]
 
   [[turn.step]]
   runtimeStep = 0
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 1
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 2
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 3
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 4
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 5
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
   [[turn.step]]
   runtimeStep = 6
   optional = true
-  respond = { type = "tool-call", tool = "deliver", args = {} }
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
 [[turn]]
 id = "engineer"
@@ -769,12 +724,12 @@ user = "# Write publish_proof.txt."
 tools = ["todowrite-for-engineer"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "write-publish-proof", planB = "等待文件写入结果，保留已写入证明。", program = "class Js extends JsProgram { async run() { await this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "write-publish-proof", intent = "等待文件写入结果，保留已写入证明。", remainingScopeTurnsEstimate = 11, program = "class Js extends JsProgram { async run() { await this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
 
   # Read probe on the programming surface: ordinary Engineer mainline.
   # Unique path makes message.part.updated correlation unambiguous in the real Host SSE stream.
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "read-probe", planB = "等待读取探针结果，保留文件版本记录。", program = "class Js extends JsProgram { async run() { return await this.cat('read_probe.txt'); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "read-probe", intent = "等待读取探针结果，保留文件版本记录。", remainingScopeTurnsEstimate = 10, program = "class Js extends JsProgram { async run() { return await this.cat('read_probe.txt'); } }" } }
 
   [[turn.step]]
   # A subagent settles only through an explicit `this.deliver(reportMapping)` (repository-programming-054/059):
@@ -782,7 +737,7 @@ tools = ["todowrite-for-engineer"]
   # `reportMapping` pointing at the work material. A plain
   # `return` leaves the delivery cell empty, so the child is not settled as
   # completed and the join stays open.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "publish_proof.txt is written and verified; delivering the completed proof to the owner.", args = { name = "deliver-publish-proof", planB = "等待交付结算，保留子工作完成事实。", program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "publish_proof.txt is written and verified; delivering the completed proof to the owner.", args = { name = "deliver-publish-proof", intent = "等待交付结算，保留子工作完成事实。", remainingScopeTurnsEstimate = 9, program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
 
   # The delivery tool result asks the provider once more; the child closes its turn here.
   [[turn.step]]
@@ -796,12 +751,12 @@ user = "# Resolve the conflicted publish_proof.txt so it contains exactly: Publi
 tools = ["todowrite-for-engineer"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "resolve-publish-proof", planB = "等待冲突文件写入完成，保留修复内容。", program = "class Js extends JsProgram { async run() { this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "resolve-publish-proof", intent = "等待冲突文件写入完成，保留修复内容。", remainingScopeTurnsEstimate = 8, program = "class Js extends JsProgram { async run() { this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
 
   [[turn.step]]
   # Same reportMapping rule for the repair child: state the outcome as prose, then
   # settle with an explicit `this.deliver(reportMapping)`.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "The conflict is resolved; publish_proof.txt now contains exactly the required text, and the repaired file is delivered.", args = { name = "deliver-resolved-proof", planB = "等待冲突修复交付结算，保留完成事实。", program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "The conflict is resolved; publish_proof.txt now contains exactly the required text, and the repaired file is delivered.", args = { name = "deliver-resolved-proof", intent = "等待冲突修复交付结算，保留完成事实。", remainingScopeTurnsEstimate = 7, program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
 
   [[turn.step]]
   respond = { type = "text", text = "Conflict file resolved." }
@@ -824,3 +779,81 @@ delivery = "provider-error"
 status = 400
 retryable = false
 attempts = [1]
+
+
+# The successor retains the triggering review call. The matcher counts that
+# assistant message before the successor's own first response.
+[[turn]]
+id = "successor-tenure"
+internal = true
+optional = true
+user = "继任「"
+tools = ["review"]
+
+  [[turn.step]]
+  runtimeStep = 0
+  optional = true
+  respond = { type = "tool-call", tool = "review", prefixText = "Independent audit of this tenure snapshot finds every required quality dimension complete.", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 1
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 2
+  optional = true
+  respond = { type = "text", text = "Successor tenure closed." }
+
+# Before the first charged round the Host asks for a remaining-turn estimate.
+[[turn]]
+id = "scope-estimate"
+internal = true
+optional = true
+user = "The current Scope has no estimate of remaining billable rounds yet."
+tools = ["todowrite-for-manager"]
+
+  [[turn.step]]
+  runtimeStep = 0
+  optional = true
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "scope-estimate", intent = "提交剩余回合估计，继续当前工作。", remainingScopeTurnsEstimate = 3, program = "class Js extends JsProgram { async run() { } }" } }
+
+  [[turn.step]]
+  runtimeStep = 1
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 2
+  optional = true
+  respond = { type = "text", text = "Estimate recorded." }
+
+# The Advisor asks a tool-free snapshot question when the estimate does not fall.
+[[turn]]
+id = "scope-stall-snapshot"
+internal = true
+optional = true
+user = "Your estimate of the remaining billable rounds did not fall by 0.1 this round."
+
+  [[turn.step]]
+  runtimeStep = 0
+  optional = true
+  respond = { type = "text", text = "The work waits on delegated results; nothing else blocks it." }
+
+# The lifecycle library announces each milestone advance with its own prompt.
+# At the closing milestone an empty review completes the work.
+[[turn]]
+id = "milestone-advanced"
+internal = true
+optional = true
+user = "进入「"
+
+  [[turn.step]]
+  runtimeStep = 0
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 1
+  optional = true
+  respond = { type = "text", text = "The work is complete." }

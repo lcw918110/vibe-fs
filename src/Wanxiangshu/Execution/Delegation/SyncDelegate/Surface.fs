@@ -41,8 +41,10 @@ open Wanxiangshu.Persistence.Journal
 module SyncDelegateSurface =
     [<Import("providerAttemptStopFence", "wanxiangli/failure")>]
     let private providerAttemptStopFence: obj = jsNative
+
     [<Import("joinGuardReservationStore", "wanxiangli/delegate-batch")>]
     let private joinGuardStore: obj = jsNative
+
     [<RequireQualifiedAccess>]
     type private RetryHarnessMode =
         | Scripted
@@ -234,7 +236,7 @@ module SyncDelegateSurface =
             eventPort: IEventObservationPort
         ) =
         let nudgeSent = HashSet<string>()
-        let joinGuardNudges: HashSet<string> = unbox (joinGuardStore?createScope())
+        let joinGuardNudges: HashSet<string> = unbox (joinGuardStore?createScope ())
         member _.Journal = journal
         member _.Dispatcher = dispatcher
         member _.Runtime = runtime
@@ -257,7 +259,9 @@ module SyncDelegateSurface =
 
             plugin
             |> Option.iter (fun scope ->
-                children |> Seq.iter (fun child -> providerAttemptStopFence?Revoke(SessionId.value child) |> ignore)
+                children
+                |> Seq.iter (fun child -> providerAttemptStopFence?Revoke (SessionId.value child) |> ignore)
+
                 scope.Dispose())
 
             sessions.ClosePendingSends()
@@ -267,7 +271,10 @@ module SyncDelegateSurface =
         member _.CloseRecovery() : Task =
             task {
                 runtime.Dispose()
-                children |> Seq.iter (fun child -> providerAttemptStopFence?Revoke(SessionId.value child) |> ignore)
+
+                children
+                |> Seq.iter (fun child -> providerAttemptStopFence?Revoke (SessionId.value child) |> ignore)
+
                 sessions.ClosePendingSends()
 
                 try
@@ -1534,7 +1541,9 @@ module SyncDelegateSurface =
 
         match harness.UsesProviderRecovery, child with
         | true, Some child when not (String.IsNullOrWhiteSpace providerRun) ->
-            providerAttemptStopFence?SignalStop(SessionId.value child, providerRun) |> ignore
+            providerAttemptStopFence?SignalStop (SessionId.value child, providerRun)
+            |> ignore
+
             true
         | _ -> false
 
@@ -1544,7 +1553,7 @@ module SyncDelegateSurface =
         if not harness.UsesProviderRecovery then
             invalidArg "value" "Provider recovery requires its owned runtime harness"
 
-        let rawSnap: obj = providerAttemptStopFence?Snapshot()
+        let rawSnap: obj = providerAttemptStopFence?Snapshot ()
 
         box
             {| stopped = unbox<int> rawSnap?stopped

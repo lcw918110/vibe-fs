@@ -27,7 +27,7 @@ const recovery = await import('../../../dist/OpenCode/Host/SessionRecoveryHostSu
 test('WHAT[host-boundary-003] coarse abort is only a wake while an exact operator cancellation settles its own accepted execution', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const sessionID = 'ses-exact-operator-cancel'
-    const message = { id: 'msg-current', sessionID, role: 'user', agent: 'engineer', model: {} }
+    const message = { id: 'msg-current', sessionID, role: 'user', agent: 'engineer', model: { providerID: 'provider', modelID: 'engineer-model' } }
     await hooks['chat.message']({ sessionID, messageID: message.id, agent: 'engineer' }, {
       message, parts: [{ type: 'text', text: 'operator input' }],
     })

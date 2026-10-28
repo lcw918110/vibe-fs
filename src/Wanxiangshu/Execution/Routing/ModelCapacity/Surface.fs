@@ -38,7 +38,9 @@ module internal ExecutionPermitBinding =
     let private constructHandles (cls: obj) : SessionLeaseHandlesLibrary = jsNative
 
     let create () = constructPermits permitsClass
-    let createHandles () = constructHandles sessionLeaseHandlesClass
+
+    let createHandles () =
+        constructHandles sessionLeaseHandlesClass
 
     let identity (value: ExecutionAdmissionExactIdentity) : obj =
         createObj
@@ -109,11 +111,7 @@ type internal ExecutionCapacityOwner(counters: CapacityTransitionCounters) =
         let permit =
             permits.issue (ExecutionPermitBinding.identity identity, float (CapacityCreditId.value capacityCredit))
 
-        sessionLeases.handleFor (
-            identity.SessionId,
-            permit,
-            createHandle identity capacityCredit permit
-        )
+        sessionLeases.handleFor (identity.SessionId, permit, createHandle identity capacityCredit permit)
         |> unbox<ExecutionAdmissionLease>
 
     member _.Target(lease: ExecutionAdmissionLease) =
@@ -146,4 +144,4 @@ type internal ExecutionCapacityOwner(counters: CapacityTransitionCounters) =
         match isNull permit, isNull handle with
         | true, _ -> None
         | false, true -> invalidOp "execution-model-routing: committed permit has no host lease handle"
-        | false, false -> Some (unbox<ExecutionAdmissionLease> handle)
+        | false, false -> Some(unbox<ExecutionAdmissionLease> handle)

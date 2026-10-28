@@ -55,6 +55,7 @@ const tenureBoundaryCountOf = (workDir, sessionId) =>
     ? workJournalEvents(workDir)
         .filter((event) => event.stream === sessionId)
         .filter((event) => event.type === 'IncumbencyOpened'
+          || event.type === 'WorkContinued'
           || (event.type === 'IncumbencyRetired' && event.payload?.outcome === 'Relayed'))
         .length
     : 0;

@@ -71,6 +71,21 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
   // Physical-exit canary: the child must reach the real Diagnostic.fatal and
   // FatalProcess.trip links — a wire-level invariant, not a test seam.
   'requirements/host-boundary/tests/fixtures/fatal-process-child.fixture.mjs',
+  // Physical host/SQLite/representation canaries added in recent upstream commits:
+  'requirements/host-boundary/tests/tenure-barrier.test.mjs',
+  'requirements/advisor/tests/007.test.mjs',
+  'requirements/advisor/tests/009.test.mjs',
+  'requirements/advisor/tests/010.test.mjs',
+  'requirements/advisor/tests/011.test.mjs',
+  'requirements/advisor/tests/012.test.mjs',
+  'requirements/advisor/tests/013.test.mjs',
+  'requirements/advisor/tests/014.test.mjs',
+  'requirements/advisor/tests/015.test.mjs',
+  'requirements/latency-degeneration/tests/001.test.mjs',
+  'requirements/latency-degeneration/tests/003.test.mjs',
+  'requirements/latency-degeneration/tests/004.test.mjs',
+  'requirements/latency-degeneration/tests/005.test.mjs',
+  'requirements/managed-session-lifecycle/tests/029.test.mjs',
 ])
 
 /**
@@ -1552,6 +1567,38 @@ export const SURFACE_MANIFEST = [
     source: 'src/Wanxiangshu/OpenCode/Host/ProviderFailurePresentation.fs',
     representation: 'json',
     kind: 'pure',
+  },
+  {
+    module: 'OpenCode/Host/LatencyWatchdog.js',
+    owner: 'latency-degeneration',
+    laws: ['LATENCY-DEGENERATION-010', 'LATENCY-DEGENERATION-011', 'LATENCY-DEGENERATION-013'],
+    source: 'src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fs',
+    representation: 'opaque-capability',
+    kind: 'resource',
+  },
+  {
+    module: 'Foundation/TerminalSignal.js',
+    owner: 'latency-degeneration',
+    laws: ['LATENCY-DEGENERATION-012'],
+    source: 'src/Wanxiangshu/Foundation/TerminalSignal.fs',
+    representation: 'opaque-capability',
+    kind: 'pure',
+  },
+  {
+    module: 'Foundation/Identity.js',
+    owner: 'latency-degeneration',
+    laws: ['LATENCY-DEGENERATION-012'],
+    source: 'src/Wanxiangshu/Foundation/Identity.fs',
+    representation: 'json',
+    kind: 'pure',
+  },
+  {
+    module: 'OpenCode/Plugin/PluginTransforms.js',
+    owner: 'delegation',
+    laws: ['DELEGATION-037'],
+    source: 'src/Wanxiangshu/OpenCode/Plugin/PluginTransforms.fs',
+    representation: 'opaque-capability',
+    kind: 'resource',
   },
 ]
 

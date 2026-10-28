@@ -94,7 +94,7 @@ module Surface =
     let projectPreviousMessages (messages: obj array) : obj = owner?projectPreviousMessages messages
 
     let startTemporaryPrevious (tempId: string) (sourceSessionId: string) (metadata: obj) : obj =
-        owner?startTemporaryPrevious(tempId, sourceSessionId, metadata)
+        owner?startTemporaryPrevious (tempId, sourceSessionId, metadata)
 
     let modelForTemporary (tempId: string) : obj = owner?modelForTemporary (tempId)
 

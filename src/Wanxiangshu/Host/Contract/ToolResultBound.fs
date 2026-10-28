@@ -22,11 +22,8 @@ module ToolResultBound =
     let setHostLimits (maxLines: obj) (maxBytes: obj) : unit =
         boundStore?setHostLimits (maxLines, maxBytes)
 
-    let clearHostLimitsForTests () : unit =
-        boundStore?clearHostLimitsForTests ()
+    let clearHostLimitsForTests () : unit = boundStore?clearHostLimitsForTests ()
 
-    let fitsInWindow (text: string) : bool =
-        boundStore?fitsInWindow (text)
+    let fitsInWindow (text: string) : bool = boundStore?fitsInWindow (text)
 
-    let bound (text: string) : string =
-        boundStore?bound (text)
+    let bound (text: string) : string = boundStore?bound (text)

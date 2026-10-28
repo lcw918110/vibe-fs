@@ -501,7 +501,7 @@ module JsToolWorkflow =
                             }
                         | hostObj ->
                             let target = unbox<JsDelegationHost> hostObj
-                            target.Horizon ()
+                            target.Horizon()
                   Review =
                     fun findings note ->
                         match activeTurnBridge?resolveHost sessionId with
@@ -520,21 +520,13 @@ module JsToolWorkflow =
             let dynamicAsk: (string -> Task<Result<unit, string>>) =
                 fun question ->
                     match activeTurnBridge?resolveAsk sessionId with
-                    | null ->
-                        Task.FromResult(Error "ask channel is unavailable outside an active tool turn")
+                    | null -> Task.FromResult(Error "ask channel is unavailable outside an active tool turn")
                     | askObj ->
                         let askFn = unbox<string -> Task<Result<unit, string>>> askObj
                         askFn question
 
             let api =
-                JsToolsBindings.createApi
-                    capabilities
-                    root
-                    staging
-                    reads
-                    ledger
-                    (Some dynamicHost)
-                    (Some dynamicAsk)
+                JsToolsBindings.createApi capabilities root staging reads ledger (Some dynamicHost) (Some dynamicAsk)
                 |> applyReviewGates reviewGates
 
             let settle (receipt: obj) : Task<obj> =
@@ -616,17 +608,19 @@ module JsToolWorkflow =
                       "lifecycle" ==> lifecycle lifecyclePersistence sessionId ]
 
             JsPrograms.noteCaller sessionId callId (string input?name)
-            try
-                let session = JsPrograms.forSession sessionId
-                let! receipt = unbox<Task<obj>> (session?execute (spec))
-                let reported = outcome receipt
 
+            let rewriteOutcome receipt reported =
                 match reported, settlementFailure with
                 | JsToolOutcome.Failed(_, rewritten, created, removed, moved), Some failure when
                     string receipt?code = JsFailure.code failure
                     ->
-                    return JsToolOutcome.Failed(failure, rewritten, created, removed, moved)
-                | _ -> return reported
+                    JsToolOutcome.Failed(failure, rewritten, created, removed, moved)
+                | _ -> reported
+
+            try
+                let session = JsPrograms.forSession sessionId
+                let! receipt = unbox<Task<obj>> (session?execute (spec))
+                return rewriteOutcome receipt (outcome receipt)
             finally
                 JsPrograms.clearCaller sessionId callId
         }

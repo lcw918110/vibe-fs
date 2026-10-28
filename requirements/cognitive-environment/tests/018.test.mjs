@@ -22,7 +22,7 @@ test('WHAT[cognitive-environment-018] registered Provider requests localize new 
       const bytes = JSON.stringify(original)
       for (const message of original) runtime.pushHostMessage(session, message)
       await hooks['chat.message']({ sessionID: session, messageID: 'language-user', agent: 'engineer' }, {
-        message: { id: 'language-user', role: 'user', agent: 'engineer' }, parts: original[0].parts,
+        message: { id: 'language-user', role: 'user', agent: 'engineer', model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: original[0].parts,
       })
       const request = async (language) => withPreference(language, async () => {
         refreshGlobalLanguage()

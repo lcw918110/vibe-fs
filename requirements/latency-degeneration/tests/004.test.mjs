@@ -47,7 +47,7 @@ function rig({interrupt,send,ack}){
   return {watchdog,timers,facts,start,fire,physical,refuseLater}
 }
 
-test('WHAT[latency-degeneration-009] fast-check: each causal resolution settles by real physical resume or explicit return, never a pending code await',async()=>{
+test('WHAT[latency-degeneration-004] fast-check: each causal resolution settles by real physical resume or explicit return, never a pending code await',async()=>{
   await fc.assert(fc.asyncProperty(
     fc.constantFrom('accept','refuse','reject','throw'),
     fc.constantFrom('accepted','refuse','reject','throw'),
@@ -93,7 +93,7 @@ test('WHAT[latency-degeneration-009] fast-check: each causal resolution settles 
   )
 })
 
-test('WHAT[latency-degeneration-009] fast-check: queued send cannot fake success; real later physical acceptance resumes once',async()=>{
+test('WHAT[latency-degeneration-004] fast-check: queued send cannot fake success; real later physical acceptance resumes once',async()=>{
   await fc.assert(fc.asyncProperty(fc.boolean(),async(secondRun)=>{
     const r=rig({interrupt:'accept',send:'pending'})
     try{
@@ -119,7 +119,7 @@ test('WHAT[latency-degeneration-009] fast-check: queued send cannot fake success
   }),{seed:0x11AD2026,numRuns:70})
 })
 
-test('WHAT[latency-degeneration-009] pending external abort never blocks a new Provider attempt or session cancellation',async()=>{
+test('WHAT[latency-degeneration-004] pending external abort never blocks a new Provider attempt or session cancellation',async()=>{
   const r=rig({interrupt:'pending',send:'pending'})
   r.start('old')
   r.fire()
@@ -135,7 +135,7 @@ test('WHAT[latency-degeneration-009] pending external abort never blocks a new P
 })
 
 
-test('WHAT[latency-degeneration-009] fast-check: delayed Host Refused and physical acceptance settle exactly once in either order',async()=>{
+test('WHAT[latency-degeneration-004] fast-check: delayed Host Refused and physical acceptance settle exactly once in either order',async()=>{
   await fc.assert(fc.asyncProperty(fc.boolean(),async(physicalFirst)=>{
     const r=rig({interrupt:'accept',send:'pending'})
     try{
@@ -153,7 +153,7 @@ test('WHAT[latency-degeneration-009] fast-check: delayed Host Refused and physic
 })
 
 
-test('WHAT[latency-degeneration-009] idle during a refused interrupt returns explicitly instead of silently forgetting the work',async()=>{
+test('WHAT[latency-degeneration-004] idle during a refused interrupt returns explicitly instead of silently forgetting the work',async()=>{
   const outcomes=[]
   let concludeAbort
   const cancelled=[]
@@ -181,7 +181,7 @@ test('WHAT[latency-degeneration-009] idle during a refused interrupt returns exp
 })
 
 
-test('WHAT[latency-degeneration-009] fast-check: both orderings of rejected interrupt and idle return abandoned child',async()=>{
+test('WHAT[latency-degeneration-004] fast-check: both orderings of rejected interrupt and idle return abandoned child',async()=>{
   await fc.assert(fc.asyncProperty(fc.boolean(),async(idleFirst)=>{
     let settleAbort
     let fired
@@ -213,7 +213,7 @@ test('WHAT[latency-degeneration-009] fast-check: both orderings of rejected inte
 })
 
 
-test('WHAT[latency-degeneration-009] fast-check: session owner releases pending detached observer on cancel, supersession and disposal',async()=>{
+test('WHAT[latency-degeneration-004] fast-check: session owner releases pending detached observer on cancel, supersession and disposal',async()=>{
   await fc.assert(fc.asyncProperty(
     fc.constantFrom('cancel','new-run','dispose'),
     fc.boolean(),

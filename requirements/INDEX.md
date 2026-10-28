@@ -57,6 +57,7 @@
 | `delegation` | 任务派工与责任移交。 |
 | `advisor` | 专席顾问协商与散文反馈。 |
 | `intra-participant-parallelism` | Fission 同一参与者多路并发与收敛。 |
+| `latency-degeneration` | 按会话的模型请求耗时看门狗与保留产出续行。 |
 | `process-execution` | 外部进程执行与时限管理。 |
 | `change-integration` | 代码提交与集成短门。 |
 

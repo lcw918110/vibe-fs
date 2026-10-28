@@ -101,17 +101,28 @@ module PairGuidanceOccurrences =
         }
 
     let private entryOrdinal (entry: obj) : int64 =
-        if isNull entry?ordinal then int64 (string entry?Ordinal) else int64 (string entry?ordinal)
+        if isNull entry?ordinal then
+            int64 (string entry?Ordinal)
+        else
+            int64 (string entry?ordinal)
 
     let private entryCallId (entry: obj) : string =
-        if isNull entry?callId then string entry?CallId else string entry?callId
+        if isNull entry?callId then
+            string entry?CallId
+        else
+            string entry?callId
 
     let private entryMarkerText (entry: obj) : string =
-        if isNull entry?markerText then string entry?MarkerText else string entry?markerText
+        if isNull entry?markerText then
+            string entry?MarkerText
+        else
+            string entry?markerText
 
     let private unboxEntry (entry: obj) : PairGuidanceOccurrence option =
-        if isNull entry then None
-        elif not (isNull entry?raw) then Some(unbox<PairGuidanceOccurrence> entry?raw)
+        if isNull entry then
+            None
+        elif not (isNull entry?raw) then
+            Some(unbox<PairGuidanceOccurrence> entry?raw)
         else
             Some
                 { Ordinal = entryOrdinal entry
@@ -122,6 +133,7 @@ module PairGuidanceOccurrences =
 
     let private readMemory (key: string) : PairGuidanceOccurrence list =
         let entries: obj array = pairGuidanceMemoryStore?read (key)
+
         entries
         |> Option.ofObj
         |> Option.defaultValue [||]
@@ -179,13 +191,19 @@ module PairGuidanceOccurrences =
         | TranscriptGap.After addr -> "After:" + TranscriptMessageAddress.value addr
 
     let private occupiedEntry (pair: PairGuidanceOccurrence) : obj =
-        box {| callGapKey = gapKey pair.CallGap; resultGapKey = gapKey pair.ResultGap |}
+        box
+            {| callGapKey = gapKey pair.CallGap
+               resultGapKey = gapKey pair.ResultGap |}
 
     let private nextOrdinal (history: PairGuidanceOccurrence list) : int64 =
         let mapped = history |> List.toArray |> Array.map box
         pairGuidanceMemoryStore?nextOrdinal (mapped)
 
-    let private occupied (visible: PairGuidanceOccurrence list) (callGap: TranscriptGap) (resultGap: TranscriptGap) : bool =
+    let private occupied
+        (visible: PairGuidanceOccurrence list)
+        (callGap: TranscriptGap)
+        (resultGap: TranscriptGap)
+        : bool =
         let mapped = visible |> List.map occupiedEntry |> List.toArray
         pairGuidanceMemoryStore?isOccupied (mapped, gapKey callGap, gapKey resultGap)
 
@@ -197,10 +215,12 @@ module PairGuidanceOccurrences =
     let private orphanCheck (ledger: PairGuidanceLedger) (transcript: PairGuidanceTranscript) =
         let hist = ledger.History |> List.toArray |> Array.map box
         let syn = transcript.SyntheticCallIds |> List.toArray
+
         let orphaned: string list =
             pairGuidanceMemoryStore?findOrphanedCallIds (hist, syn)
             |> unbox<string array>
             |> Array.toList
+
         Result.requireTrue (formatOrphanError orphaned) (List.isEmpty orphaned)
 
     /// The product's own prose about a failed append.
