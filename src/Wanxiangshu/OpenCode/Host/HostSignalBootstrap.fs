@@ -1388,7 +1388,7 @@ module HostSignalBootstrap =
                 |> List.filter (fun state -> state.key.SessionId = sessionId && state.terminalDisposition.IsNone)
                 |> List.tryLast
 
-            let failUninheritableContinuation durable (key: ChatExecutionKey) reason =
+            let failUninheritableContinuation durable (key: ChatExecutionKey) reason : Task<unit> =
                 Diagnostic.emit
                     "compaction-continuation-uninheritable"
                     [ "session_id", SessionId.value key.SessionId
@@ -1406,6 +1406,8 @@ module HostSignalBootstrap =
                         ))
                     |> ignore)
 
+                Task.FromResult()
+
             /// managed-chat-execution-017: OpenCode never runs `chat.message` for
             /// its post-compaction continuation, so the row reaches the provider
             /// boundary with no Accepted record. It is not new authority: it is
@@ -1414,6 +1416,29 @@ module HostSignalBootstrap =
             /// continuation admission below hands the lease over. When nothing
             /// live can be inherited, the parent waiting on the run is told the
             /// run failed instead of waiting on a dead session.
+            let inheritAccepted durable (key: ChatExecutionKey) (evidence: AcceptedChatExecutionEvidence) =
+                task {
+                    match! ManagedChatAcceptance.accept durable key evidence with
+                    | Ok _ ->
+                        observePhysicalAdmission () key.SessionId key.PhysicalUserMessageId
+                        return ()
+                    | Error error -> return! failUninheritableContinuation durable key (sprintf "%A" error)
+                }
+
+            let inheritFromCompacted durable (key: ChatExecutionKey) =
+                task {
+                    match compactedExecution durable key.SessionId with
+                    | None ->
+                        return! failUninheritableContinuation durable key "no live execution holds the session lease"
+                    | Some compacted ->
+                        let evidence =
+                            { compacted.acceptedEvidence with
+                                PhysicalUserMessageId = key.PhysicalUserMessageId
+                                Origin = PromptOrigin.Continuation PromptContinuationKind.BusyAgentNudge }
+
+                        return! inheritAccepted durable key evidence
+                }
+
             let inheritCompactionContinuation durable messages (key: ChatExecutionKey) =
                 task {
                     let exists =
@@ -1425,18 +1450,18 @@ module HostSignalBootstrap =
                         not exists
                         && ProviderWireCapture.isHostCompactionContinuation messages key.PhysicalUserMessageId
                     then
-                        match compactedExecution durable key.SessionId with
-                        | None -> failUninheritableContinuation durable key "no live execution holds the session lease"
-                        | Some compacted ->
-                            let evidence =
-                                { compacted.acceptedEvidence with
-                                    PhysicalUserMessageId = key.PhysicalUserMessageId
-                                    Origin = PromptOrigin.Continuation PromptContinuationKind.BusyAgentNudge }
-
-                            match! ManagedChatAcceptance.accept durable key evidence with
-                            | Ok _ -> observePhysicalAdmission () key.SessionId key.PhysicalUserMessageId
-                            | Error error -> failUninheritableContinuation durable key (sprintf "%A" error)
+                        do! inheritFromCompacted durable key
                 }
+
+            let inheritIfSessionVisible durable messages output physicalId =
+                match ProviderWireDecode.projectionSessionIdFromMessages output with
+                | Some sessionText ->
+                    inheritCompactionContinuation
+                        durable
+                        messages
+                        { SessionId = SessionId.create sessionText
+                          PhysicalUserMessageId = physicalId }
+                | None -> Task.FromResult()
 
             let ensureVisibleInputAdmission (output: obj) =
                 task {
@@ -1444,15 +1469,7 @@ module HostSignalBootstrap =
 
                     match journal, admissionTransaction, ProviderWireCapture.lastUserMessageId messages with
                     | Some durable, Some createTransaction, Some physicalId ->
-                        match ProviderWireDecode.projectionSessionIdFromMessages output with
-                        | Some sessionText ->
-                            do!
-                                inheritCompactionContinuation
-                                    durable
-                                    messages
-                                    { SessionId = SessionId.create sessionText
-                                      PhysicalUserMessageId = physicalId }
-                        | None -> ()
+                        do! inheritIfSessionVisible durable messages output physicalId
 
                         return!
                             messages
