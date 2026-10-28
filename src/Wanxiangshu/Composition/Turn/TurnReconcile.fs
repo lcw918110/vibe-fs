@@ -92,7 +92,8 @@ module TurnReconcile =
 
     let private isAbortedAssistant (message: SessionMessage) =
         CompletedTurnClassifier.isAbortErrorName message.ErrorName
-        || (message.Finish |> Option.exists (fun value -> value.Equals("aborted", System.StringComparison.OrdinalIgnoreCase)))
+        || (message.Finish
+            |> Option.exists (fun value -> value.Equals("aborted", System.StringComparison.OrdinalIgnoreCase)))
 
     /// WHAT[delegation-039]: the late-consultation stop aborted the step this
     /// answer woke. The answer was queued while the agent was still writing its
@@ -122,7 +123,8 @@ module TurnReconcile =
                 report.ParentId
                 |> Option.filter (fun parent ->
                     floor = Some parent
-                    || before |> List.exists (fun message -> message.Id = parent && message.Role = "user"))
+                    || before
+                       |> List.exists (fun message -> message.Id = parent && message.Role = "user"))
                 |> Option.defaultValue physical
 
             reportPhysical, report)
@@ -138,11 +140,10 @@ module TurnReconcile =
         // assistant after the run's own physical, parented by the answer.
         match resolveAssistant messages physical with
         | Some assistant when isAbortedAssistant assistant ->
-            match assistant.ParentId with
-            | Some answer when stopped answer ->
-                stoppedContinuationTerminal messages (Some physical) answer
-                |> Option.orElse (plain assistant)
-            | _ -> plain assistant
+            assistant.ParentId
+            |> Option.filter stopped
+            |> Option.bind (stoppedContinuationTerminal messages (Some physical))
+            |> Option.orElse (plain assistant)
         | Some assistant -> plain assistant
         | None when stopped physical -> stoppedContinuationTerminal messages None physical
         | None -> None

@@ -242,7 +242,7 @@ module HostSignalBootstrap =
                                     finalizeDelegate
                                     deletion
 
-                            providerAttemptStopFence?Revoke(SessionId.value sessionId) |> ignore
+                            providerAttemptStopFence?Revoke (SessionId.value sessionId) |> ignore
 
                             do!
                                 scope.SignalChatRecoverySession
@@ -332,7 +332,11 @@ module HostSignalBootstrap =
 
                 match observation.Outcome, ModelRouting.tryReadExecution key with
                 | HostProviderTerminalOutcome.Cancelled _, Some _ ->
-                    providerAttemptStopFence?SignalStop(SessionId.value observation.SessionId, ProviderRunIdentity.value observation.ProviderRun) |> ignore
+                    providerAttemptStopFence?SignalStop (
+                        SessionId.value observation.SessionId,
+                        ProviderRunIdentity.value observation.ProviderRun
+                    )
+                    |> ignore
 
                     // WHAT[delegation-040]: the late-consultation stop's own abort is
                     // not an operator cancel. Revoking here left the session Revoked
@@ -359,7 +363,11 @@ module HostSignalBootstrap =
                     // attempt-stop observation. A missing durable start fact must not
                     // suppress the fence or the failure wake, or the recovery
                     // dispatch would wait forever on a fence nothing observes.
-                    providerAttemptStopFence?SignalStop(SessionId.value observation.SessionId, ProviderRunIdentity.value observation.ProviderRun) |> ignore
+                    providerAttemptStopFence?SignalStop (
+                        SessionId.value observation.SessionId,
+                        ProviderRunIdentity.value observation.ProviderRun
+                    )
+                    |> ignore
 
                     reconciler.Kick(
                         observation.SessionId,
@@ -719,7 +727,11 @@ module HostSignalBootstrap =
                 | Ok() -> ()
                 | Error reason -> invalidOp ("Could not settle the user question: " + reason)
 
-            let workHumanInputCommand (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option) answered messageId =
+            let workHumanInputCommand
+                (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option)
+                answered
+                messageId
+                =
                 match work with
                 | Some current when answered && current.Wait = "AwaitOperatorAnswer" ->
                     Some("OperatorAnswer", [ "messageId", box messageId ])
@@ -736,7 +748,9 @@ module HostSignalBootstrap =
                         (Wanxiangshu.Mission.Lifecycle.DurableWorkHost.command kind fields)
 
                 match receipt.Status with
-                | "Committed" | "Replayed" | "Observed" -> ()
+                | "Committed"
+                | "Replayed"
+                | "Observed" -> ()
                 | _ -> invalidOp ("Could not settle lifecycle human input: " + receipt.Reason)
 
             let settleWorkHumanInputAt (key: ChatExecutionKey) (answered: bool) workspace =
@@ -745,6 +759,7 @@ module HostSignalBootstrap =
                     let sessionId = SessionId.value key.SessionId
                     let messageId = PhysicalUserMessageId.value key.PhysicalUserMessageId
                     let work = Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected root sessionId
+
                     workHumanInputCommand work answered messageId
                     |> Option.iter (commitWorkHumanInput root sessionId messageId)
                 }
@@ -803,10 +818,12 @@ module HostSignalBootstrap =
 
                     for durable, key in Option.toList maybePair do
                         let pending = UserQuestionJournal.pending durable key.SessionId
+
                         let! resumed =
                             UserQuestionJournal.observeHumanInput durable key.SessionId key.PhysicalUserMessageId
 
                         resumed |> requireQuestionSettled
+
                         let answered =
                             pending
                             |> Option.bind (fun question ->
@@ -894,15 +911,32 @@ module HostSignalBootstrap =
             let hostTarget (output: obj) : ModelRoutingTarget =
                 let message = if isNull output then null else output?message
                 let model = if isNull message then null else message?model
-                let provider = if isNull model || isNull model?providerID then "" else string model?providerID
-                let name = if isNull model || isNull model?modelID then "" else string model?modelID
+
+                let provider =
+                    if isNull model || isNull model?providerID then
+                        ""
+                    else
+                        string model?providerID
+
+                let name =
+                    if isNull model || isNull model?modelID then
+                        ""
+                    else
+                        string model?modelID
+
                 let variant =
-                    if not (isNull model) && not (isNull model?variant) then string model?variant
-                    elif not (isNull message) && not (isNull message?variant) then string message?variant
-                    else ""
+                    if not (isNull model) && not (isNull model?variant) then
+                        string model?variant
+                    elif not (isNull message) && not (isNull message?variant) then
+                        string message?variant
+                    else
+                        ""
+
                 if String.IsNullOrWhiteSpace provider || String.IsNullOrWhiteSpace name then
                     invalidOp "OpenCode did not provide the selected model for this message"
-                { Model = provider + "/" + name; Reasoning = variant }
+
+                { Model = provider + "/" + name
+                  Reasoning = variant }
 
             let projectCommittedAdmission key output =
                 let lease =
@@ -923,8 +957,7 @@ module HostSignalBootstrap =
 
                     projectCommittedAdmission key output
                     continueManagedChatMessage intent output
-                | Ok(ChatAdmissionTransactionOutcome.DeferredInput _) ->
-                    continueManagedChatMessage intent output
+                | Ok(ChatAdmissionTransactionOutcome.DeferredInput _) -> continueManagedChatMessage intent output
                 | Ok outcome -> raise (ChatAdmissionHookException(TransactionStopped outcome, executionKey intent))
                 | Error error ->
                     executionKey intent |> Option.iter ModelRouting.cancelContinuationInput
@@ -1051,7 +1084,10 @@ module HostSignalBootstrap =
                             task {
                                 try
                                     let! acquired =
-                                        ModelRouting.continueExecutionAdmission previous key.PhysicalUserMessageId selectedTarget
+                                        ModelRouting.continueExecutionAdmission
+                                            previous
+                                            key.PhysicalUserMessageId
+                                            selectedTarget
 
                                     return Ok acquired
                                 with error ->
@@ -1105,8 +1141,7 @@ module HostSignalBootstrap =
                             else
                                 Error(InvalidOperationException("OpenCode model does not match the execution lease"))
 
-                        let ports: ChatAdmissionTransactionPorts =
-                            createTransaction selected validateModel
+                        let ports: ChatAdmissionTransactionPorts = createTransaction selected validateModel
 
                         let finish = finishProjection phase intent output key outputs
 
@@ -1215,8 +1250,7 @@ module HostSignalBootstrap =
             let continueClassifiedChatMessage intent output =
                 match intent, journal, admissionTransaction with
                 | ChatAdmissionIntent.Decision.NoManagedExecution _, _, _
-                | ChatAdmissionIntent.Decision.HostInternal _, _, _ ->
-                    task { do! continueUnmanagedChatMessage () }
+                | ChatAdmissionIntent.Decision.HostInternal _, _, _ -> task { do! continueUnmanagedChatMessage () }
                 | ChatAdmissionIntent.Decision.Reject rejection, _, _ -> rejectedChatMessage (IntentRejected rejection)
                 | ChatAdmissionIntent.Decision.ExternalRootIntent _, Some durable, Some createTransaction ->
                     admitManagedChatMessage durable createTransaction ChatAdmissionPurpose.PublishInput intent output

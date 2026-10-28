@@ -187,6 +187,14 @@ OpenCode 暂时建立一个作为接收方子会话的临时孙会话，Host 中
 **user-facing session 不提供协商工具。** 在 OpenCode 的 `chat.message` 钩子里，凡 `IsManagedChild = false` 的根会话，其真实 `UserMessage.tools.negotiate` 必须显式为 `false`，因此工具不进入该次 LLM 请求可用列表；`tool.execute.before` 仍必须对根会话伪造的协商调用硬拒绝。受委托子会话和 Advisor 必须保留工具。本判定按真实物理会话父子身份，**不能按 Manager / Engineer 等角色统一禁用**，以免误杀同角色子代理的首次协商。
 
 
+## [035] 在途运行由 PendingRunStore 自治持有
+
+Fork 子代理的在途运行（agentId、因果令牌、子会话、角色、载荷与终端订阅）统一由 `wanxiangli/handle-lifecycle` 的自治对象 `PendingRunStore` 独占持有；主仓 `HostForkRuntime` 只向它发送消息，不保留私有的在途运行字典。
+
+- 允许后果：`register` 记录在途运行；`claim` 只接受精确因果令牌，令牌不符返回 `TokenMismatch`，重复认领返回 `AlreadyFinished`；`removeClaimed` 移除已认领条目；`settleParentCancelled` 原子结算父级取消并交还终端订阅，重复结算返回 `NotFound`；`drainAll` 一次排空剩余条目；
+- 禁止后果：主仓保留第二份可互相覆盖的在途运行状态；非精确令牌完成认领；父级取消后遗留孤儿句柄或未释放订阅。
+
+
 ## [036] Busy 子代理必须即时 steer 而不是等待空闲
 
 Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话的 `BusyAgentNudge` 必须明确使用 `delivery: "steer"`（SDK body 与顶层载体一致）。它沿原 LogicalRun 和身份种子保存真实 PromptKey，供正在运行的子代理在下一模型步骤优先消费，不允许退化成 `queue` 等待 idle，也不创建新 assignment。宿主发送者不另发 `AbortSession`；若 SDK 为消费 steer 切换旧 Provider attempt，须按真实 Provider 终态核对，不把任何 `Cancelled` 一概认作非预期中断。
