@@ -1,3 +1,0 @@
-{"seed":1,"runs":5000,"mutant":null,"steps":154403,"replays":308806,"mismatches":0,"first":null,"seen":{"RetryExhausted":60710,"RetryAuthorized":53218,"EpisodeSuperseded":194878}}
-{"seed":2,"runs":5000,"mutant":null,"steps":149637,"replays":299274,"mismatches":0,"first":null,"seen":{"EpisodeSuperseded":188660,"RetryAuthorized":51188,"RetryExhausted":59426}}
-{"seed":3,"runs":5000,"mutant":null,"steps":150600,"replays":301200,"mismatches":0,"first":null,"seen":{"EpisodeSuperseded":189396,"RetryAuthorized":52470,"RetryExhausted":59334}}

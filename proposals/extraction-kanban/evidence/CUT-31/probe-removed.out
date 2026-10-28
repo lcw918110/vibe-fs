@@ -1,5 +1,0 @@
-fit(maxIterations=1, tol=1e-8) {"status":"NotConverged","iterationsReported":1,"gradientNorm":1,"beta":null,"theta":{"a":0,"b":-1,"c":0}}
-fit(maxIterations=100, tol=1e-8) {"status":"NotConverged","iterationsReported":100,"gradientNorm":1,"beta":null,"theta":{"a":0,"b":-1,"c":0}}
-fit(maxIterations=10000, tol=1e-8) {"status":"NotConverged","iterationsReported":10000,"gradientNorm":1,"beta":null,"theta":{"a":0,"b":-1,"c":0}}
-tie-aware model, same ballots {"status":"NotConverged","iterationsReported":100,"gradientNorm":1,"beta":null,"theta":{"a":0,"b":-1,"c":0}}
-connectivity with never-shown z {"components":[["a","b","c"],["z"]],"connected":false,"isolated":[]}

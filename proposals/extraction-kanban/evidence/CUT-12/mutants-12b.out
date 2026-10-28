@@ -1,8 +1,0 @@
-self-link-allowed differences=1200 CAUGHT
-recursion-allowed differences=1170 CAUGHT
-other-companion-allowed differences=240 CAUGHT
-work-as-satellite-allowed differences=676 CAUGHT
-stale-not-first differences=7470 CAUGHT
-no-new-write-trusted differences=1920 CAUGHT
-alive-other-run-kept differences=80 CAUGHT
-absent-resumes-started differences=40 CAUGHT

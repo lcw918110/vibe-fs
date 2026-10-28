@@ -1,6 +1,0 @@
-{"seed":"1","mutant":null,"comparisons":20000,"divergences":0,"staleByOld":13284}
-{"seed":"2","mutant":null,"comparisons":20000,"divergences":0,"staleByOld":13254}
-{"seed":"3","mutant":null,"comparisons":20000,"divergences":0,"staleByOld":13404}
-{"seed":"1","mutant":"ge","comparisons":20000,"divergences":498,"staleByOld":12786}
-{"seed":"1","mutant":"first","comparisons":20000,"divergences":2131,"staleByOld":13833}
-{"seed":"1","mutant":"nocut","comparisons":20000,"divergences":276,"staleByOld":13008}

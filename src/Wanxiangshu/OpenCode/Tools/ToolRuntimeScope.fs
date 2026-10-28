@@ -1647,7 +1647,15 @@ type ToolRuntimeScope
             task {
                 let sessionId = SessionId.create ctx.SessionId
                 use _listener = sessions.SubscribeTerminal(sessionId, (fun _ _ -> ()))
-                let! outcome = sessions.SendPrompt(sessionId, string request?text, promptOptions None)
+                // The relay prompt continues this session's own Logical Run, so it
+                // must name the run's selected agent. Without it OpenCode falls back
+                // to its default agent and the turn leaves the managed persona.
+                let agent =
+                    activeProfileFor sessionId
+                    |> Option.map (fun profile -> profile.SelectedAgent)
+                    |> Option.orElse ctx.Agent
+
+                let! outcome = sessions.SendPrompt(sessionId, string request?text, promptOptions agent)
 
                 if admitted outcome then
                     return createObj [ "ok", box true ]

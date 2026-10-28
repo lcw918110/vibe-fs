@@ -1,9 +1,0 @@
-logSigmoid cases=100000 differences=0
-logSumExp cases=100000 differences=0
-directional cases=100000 differences=0
-tieAware cases=100000 differences=0
-gradient cases=100000 differences=0
-maxDiff cases=100000 differences=0
-plackettLuce cases=100000 differences=0
-compositePairs cases=100000 differences=0
-borda cases=100000 differences=0

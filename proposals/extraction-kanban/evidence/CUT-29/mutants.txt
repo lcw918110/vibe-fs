@@ -1,8 +1,0 @@
-M1 case-insensitive keyword dedupe: # fail 1
-M2 top-k 5: # fail 1
-M3 identity ignores content: # fail 1
-M4 fit forgets dropped entries in omitted: # fail 1
-M5 select keeps input order: # fail 1
-M6 manager is a direct consumer: # fail 1
-M7 omitted excludes duplicates: # fail 1
-M8 fit cuts at < instead of <=: # fail 1

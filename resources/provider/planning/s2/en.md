@@ -26,6 +26,6 @@ Choose one main path and state clearly:
 
 Run counterfactual checks on the chosen path: if a step fails, how does the path proceed? If an assumption is falsified, which steps become void?
 
-Ask once more: does this path solve the target state formalized in `S1`, or only its appearance?
+Ask once more: does this path solve the target state established in `S1`, or only its appearance?
 
 Submit with `review`. What you grade is the `S2` work left by previous runners, and whether it passes depends on how well the previous runner did. The object of review is the gap to being ready for promotion to `S3` (meaning `S2`'s problem restatement, candidate path comparison, main path decomposition/boundaries/ordering, and counterfactual checks are complete so `S3` can begin), not the gap to `S3` completion (not whether Knuth-style pseudocode, step labels, or `▷` decision points are already written): never treat unwritten `S3` pseudocode as an `S2` gap. For each non-empty gap, give one acceptance criterion and one work plan, fill in `S2`'s path and checks, then hand over and retire. An empty gap set advances the milestone by itself (only on a successor's first review; when an originator's ledger is empty the system asks the user instead): on return the system presents the `S3` method, and as the originator of `S3` in this same tenure you begin `S3` pseudocode under that method. There is no separate promotion call. Relay does not swap the stage: your successor takes over in whatever stage you retire in.

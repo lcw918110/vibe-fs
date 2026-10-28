@@ -824,10 +824,15 @@ module PluginTransforms =
                 let marked =
                     ProviderWireDecode.rawPartsOf message
                     |> List.exists (fun part -> not (isNull part?metadata) && part?metadata?wanxiangshu_consultation_steer = box true)
+                let isAssistant item =
+                    ProviderWireDecode.firstString (ProviderWireDecode.infoObject item) [ "role" ] = Some "assistant"
+                // The agent already ran a model step after this answer landed:
+                // the answer was consumed inside a live loop, so this request is
+                // ordinary work, never a late wake-up to suppress.
+                let answeredAlready = messages |> List.skip (index + 1) |> List.exists isAssistant
                 let previous =
-                    messages |> List.take index |> List.rev
-                    |> List.tryFind (fun item -> ProviderWireDecode.firstString (ProviderWireDecode.infoObject item) [ "role" ] = Some "assistant")
-                marked && (previous |> Option.exists (fun assistant ->
+                    messages |> List.take index |> List.rev |> List.tryFind isAssistant
+                marked && not answeredAlready && (previous |> Option.exists (fun assistant ->
                     let info = ProviderWireDecode.infoObject assistant
                     let finished = not (isNull info?time) && not (isNull info?time?completed)
                     let calls = ProviderWireDecode.rawPartsOf assistant |> List.exists (fun part -> ProviderWireDecode.firstString part [ "type" ] = Some "tool")
@@ -1839,12 +1844,20 @@ module PluginTransforms =
                   SessionStartedAt = None
                   TracedXTrace = None }
 
+            // The late-consultation stop reads the unprojected Host history only.
+            // After the ordinary stages the wire is a projection: a committed
+            // resetScope retires the ordinary tool parts (and thinking) before the
+            // latest reset while keeping resetScope/askPreviousScope/... calls, so
+            // the assistant turn just before the answer (e.g. a todowrite-only
+            // step) survives as a completed step-start/step-finish shell and looks
+            // like a finished tool-free turn. The predicate only inspects the turn
+            // before the answer, so the retained resetScope after it never helps. Re-judging that projection aborted
+            // live children right after resetScope with nothing left to resume
+            // them (2026-10-27/28 field incidents), so it is judged exactly once.
             let! stopped = caps.StopCompletedContinuation projectionSessionIdOpt physicalUserMessageId outObj
 
             if not stopped then
                 do! runOrdinaryStages stages frame
-                let! _ = caps.StopCompletedContinuation projectionSessionIdOpt physicalUserMessageId outObj
-                ()
 
             projectionSessionIdOpt
             |> Option.iter (fun sid ->

@@ -1,6 +1,0 @@
-M1 naive logSigmoid for x<0: # fail 1
-M2 logSumExp drops the tie shortcut constant: # fail 2
-M3 tie numerator uses half: # fail 1
-M4 position term ignored: # fail 1
-M5 gradient sign flip on loser: # fail 1
-M6 borda counts raw totals: # fail 1

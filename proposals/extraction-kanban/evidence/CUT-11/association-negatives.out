@@ -1,5 +1,0 @@
-delivery-carries-metadata exit=1
-claim-outside-send exit=1
-send-without-key exit=1
-prompt-before-bind exit=1
-recovery-resends exit=1

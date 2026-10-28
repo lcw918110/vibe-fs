@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {forkCall,resumeCall,withRealFork} from './support/real-fork.mjs'
 
-test('WHAT[delegation-036] real Manager busy resume queues child guidance without interrupting active Engineer Scope',async()=>{
+test('WHAT[delegation-036] real Manager busy resume immediately steers its active Engineer without adding a Host abort',async()=>{
   await withRealFork('manager-nonpreemptive-busy-036',async({hooks,runtime,createdIds})=>{
     const first=String(await forkCall(hooks,'manager-nonpreemptive-busy-036','Ada','Implement scope safely'))
     assert.match(first,/ok = true/)
@@ -19,13 +19,13 @@ test('WHAT[delegation-036] real Manager busy resume queues child guidance withou
       entry.path?.id===child &&
       entry.body?.metadata?.wanxiangshu_origin==='BusyAgentNudge')
     assert.equal(extra.length,1,'one registered PromptDispatcher BusyAgentNudge must be sent')
-    assert.equal(extra[0].body.delivery,'queue',
-      'an active Engineer cannot be re-steered into a new provider request in the middle of a Scope')
-    assert.equal(extra[0].delivery,'queue')
+    assert.equal(extra[0].body.delivery,'steer',
+      'a busy Engineer must be corrected at the next Provider step, not held until idle')
+    assert.equal(extra[0].delivery,'steer')
     assert.ok(extra[0].body.metadata.wanxiangshu_prompt_key)
     assert.notEqual(extra[0].body.parts[0].metadata.wanxiangshu_consultation_steer,true,
       'ordinary BusyAgentNudge must not be disguised as a consultation steer')
     assert.equal(runtime.abortedIds.filter(id=>id===child).length,abortedBefore,
-      'parent-provided guidance must not physically abort the child')
+      'the product must not separately call AbortSession when sending an immediate steer')
   })
 })

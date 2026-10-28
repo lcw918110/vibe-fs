@@ -1,3 +1,0 @@
-anyRecent CAUGHT 2 {"run":1,"i":5,"limit":3,"probe":{"session":"","run":"","root":"root-2","attempt":"p11"},"old":"EpisodeSuperseded","new":"RetryAuthorized"}
-ignoreBudget CAUGHT 1 {"run":0,"i":0,"limit":0,"probe":{"session":"a\u001fb","run":"","root":"root-1","attempt":"p15"},"old":"RetryExhausted","new":"RetryAuthorized"}
-ignoreExhausted CAUGHT 2 {"run":2,"i":27,"limit":3,"probe":{"session":"s2","run":"","root":"root-2","attempt":"p19"},"old":"RetryExhausted","new":"RetryAuthorized"}

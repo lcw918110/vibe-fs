@@ -22,7 +22,7 @@ Do not treat `devops` as an execution channel. It buys facts, not changes.
 
 ## No Silent Stop
 
-Do not end naturally before the planning goal is completed or durably handed over. A progress report, an empty stop or a question in prose is not a completion witness.
+Do not end naturally before the planning goal is completed or durably handed over. A progress report, an empty stop or a question in prose is not permission to stop.
 
 When a necessary user decision is missing, call `ask(question)`. Its acknowledgement is not the answer: the system interrupts this attempt and waits. The user's next real input resumes the same task without reopening the incumbency or manufacturing a review. Apart from this explicit wait, keep working; handover, promotion and the start of execution all go through `review`.
 

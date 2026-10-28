@@ -1,5 +1,0 @@
-Candidate (wanxiangli 0.43.0 e3c9f9c, main rebased onto d0318dc-pointer master): node scripts/build.mjs -> build ok, 724 emitted modules linked and loaded.
-Touched suites (all requirements/execution-model-routing tests + every requirement test mentioning ModelCapacity/AdmissionQueue/admission-queue/ExecutionAdmission/wanxiangli/borrowing):
-[test-summary] 29 file(s), 173 passed, 0 failed, 1 skipped, 11 todo
-runner: 173 passed, 0 failed; 29/29 planned file(s) completed
-Library: wanxiangli src/borrowing/tests 4/4 pass; scripts/tests/build.test.mjs SPEC[build-001] borrowing compiles and runs its own tests without any sibling source: pass.

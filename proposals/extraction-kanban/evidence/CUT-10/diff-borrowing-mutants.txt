@@ -1,7 +1,0 @@
-CUT-10 sub-scope ⑤ (borrowing) seeded mutants of wanxiangli dist/borrowing/CapacityBorrowing.js (0.43.0),
-run through diff-borrowing.mjs (old master host BorrowingCapacity+CapacityLedger vs host adapter over the mutant), seed 1, 300 runs x 60 ops.
-Control (unmutated copy, same harness setup): mismatches=0
-M1 rememberCreditSource `distance <= 0` -> `distance < 0`: mismatches=0  -- EQUIVALENT: the only caller passes distance 1 (lineage-local lender), so the branch is unreachable with distance 0. Not a detection gap.
-M2 invariantSnapshot retiringCount counts Idle tokens instead: mismatches=300 (first op: enter)
-M3 single-provider attribution shortcut `Count === 1` -> `=== 2`: mismatches=1/300 (first op: route) -- caught but weakly; the shortcut and the attributed path agree on most generated states.
-M4 token state name Retiring reported as InFlight: mismatches=299 (first op: releaseSession)

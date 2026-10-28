@@ -1,9 +1,0 @@
-M1 same-physical-not-reused seed 1 total 7982 mismatched runs 300
-M1 same-physical-not-reused seed 2 total 7922 mismatched runs 300
-M1 same-physical-not-reused seed 3 total 7952 mismatched runs 300
-M2 withdraw-ignores-physical seed 1 total 24008 mismatched runs 287
-M2 withdraw-ignores-physical seed 2 total 24569 mismatched runs 287
-M2 withdraw-ignores-physical seed 3 total 24452 mismatched runs 287
-M3 bound-off-by-one seed 1 total 37971 mismatched runs 300
-M3 bound-off-by-one seed 2 total 38172 mismatched runs 299
-M3 bound-off-by-one seed 3 total 37994 mismatched runs 300

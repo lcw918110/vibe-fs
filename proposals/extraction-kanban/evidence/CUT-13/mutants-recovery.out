@@ -1,6 +1,0 @@
-durable-reason-lost differences=1813 CAUGHT
-retired-reopened differences=1813 CAUGHT
-bad-proof-trusted differences=-1 CAUGHT (candidate threw)
-unreadable-blocks differences=518 CAUGHT
-active-beats-abandon differences=876 CAUGHT
-abort-is-active differences=88 CAUGHT

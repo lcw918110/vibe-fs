@@ -1,7 +1,0 @@
-{"cases":3000,"steps":7010,"errors":176,"keyChecks":5000,"keyMismatch":0}
-{"cases":3000,"steps":7010,"errors":176,"keyChecks":5000,"keyMismatch":0}
-7a63e53661633d77dae0195e01fc82a0daa675c83c6ca18bb4491397f9db682c  diff-base.json
-7a63e53661633d77dae0195e01fc82a0daa675c83c6ca18bb4491397f9db682c  diff-cand.json
-DIFF_IDENTICAL
-{"validSteps":6834,"followUps":3837,"partialDelta":2667,"noNewMaterial":167,"withAnchorZero":168,"unrecordedConsults":1511}
-{"cases":20000,"nonNull":10069,"mismatches":0}

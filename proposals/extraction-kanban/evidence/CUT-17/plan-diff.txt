@@ -1,8 +1,0 @@
-{"seed":"1","comparisons":6000,"divergences":0,"conflicts":1679,"renders":716,"renderThrows":2284}
-{"seed":"2","comparisons":6000,"divergences":0,"conflicts":1695,"renders":707,"renderThrows":2293}
-{"seed":"3","comparisons":6000,"divergences":0,"conflicts":1650,"renders":783,"renderThrows":2217}
-# negative controls (mutated candidate dist, seed 1):
-# A anchor offset dropped:
-{"seed":"1","comparisons":6000,"divergences":1818,"conflicts":1679,"renders":716,"renderThrows":2284}
-# B insertion fingerprint blanked:
-{"seed":"1","comparisons":6000,"divergences":40,"conflicts":1679,"renders":716,"renderThrows":2284}

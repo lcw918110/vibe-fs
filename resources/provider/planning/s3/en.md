@@ -22,8 +22,8 @@ Do not dodge decision points: every `▷` carries an explicit trade-off conclusi
 
 Failure paths are steps too: where control goes on failure, what is returned, which state is preserved. Never write hollow lines like "handle errors somehow".
 
-## Acceptance
+## Review and Advancement
 
-`S3` is accepted when: every segment of the path has pseudocode; every decision point has a conclusion; failure paths have destinations; an executor can restate what will be done after reading the draft.
+`S3` is ready to advance when: every segment of the path has pseudocode; every decision point has a conclusion; failure paths have destinations; an executor can restate what will be done after reading the draft.
 
 Submit with `review`. What you grade is the `S3` draft left by previous runners, and whether it passes depends on how well the previous runner did. The object of review is the gap to becoming the last runner (reaching "ready to execute" with a draft ready to hand directly to the Manager): whether every segment of the path has self-contained pseudocode, every `▷` decision point has an explicit conclusion, and every failure path has a concrete destination. For each non-empty gap, give one acceptance criterion and one work plan, fill in the `S3` pseudocode, then hand over and retire. An empty gap set advances the milestone by itself (only on a successor's first review; when an originator's ledger is empty the system asks the user instead): on return the system presents the "ready to execute" method, and in this same tenure you submit empty findings through the `review` tool with the full draft in `note` to launch a Manager. There is no separate promotion call and no interruption or extra user turn. Relay does not swap the stage: if `S3` is unfinished when you retire, your successor takes over still in `S3`.

@@ -1,7 +1,0 @@
-noDedupe CAUGHT {"run":0,"i":1,"op":"applyFailure","old":{"ok":true,"v":{"logicalRun":"","authorityRoot":"root-1","failures":2,"dedupeKeys":2,"exhausted":false}},"lib":{"ok":true,"v":{"logicalRun":"","authorityRoot":"root-1","failures":2,"dedupeKeys":1,"exhausted":false}}}
-window31 CAUGHT {"run":79,"i":46,"op":"applyFailure","old":{"ok":true,"v":{"logicalRun":"","authorityRoot":"root-2","failures":32,"dedupeKeys":32,"exhausted":false}},"lib":{"ok":true,"v":{"logicalRun":"","authorityRoot":"root-2","failures":32,"dedupeKeys":31,"exhausted":false}}}
-skipAllowed CAUGHT {"run":2,"i":18,"op":"applyFailure","old":{"ok":false,"e":"InvalidTransition"},"lib":{"ok":true,"v":{"logicalRun":"","authorityRoot":"root-1","failures":13,"dedupeKeys":13,"exhausted":false}}}
-exhaustedOrder CAUGHT {"run":14,"i":24,"op":"applyFailure","old":{"ok":false,"e":"AlreadyExhausted"},"lib":{"ok":false,"e":"AlreadyObserved"}}
-successKeepsKeys CAUGHT {"run":2,"i":24,"op":"recordSuccess","old":{"logicalRun":"","authorityRoot":"root-1","failures":0,"dedupeKeys":0,"exhausted":false},"lib":{"logicalRun":"","authorityRoot":"root-1","failures":0,"dedupeKeys":15,"exhausted":false}}
-verdictGt CAUGHT {"run":1,"i":7,"op":"mayRetry","old":[false,"Exhausted"],"lib":[true,"Exhausted"]}
-rootIgnored CAUGHT {"run":0,"i":2,"op":"applyFailure","old":{"ok":false,"e":"DifferentRun"},"lib":{"ok":true,"v":{"logicalRun":"","authorityRoot":"root-1","failures":3,"dedupeKeys":3,"exhausted":false}}}

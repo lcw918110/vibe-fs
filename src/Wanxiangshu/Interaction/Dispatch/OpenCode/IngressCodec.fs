@@ -36,6 +36,9 @@ module PromptIngressCodec =
     [<Emit("$0.value")>]
     let private descriptorValue (descriptor: obj) : obj = jsNative
 
+    [<Emit("$0 === undefined")>]
+    let private isUndefined (value: obj) : bool = jsNative
+
     type private RawCarrier =
         | MissingRaw
         | MalformedRaw
@@ -60,6 +63,16 @@ module PromptIngressCodec =
 
         if isNull descriptor || not (isDataDescriptor descriptor) then
             MalformedRaw
+        elif isUndefined (descriptorValue descriptor) then
+            // OpenCode 1.19 calls chat.message with `{ agent: input.agent, ... }`,
+            // so a prompt sent without an agent arrives as an own `agent` key
+            // whose value is `undefined`. JSON has no `undefined`: the carrier
+            // is absent, not malformed. Treating it as malformed rejected every
+            // agent-less plugin prompt (review relay) as
+            // MalformedIdentityCarrier Agent.
+            // 证明税遗毒：这条 carrier 拒收路径本身是运行时证明，把宿主正常形状判成
+            // 用户可见的 Failed。此处只做最小修复；应在设计上消灭非法状态并整条删除，另开清税。
+            MissingRaw
         else
             Raw(descriptorValue descriptor)
 

@@ -1,5 +1,0 @@
-{"seed":"1","rounds":3000,"compared":18000,"okBoth":18000,"diverged":0,"sample":null}
-{"seed":"2","rounds":3000,"compared":18000,"okBoth":18000,"diverged":0,"sample":null}
-{"seed":"3","rounds":3000,"compared":18000,"okBoth":18000,"diverged":0,"sample":null}
-G(no-tab-escape): {"seed":"1","rounds":3000,"compared":18000,"okBoth":18000,"diverged":6252}
-H(null-as-empty): {"seed":"1","rounds":3000,"compared":18000,"okBoth":18000,"diverged":10461}

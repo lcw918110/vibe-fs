@@ -143,12 +143,16 @@ module internal SyncDelegateWorkflow =
     let private onTerminalOutcome
         (store: SyncDelegateCallStore)
         (delegateSession: SessionId)
+        (degeneration: DegenerationInterrupts.Cursor)
         (_sessionId: SessionId)
         (outcome: TerminalOutcome)
         =
         match outcome with
         | TerminalOutcome.Failed stop ->
             failCurrentCall store delegateSession stop (sprintf "SyncDelegate run failed: %s" stop.Reason)
+        // The latency watchdog owns its own interrupt: it continues the
+        // session or returns Failed.
+        | TerminalOutcome.Aborted _ when degeneration.IsOwnAbort() -> ()
         | TerminalOutcome.Aborted stop ->
             failCurrentCall store delegateSession stop (sprintf "SyncDelegate run aborted: %s" stop.Reason)
         | TerminalOutcome.Completed _ -> ()
@@ -164,7 +168,9 @@ module internal SyncDelegateWorkflow =
         : Task<Result<string, string>> =
         taskResult {
             use _terminalSub =
-                deps.SubscribeFutureTerminal delegateSession (onTerminalOutcome store delegateSession)
+                deps.SubscribeFutureTerminal
+                    delegateSession
+                    (onTerminalOutcome store delegateSession (DegenerationInterrupts.Cursor delegateSession))
 
             do! deps.SendPrompt call request
 

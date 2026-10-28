@@ -55,3 +55,18 @@ type ISessionTerminalSource =
     abstract SubscribeTerminal: sessionId: SessionId * listener: TerminalCompletionListener -> IDisposable
     abstract SubscribeFutureTerminal: sessionId: SessionId * listener: TerminalCompletionListener -> IDisposable
     abstract HasSubscriber: sessionId: SessionId -> bool
+
+/// Latency-degeneration interrupts the host has sent to a managed session.
+/// The watchdog owns the resulting `Aborted`: it continues the session or
+/// returns `Failed`. Fail-fast consumers ignore one `Aborted` per interrupt.
+[<RequireQualifiedAccess>]
+module DegenerationInterrupts =
+    val record: sessionId: SessionId -> unit
+    val unrecord: sessionId: SessionId -> unit
+    val count: sessionId: SessionId -> int
+    val forget: sessionId: SessionId -> unit
+
+    [<Class>]
+    type Cursor =
+        new: sessionId: SessionId -> Cursor
+        member IsOwnAbort: unit -> bool

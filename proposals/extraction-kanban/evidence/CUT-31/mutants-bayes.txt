@@ -1,8 +1,0 @@
-M1 duplicate observation id counted twice: # fail 1
-M2 naive log-sum-exp underflows: # fail 1
-M3 likelihood upper bound relaxed: # fail 1
-M4 unqualified factors admitted: # fail 1
-M5 duplicate fault names the first key: # fail 1
-M6 prior-only skips the hypothesis contract: # fail 1
-M7 dropped members not reported: # fail 1
-M8 zero prior lifted: # fail 1

@@ -30,16 +30,24 @@
 
 ---
 
-万象术以 OpenCode 插件形式落地。它不替换 Host 的对话模型，而是在其上叠加一层结构化编排：Orchestrator 统筹全局，Manager 分解任务并管理子会话，Engineer 调查事实与修改源码（独占 Fission），DevOps 管控进程与执行并拥有固有局部自修授权。每个角色有自己的工具面与权限边界，Companion 在会话级提供认知上下文，Fallback 与 Review 各有明确写入口。智能体不必彼此信任，只需遵守同一套事实与边界。
+## 架构与演进方向
 
-Wanxiangshu is proprietary commercial software.
-Use, copying, modification, and distribution are governed by LICENSE.
+万象术当前以 **OpenCode 插件**形式落地。它不替换 Host 的对话模型，而是在其上叠加结构化编排能力：通过多角色分工（Orchestrator、Manager、Engineer、DevOps 等）、任务派发与收敛（Fission）、沙箱化编程面（todowrite）以及基于事件日志的因果持久化，使多智能体可靠协作。
+
+产品遵循唯一实在的**总流程**：**用户打开软件，提出需求，系统完成调查、修改与测试，帮用户把事情做成并结束。**
+
+系统正在依照《纠偏令》向清晰的三层分工演进：
+1. **本仓产品面（wanxiangshu）**：承载提示词、工具资源与顶层组装，逐步减负，最终不保留程序状态。
+2. **万象通（wanxiangtong）**：负责抹平宿主（OpenCode 等）怪癖与翻译适配（先作为外层子目录规划，当前部分适配代码仍在宿主仓源码中，标为【程序待改】）。
+3. **万象理（wanxiangli）**：中立内核（Git submodule），遵循 Smalltalk / Actor 模型与 A-B-C 组合原则，状态自治，不认识具体宿主。
+
+---
 
 ## 用户指南
 
-使用入门见 [功能导览](docs/功能导览.md)；运行与验收巡检见 [人工巡检指南](docs/人工巡检.md)。
+使用入门见 [功能导览](docs/功能导览.md)；运行与人工核验见 [人工巡检方法](docs/人工巡检.md)；技术待办见 [待决事项与已知限制](requirements/GAP.md)。
 
-### 产品简介
+### 产品形式与入口
 
 万象术作为 OpenCode 插件加载后，为 Host 会话提供多角色协作、任务分叉与汇合、审阅与恢复。公开入口：
 
@@ -48,258 +56,63 @@ import "wanxiangshu"
 → dist/OpenCode/Plugin/Plugin.js
 ```
 
-`package.json` 的 `main` / `exports["."]` 指向同一路径。本仓自身只把 `dist/` 与 `resources/` 列入 files；Lifecycle 依赖的独立 `wanxiangli` 以 bundled npm dependency 一并进入最终 tarball，不从源码树或本机路径解析。
+`package.json` 的 `main` / `exports["."]` 指向同一路径。构建产物中，本仓自身将 `dist/` 与 `resources/` 列入 files；依赖的独立 `wanxiangli` 以 bundled npm dependency 进入最终 tarball，不从宿主机器环境解析未定义源码。
 
 ### 系统要求
 
-- Node.js `>= 22.13.0`（`engines.node`；Lifecycle 的 Node 路径使用内建 `node:sqlite`）
-- OpenCode Host，peer 依赖 `@opencode-ai/plugin`（`>= 1.17.4`）
-- 从源码构建时：.NET SDK（`global.json`）与 `dotnet tool restore`（Fable、Fantomas）
+- **Node.js**：`>= 22.13.0`（`engines.node`；使用内建 `node:sqlite`）
+- **OpenCode Host**：peer 依赖 `@opencode-ai/plugin`（`>= 1.17.4`）
+- **源码构建**：.NET SDK（见 `global.json`）与 `dotnet tool restore`（Fable、Fantomas）
 
 `packageManager` = `npm@11.12.1`。安装依赖使用 `npm ci`（已提交 `package-lock.json`）。
 
-`wanxiangli/` 是正式 Git submodule，跟踪其 `main`；npm 依赖为 `file:wanxiangli`。先执行 `git submodule update --init -- wanxiangli`，再 `npm ci`。开发更新执行 `npm run deps:update`，它只允许 fast-forward 到 `origin/main`，拒绝覆盖本地改动；之后一并审阅、提交 gitlink 与 lockfile。普通构建使用当前检出的源码，不在运行时联网换依赖。
+`wanxiangli/` 是正式 Git submodule，跟踪其 `main`；npm 依赖为 `file:wanxiangli`。开发初始化需执行：
+```bash
+git submodule update --init -- wanxiangli
+npm ci
+```
 
-构建入口先安装并构建 wanxiangli，再编译宿主；仍只从公开 npm 入口导入。没有 vendor tarball 兜底；旧 `node_modules/wanxiangli` 若仍是归档副本，构建会要求先运行 `npm ci`。任何 `.tgz` 都只能是忽略或临时目录内的发行验收产物，永远不得进入 Git。
+更新子模块依赖执行 `npm run deps:update`（只允许 fast-forward 到 `origin/main`）。任何 `.tgz` 都只能是临时构建产物，永远不得提交进入 Git。
 
 ### 本机状态目录
 
-运行数据统一位于主工作树的 `.Herdchestra/`；同一仓库的 linked worktree 通过 Git 的只读拓扑查询找到这个位置，共用同机状态。非 Git 工作区直接使用自己的 `.Herdchestra/`。业务状态在 `wanxiangshu/` 子目录中按原有职责组织，诊断在 `diagnostics/`。目录内自行创建 `.gitignore` 排除全部运行数据，不修改 `.git/info/exclude`。
+运行数据统一位于主工作树的 `.Herdchestra/`；同一仓库的 linked worktree 通过 Git 的只读拓扑查询共用该状态。非 Git 工作区直接使用工作区根下的 `.Herdchestra/`。
 
-旧 `.git/wanxiang`、`.git/wanxiangshu`、`refs/wanxiang/*` 都是退役数据，不读取、不迁入、不作为新历史的恢复来源。插件不再安装 Git hooks、改 SSH 配置或进行运行数据的 Git 同步。暂不承诺跨机恢复。Git 本身管理 submodule 和源代码所需的元数据不属于应用持久化。
+- 业务状态按职责组织于 `.Herdchestra/wanxiangshu/`；
+- 诊断信息位于 `.Herdchestra/diagnostics/`；
+- 目录内自动创建 `.gitignore` 排除全部运行数据。
+
+旧 `.git/wanxiang`、`.git/wanxiangshu`、`refs/wanxiang/*` 为历史退役路径，不读取、不迁入、不作为新历史的恢复来源。
 
 ### 获取与安装
 
-`private: true` 商业软件，不从公共 npm 默认源分发。从 tarball 或私有 registry 安装：
+专有软件，从本地 tarball 或私有 registry 安装：
 
 ```bash
 npm install ./wanxiangshu-0.9.0.tgz
 # 或
-npm install wanxiangshu --registry <your-private-registry>
+npm install wanxiangshu --registry=<私有源URL>
 ```
-
-版本以 `package.json` 的 `version` 为准（当前 **0.9.0**）。
-
-### OpenCode 配置
-
-1. 在可解析 peer 插件 API 的环境中安装本包。
-2. 按 Host 的 plugin 配置挂载入口（包名 `wanxiangshu` 或已安装包的 `main`）。
-3. 启动 Host。插件初始化时加载 `resources/` 下 system prompt；资源缺失或非法则启动失败（fail fast），无代码内置副本兜底。
-
-配置以 Host 文档与 `peerDependencies` 为准。角色与 Prompt 语义以 [requirements/README.md](requirements/README.md) 为高级参考；安装与挂载不依赖阅读条款正文。
-
-部分常用可选环境变量（非全集）：
-
-| 变量 | 作用 |
-|------|------|
-| `WANXIANGSHU_SKIP_AUTO_INJECTED=1` | 跳过 HOST-013 新的 `auto-injected` 伪工具注入；已落盘历史 pair 仍会 replay |
-| `WANXIANGSHU_NO_FATAL_EXIT=1` | 抑制 fatal 的物理进程退出（`SIGKILL` / `process.exit`）；测试用 |
-| `WANXIANGSHU_PROVIDER_LANGUAGE` | provider 语言偏好显式设置（`en` / `zh-CN`），位于全局语言阶梯最高优先级 |
-| `WANXIANGSHU_ADMISSION_TIMEOUT_MS` | prompt 物理 acceptance 等待超时（毫秒，默认 10000） |
-| `WANXIANGSHU_DIAG=1` | 让内部诊断记录经 stderr 可见；只观测，不改变任何决策 |
-| `WANXIANGSHU_ABLATION_PROFILE` | feature-ablation 拓扑 profile 选择（配 `resources/ablation/`） |
-| `WANXIANGSHU_ABLATION_<node>` | feature-ablation 单节点三态覆盖（`ablated` / `borrowed` / `active`）；仍过 DAG 校验 |
-| `SPHINX_COMMON_DIR` | Sphinx MCP 独立进程的 durable workspace；缺失即启动失败 |
-| `SPHINX_START_CONFIG` | Sphinx MCP start 配置 JSON；缺失时只允许读取类工具（start 返回 `CONFIG_REQUIRED`） |
-
-### 模型选择与旧环境变量
-
-**旧环境变量已失效。** `WANXIANGSHU_STRENGTH_MODE`、`WANXIANGSHU_STRENGTH_DRY_RUN_BUDGET`、`WANXIANGSHU_STRENGTH_HOST_CANARY`、`WANXIANGSHU_STRENGTH_K1_MARGIN`、`WANXIANGSHU_STRENGTH_K2_MARGIN`、`WANXIANGSHU_STRENGTH_K2_MIN_EVIDENCE`、`WANXIANGSHU_STRENGTH_CONTROL_BPS`、`WANXIANGSHU_STRENGTH_POLICY_VERSION`、`WANXIANGSHU_STRENGTH_SAVED_DEEP_*` 等一律不再读取。残留旧值不会阻止运行，也不会启用任何功能；从 shell 环境里删掉即可。
-
-**模型选择。** 由 OpenCode 决定：优先使用用户选择，其次使用 `opencode.json` 或 `opencode.jsonc` 中的配置。万象术不切换到备用模型。
-
-### 快速开始
-
-安装并在 OpenCode 注册插件后，Orchestrator 发起任务，Manager 分解并管理子会话，子角色按工具面分工：
-
-```bash
-npm install ./wanxiangshu-0.9.0.tgz
-# 在 OpenCode 注册插件后启动会话
-```
-
-```text
-Orchestrator
-  └── Manager
-        ├── Engineer
-        └── DevOps
-```
-
-Bookkeeper 等内部角色由编排路径调用，不作为单独“安装角色”配置。
-
-### 智能体角色
-
-核心活跃角色与 `requirements/office-capability`、`requirements/capability-enforcement` 一致。工具面由 `OfficeCapability.permissions` 定义（`src/Wanxiangshu/Foundation/OfficeCapability.fs`；`src/Wanxiangshu/Foundation/Roles.fs` 只承载 Role 词汇）：
-
-| 角色 | 典型工具面 | 说明 |
-|------|------------|------|
-| Orchestrator | `commission`, `join`, `horizon` | 顶层战役战略统筹与独立道路委任 |
-| Manager | `fork`, `resume`, `join`, `horizon`, `review` | 独立评估、任务分解与推进未尽账本；通过 fork 派发 Engineer，通过 resume 续做固定 DevOps（无 Fission） |
-| Engineer | `read`, `write`, `edit`, `glob`, `grep`, `mv`, `rm`, `fetch`, `js-engineer`, `bash-honeypot`, `fission` | 本地事实调查与源码读写实现（不执行真实命令，不差遣 DevOps）；独占 Fission 权能 |
-| DevOps | `read`, `write`, `edit`, `glob`, `grep`, `mv`, `rm`, `js-devops`, `run`, `open-terminal`, `send-terminal`, `read-terminal`, `signal-terminal`, `join`, `horizon` | 真实命令执行、终端与进程管理；具备角色固有的非架构级自修授权（无 Fission） |
-| Plan | `js-plan`, `ask`, `review` | 接力式规划跑者，负责产出完整底稿 P；review 按义务账完成接力、晋级与就绪启动，保留任期隔离和崩溃恢复 |
-
-Bookkeeper 是内部叶子角色（有独立 Role Law，不进 public Role DU）。精确权限见 `requirements/participant-identity` 与 `requirements/capability-enforcement`。
-
-异步指导可以先进入宿主队列。真正出站时，OpenCode 的 messages transform 会重读对应任务的完成事实：原任务已结束就清空本次请求并 interrupt，不再为旧指导调用模型。此操作不删除会话历史、不封禁会话；新的任务仍能读取先前落地的指导。
-
-迁移后的宿主适配对象通过实例成员调用库对象；Join 等待仍使用宿主的 `AsyncSupport.trySetResult` 完成异步句柄。库中的发送停止围栏一旦被撤销，迟到的停止信号不能重新授予该 attempt 的恢复许可。退役的宿主测试入口不再登记到产物清单。
-
-上下文边界不随角色变化：每个会话由 `resetScope(oldScopeVerboseVerbatimExperience?, newScopeObjective)` 显式开启新 Scope；`todowrite` 的剩余计费回合估计由独立 ScopeProgress 记录。父到子委派仅传本次指令和确切参考材料，不隐式复制发送方的整份对话。Engineer 与 DevOps 以有正文、无未决工具调用的自然终态交回末轮 assistant 散文；所有角色没有正文也没有工具调用时必须 nudge。Manager 与 Plan 的任期接力、晋级和结案由唯一 `review` 入口根据义务账推进。
-
-### 运行时数据
-
-领域事实以 journal（按 runtime 的 NDJSON）写入 `.Herdchestra/wanxiangshu/runtimes/`；没有 Git 仓库时使用给定目录，不回退 .git、XDG 或旧日志。随包资源：
-
-- `resources/provider/`（world / role / tool / delegation / host / lifecycle / runtime / library / casebook / planning / work；EN + zh-CN）；`resources/ablation/{fact-map,nodes,profiles,tool-map}.json`（feature-ablation 拓扑）。**无** `resources/prompts/*`；**无** `catalog.json` SSOT。
-- journal 与事实名默认冻结；升级前阅读 [CHANGELOG](CHANGELOG.md)。
-
-
-### 商业许可与支持
-
-使用、复制、修改与分发受 [LICENSE](LICENSE) 约束。`license` 为 `SEE LICENSE IN LICENSE`，`publishConfig.access` 为 `restricted`。
-
-商业授权与支持请联系版权方。本 README 不承诺开源时间表。
-
----
-
-## 贡献者指南
-
-面向维护者。法律上仍为专有商业软件，内部工程纪律见 [AGENTS.md](AGENTS.md)。
-
-### 仓库结构
-
-```text
-src/           生产源码
-resources/     随包运行时资源
-requirements/  normative 语义树（48 个活跃包，另 1 个历史包 epistemic-reasoning）：每包必备 WHY.md、WHAT.md 与 tests/
-docs/          功能导览与人工巡检指南
-proposals/     现行施工计划、未来提案与 archive 历史记录（用户管理）
-万象体系/     投资人材料（DOC.html、PPT.html）
-scripts/       构建与少量仓库检查
-dist/          最终编译输出，不提交
-artifacts/     中间产物与本地发布产物，不提交
-.github/       CI workflows
-```
-
-- 生产 F# 唯一根：`src/Wanxiangshu/`
-- 规范导航 [requirements/README.md](requirements/README.md)；历史 Clause 与变更工作流已归档（2026-08-14 cutover；git 历史可回溯）
-- 施工与提案导航 [proposals/README.md](proposals/README.md)；旧计划与已结束批次见[归档索引](proposals/archive/README.md)
-- `wanxiangshu → wanxiangli` 抽取与 HNI 迁移统一从根 [AGENTS.md](AGENTS.md) 的迁移章节认领和验收；库就绪、实际接线和旧职责退出分别举证。
-- 测试全部包自有：`requirements/<package>/tests/`；共享 harness 在 `requirements/verification-system/tests/`（含 `support/`、unit runner、integration orchestrator、Long Stroke e2e）
-- 脚本：`scripts/build.mjs`、`scripts/check.mjs`、`scripts/checks/*`、`scripts/lib/walk.mjs`
-
-### 开发环境
-
-Node.js ≥ 22.13.0，`npm@11.12.1`；.NET SDK（`global.json`）；本地工具 `.config/dotnet-tools.json`（Fable、Fantomas）。
-
-### 首次设置
-
-```bash
-npm ci
-dotnet tool restore
-npm run format-build-test
-```
-
-请用 `npm ci`。`bun-pty` 经 `overrides` 固定（见 `package.json` / [AGENTS.md](AGENTS.md)）。
 
 ### 常用命令
 
-验证入口只有两个：
-
-```bash
-npm ci
-dotnet tool restore
-npm run format-build-test   # 日常验证
-npm run verify:release      # 发布验证
-```
-
 | 命令 | 作用 |
 |------|------|
-| `npm run format-build-test` | 日常验证（入口 `node scripts/verify.mjs`）：Fantomas 检查（`format:check`）→ `check` → 编译 → unit → integration（warmup 与 distribution package 子步骤随 integration 调度） |
-| `npm run verify:release` | 发布验证：在日常阶梯基础上追加 clean build（`--clean`）、Long Stroke e2e（`tests/014.test.mjs`）与真实 package 校验 |
+| `node scripts/build.mjs` | 官方构建脚本：自动增量编译 wanxiangli 及宿主插件 |
+| `npm run format-build-test` | 提交前检查：代码格式、增量构建与日常自保测试 |
+| `npm run verify:release` | 发布验证：clean build、端到端与安装包完整性校验 |
+| `npm run format` | Fantomas 代码格式化写盘 |
 
-辅助命令（不是验证入口）：
+### 文档与规范索引
 
-| 命令 | 作用 |
-|------|------|
-| `npm run format` | Fantomas 写盘（与 `format:check` 的相对面：一个改文件，一个只判失败） |
-| `node scripts/build.mjs --plan` | 只读计划报告：`mode`/`reason`/`changedInputs`/`selectedShards`/`compileItems`/`fableCompileInvocations`，不写 `dist/` |
+- **功能导览**：[docs/功能导览.md](docs/功能导览.md)
+- **人工巡检方法**：[docs/人工巡检.md](docs/人工巡检.md)
+- **功能说明书目录**：[requirements/README.md](requirements/README.md)（含 48 个功能说明包与 INDEX 导航）
+- **待决事项与限制**：[requirements/GAP.md](requirements/GAP.md)
+- **计划与提案**：[proposals/README.md](proposals/README.md)
+- **根目录纠偏令**：[AGENTS.md](AGENTS.md)
+- **万象理总宪法**：[wanxiangli/AGENTS.md](wanxiangli/AGENTS.md)
 
-### 测试分层
+### 许可证与保密
 
-语义命题按 Pure laws → Temporal → Adapter → Long Stroke 四层逐级证明（WHAT[verification-system-001]、[003]）。日常入口 format-build-test 调度编译与 unit/integration；Long Stroke 与真实 package 校验由发布入口 verify:release 额外调度。
-
-| 层 | 入口 | 范围 |
-|----|------|------|
-| unit | `requirements/verification-system/tests/run.mjs` | 对 `dist/` 的契约；经 `requirements/verification-system/tests/support/` |
-| integration | `requirements/verification-system/tests/integration/run.mjs` | resources、plugin、persist、strength、package、harness（用例经 tier-gate 门控并入各包顶级 `tests/NNN.test.mjs`） |
-| e2e（Long Stroke） | `requirements/verification-system/tests/014.test.mjs` | `scenarios/long-stroke.toml` + `support/` oracles；单次连续生命周期 |
-
-`dist/` 陈旧时 unit 拒绝运行。资源路径由包内 `dist/` 相对定位到 `resources/`，不依赖 `process.cwd()`。
-
-### 规范与文档体系
-
-规范是万象术的语义根：每条行为命题有稳定 ID、测试落点和 owner 包。规范不跟踪实现进度，只定义正确性。
-
-- **规范**：`requirements/<package>/`（48 个活跃包，另 1 个历史包 epistemic-reasoning；必备 WHY.md、WHAT.md 与 tests/；WHAT 命题 ID 稳定寻址，条款与测试文件一一映射，覆盖缺口见 [requirements/GAP.md](requirements/GAP.md)；Plan 角色的接力式规划归 `work` 包 work-020 起：review 晋级接力、任期隔离、崩溃恢复）。
-- **历史 Clause 与变更记录**：2026-08-14 cutover 已归档（含 Kolmogorov 工程纪律与 completed change 考古；git 历史可回溯）。
-- 测试全部包自有（`requirements/<package>/tests/`），直接引用 WHAT 命题 ID。规范不跟踪实现进度。
-
-导航：[requirements/README.md](requirements/README.md)。治理见 [AGENTS.md](AGENTS.md) 与归档文档。
-
-### 运行时资源
-
-```text
-resources/provider/
-  world/common-law/{en,zh-CN}.md
-  role/<role>/{en,zh-CN}.md
-  tool/<tool>/{en,zh-CN}.md
-  delegation/<scenario>/{en,zh-CN}.md
-  host/<guideline>/{en,zh-CN}.md
-  lifecycle/<phase>/{en,zh-CN}.md
-  runtime/<scenario>/{en,zh-CN}.md
-  library/<office>/{en,zh-CN}.md
-  casebook/<step>/{en,zh-CN}.md
-  planning/<step>/{en,zh-CN}.md
-  work/<scenario>/{en,zh-CN}.md
-  README.md
-resources/ablation/{fact-map,nodes,profiles,tool-map}.json
-```
-
-加载：`Resources/`（`PackageResources`、`ProviderResources`、`PromptResources`、`RuntimeResourceAssembly`、`RuntimeResources`）；插件初始化 load/install 一次。
-旧 `resources/prompts/*-system.md` 已删除；生产 system 仅由 Common Law → Role Law → Office Library 组成。
-
-### 构建与打包
-
-- **构建**：`scripts/build.mjs`（增量：按输入摘要判定 no-op / focused / full / clean 四模式，plan 与 run 共用判定；非源码输入或工具链变化进入 full 编译但不清空 `dist/`；仅源图删除、重命名或显式 `--clean` 时清空输出目录后重建；其余情况按受影响分片增量聚焦编译；随后把入库的 loop detector envelope 复制到 `dist/` 并校验入口与资源）。除这一处 runtime import 产物外，不把 `resources/` 复制进 `dist/`。
-- **打包**：仓库根 `npm pack`（或 `--pack-destination artifacts/package`）。tarball = 本仓 `dist/` + `resources/` + metadata（`package.json`、`README.md`、`LICENSE`）+ 明确 bundle 的 `node_modules/wanxiangli/**`。不得含本仓 `src/`、`requirements/`、`scripts/`、`artifacts/`，也不得夹带其它 `node_modules`。release verifier 逐文件核对 bundle，并在外部消费者测试前删除另装的顶层 `wanxiangli`，防止环境兜底。
-
-发布预检：`npm run verify:release`（干净工作树；验证日志默认写 `.fable-build/verify-logs/`，已被 .gitignore 忽略；CI 工作流 `.github/workflows/ci.yml` 运行同一命令，但无 artifact 上传，runner 结束后只剩余作业控制台输出）。
-
-### 提交要求
-
-1. 源码变更后运行 `npm run format-build-test`。
-2. 优先 stage 具体路径；保留 hooks；不用 `--no-verify`。
-3. 用户可见变化写入 [CHANGELOG.md](CHANGELOG.md)。
-4. 不推送对 `main`/`master` 的破坏性历史改写；force push 等需显式许可。
-
-### 发布
-
-```bash
-npm ci
-dotnet tool restore
-npm run verify:release
-npm pack --pack-destination artifacts/package
-```
-
-Git 工作树须干净。验证输出留存本地 `.fable-build/verify-logs/` 或作为发布附件，不提交进仓库。
-
-### 安全与保密
-
-源码与内部脚本默认不进 tarball。勿提交密钥与私有 registry 凭证。漏洞与授权走版权方私有渠道。
-
-### 许可证
-
-专有商业软件。见 [LICENSE](LICENSE)。`private: true`；分发受 LICENSE 与商业合同约束。
-
-更多：[功能导览](docs/功能导览.md) · [人工巡检指南](docs/人工巡检.md) · [requirements/README.md](requirements/README.md) · [计划与提案](proposals/README.md) · [历史归档](proposals/archive/README.md) · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) · [AGENTS.md](AGENTS.md)
+专有商业软件。使用、复制与分发受 [LICENSE](LICENSE) 约束。

@@ -1,2 +1,0 @@
-runner: 339 passed, 0 failed; 37/37 planned file(s) completed
-runner: partial evidence; 1 skipped, 13 TODO; excluded cases are not passes

@@ -1,1 +1,1 @@
-The `root_requirement` entries are the authoritative review scope: verified HumanRoot prompts received since the previous assessment. Verify every applicable requirement. The charge is supplementary and must not narrow or override that scope.
+The `root_requirement` entries below provide context from the user's original request. Keep the user's genuine intent in view while carrying out your charge; the charge provides specific direction for this action.

@@ -1,7 +1,0 @@
-keep-all-claims:  "differences": 22392,
-drop-root-claims:  "differences": 4089,
-keep-all-counters:  "differences": 30252,
-drop-root-counters:  "differences": 4181,
-counters-any-session:  "differences": 6055,
-keep-continuations:  "differences": 6340,
-keep-questions:  "differences": 85108,

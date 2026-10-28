@@ -1,9 +1,0 @@
-second-completion-overwrites differences=729 CAUGHT
-abandon-after-retire differences=3 CAUGHT
-active-retires differences=1 CAUGHT
-false-completion-revokes-any differences=96 CAUGHT
-legacy-ignored differences=3584 CAUGHT
-cancelled-completes-work differences=4 CAUGHT
-blank-consumption-accepted differences=168 CAUGHT
-consume-any-completion differences=702 CAUGHT
-abandoned-consumed-with-payload differences=24 CAUGHT

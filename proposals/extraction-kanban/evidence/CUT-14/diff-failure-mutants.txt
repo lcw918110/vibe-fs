@@ -1,8 +1,0 @@
-CUT-14 ① seeded mutants of the library decision view (diff-failure.mjs seed 1, 20000 inputs; old = pre-cut compiled host Surface.js)
-M1-unknown-releases: mismatches=3369
-M2-retry-open-breaker: mismatches=430
-M3-noaccepted-releases: mismatches=4780
-M4-cancel-as-failed: mismatches=1144
-M5-no-fatal: mismatches=4787
-M6-unknown-as-preserve: mismatches=2449
-M7-breaker-swap: mismatches=1136

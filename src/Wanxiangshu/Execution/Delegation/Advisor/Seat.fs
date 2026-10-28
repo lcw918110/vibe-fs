@@ -330,11 +330,16 @@ module AdvisorSeat =
                 if armed.Value && not (isStaleRun fence result) then
                     admitCompleted result
 
+            // A latency-degeneration interrupt aborts the child and the watchdog
+            // continues it (or returns Failed): that Aborted is not the answer.
+            let degeneration = DegenerationInterrupts.Cursor childId
+
             // live terminal listener, and the listener must outlive both sends.
             let onTerminal _ outcome =
                 match outcome with
                 | Completed result when armed.Value && not (isStaleRun fence result) -> observeCompleted result
                 | Completed _ -> ()
+                | Aborted _ when armed.Value && degeneration.IsOwnAbort() -> ()
                 | Aborted _
                 | Failed _ when armed.Value -> AsyncSupport.trySetResult completion (Error DidNotAnswer) |> ignore
                 | _ -> ()

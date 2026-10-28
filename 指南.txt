@@ -1,0 +1,99 @@
+存在即合理——大重构指南
+
+状态：defer。现在只立文档，不开刀。可以 clean-break，但不急。
+地位：纠偏令（AGENTS.md）3.2「证明税」的施工细则。与纠偏令、万象理宪法冲突时，以二者为准。
+
+
+一、一句话
+
+能被构造出来的状态，就是合理的状态。非法状态在设计时消灭，不在运行时抓捕。
+
+
+二、为什么
+
+运行时校验把「本来不该存在的东西」先造出来，再派检查员拦下，最后把 Failed 弹给用户。
+用户看到的是失败；系统得到的是一份「我很严谨」的自我感觉。这就是证明税。
+
+现场反例（2026-10-28）：
+  OpenCode 1.19.4 在 chat.message 里传 { agent: undefined }。这是宿主的正常形状。
+  IngressCodec 判它 malformed，ChatAdmissionIntent 拒收，
+  Dispatcher 包成 ManagedChatAcceptanceError.IntentRejected，
+  用户看到 "IntentRejected (MalformedIdentityCarrier Agent)" 弹框，prompt_async 失败。
+  91fab930 只做了最小修补（undefined 当作缺省）。病根还在：整条拒收链本不该存在。
+
+同理，近期「打断后无人续」也是一路检查员互相误判：
+  判停看错了历史、Abort 被当观察、回执没来就撤恢复。
+  每一处都是「运行时再判一次合不合理」，每一次误判都落成用户可见的停摆。
+
+
+三、反对什么
+
+1. 运行时 admission / identity / carrier 校验
+   宿主给什么形状，翻译层（万象通）就把它翻成核能理解的值；翻不出就取缺省或照常走。
+   不存在「消息到了，但被拒收」这种用户可见的结局。
+
+2. 程序计数器的状态机化
+   把控制流拆成显式 phase / step 枚举、再用 match 当跳转表、再在每个入口校验「当前 phase 允许这一步吗」——
+   这是手写程序计数器。它让非法组合（错 phase 收到事件、回执先于请求、Abort 撞上排队请求）成为可到达状态，
+   然后再雇检查员拦。反对把它当架构。
+   顺序本来就该由代码的书写顺序表达：先做 A，再做 B，等到 C，就写成先 A、再 B、await C。
+
+3. Rejection / Unproven / Unavailable 类错误分支
+   ClosureKindUnproven、MalformedIdentityCarrier、DurableAuthorityUnavailable、"Input has no exact accepted evidence"……
+   凡是名字里在说「我证明不了它合理」的，都是税。默认删；删了用户会立刻做错事的，才改成结构保证。
+
+4. 「Failed 但不说为什么」「Aborted 当作观察」这类冒充
+   失败、未知、成功不得互相冒充（纠偏令 4.1）。消灭非法状态之后，剩下的真失败少而清楚，必须直达主代理。
+
+
+四、目标形态：简单的 F# CE DSL
+
+关键控制流（一轮对话、委托与 Join、打断与续跑、咨询与答复）用 computation expression 重写：
+
+  conversation {
+      let! input  = receive          // 宿主形状已由万象通翻好，这里只有合理值
+      let! reply  = model input
+      for call in reply.Tools do
+          do! tool call               // 工具时间不算模型时间，因为它们本就不在同一行
+      if reply.Unfinished then
+          return! continue_           // 续跑是一句话，不是一个 phase
+  }
+
+要点：
+- 顺序、等待、分支、循环由 CE 的 Bind / For / While / TryFinally 表达；程序计数器由语言持有，不由我们手写枚举持有。
+- 打断是 CE 层的取消，续跑是 CE 层的重入；不存在「打断了但没人续」的中间态，因为没有地方能停在那里。
+- 类型只表达真区别：有 agent 与没 agent 是两个合法值，不是「合法 / 非法 carrier」。
+- DSL 要小。一个 builder 只管一件事；不做通用工作流引擎，不做可序列化状态机，不做 DSL 套 DSL。
+  仓内已有 Foundation/TaskResult.fs 的 TaskResultBuilder，可作起点，按需长。
+- 持久化与恢复：记事实（发生了什么），不记 PC（走到第几步）。恢复 = 按事实重放 CE，不 = 跳回某个 phase。
+
+
+五、怎么判断一处设计是否「存在即合理」
+
+逐条问：
+1. 这个类型的每个值，用户看到都会觉得合理吗？有不合理的值，就改类型，不加检查。
+2. 这个检查若删掉，用户会立刻做错事吗？不会，就删（纠偏令「给改程序的人」）。
+3. 有没有 phase / step / state 枚举在模拟「下一行代码」？有，就改写成 CE 里的顺序代码。
+4. 有没有错误分支在宿主正常形状下也会触发？有，那是翻译没做好，回万象通修，不在核里拒收。
+5. 改完，Failed 种类是变少了还是变多了？变多就是走反了。
+
+
+六、待清的税（盘点起点，不是任务卡）
+
+- Interaction/Admission/*：ChatAdmissionIntent、ChatAdmissionTransaction 及其 Surface——整块是拒收机器。
+- ChatAdmissionIntent.IdentityCarrierError / Rejection.MalformedIdentityCarrier。
+- Execution/Session/ChatExecution/Acceptance：ManagedChatAcceptanceError.IntentRejected。
+- Interaction/Dispatch/Dispatcher：ClosureKindUnproven、describeIdentitySeedRejection、"no exact accepted evidence"。
+- OpenCode/Host/HostSignalBootstrap：ChatAdmissionHookFailure、rejectedChatMessage。
+- Foundation/Identity：凡只为「校验身份载体」而存在的部分。
+- 宿主看门狗、委托判停、续跑：手写 phase 与「在途 / 回执 / 撤恢复」组合，迁 CE。
+清单会随盘点改；发现新的，追加一句人话，不另立看板。
+
+
+七、施工规矩（到开工时）
+
+- 仍守纠偏令：迁移闸门未过不开迁移刀；人手一刀；可读 diff；不自动迁移；不新增证明词。
+- clean-break 允许：可以整块推倒重写状态表示，不必兼容旧 phase 枚举与旧事件里的拒收记录。
+- 一刀删一类拒收：删掉旧检查员，同一刀给出让非法状态不可构造的类型或 CE；不留「先加新的、旧的以后删」。
+- 宿主怪形状一律进万象通翻译；万象理与 CE 只见合理值。
+- 自保测试测总流程上的浪花（发得出、续得上、做得成），不测「拒收得对不对」。

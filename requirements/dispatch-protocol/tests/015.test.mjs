@@ -7,7 +7,8 @@ const { default: fc } = await import("fast-check");
 // CUT-40: the chat.message ingress decode is exercised on the OpenCode codec surface (one copy, next to PromptIngressCodec).
 const { decodeIngress } = await import("../../../dist/OpenCode/Codec/ProviderProjectionSurface.js");
 
-const malformedString = fc.anything({ withBoxedValues: true }).filter(value => typeof value !== 'string')
+// An own key holding `undefined` is an absent JSON carrier, not a malformed one (see the undefined test below).
+const malformedString = fc.anything({ withBoxedValues: true }).filter(value => typeof value !== 'string' && value !== undefined)
 const nonblankString = fc.string().filter(value => value.trim().length > 0)
 
 test('WHAT[dispatch-protocol-015] ingress identity property rejects every malformed or ambiguous carrier world', () => {
@@ -215,3 +216,21 @@ test('WHAT[dispatch-protocol-015] malformed explicit agent cannot inherit identi
     assert.equal(projection.pendingClaims[0].promptKey, sent.key)
   })
 })
+
+{
+const { default: assert } = await import("node:assert/strict");
+const { default: test } = await import("node:test");
+const { decodeIngress } = await import("../../../dist/OpenCode/Codec/ProviderProjectionSurface.js");
+test('WHAT[dispatch-protocol-015] an own carrier key holding undefined is absent, as OpenCode 1.19 chat.message sends it', () => {
+  // OpenCode 1.19.4 triggers chat.message with { agent: input.agent, ... }; an agent-less prompt_async
+  // therefore arrives with agent: undefined. That must decode as no explicit agent, not MalformedIdentityCarrier Agent.
+  const decoded = decodeIngress(
+    { sessionID: 's-undef', agent: undefined, model: undefined, messageID: 'm-undef', variant: undefined },
+    { message: { sessionID: 's-undef', id: 'm-undef', agent: 'manager', role: 'user' }, parts: [] },
+  )
+  assert.equal(decoded.sessionId, 's-undef')
+  assert.equal(decoded.explicitAgent, 'manager')
+  assert.equal(decodeIngress({ sessionID: 's', agent: undefined }, {}).explicitAgent, null)
+  assert.equal(decodeIngress({ sessionID: 's', agent: null }, {}).explicitAgent, null)
+})
+}

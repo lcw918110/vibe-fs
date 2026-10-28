@@ -16,6 +16,7 @@ open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Advisor
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
+open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Execution.Session.Recovery
 open Wanxiangshu.Foundation
 open Wanxiangshu.Git
@@ -478,12 +479,18 @@ module PluginHooks =
                           member _.Dispose() = handle.Cancel() }
                   Abort = fun sessionId ->
                       task {
-                          let! outcome = sessionPort.InterruptAttempt (SessionId.create sessionId)
+                          let sid = SessionId.create sessionId
+                          // Recorded before the Host acts: its Aborted terminal
+                          // can arrive before this promise resolves.
+                          Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.record sid
+                          let! outcome = sessionPort.InterruptAttempt sid
 
                           return
                               match outcome with
                               | Ok() -> true
-                              | Error _ -> false
+                              | Error _ ->
+                                  Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.unrecord sid
+                                  false
                       }
                   Continue = fun sessionId prompt accepted onLateRefused ->
                       task {
@@ -543,19 +550,31 @@ module PluginHooks =
                       | _ -> ()
                   Return = fun sessionId reason ->
                       let sid = SessionId.create sessionId
-                      match HostSessionNudge.tryActiveProfile journal sid with
-                      | Some owner when sessionPort.IsManagedChild sid ->
-                          let stop =
-                              Wanxiangshu.Foundation.TerminalSignal.TerminalStop.forAuthority
-                                  owner.AuthorityRootUserMessageId
-                                  ("degeneration continuation unavailable: " + reason)
+                      let text = "degeneration continuation unavailable: " + reason
+                      // The active profile can close while the interrupt is in
+                      // flight. The parent must still hear Failed: an
+                      // authority-less session stop addresses its live run.
+                      let stop =
+                          if sessionPort.IsManagedChild sid then
+                              match HostSessionNudge.tryActiveProfile journal sid with
+                              | Some owner ->
+                                  Some(
+                                      Wanxiangshu.Foundation.TerminalSignal.TerminalStop.forAuthority
+                                          owner.AuthorityRootUserMessageId
+                                          text
+                                  )
+                              | None -> Some(Wanxiangshu.Foundation.TerminalSignal.TerminalStop.session text)
+                          else
+                              None
+                      match stop with
+                      | Some stop ->
                           if not (eventPort.NotifyTerminal
                                       sid
                                       (Wanxiangshu.Foundation.TerminalSignal.TerminalOutcome.Failed stop)) then
                               Diagnostic.emit
                                   "latency-degeneration-return-unobserved"
                                   [ "session_id", sessionId; "reason", reason ]
-                      | _ ->
+                      | None ->
                           Diagnostic.emit
                               "latency-degeneration-return-unowned"
                               [ "session_id", sessionId; "reason", reason ]
@@ -568,7 +587,9 @@ module PluginHooks =
                           (ProviderLanguageBinding.forSessionText sessionId)
                           RuntimeNudge.LatencyDegeneration
                           Map.empty
-                  Diagnostic = fun kind reason -> Diagnostic.emit kind [ "detail", reason ] }
+                  // CTX-014 only admits whitelisted fields; a non-whitelisted
+                  // name makes Diagnostic.emit drop the whole record.
+                  Diagnostic = fun kind reason -> Diagnostic.emit kind [ "reason", reason ] }
 
             let latencyWatchdog =
                 new LatencyWatchdog(
@@ -1316,6 +1337,9 @@ module PluginHooks =
                 task {
                     let sessionId = toolField toolInput "sessionID"
                     let toolName = toolField toolInput "tool"
+                    // latency-degeneration [013]: the model request ended when
+                    // it handed this tool over; tool execution is not latency.
+                    latencyWatchdog.ToolStarted sessionId
 
                     if PluginTransforms.negotiationIsTemporary sessionId then
                         PluginTransforms.negotiationRecordToolViolation sessionId
@@ -1686,7 +1710,8 @@ module PluginHooks =
                         activeCompactingSessions.Remove(SessionId.value sessionId) |> ignore
                         AdvisorSeat.clear (SessionId.value sessionId)
                         latencyWatchdog.Cancel (SessionId.value sessionId)
-                        latencyWatchdog.ForgetDetector (SessionId.value sessionId))
+                        latencyWatchdog.ForgetDetector (SessionId.value sessionId)
+                        Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId)
 
             /// The watchdog's boundaries use the exact provider-run identity:
             /// the assistant message's own id, present on both the provider
@@ -1720,6 +1745,11 @@ module PluginHooks =
                                 SessionId.value sessionId,
                                 Some(ProviderRunIdentity.value providerRun)
                             )
+                        | Wanxiangshu.Execution.Session.ChatExecution.HostProviderTerminalOutcome.Cancelled ExecutionFailure.UserCancelled ->
+                            latencyWatchdog.OnProviderCancelled(
+                                SessionId.value sessionId,
+                                Some(ProviderRunIdentity.value providerRun)
+                            )
                         | _ ->
                             latencyWatchdog.Discard(
                                 SessionId.value sessionId,
@@ -1727,7 +1757,7 @@ module PluginHooks =
                             )
                     | None ->
                         // Tool-calls finishes this exact model request, not the Session.
-                        latencyWatchdog.Complete(
+                        latencyWatchdog.CompleteStep(
                             SessionId.value sessionId,
                             Some(ProviderRunIdentity.value providerRun)
                         )

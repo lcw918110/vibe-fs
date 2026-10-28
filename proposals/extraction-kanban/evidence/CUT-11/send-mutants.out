@@ -1,7 +1,0 @@
-unknown-abandons send-diff:  "differences": 16
-unknown-notsent send-diff:  "differences": 1
-refusal-sent send-diff:  "differences": 2
-physical-skips-accept send-diff:  "differences": 16
-receipt-keeps-pending send-diff:  "differences": 16
-detached-refused-unknown dispatch-protocol suite: pass 98 fail 1 (base 99/0)
-unknown-abandons dispatch-protocol suite: fail 4, effect-accounting fail 2; refusal-sent dispatch-protocol fail 1

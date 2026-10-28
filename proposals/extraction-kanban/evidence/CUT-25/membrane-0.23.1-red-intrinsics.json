@@ -1,6 +1,0 @@
-{
-  "against": "wanxiangli/sandbox 0.23.1 (library d2a9f3b / host e4ff18704)",
-  "note": "Same host RuntimeSurface; only Sandbox.js swapped for the 0.23.1 build. Model program patches WeakMap.prototype.has/.set and observes the raw host value the membrane feeds the map, then reaches process via constructor.constructor.",
-  "WeakMap.prototype.has": { "escaped": true },
-  "WeakMap.prototype.set": { "escaped": true }
-}

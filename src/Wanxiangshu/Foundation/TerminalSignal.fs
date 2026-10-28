@@ -65,3 +65,48 @@ type ISessionTerminalSource =
     abstract SubscribeTerminal: sessionId: SessionId * listener: TerminalCompletionListener -> IDisposable
     abstract SubscribeFutureTerminal: sessionId: SessionId * listener: TerminalCompletionListener -> IDisposable
     abstract HasSubscriber: sessionId: SessionId -> bool
+
+/// Latency-degeneration interrupts the host has sent to a managed session.
+///
+/// The interrupt is a Host session abort, so the session reports an `Aborted`
+/// terminal; but the latency watchdog owns that abort and either continues the
+/// same session or returns `Failed`. A consumer that fails fast on `Aborted`
+/// (Advisor consult, SyncDelegate call) consumes one interrupt per `Aborted`
+/// it ignores, instead of treating the watchdog's own abort as the answer.
+[<RequireQualifiedAccess>]
+module DegenerationInterrupts =
+    // DSL-MUTABLE: resource — per-session count of latency-degeneration interrupts sent to the Host
+    let private sent = System.Collections.Generic.Dictionary<string, int>()
+
+    let private countOf (sessionId: SessionId) =
+        match sent.TryGetValue(SessionId.value sessionId) with
+        | true, count -> count
+        | _ -> 0
+
+    let record (sessionId: SessionId) : unit =
+        sent[SessionId.value sessionId] <- countOf sessionId + 1
+
+    /// The Host refused the interrupt: it produced no abort.
+    let unrecord (sessionId: SessionId) : unit =
+        match countOf sessionId with
+        | count when count > 1 -> sent[SessionId.value sessionId] <- count - 1
+        | _ -> sent.Remove(SessionId.value sessionId) |> ignore
+
+    let count (sessionId: SessionId) : int = countOf sessionId
+
+    let forget (sessionId: SessionId) : unit =
+        sent.Remove(SessionId.value sessionId) |> ignore
+
+    /// One consumer's view: `IsOwnAbort()` is true once per interrupt recorded
+    /// after the cursor was opened.
+    type Cursor(sessionId: SessionId) =
+        let mutable seen = countOf sessionId
+
+        member _.IsOwnAbort() : bool =
+            let current = countOf sessionId
+
+            if current > seen then
+                seen <- seen + 1
+                true
+            else
+                false

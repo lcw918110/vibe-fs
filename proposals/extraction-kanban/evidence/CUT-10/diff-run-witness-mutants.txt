@@ -1,9 +1,0 @@
-CUT-10 ⑥a seeded mutants of wanxiangli dist/run-witness (diff-run-witness.mjs seed 1, 500 runs x 80 ops)
-control: {"seed":1,"runs":500,"total":40000,"mismatches":0,"first":null,"seen":
-M1 remember does not retire the previous witness: mismatches=992 firstOp=remember
-M2 forgetSession keeps the retry binding: mismatches=172 firstOp=forgetSession
-M3 forgetSession drops other sessions' steps: mismatches=499 firstOp=forgetSession
-M4 forgetPhysical matches only the session: mismatches=488 firstOp=forgetPhysical
-M5 takeRetry not single-consumption: mismatches=184 firstOp=takeRetry
-M6 take forgets latest of a different run: mismatches=487 firstOp=take
-M7 retainForRetry grants another session's witness: mismatches=714 firstOp=retainForRetry

@@ -1,3 +1,0 @@
-{"seed":1,"runs":200000,"mutant":null,"mismatches":0,"first":null,"seen":{"throw":34114,"PreserveCurrentFact":89397,"TerminalizeAcceptedPreProvider":26538,"TerminalizeProviderStarted":24624,"AwaitAcceptanceReconciliation":23909,"RetryFreshAttempt":1418}}
-{"seed":2,"runs":200000,"mutant":null,"mismatches":0,"first":null,"seen":{"throw":34560,"TerminalizeAcceptedPreProvider":26266,"PreserveCurrentFact":89276,"AwaitAcceptanceReconciliation":23706,"TerminalizeProviderStarted":24739,"RetryFreshAttempt":1453}}
-{"seed":3,"runs":200000,"mutant":null,"mismatches":0,"first":null,"seen":{"PreserveCurrentFact":88882,"AwaitAcceptanceReconciliation":24001,"throw":34404,"TerminalizeAcceptedPreProvider":26374,"TerminalizeProviderStarted":24855,"RetryFreshAttempt":1484}}

@@ -1,5 +1,0 @@
-{"seed":"1","comparisons":3000,"divergences":0,"oldThrows":680,"keptRows":3894}
-{"seed":"2","comparisons":3000,"divergences":0,"oldThrows":672,"keptRows":3775}
-{"seed":"3","comparisons":3000,"divergences":0,"oldThrows":647,"keptRows":3997}
-mutant (library keepsInteraction cursor >= opening -> >):
-{"seed":"1","comparisons":3000,"divergences":197,"oldThrows":680,"keptRows":3894}
