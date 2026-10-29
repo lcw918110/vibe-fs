@@ -128,6 +128,39 @@ module OpenCodePortAdapter =
 
         not (isNull status) && string status?``type`` <> "idle"
 
+    let private statusDirectoryFields (directory: string option) (workspaceDirectory: string option) =
+        match directory |> Option.orElse workspaceDirectory with
+        | Some dir -> [ "query", box (createObj [ "directory", box dir ]); "directory", box dir ]
+        | None -> []
+
+    let private statusRejected (response: obj) =
+        not (isNull response) && not (isNull response?error)
+
+    let private runnerBusyResult (response: obj) (sessionId: SessionId) =
+        if statusRejected response then
+            Error(sprintf "Host rejected session status: %A" response?error)
+        else
+            Ok(runnerBusyIn (responseBody response) sessionId)
+
+    let private queryRunnerBusy
+        (statusFn: obj)
+        (sessObj: obj)
+        (headers: obj)
+        (directory: string option)
+        (workspaceDirectory: string option)
+        (sessionId: SessionId)
+        =
+        task {
+            if isNull statusFn then
+                return Ok false
+            else
+                let payload =
+                    createObj ([ "headers", box headers ] @ statusDirectoryFields directory workspaceDirectory)
+
+                let! res = unbox<Task<obj>> (statusFn?call (sessObj, payload))
+                return runnerBusyResult res sessionId
+        }
+
     [<Emit("fetch($0, $1)")>]
     let private jsFetch (url: string) (init: obj) : Task<obj> = jsNative
 
@@ -344,24 +377,16 @@ module OpenCodePortAdapter =
                         let sessObj = client?session
                         let statusFn = if isNull sessObj then null else sessObj?status
 
-                        if isNull statusFn then
-                            return Ok false
-                        else
-                            let directoryFields =
-                                match directory |> Option.orElse workspaceDirectory with
-                                | Some dir ->
-                                    [ "query", box (createObj [ "directory", box dir ]); "directory", box dir ]
-                                | None -> []
+                        let! busy =
+                            queryRunnerBusy
+                                statusFn
+                                sessObj
+                                (headersObj directory)
+                                directory
+                                workspaceDirectory
+                                sessionId
 
-                            let payload =
-                                createObj ([ "headers", box (headersObj directory) ] @ directoryFields)
-
-                            let! res = unbox<Task<obj>> (statusFn?call (sessObj, payload))
-
-                            if not (isNull res) && not (isNull res?error) then
-                                return Error(sprintf "Host rejected session status: %A" res?error)
-                            else
-                                return Ok(runnerBusyIn (responseBody res) sessionId)
+                        return busy
                     with ex ->
                         return Error ex.Message
                 }
