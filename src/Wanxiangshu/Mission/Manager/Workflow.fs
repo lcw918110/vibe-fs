@@ -87,6 +87,48 @@ module ManagerWorkflow =
     let private activeResourcePath (directory: string option) (sessionId: SessionId) =
         resourceForCurrentAction directory sessionId
 
+    let private obligationLines (obligations: obj array) =
+        obligations
+        |> Array.choose (fun entry ->
+            let key = if isNull entry?key then "" else string entry?key
+            let value = if isNull entry?value then "" else string entry?value
+
+            if System.String.IsNullOrWhiteSpace key then None
+            elif System.String.IsNullOrWhiteSpace value then Some("- " + key)
+            else Some("- " + key + "：" + value))
+        |> String.concat "\n"
+
+    /// A qualified nudge names its target: the consultation the host is
+    /// waiting for, the open obligations, or for an unreviewed successor the
+    /// commission it must verify. Read from the same facts the gates read.
+    let private nudgeTarget (directory: string option) (sessionId: SessionId) =
+        task {
+            let! workOpt = lifecycleWork directory (SessionId.value sessionId)
+            let sid = SessionId.value sessionId
+
+            let pending =
+                if Wanxiangshu.Context.Scope.Surface.pendingKind sid = "askPreviousScope" then
+                    [ ProviderProse.documentFor sessionId "work/manager-continue-ask-previous" Map.empty ]
+                else
+                    []
+
+            let work =
+                match workOpt with
+                | Some work when work.ActiveId.IsSome && not (Array.isEmpty work.Obligations) ->
+                    [ ProviderProse.documentFor
+                          sessionId
+                          "work/manager-continue-obligations"
+                          (Map [ "obligations", obligationLines work.Obligations ]) ]
+                | Some work when work.ActiveId.IsSome && work.ActiveId = work.SuccessorTenureId && not work.Reviewed ->
+                    [ ProviderProse.documentFor
+                          sessionId
+                          "work/manager-continue-successor"
+                          (Map [ "milestone", work.Stage ]) ]
+                | _ -> []
+
+            return pending @ work
+        }
+
     let private sendNudge
         (quiescence: ISessionQuiescenceGate)
         (permit: QuiescencePermit)
@@ -106,6 +148,14 @@ module ManagerWorkflow =
                 else
                     Task.FromResult Map.empty
 
+            let! target = nudgeTarget turn.Directory turn.SessionId
+
+            let text =
+                target
+                @ [ ProviderProse.documentFor turn.SessionId "work/manager-continue" Map.empty
+                    ProviderProse.documentFor turn.SessionId resourcePath substitutions ]
+                |> String.concat "\n\n"
+
             return!
                 HostSessionNudge.trySendIdleGateContinuation
                     quiescence
@@ -113,9 +163,7 @@ module ManagerWorkflow =
                     sessionPort
                     rootWorkspace
                     turn.SessionId
-                    (ProviderProse.documentFor turn.SessionId "work/manager-continue" Map.empty
-                     + "\n\n"
-                     + ProviderProse.documentFor turn.SessionId resourcePath substitutions)
+                    text
                     PromptAuthority.ContinuationKind.ManagerGuard
                     turn.Directory
                     (Some journal)

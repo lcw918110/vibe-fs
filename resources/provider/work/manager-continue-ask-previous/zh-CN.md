@@ -1,0 +1,1 @@
+本回合的第一件事：调用 `askPreviousScope(questions)`。上一次 `resetScope` 之后你还没有问过前一 Scope，所以在你问之前，任何调用上的 `scope.kind=resetScope` 都会被拒；其他工具仍可用。它不扣额度，可以和本回合别的工具一起发，也可以就在这次调用上带 `resetScope` 注解。问你接着要做的那件事真正缺的依据，不要问前一 Scope「读没读过」。

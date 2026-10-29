@@ -405,7 +405,7 @@ test('WHAT[capability-enforcement-026] D10_promoted_review_admits_devops_dispatc
 
 // 跨进程隔离：DevOps 派工门的能力不得以进程局部状态跨进程走私。produce 进程
 // 在评审接纳前被拒、接纳后被放行；recover 进程在同一个工作区重新打开时，未评审
-// 的会话仍被 assessment-pending-for-devops 拒绝，已确认的会话被 dispatch-closed
+// 的会话仍被 assessment-pending-for-devops 拒绝，已确认的会话被 REVIEW_PENDING
 // 拒绝。两个进程必须真的不同。
 test('WHAT[capability-enforcement-026] D11_cross_process_devops_dispatch_capability_isolation', async () => {
   const { mkdtempSync, rmSync } = await import('node:fs')

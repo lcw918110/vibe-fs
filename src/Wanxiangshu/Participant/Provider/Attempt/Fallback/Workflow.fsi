@@ -3,6 +3,7 @@ namespace Wanxiangshu.Participant.Provider.Attempt.Fallback
 open System.Threading.Tasks
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Execution.Failure
+open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation.HostSession
 open Wanxiangshu.Foundation.HostSession
@@ -27,6 +28,12 @@ module ProviderRecoveryWorkflow =
         sessionId: SessionId ->
         physicalUserMessageId: PhysicalUserMessageId ->
             ProviderRequestKind option
+
+    /// The goal-directed continuation a long-running role (Manager / Orchestrator / Plan)
+    /// receives when automatic retry gives up on a transient provider failure. None for
+    /// every other role and failure: those stop with the turn's terminal failure.
+    val longWorkContinuationPath: role: Role option -> failure: ExecutionFailure -> string option
+    val isContextOverflowReason: reason: string -> bool
 
     val continueAfterConfirmedFailure:
         sessionPort: ISessionHostPort ->

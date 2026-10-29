@@ -255,6 +255,48 @@ test('WHAT[delegation-negotiation-001] the Host records only the question while 
   negotiationForgetSession(parent)
 })
 
+test('WHAT[context-compression-047] OpenCode previous-Scope consultation uses the source session current model, not a stale archived one', async () => {
+  const { negotiationRememberModel, negotiationForgetSession, consultationModelForPrevious } =
+    await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  const source = 'ses-previous-model-047'
+  negotiationForgetSession(source)
+  const archived = { model: { providerID: 'lazy', modelID: 'default' }, system: ['old system'] }
+  assert.deepEqual(consultationModelForPrevious(source, archived), archived.model,
+    'archived model is only a fallback while no current model was observed')
+  negotiationRememberModel({ sessionID: source, model: { providerID: 'xai', modelID: 'grok-4.7' } })
+  assert.deepEqual(consultationModelForPrevious(source, archived), { providerID: 'xai', modelID: 'grok-4.7' },
+    'stale archived upstream must not strand the consultation')
+  negotiationForgetSession(source)
+})
+
+test('WHAT[context-compression-047] OpenCode previous-Scope consultation projects the sealed equivalent view, not the raw Host history', async () => {
+  const {
+    negotiationRememberMessages, negotiationForgetSession, consultationStartPrevious,
+    negotiationProjectMessages, negotiationFinishTemporary,
+  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  const source = 'ses-previous-view-047'
+  const temporary = 'ses-previous-view-047-temp'
+  negotiationForgetSession(source)
+  const raw = (text, role = 'user') => ({ info: { sessionID: source, role }, parts: [{ type: 'text', text }] })
+  const reset = { info: { sessionID: source, role: 'assistant' }, parts: [{ type: 'tool', id: 'r', tool: 'resetScope', state: { status: 'completed', input: {}, output: 'ok' } }] }
+  negotiationRememberMessages(source, { messages: [raw('RAW_EARLIER_SCOPES_HUGE'), raw('old'), reset, raw('NEW_SCOPE_SECRET')] })
+  const sealed = [raw('SEALED_OLD_VIEW')]
+  const missing = consultationStartPrevious(temporary, source, { system: ['old system'], model: { providerID: 'p', modelID: 'm' } })
+  assert.equal(missing.tag, 1, 'no sealed equivalent view, no consultation')
+  const started = consultationStartPrevious(temporary, source, { system: ['old system'], model: { providerID: 'p', modelID: 'm' }, messages: sealed })
+  assert.equal(started.tag, 0)
+  const question = { info: { sessionID: temporary, role: 'user' }, parts: [{ type: 'text', text: 'What was decided?' }] }
+  const outgoing = { messages: [question] }
+  assert.equal(negotiationProjectMessages(temporary, outgoing), true)
+  const wire = JSON.stringify(outgoing.messages)
+  assert.equal(wire.includes('SEALED_OLD_VIEW'), true, 'previous Scope sees its own sealed view')
+  assert.equal(wire.includes('RAW_EARLIER_SCOPES_HUGE'), false, 'raw Host history is not the previous Scope view')
+  assert.equal(wire.includes('NEW_SCOPE_SECRET'), false)
+  assert.equal(outgoing.messages.at(-1).parts[0].text, 'What was decided?')
+  negotiationFinishTemporary(temporary)
+  negotiationForgetSession(source)
+})
+
 test('WHAT[delegation-negotiation-001] a vetoed temporary tool call keeps its denial visible to the next provider step', async () => {
   const {
     negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
@@ -1459,4 +1501,79 @@ test('WHAT[delegation-negotiation-038] a normally completed empty SDK reply term
       clearSessionState(child)
     }
   })
+})
+
+test('WHAT[delegation-negotiation-002] the unlocking call may itself carry resetScope; a same-turn meToo follows it', async () => {
+  const { bindDelegation, askNegotiation, negotiationRequired, clearSessionState } = await import('../../../dist/Context/Scope/Surface.js')
+  const { wrap, apply } = await import('../../../dist/OpenCode/Tools/ScopeAnnotationGate.js')
+  const { HostToolArguments_$ctor_4E60E31B } = await import('../../../dist/OpenCode/Codec/ToolHostCodec.js')
+  const recipient = 'ses-neg-self-unlock'
+  clearSessionState(recipient)
+  bindDelegation(recipient, 'ses-neg-self-unlock-parent')
+  assert.equal(negotiationRequired(recipient), true)
+  const reset = { kind: 'resetScope', newScopeGoal: 'parser', newScopeRetentionBudget: 4, oldScopeVerboseVerbatim: 'old' }
+  const ctx = { SessionId: recipient, ToolCallId: ToolCallIdModule_create('call-neg'), ProviderRunId: undefined }
+  let ran = false
+  const gated = wrap('negotiate', () => '0', undefined, null, async () => {
+    ran = askNegotiation(recipient, 'Which parser?').ok
+    return 'negotiate accepted'
+  })
+  const out = await gated(HostToolArguments_$ctor_4E60E31B({ questions: 'Which parser?', scope: reset }))(ctx)
+  assert.equal(ran, true, 'negotiate runs although it carries the reset it unlocks')
+  assert.match(out, /^negotiate accepted/)
+  assert.doesNotMatch(out, /unavailable until/)
+
+  const { ProviderRunIdentityModule_create } = await import('../../../dist/Foundation/Identity.js')
+  const turn = ProviderRunIdentityModule_create('run-1')
+  const run = { SessionId: 'ses-same-turn', ToolCallId: ToolCallIdModule_create('c-reset'), ProviderRunId: turn }
+  assert.equal(apply('bash', HostToolArguments_$ctor_4E60E31B({ scope: reset }), run, () => '0').tag, 0)
+  const sibling = { ...run, ToolCallId: ToolCallIdModule_create('c-sibling') }
+  assert.equal(apply('read', HostToolArguments_$ctor_4E60E31B({ scope: { kind: 'meToo' } }), sibling, () => '0').tag, 0)
+  clearSessionState(recipient)
+})
+
+test('WHAT[delegation-negotiation-002] a same-turn meToo ahead of its real annotation is not refused for arriving first', async () => {
+  const { apply } = await import('../../../dist/OpenCode/Tools/ScopeAnnotationGate.js')
+  const { HostToolArguments_$ctor_4E60E31B } = await import('../../../dist/OpenCode/Codec/ToolHostCodec.js')
+  const { ProviderRunIdentityModule_create } = await import('../../../dist/Foundation/Identity.js')
+  const { scopeRetention } = await import('wanxiangli/scope-retention')
+  const session = 'ses-metoo-first'
+  scopeRetention.clear(session)
+  scopeRetention.apply(session, '0', 'bash', 'run-open', 'c-open', 'run-open', { kind: 'resetScope', newScopeGoal: 'g', newScopeRetentionBudget: 3 })
+  const turn = ProviderRunIdentityModule_create('run-order-1')
+  const sibling = { SessionId: session, ToolCallId: ToolCallIdModule_create('c-early'), ProviderRunId: turn }
+  assert.equal(apply('read', HostToolArguments_$ctor_4E60E31B({ scope: { kind: 'meToo' } }), sibling, () => '0').tag, 0, 'meToo first is accepted')
+  const real = { ...sibling, ToolCallId: ToolCallIdModule_create('c-keep-late') }
+  assert.equal(apply('edit', HostToolArguments_$ctor_4E60E31B({ scope: { kind: 'keepLast' } }), real, () => '0').tag, 0)
+  assert.equal(scopeRetention.status(session).remaining, 2, 'one keep for the turn')
+  scopeRetention.clear(session)
+})
+
+test('WHAT[delegation-negotiation-002] an early meToo runs at once; an all-meToo turn runs and costs one keep; the refusal text only says all-meToo is not allowed', async () => {
+  const { wrap } = await import('../../../dist/OpenCode/Tools/ScopeAnnotationGate.js')
+  const { HostToolArguments_$ctor_4E60E31B } = await import('../../../dist/OpenCode/Codec/ToolHostCodec.js')
+  const { ProviderRunIdentityModule_create } = await import('../../../dist/Foundation/Identity.js')
+  const { scopeRetention } = await import('wanxiangli/scope-retention')
+  const session = 'ses-metoo-keep'
+  scopeRetention.clear(session)
+  scopeRetention.apply(session, '0', 'bash', 'run-open', 'c-open', 'run-open', { kind: 'resetScope', newScopeGoal: 'g', newScopeRetentionBudget: 2 })
+  const ran = []
+  const tool = (name) => wrap(name, () => '0', undefined, null, async () => { ran.push(name); return name + ' ran' })
+  const call = (id, run) => ({ SessionId: session, ToolCallId: ToolCallIdModule_create(id), ProviderRunId: ProviderRunIdentityModule_create(run) })
+  const meToo = HostToolArguments_$ctor_4E60E31B({ scope: { kind: 'meToo' } })
+  try {
+    assert.equal(await tool('read')(meToo)(call('c-m1', 'run-a')), 'read ran', 'no hold: runs immediately')
+    assert.equal(await tool('grep')(meToo)(call('c-m2', 'run-a')), 'grep ran')
+    assert.equal(scopeRetention.status(session).remaining, 1, 'the all-meToo turn cost one keep')
+    assert.equal(scopeRetention.journal(session).some((row) => row.kind === 'MeTooOrphan'), false)
+    assert.equal(await tool('read')(meToo)(call('c-m3', 'run-b')), 'read ran')
+    assert.equal(scopeRetention.status(session).remaining, 0)
+    // exhausted: there is nothing to book, so an all-meToo turn is refused
+    const refused = await tool('read')(meToo)(call('c-m4', 'run-c'))
+    assert.match(refused, /may not be all meToo/)
+    assert.doesNotMatch(refused, /treated as|charged|booked/)
+    assert.deepEqual(ran, ['read', 'grep', 'read'])
+  } finally {
+    scopeRetention.clear(session)
+  }
 })

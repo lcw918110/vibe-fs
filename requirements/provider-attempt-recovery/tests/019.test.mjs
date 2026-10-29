@@ -72,8 +72,16 @@ test('WHAT[provider-attempt-recovery-019] real retry engine admits only typed pr
     ...['NotCommitted', 'Committed', 'Unknown'].map(commitment => ({ kind: 'PersistenceFailure', commitment })),
   ]) {
     const attempt = run(failure, current())
-    await attempt.completed
+    const verdict = await attempt.completed
     assert.deepEqual(attempt.events, [], JSON.stringify(failure))
+    const unknownAcceptance = failure === 'AcceptanceUnknown'
+      || (failure && failure.kind === 'PersistenceFailure' && failure.commitment === 'Unknown')
+    if (unknownAcceptance) {
+      assert.notEqual(verdict, 'Superseded', JSON.stringify(failure))
+      assert.notEqual(verdict, 'Dispatched', JSON.stringify(failure))
+      assert.equal(verdict, 'Terminal', JSON.stringify(failure))
+      assert.notEqual(owner.delegateRetryObservation(verdict), 'Ok')
+    }
   }
 })
 

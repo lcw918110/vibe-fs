@@ -112,7 +112,7 @@ module ChildRecovery =
 
     [<RequireQualifiedAccess>]
     type HostObservation =
-        | AbortedObserved of reason: string
+        
         | ParentCancelled
         | DeadlineExceeded
         | HostSessionGone

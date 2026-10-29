@@ -13,9 +13,9 @@ namespace Wanxiangshu.Execution.Failure
 ///   - RateLimited / Network / Provider -> ProviderTransient. The provider recovery
 ///                           path owns retry, budget and context replacement.
 ///   - Authentication     -> ProviderPermanent. Credentials do not recover by retrying.
-///   - ContextOverflow    -> ProviderTransient. Context replacement is owned by the
-///                           provider recovery path, so the wake is a transient provider
-///                           failure rather than a permanent one.
+///   - ContextOverflow    -> ProviderPermanent. Resending the same oversized input
+///                           cannot succeed; an overflow is not a gateway-style transient
+///                           and must never feed an unbounded retry / continue loop.
 ///   - Unknown            -> ProviderTransient. An unobservable failure keeps the
 ///                           recovery path in charge instead of guessing a terminal.
 ///
@@ -27,9 +27,9 @@ module HostFailureClassifier =
     let classify (failure: Wanxiangshu.Host.Ports.HostFailure) : ExecutionFailure =
         match failure.Kind with
         | Wanxiangshu.Host.Ports.HostFailureKind.Aborted -> ExecutionFailure.UserCancelled
-        | Wanxiangshu.Host.Ports.HostFailureKind.Authentication -> ExecutionFailure.ProviderPermanent
+        | Wanxiangshu.Host.Ports.HostFailureKind.Authentication
+        | Wanxiangshu.Host.Ports.HostFailureKind.ContextOverflow -> ExecutionFailure.ProviderPermanent
         | Wanxiangshu.Host.Ports.HostFailureKind.RateLimited
         | Wanxiangshu.Host.Ports.HostFailureKind.Network
-        | Wanxiangshu.Host.Ports.HostFailureKind.ContextOverflow
         | Wanxiangshu.Host.Ports.HostFailureKind.Provider
         | Wanxiangshu.Host.Ports.HostFailureKind.Unknown -> ExecutionFailure.ProviderTransient

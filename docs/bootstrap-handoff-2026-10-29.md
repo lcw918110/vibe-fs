@@ -76,6 +76,140 @@
 | requirement-system 017 | 需用户 | #70 带入的测无 WHAT 条款：mce 016、dispatch-protocol 016、crash-reconciliation 022、work 056/057（「notify the user」）|
 | managed-chat-execution 005 #5 | 不确定 | `message.updated` 已让 providerStarted 先于 transform 落盘；测期望 false。基线既有，未判 |
 | managed-session-lifecycle 022 #5 | 不确定 | EngineerCaseCaptured 1≠2。基线既有，未判 |
-| capability-enforcement 025 P15 | 负载抖动 | P8 并发下 rg 先退出（ESRCH），单跑 3/3 绿 |
+| capability-enforcement 025 P15 | 证据不足，不要写成已解决 | P8 并发下 rg 先退出（ESRCH），单跑 3/3 绿。这只是一次观察，不是裁定，也不是已解决。
 
 仍悬：OMP `askPreviousScope`+`scope.kind=resetScope` 静默丢（待裁，未动）；被 skip 的独立 reset 档案链路尚无注解路径等价新测；scope 注解 schema 未承载「收尾后不得 reset」（delegation-038 第 5 例 skip 后的欠账）。
+
+## 待裁补缺（本轮）
+
+已有记录只补缺，不把待裁改成裁定。
+
+仍待裁定，上文已写，此处不改写：capability-enforcement 026 的 keepLast 零副作用；`askPreviousScope` 与 `scope.kind=resetScope` 同用时静默丢弃；capability-enforcement 009 空 session；work 019 第 4 例；time-capability 004 的 `setTimeout`；js-semantic 与 requirement-system 017 无 WHAT。
+
+补上的事实：`requirements/js-semantic-surface/WHAT.md`、`requirements/requirement-system/WHAT.md` 两份文件都在，[002] 与 [017] 条款也在。上文「无 WHAT」指 017 点名的测没有对应条款（mce 016、dispatch-protocol 016、crash-reconciliation 022、work 056/057），不是文件缺失。不代裁。
+
+有实现声称、未见裁定，故仍待裁。不得回滚，也不得代裁，不升格为已裁定，也不写成已解决：
+- 畸形 identity carrier 按缺省处理。
+- 受管 intent 缺持久 authority 时，改为边界级显式失败。
+
+树里没有这两项的报告路径，不编出处。先前报告指向主仓 `5dd99b875`、子模块 `c8d18b9`、generation 462；这不是本轮读回的当前树事实。`wanxiangli-ce-replay-wt` 不删。
+
+## phase/step 档案（建议分类，不是裁定）
+
+只收回下面三处。约 22 处里其余仍未收回，不在此补完，也不逐处代裁。建议分类不是负责人裁定。
+
+1. `ExecutionPermits.IllegalTransition` 在 `wanxiangli/src/permit/ExecutionPermits.fs:115`。本轮读到第 115 行是 Rejection 用例 `IllegalTransition`，不是函数体。托付原意：守的是 completeRelease 只能从同一 Release 的 Releasing 完成，Pending/Committed 必须拒绝。建议保留。不是裁定。
+2. `ChatAdmissionFlightPhase` 在 `src/Wanxiangshu/OpenCode/Host/HostSignalBootstrap.fs:54`。本轮读到 `Running` / `Finished`。第 1155 行在 `Phase.Value = Running` 时交回已有 `Work`，否则新开航班。建议保留到有计算表达式接过这个合并。不是裁定。
+3. `ChatAdmissionTransactionStep` 在 `src/Wanxiangshu/Interaction/Admission/ChatAdmissionTransaction.fs:23`。本轮读到的是步骤名枚举。托付：没有用当前 step 决定下一步，顺序就是 task 顺序；形态符合指南第 2 节要去掉的 phase/step 标签。指南点的是形状，不是逐字类型名；本轮在 docs 里用 phase/step 只命中本交接文件，不另编指南路径。`ChatAdmissionTransactionSurface.fs` 有 `CrashB`/`AcquireLease`、`CrashC`/`LeaseTarget`、`CrashD`/`ProjectHost` 匹配臂。这些名字是否仍被依赖，未测量。未测量前不删。不是裁定。
+
+## 待裁补缺（续，不代裁）
+
+不重复上文已写的待裁名单。
+
+work 019 第 4 例仍待裁。不改测试，也不改代码。`requirements/work/tests/019.test.mjs` 109-123 期望 `binding-unavailable` 或 `review-unavailable`。源码路径是 `ToolRegistry.reviewMember` 不看任期；空账走到 lifecycle `finishActive` `Asked`，返回 `ok=true`、`kind=Asked`，并打开初始任期。`binding-unavailable` 当前无调用方。与第 3 例承认的开工路径相反。
+
+交接表排除清单外，没有同时写明期望行为和当前偏差的可修项。不据此开修。
+
+scope 注解 schema 缺少「收尾后不得 reset」，只是缺口，没有字段名，不代设计。
+
+`arg-estimate` 旧路径名没有指定替代名，不改。
+
+## 另记（只补缺，不代裁）
+
+reset 043／047／049／050 两宿主文案不一致，补测试等于代裁。只记下缺口，不补等价新测，也不裁定哪一家文案为准。
+
+P15 证据不足，不要写成已解决。上表类别已从「负载抖动」改成这句话。单跑绿不能升格成已解决。
+
+lsof 留删：文档里原先没有这条。留还是删，未裁定、不代裁。本轮不删任何调用。
+
+
+## 待裁补缺（gen465 笔记入账，不代裁、不回滚）
+
+委派人所告：`04d4a9a8` 已提交并推送，主题是待裁登记不是裁定。本段只补上文还没有的缺口，不回滚该提交，不改产品代码，不改测试，不把待裁写成裁定。落笔前交账仍是 17166 字节、mtime 2026-10-29T10:01:07.972Z，文末仍是「本轮不删任何调用。」；对不上就不会写这一段。
+
+managed-session-lifecycle 022 第 5 例不改。本轮在 requirements 的 WHAT.md 检索 EngineerCaseCaptured，无命中：WHAT 没有这条数。实现一次 archive 写一条。测试期望 2 是夹具算术，不是现行契约。缺的书面裁定是：删除归档后总数以谁为准，decoy 与子会话各算不算。上文表里「1≠2、未判」不改写。
+
+time-capability 004 不改。本轮读到 `src/Wanxiangshu/OpenCode/Host/Sessions.fs:84` 起是 `RunnerIdleWait`，第 85 行从 `node:timers/promises` 导入 `setTimeout`，`sleep` 走这个导入。轮询参数是 `IOpenCodePort`，没有接到 `ITimerPort`。走时间端口还是精确豁免，未裁。上文表内 `Sessions.fs:85` 与这次读到的行号一致，原句不动。
+
+「收尾后不得 reset」不在 `ToolHostCodec.scopeAnnotationSchema`。本轮读到的字段只有 `kind`、`oldScopeVerboseVerbatim`、`newScopeGoal`、`newScopeRetentionBudget`、`replacement`，没有这项的字段名。不设计字段。delegation 038 第 5 例 skip 的是已删除的 ResetScopeTool.js 那句英文，不是 schema 断言。上文「schema 未承载、没有字段名」不改写成已设计。
+
+ChatAdmissionFlightPhase 的类型名本轮只出现在 `HostSignalBootstrap.fs`。第 1155 行是进程内字典 `admissionInFlight.TryGetValue` 命中、且 `Phase.Value = Running` 时交回已有 Work。`admissionInFlight` 的 .fs 命中限于：src/Wanxiangshu/OpenCode/Host/HostSignalBootstrap.fs。按类型名，恢复和 journal replay 不读它；本轮没有再用别名把 replay 路径搜完。`completeRelease` 定义在 `wanxiangli/src/permit/ExecutionPermits.fs:150`；.fs 里另一处是第 259 行，`release` 在 `beginRelease` 已 Transitioned 之后调用 `Lifecycle.completeRelease`。这是读到的位置，不是删留裁定。上文「建议保留到有计算表达式接过这个合并」不改成裁定。
+
+计算表达式事实重放：本轮读到 `wanxiangli/src/program/Program.fs` 有 `replay`，`wanxiangli/src/lifecycle/State.fs:215` 写明程序位置只按事实重放推进。笔记还点了 Work.fs。本轮用 replay／事实重放／计算表达式去对 wanxiangli/src 下的 Work.fs，没有命中。不把笔记改写成「本轮已在 Work.fs 读到重放」。这只说明重放还在，不说明指南第 49 行四段控制流已经重写完。
+
+指南第 49 行四段，按笔记尚未收成单一 CE。咨询与答复是 task。一轮对话、委托与 Join 是 CE 与 phase 枚举并排。打断与续跑两边都不是。不要把 `ChatExecutionLaw.Phase` 或 `HandleLifecycleLaw.Phase` 当证明税删除。本轮在 markdown 检索 `ChatExecutionLaw` 无命中，不另编指南路径，也不删这两个 Phase。
+
+六个旧拒收名，笔记说测试路径没有断言行，名字本身没有列出，不补全。本轮读到 requirements/managed-chat-execution/tests/018.test.mjs:9 // `MANAGED-CHAT-005 … frozen-attempt-plan-missing` because the process-local frozen。
+
+capability-enforcement 026 缺的裁定上文已写：拒派改了 durable 字节时，豁免 scope-retention 流，还是让门在业务拒绝前不落注解。此处不另选，不改写原句。
+
+capability-enforcement 009 第 2 例补一句，不改上文表。这是短路：调用方只看见 `sessionId and epochId required`，执行面拒绝没有生成。门序和文案归属未裁。
+
+scope-progress 包与出口都在，不拆。宿主不再写估计，仍读估计日志认 epoch。上文「不拆包」不动。
+
+回执没来仍被收成 Superseded 并 Ok 的旧状，笔记称已按指南派工改成未知不得冒充。AbortedObserved 仍是合法观察种类，现行重启不喂它；LegacyFalseAbort 拒绝路径保留。本轮在 *.fs 见到这些符号，只作定位，不解释成裁定：wanxiangli/src/assembly/DurableWork.fs:200、wanxiangli/src/assembly/DurableWork.fs:202、wanxiangli/src/chat-execution/ChatExecutionLaw.fs:293、wanxiangli/src/handle-lifecycle/HandleLifecycleLaw.fs:201、wanxiangli/src/handle-lifecycle/HandleLifecycleLaw.fs:214、wanxiangli/src/lifecycle/State.fs:624、wanxiangli/src/lifecycle/Work.fs:213、wanxiangli/src/lifecycle/Work.fs:216、wanxiangli/src/lifecycle/Work.fs:220、wanxiangli/src/session/Message.fs:14、wanxiangli/src/session/Message.fs:60、wanxiangli/src/session/Message.fs:62、wanxiangli/src/session/Message.fs:85、wanxiangli/src/session/Ownership.fs:30、wanxiangli/src/session/Ownership.fs:168、wanxiangli/src/session/Ownership.fs:172、wanxiangli/src/session/Ownership.fs:173、wanxiangli/src/session/Ownership.fs:176、wanxiangli/src/session/Ownership.fs:267、src/Wanxiangshu/Mission/Lifecycle/DurableWorkHost.fs:286、src/Wanxiangshu/Mission/Lifecycle/DurableWorkHost.fs:327、src/Wanxiangshu/Mission/Lifecycle/DurableWorkHost.fs:332、src/Wanxiangshu/Mission/Planning/PlanTools.fs:29、src/Wanxiangshu/Execution/Session/ChatExecution/Surface.fs:630、src/Wanxiangshu/Execution/Session/ChatExecution/Surface.fs:632。这不是新裁定，也不回滚 `04d4a9a8`。
+
+lsof 留删仍未裁。本轮检索 lsof，命中 2 处：docs/bootstrap-handoff-2026-10-29.md:123；requirements/verification-system/tests/e2e/support/process-host.js:245。上文「本轮不删任何调用」仍然有效。本轮不删。
+
+requirement-system 017：正文按显式引用没有点名测试路径。五个外包装测试是否补 WHAT，仍待裁。本轮在 WHAT.md 见到的 017 相关行：51 ## [017] 包结构测试。不代裁，不补条款。
+
+createSession 传输超时仍是 Unknown。NotStarted 只用于未绑定 manager 或宿主 HTTP 拒绝。不改，不代裁。
+
+ChatAdmissionTransactionStep 的展示字符串可有可无。CrashB/C/D 的中断点是枚举臂。未裁定，不删。上文第 3 条已写未测量前不删，此处只补这两句，不改成删留裁定。
+
+askPreviousScope 同带 resetScope，不改。本轮读到 ScopeAnnotationGate.fs:135 为 `| Ok _ -> return! inner args ctx`。上文「静默丢、待裁是拒收还是走同一 reset 路径」不改写成已修。
+
+
+## 待裁补缺（P15 与符号位置，不代裁、不回滚）
+
+不回滚 `04d4a9a8`。委派人所核：该提交只含 `docs/bootstrap-handoff-2026-10-29.md`。本轮没有跑 git，不把这句话写成自己查过的提交范围。
+
+P15 当前树重读后仍是证据不足。不写成代码缺陷，不写成负载抖动，不写成已解决，本轮不重跑。上文表里那句 ESRCH 摘要还在，没有栈，没有 stderr。本轮在 capability-enforcement 与这份交接里检索 P8，命中：docs/bootstrap-handoff-2026-10-29.md:79。没有读到 P8 的定义。本轮读到 `requirements/capability-enforcement/tests/025.test.mjs:441` 为 `test('WHAT[capability-enforcement-025] P15_concurrent_physical_rg_overlap_with_review_acceptance_admits_inflight_and_refuses_subsequent', { timeout: 5000 }, async () => {`。笔记说这里的并发 rg 用无保护的 SIGSTOP/SIGCONT。附近原文：
+
+```
+431|      assert.equal((await execute(hooks, sessionID, reads[3], 'late-rg')).code, 'REVIEW_ONLY')
+432|      assert.equal(spawns, 1)
+433|    } finally {
+434|      released.resolve()
+435|      processes.spawn = spawn
+436|      syncBuiltinESMExports()
+437|    }
+438|  })
+439|})
+440|
+441|test('WHAT[capability-enforcement-025] P15_concurrent_physical_rg_overlap_with_review_acceptance_admits_inflight_and_refuses_subsequent', { timeout: 5000 }, async () => {
+442|  const { default: processes } = await import('node:child_process')
+443|  const { syncBuiltinESMExports } = await import('node:module')
+444|  await withExecutablePlugin(async (hooks, directory, _ids, runtime) => {
+445|    const sessionID = 'ses-concurrent-inflight-review'
+446|    await seed(runtime, sessionID, directory)
+447|    const paused = Promise.withResolvers()
+448|    const spawn = processes.spawn
+449|    let spawns = 0
+450|    let liveChild = null
+451|    try {
+452|      processes.spawn = function (...args) {
+453|        const child = spawn.apply(this, args)
+454|        if (args[0] !== 'rg') return child
+455|        spawns += 1
+```
+
+符号位置按本轮检索入账，不是形态裁定。生产路径指 `src/` 与 `wanxiangli/src/` 里非测试、非 markdown 的文件。
+
+MalformedIdentityCarrier：2 处。生产路径 无。其余：指南.txt。
+DurableAuthorityUnavailable：2 处。生产路径 无。其余：指南.txt、proposals/archive/2026-10-03/baselines/2026-10-03-r04-concurrent-hook-handles-red.log。
+ClosureKindUnproven：1 处。生产路径 无。其余：指南.txt。
+frozen-attempt-plan-missing：3 处。生产路径 无。其余：docs/bootstrap-handoff-2026-10-29.md、requirements/managed-chat-execution/tests/018.test.mjs、requirements/managed-chat-execution/WHAT.md。
+Input has no exact accepted evidence：1 处。生产路径 无。其余：指南.txt。
+AuthorityRootAppendFailure：本轮 `rg --no-ignore` 全树零命中。
+
+本轮读到 `requirements/capability-enforcement/tests/026.test.mjs` 第 406-409 行：
+
+```
+406|// 跨进程隔离：DevOps 派工门的能力不得以进程局部状态跨进程走私。produce 进程
+407|// 在评审接纳前被拒、接纳后被放行；recover 进程在同一个工作区重新打开时，未评审
+408|// 的会话仍被 assessment-pending-for-devops 拒绝，已确认的会话被 REVIEW_PENDING
+409|// 拒绝。两个进程必须真的不同。
+```
+
+上文已有的「畸形 identity carrier」「缺持久 authority」两条实现声称，不因这次检索升格为裁定，也不改写成已解决。

@@ -54,10 +54,7 @@ module PluginSessionWiring =
                                 failure
                                 error
 
-                        match verdict with
-                        | RetryVerdict.Dispatched
-                        | RetryVerdict.Superseded -> return Ok()
-                        | RetryVerdict.Terminal reason -> return Error reason
+                        return Retry.observeDelegateRetry verdict
                     } }
 
         let seedDurableSessions (durable: AgentJournal) =

@@ -223,7 +223,11 @@ module InteractionRepairWorkflow =
         : Task =
         let turn = context.Turn
 
-        if isFailureBudgetExhausted journal turn.SessionId then
+        // An exhausted retry budget ends a short role's repair. A long-running role's open
+        // work outlives the budget: its empty or unfinished stop still earns the reminder.
+        let longRunning = turn.Role |> Option.exists Roles.isLongRunning
+
+        if not longRunning && isFailureBudgetExhausted journal turn.SessionId then
             eventPort.NotifyTerminal
                 turn.SessionId
                 (TerminalOutcome.Failed(

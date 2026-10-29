@@ -592,9 +592,32 @@ module ProviderFailureSurface =
                 match result with
                 | RetryVerdict.Dispatched -> "Dispatched"
                 | RetryVerdict.Superseded -> "Superseded"
+                | RetryVerdict.ReceiptUnknown -> "ReceiptUnknown"
+                | RetryVerdict.WaitDenied -> "WaitDenied"
                 | RetryVerdict.Terminal _ -> "Terminal"
         }
 
+    let stopWaitVerdict (alreadyAdmitted: bool) (stopWait: string) : string =
+        match Retry.verdictUnlessContinuing alreadyAdmitted stopWait with
+        | None -> "Continue"
+        | Some RetryVerdict.Superseded -> "Superseded"
+        | Some RetryVerdict.ReceiptUnknown -> "ReceiptUnknown"
+        | Some RetryVerdict.WaitDenied -> "WaitDenied"
+        | Some RetryVerdict.Dispatched -> "Dispatched"
+        | Some (RetryVerdict.Terminal _) -> "Terminal"
+
+    let delegateRetryObservation (verdictName: string) : string =
+        let verdict =
+            match verdictName with
+            | "Dispatched" -> RetryVerdict.Dispatched
+            | "Superseded" -> RetryVerdict.Superseded
+            | "ReceiptUnknown" -> RetryVerdict.ReceiptUnknown
+            | "WaitDenied" -> RetryVerdict.WaitDenied
+            | other -> RetryVerdict.Terminal other
+
+        match Retry.observeDelegateRetry verdict with
+        | Ok () -> "Ok"
+        | Error reason -> "Error:" + reason
     /// Record one confirmed provider failure through the production ledger using
     /// an opaque JournalHandle. Only `ExecutionFailurePolicy` may licence the
     /// advance against the single `ProviderFailureBudget.DefaultBudget`, and no
@@ -785,3 +808,22 @@ module ProviderFailureSurface =
             box
                 {| failures = current.Budget.ConsecutiveFailureCount
                    exhausted = current.Exhausted |}
+
+    /// Which continuation a role gets when automatic retry gives up on a failure.
+    /// Empty string means the turn stops with its terminal failure.
+    let longWorkContinuationPath (role: string) (failure: string) : string =
+        let failureKind =
+            match failure with
+            | "ProviderTransient" -> ExecutionFailure.ProviderTransient
+            | "ProviderPermanent" -> ExecutionFailure.ProviderPermanent
+            | "UserCancelled" -> ExecutionFailure.UserCancelled
+            | other -> invalidArg "failure" $"unsupported failure '{other}'"
+
+        ProviderRecoveryWorkflow.longWorkContinuationPath (Roles.tryParseRole role) failureKind
+        |> Option.defaultValue ""
+
+    /// Same as `longWorkContinuationPath`, but a context-window overflow reason
+    /// never earns a continuation: resending the oversized input cannot succeed.
+    let longWorkContinuationPathForReason (role: string) (failure: string) (reason: string) : string =
+        if ProviderRecoveryWorkflow.isContextOverflowReason reason then ""
+        else longWorkContinuationPath role failure

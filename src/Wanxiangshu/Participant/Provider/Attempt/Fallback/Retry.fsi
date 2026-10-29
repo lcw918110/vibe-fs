@@ -16,6 +16,10 @@ type RetryVerdict =
     | Dispatched
     /// A duplicate or superseded episode: idempotent stop, no terminal.
     | Superseded
+    /// Stop receipt did not arrive. Not success, not supersession, and not a claim that the host did not stop.
+    | ReceiptUnknown
+    /// Stop wait was refused. A known rejection, not a missing receipt and not a superseded recovery.
+    | WaitDenied
     /// Recovery is exhausted or not licensed; the caller terminalizes with this reason.
     | Terminal of reason: string
 
@@ -37,3 +41,10 @@ type RetryPorts =
 module Retry =
     /// The single retry decision: pure policy, then admitted redispatch or a typed terminal.
     val attempt: ports: RetryPorts -> input: RetryAttempt -> Task<RetryVerdict>
+
+    /// None: the attempt stopped and recovery is not already admitted, so redispatch may continue.
+    /// Some: already admitted, receipt missing, or wait refused. Timeout is never Superseded.
+    val verdictUnlessContinuing: alreadyAdmitted: bool -> stopWait: string -> RetryVerdict option
+
+    /// Ok only for a real dispatch or a real supersession.
+    val observeDelegateRetry: verdict: RetryVerdict -> Result<unit, string>

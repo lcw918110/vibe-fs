@@ -160,6 +160,26 @@ module PluginHooks =
         | _ -> None
 
 
+    /// A read-only consultation projects an immutable view (the delegator's
+    /// latest view or the previous Scope's sealed equivalent view). Host
+    /// compaction cannot shrink it: every next step re-projects the same view.
+    /// So a Host compaction on a temporary session is the observed fact that
+    /// the view does not fit the provider window; the consultation ends there
+    /// and reports that to its caller instead of compacting forever.
+    let private overflowedTemporaries = HashSet<string>()
+
+    let private markTemporaryOverflow (tempId: string) : bool =
+        if PluginTransforms.negotiationIsTemporary tempId then
+            overflowedTemporaries.Add tempId |> ignore
+            true
+        else
+            false
+
+    let private temporaryOverflowed (tempId: string) = overflowedTemporaries.Contains tempId
+
+    let private temporaryOverflowError =
+        "read-only consultation view exceeds the provider context window; Host compaction cannot shrink a projected consultation view, so the consultation ended"
+
     let private negotiationSdk (session: obj) (methodName: string) (payload: obj) : Task<obj> =
         let action = emitJsExpr (session, methodName) "$0[$1]"
 
@@ -304,7 +324,9 @@ module PluginHooks =
         let retryText = snapshotDenialText tempId + "\n\n" + firstPrompt
 
         let rec run attempt prose =
-            if not (PluginTransforms.negotiationIsTemporary tempId) then
+            if temporaryOverflowed tempId then
+                Task.FromResult(Error temporaryOverflowError)
+            elif not (PluginTransforms.negotiationIsTemporary tempId) then
                 Task.FromResult(Error "temporary read-only consultation was cancelled")
             elif attempt > 2 then
                 Task.FromResult(
@@ -319,6 +341,7 @@ module PluginHooks =
                 let! result = tryTemporaryAnswer session tempId payload
 
                 match result with
+                | _ when temporaryOverflowed tempId -> return Error temporaryOverflowError
                 | TemporaryAnswer.Replied text -> return Ok text
                 | TemporaryAnswer.Retry -> return! run (attempt + 1) retryText
                 | TemporaryAnswer.Failed error -> return Error error
@@ -377,7 +400,7 @@ module PluginHooks =
                     PluginTransforms.negotiationModelFor delegator
                 | ConsultationOrigin.Previous(source, metadata) ->
                     PluginTransforms.consultationStartPrevious tempId source metadata,
-                    (if isNull metadata then null else metadata?model)
+                    PluginTransforms.consultationModelForPrevious source metadata
 
             let questionRun =
                 match linked with
@@ -388,6 +411,7 @@ module PluginHooks =
                 return! questionRun
             finally
                 PluginTransforms.negotiationFinishTemporary tempId
+                overflowedTemporaries.Remove tempId |> ignore
         // Physical session cleanup is deliberately performed after the runner by createAndRunTemporary.
         }
 
@@ -1819,35 +1843,62 @@ module PluginHooks =
                 let combined = Array.append (existingContextOf output) (Array.ofList lines)
                 writeOutputField output "context" (box combined)
 
+            // Ends the overflowed consultation's Host loop; its prompt then returns.
+            let abortOverflowedTemporary (tempId: string) : unit =
+                let session = if isNull client then null else client?session
+
+                if not (isNull session) then
+                    (task {
+                        try
+                            let! _ = negotiationSdk session "abort" (negotiationSessionPayload tempId [])
+                            return ()
+                        with _ ->
+                            return ()
+                    })
+                    |> ignore<Task<unit>>
+
             let onSessionCompacting (input: obj) (output: obj) : Task<unit> =
                 task {
                     let sid = sessionIdOfHook input
 
-                    Diagnostic.emit
-                        "compaction_started"
-                        [ "session_id", SessionId.value sid; "result", "cannot-refuse" ]
+                    if markTemporaryOverflow (SessionId.value sid) then
+                        Diagnostic.emit
+                            "temporary_consultation_overflow"
+                            [ "session_id", SessionId.value sid; "result", "consultation-ends" ]
 
-                    activeCompactingSessions.Add(SessionId.value sid) |> ignore
+                        abortOverflowedTemporary (SessionId.value sid)
+                    else
+                        Diagnostic.emit
+                            "compaction_started"
+                            [ "session_id", SessionId.value sid; "result", "cannot-refuse" ]
 
-                    let! contribution = product.Compaction.OnCompacting sid
+                        activeCompactingSessions.Add(SessionId.value sid) |> ignore
 
-                    match contribution with
-                    | Wanxiangshu.Host.Ports.CompactionContribution.Nothing -> ()
-                    | Wanxiangshu.Host.Ports.CompactionContribution.Context lines ->
-                        appendCompactionContext output lines
-                    | Wanxiangshu.Host.Ports.CompactionContribution.ReplacePrompt prompt ->
-                        writeOutputField output "prompt" (box prompt)
+                        let! contribution = product.Compaction.OnCompacting sid
+
+                        match contribution with
+                        | Wanxiangshu.Host.Ports.CompactionContribution.Nothing -> ()
+                        | Wanxiangshu.Host.Ports.CompactionContribution.Context lines ->
+                            appendCompactionContext output lines
+                        | Wanxiangshu.Host.Ports.CompactionContribution.ReplacePrompt prompt ->
+                            writeOutputField output "prompt" (box prompt)
                 }
 
             let onCompactionAutoContinue (input: obj) (output: obj) : Task<unit> =
                 task {
                     let sid = sessionIdOfHook input
-                    let! verdict = product.Compaction.AutoContinue sid
 
-                    match verdict with
-                    | Wanxiangshu.Host.Ports.ContinueVerdict.Allow -> writeOutputField output "enabled" (box true)
-                    | Wanxiangshu.Host.Ports.ContinueVerdict.Deny _reason ->
+                    if markTemporaryOverflow (SessionId.value sid) then
+                        // The overflowed consultation stops here; its prompt returns
+                        // and the runner reports the overflow to the caller.
                         writeOutputField output "enabled" (box false)
+                    else
+                        let! verdict = product.Compaction.AutoContinue sid
+
+                        match verdict with
+                        | Wanxiangshu.Host.Ports.ContinueVerdict.Allow -> writeOutputField output "enabled" (box true)
+                        | Wanxiangshu.Host.Ports.ContinueVerdict.Deny _reason ->
+                            writeOutputField output "enabled" (box false)
                 }
 
             let sessionCompacting =

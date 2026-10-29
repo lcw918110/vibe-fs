@@ -921,11 +921,7 @@ module SyncDelegateSurface =
                                         failure
                                         error
 
-                                return
-                                    match verdict with
-                                    | RetryVerdict.Dispatched
-                                    | RetryVerdict.Superseded -> Ok()
-                                    | RetryVerdict.Terminal reason -> Error reason
+                                return Retry.observeDelegateRetry verdict
                             } }
 
             let runtime =

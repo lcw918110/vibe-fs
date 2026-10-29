@@ -1,7 +1,7 @@
 // WHAT[capability-enforcement-026]: DevOps 派工门的能力不得以进程局部状态跨进程
 // 走私。produce 进程在评审接纳前被拒、接纳后被放行；recover 进程在同一个工作区
 // 重新打开时，未评审的会话仍被 assessment-pending-for-devops 拒绝，已确认的会话
-// 被 dispatch-closed 拒绝，且拒绝不产生任何持久化副作用或子会话。
+// 被 REVIEW_PENDING 拒绝，且拒绝不产生任何持久化副作用或子会话。
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'

@@ -5,7 +5,7 @@ open Fable.Core.JsInterop
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Foundation.Identity
 
-/// P0-RECOVERY-JOIN-001 + clean-break: Aborted is observation, not durable finality.
+/// P0-RECOVERY-JOIN-001 + clean-break: Aborted is not a host observation and not durable finality.
 /// Join consumes only JoinableCompletion from a decoded current terminal; no raw JSON / kind+body.
 module ChildRecovery =
 
@@ -173,11 +173,11 @@ module ChildRecovery =
         | Terminal of TerminalEvidence
         | Unreadable of reason: string
 
-    /// Host observations. AbortedObserved is never finality.
+    /// Host observations that may enter recovery resolution. Abort is not one of them.
     /// RecoveryInFlight avoids dsl-ownership behaviour-bool tokens (*Pending/*Running).
     [<RequireQualifiedAccess>]
     type HostObservation =
-        | AbortedObserved of reason: string
+        
         | ParentCancelled
         | DeadlineExceeded
         | HostSessionGone
@@ -229,7 +229,7 @@ module ChildRecovery =
     /// snapshot legal terminal → RecoveredTerminal
     /// snapshot Unreadable (true read error) → RecoveryIncomplete (wait; no permit; not hard block)
     /// session active → RecoveredActive (recovery work done; child continues)
-    /// restore in flight / abort-only / unknown → RecoveryIncomplete (must not issue permit)
+    /// restore in flight / unknown → RecoveryIncomplete (must not issue permit)
     /// ParentCancelled / DeadlineExceeded / HostSessionGone → RecoveredAbandoned
     /// conflict / retired → RecoveryBlocked
     /// CUT-13: the resolution order is owned by wanxiangli/handle-lifecycle
@@ -260,7 +260,7 @@ module ChildRecovery =
 
     let private observationName (observation: HostObservation) =
         match observation with
-        | HostObservation.AbortedObserved _ -> "AbortedObserved"
+        
         | HostObservation.ParentCancelled -> "ParentCancelled"
         | HostObservation.DeadlineExceeded -> "DeadlineExceeded"
         | HostObservation.HostSessionGone -> "HostSessionGone"
@@ -337,7 +337,7 @@ module ChildRecovery =
     /// Pure invariant over a join-recovery timeline:
     /// ∀ JoinReturned(agent) ∃ TerminalProofIssued(agent) before HandleCompletionCommitted(agent)
     /// before that JoinReturned; RawAbortObserved never adjacent to HandleCompletionCommitted
-    /// or JoinReturned (abort is observation, not a completion step).
+    /// or JoinReturned (a raw abort is not a completion step).
     let joinReturnedImpliesProofBeforeCommit (events: JoinRecoveryTrace list) : bool =
         let adjacentForbidden a b =
             match a, b with

@@ -22,7 +22,7 @@ For Accepted without ProviderStarted, accepted origin may establish WorkMain or 
 
 ## [005] Bounded automatic retry
 
-Automatic retry has a finite consecutive-failure limit. At the limit the run is exhausted and sends no further automatic physical request. Later recovery requires a new Authority Root or explicit user action.
+Automatic retry has a finite consecutive-failure limit. At the limit the run is exhausted and sends no further automatic retry. A short role then stops with its failure; a long-running role continues its work under [024].
 
 ## [006] Fixed participant, separate model routing
 
@@ -91,6 +91,12 @@ Host 停止自动重试的唯一证据是确切 `(SessionId, ProviderRunIdentity
 session-only idle 是唤醒，不能证明同 session 所有已接受输入都已被 Host 停止。在线 sweep 必须由公开 Host snapshot 的最新已完成 assistant 的 exact `parentID` 确认停止的物理执行，只定夺它自己的未启动义务。已被 owner 明确取代的旧 assistant idle 不定夺新输入，不铸造新输入的 idle permit；尚未保存到 Host 或仍在容量排队的已接受 successor 由其准入 owner 和独立 recovery sweep 负责。
 
 定夺必须终局：有 typed resume capability 时，用确切已接受 material 恢复执行；否则将该执行结为终态并报告该 turn 失败。本义务不发送新文本、不生成替换 PromptClaim，也不放宽 [003] 的单次物理发送约束。
+
+## [024] 长程角色不因上游错误停工
+
+Manager、Orchestrator、Plan 的工作在会话里还开着。上游可恢复错误（Bad Gateway、5xx、网络、重试预算耗尽、重投失败）让本拍失败时，宿主等确切宿主终态后，向该会话发本角色的续工指令（`work/<role>-continue`，前面带一句网络故障说明），不报终态失败，不停会话。预算耗尽也不挡这类角色的空回复/未完成提醒。
+
+DevOps、Engineer、Advisor 等短工照旧：耗尽即报失败。用户取消与非瞬时错误不在此列。上下文窗口溢出（`input_too_large`、context window 超限等）不是网关类瞬时错误：原样重发不可能成功，不得续工 nudge，也不得作为可无限重试的瞬时失败。
 
 ## [025] 上游仅含思考无正文的错误统一并入可修复续行
 

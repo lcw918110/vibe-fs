@@ -161,6 +161,17 @@ module PluginTransforms =
 
     let consultationModelForTemporary (tempId: string) : obj = Surface.modelForTemporary tempId
 
+    /// Previous-Scope consultation runs on the source session's current model,
+    /// exactly like a fresh negotiate; the archived model is only a fallback
+    /// when no current model has been observed. A stale archived identity
+    /// (e.g. an upstream that has since gone away) must not strand the ask.
+    let consultationModelForPrevious (sourceSessionId: string) (metadata: obj) : obj =
+        let current = negotiationModelFor sourceSessionId
+
+        if not (isNull current) then current
+        elif isNull metadata then null
+        else metadata?model
+
     let negotiationFinishTemporary (tempId: string) : unit = Surface.finishTemporary tempId
 
     let negotiationForgetSession (sessionId: string) : unit = Surface.forgetSession sessionId

@@ -60,6 +60,107 @@ module ProviderRecoveryWorkflow =
             (TerminalOutcome.Failed(TerminalStop.forAuthority turn.AuthorityRootUserMessageId reason))
         |> ignore
 
+    /// Manager, Orchestrator and Plan own open work. When automatic retry gives up on a
+    /// transient provider failure (retry budget exhausted, failed redispatch), the turn
+    /// ended but the work did not: such a role gets its own goal-directed continuation,
+    /// never a terminal stop. Short-lived roles keep the terminal failure.
+    let longWorkContinuationPath (role: Role option) (failure: ExecutionFailure) : string option =
+        match failure, role with
+        | ExecutionFailure.ProviderTransient, Some Role.Manager -> Some "work/manager-continue"
+        | ExecutionFailure.ProviderTransient, Some Role.Plan -> Some "work/plan-continue"
+        | ExecutionFailure.ProviderTransient, Some Role.Orchestrator -> Some "work/orchestrator-continue"
+        | _ -> None
+
+    [<RequireQualifiedAccess>]
+    type private LongWorkAfterStop =
+        | Continued
+        | ReceiptUnknown
+        | WaitDenied
+        | NotSent of reason: string
+
+    /// A context-window overflow is not a gateway-style transient: resending the
+    /// same oversized input cannot succeed, so it never earns a continuation nudge.
+    let isContextOverflowReason (reason: string) : bool =
+        let text = if isNull reason then "" else reason.ToLowerInvariant()
+
+        text.Contains "input_too_large"
+        || text.Contains "context_length_exceeded"
+        || text.Contains "contextoverflow"
+        || text.Contains "context window"
+        || text.Contains "prompt is too long"
+        || text.Contains "maximum context length"
+
+    let private sendLongWorkContinuation
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (durable: AgentJournal)
+        (turn: ReconciledTurn)
+        (path: string)
+        : Task<LongWorkAfterStop> =
+        task {
+            let! hostStopped =
+                providerAttemptStopFence?WaitForStop(
+                    SessionId.value turn.SessionId,
+                    ProviderRunIdentity.value turn.ProviderRun,
+                    30000
+                )
+
+            match string hostStopped, HostSessionNudge.tryActiveProfile (Some durable) turn.SessionId with
+            | "Stopped", Some profile when profile.AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId ->
+                let prompt =
+                    ProviderProse.documentFor turn.SessionId RuntimeNudge.ProviderRetry Map.empty
+                    + "\n\n"
+                    + ProviderProse.documentFor turn.SessionId path Map.empty
+
+                match!
+                    HostSessionNudge.trySendGateContinuation
+                        sessionPort
+                        rootWorkspace
+                        turn.SessionId
+                        prompt
+                        PromptAuthority.ContinuationKind.InteractionRepair
+                        turn.Directory
+                        (Some durable)
+                        "unfinished-long-work-after-provider-failure"
+                        turn.ProviderRun
+                with
+                | HostSessionNudge.GateContinuationOutcome.Failed error -> return LongWorkAfterStop.NotSent error
+                | HostSessionNudge.GateContinuationOutcome.Sent _
+                | HostSessionNudge.GateContinuationOutcome.AlreadyAdmitted
+                | HostSessionNudge.GateContinuationOutcome.Retired -> return LongWorkAfterStop.Continued
+            | "Stopped", Some _ -> return LongWorkAfterStop.Continued
+            | "Stopped", None -> return LongWorkAfterStop.NotSent "No active authority profile"
+            | "Denied", _ -> return LongWorkAfterStop.WaitDenied
+            | _, _ -> return LongWorkAfterStop.ReceiptUnknown
+        }
+
+    /// The terminal answer of confirmed-failure recovery. A long-running role with open
+    /// work is continued instead; anything else is reported as the turn's failure.
+    let private stopOrContinueLongWork
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (eventPort: IEventObservationPort)
+        (durable: AgentJournal)
+        (turn: ReconciledTurn)
+        (failure: ExecutionFailure)
+        (reason: string)
+        : Task =
+        task {
+            match longWorkContinuationPath turn.Role failure with
+            | None -> notifyFailure eventPort turn reason
+            | Some _ when isContextOverflowReason reason -> notifyFailure eventPort turn reason
+            | Some path ->
+                match! sendLongWorkContinuation sessionPort rootWorkspace durable turn path with
+                | LongWorkAfterStop.Continued -> ()
+                | LongWorkAfterStop.ReceiptUnknown ->
+                    notifyFailure eventPort turn (reason + "; stop receipt did not arrive")
+                | LongWorkAfterStop.WaitDenied ->
+                    notifyFailure eventPort turn (reason + "; stop wait was denied")
+                | LongWorkAfterStop.NotSent error ->
+                    notifyFailure eventPort turn (reason + "; long-work continuation not sent: " + error)
+        }
+        :> Task
+
     let private recoveryGateKind (authorization: ProviderRecoveryAuthorization) =
         "provider-recovery:" + authorization.DecisionId.Value
 
@@ -186,8 +287,8 @@ module ProviderRecoveryWorkflow =
                     30000
                 )
 
-            match admitted, string hostStopped with
-            | false, "Stopped" ->
+            match Retry.verdictUnlessContinuing admitted (string hostStopped) with
+            | None ->
                 return!
                     continueSameProvider
                         sessionPort
@@ -198,7 +299,7 @@ module ProviderRecoveryWorkflow =
                         authorization
                         continuationPrompt
                         failureReason
-            | _ -> return RetryVerdict.Superseded
+            | Some verdict -> return verdict
         }
 
     let private admitAuthorizedFailure
@@ -253,7 +354,10 @@ module ProviderRecoveryWorkflow =
             match verdict with
             | RetryVerdict.Dispatched
             | RetryVerdict.Superseded -> ()
-            | RetryVerdict.Terminal reason -> notifyFailure eventPort turn reason
+            | RetryVerdict.ReceiptUnknown -> notifyFailure eventPort turn "stop receipt did not arrive"
+            | RetryVerdict.WaitDenied -> notifyFailure eventPort turn "stop wait was denied"
+            | RetryVerdict.Terminal reason ->
+                do! stopOrContinueLongWork sessionPort rootWorkspace eventPort durable turn failure reason
         }
         :> Task
 

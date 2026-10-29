@@ -622,13 +622,13 @@ Shape (flat: `kind` enum + optional fields; the host validates combinations):
   `replacement` must state the **lesson**; if the previous beat already affected the world, it must also state what changed (dialogue may shrink; the outside world does not roll back).
   The host also appends “this is idle spin number N; do not spin idle”; N rises with consecutive `removeLast` and resets on `keepLast` or `resetScope`.
   Consecutive `removeLast` only erases the current beat: earlier replacements stay in context and are not eaten by a later remove.
-- `meToo`: in one model turn with N tool calls, exactly one carries `resetScope` / `keepLast` / `removeLast`; the other N−1 are `meToo`. At most one decrement per turn. Only-`meToo` / all-`meToo` is refused.
+- `meToo`: in one model turn with N tool calls, exactly one carries `resetScope` / `keepLast` / `removeLast`; the other N−1 are `meToo`. At most one decrement per turn, whatever the arrival order. Only-`meToo` / all-`meToo` is refused.
 
 retention is the keep quota (information capacity), not model turns and not tool-call count.
 Only `keepLast` decrements by 1; `removeLast` / `meToo` do not.
-`newScopeRetentionBudget` ≈ the lower bound on **substantive operations** needed to finish this goal (the fewest keeps that can complete the work; trials and corrections go through `removeLast` and do not count). Prefer short over long; the host caps a single budget — no padding.
+`newScopeRetentionBudget` ≈ how many `keepLast` this goal is expected to take to finish (only **substantive progress** counts; trials and corrections go through `removeLast` and are not counted). The estimate is size-neutral: estimate it as it is, neither padded nor deliberately shrunk; when unsure, estimate the main path — a later `resetScope` relay corrects an estimate that was too high or too low. The host caps a single budget.
 When retention is 0, the next non-exempt tool must be `resetScope` or the host refuses.
-Exempt (no decrement; not forced to reset at 0): `negotiate`, `askPreviousScope`, and finishing tools such as `deliver`.
+Exempt (no decrement, never the turn's real annotation; not forced to reset at 0): `negotiate`, `askPreviousScope`, and finishing tools such as `deliver`.
 Do not fake-keep or idle-spin with “no change / wait longer” to dodge reset; with nothing retainable, `removeLast` (with a lesson) or `resetScope`.
 
 Outbound projection does not rewrite the durable store: the journal records `BeatRetracted`; PairHint collapses that beat to one assistant message outbound. Cold start restores retention and the idle streak by replaying the journal.
