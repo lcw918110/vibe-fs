@@ -107,7 +107,11 @@ module ModelRouting =
 
         { providerID = target.Model.Substring(0, slash)
           modelID = target.Model.Substring(slash + 1)
-          variant = if String.IsNullOrWhiteSpace target.Reasoning then None else Some target.Reasoning }
+          variant =
+            if String.IsNullOrWhiteSpace target.Reasoning then
+                None
+            else
+                Some target.Reasoning }
 
     let toOpenCodeModel (target: ModelRoutingTarget) : HostModel = toHostModel target
 
@@ -227,6 +231,7 @@ module ModelRouting =
             match durableDevopsResolver with
             | Some r -> Some r
             | None -> sharedDurableResolver
+
         let gate = obj ()
         let transitionCounters = CapacityTransitionCounters()
 
@@ -303,8 +308,7 @@ module ModelRouting =
             else
                 Some(unbox<string> view?sessionId, unbox<string> view?physicalUserMessageId)
 
-        let recoveryPreviousTarget (purpose: ModelExecutionPurpose) sessionId =
-            activeTargetOfPurpose purpose sessionId
+        let recoveryPreviousTarget (purpose: ModelExecutionPurpose) sessionId = activeTargetOfPurpose purpose sessionId
 
         let ensureHealthy () = fatalError |> Option.iter raise
 
@@ -340,18 +344,23 @@ module ModelRouting =
                 raise ex
 
         let exactTargetAvailable (role: Role) target running (purpose: ModelExecutionPurpose) =
-            match (if isNull scheduler then Some target else scheduleOrPoison running role (Some target) purpose) with
+            match
+                (if isNull scheduler then
+                     Some target
+                 else
+                     scheduleOrPoison running role (Some target) purpose)
+            with
             | Some candidate -> candidate = target
             | None -> false
 
         /// execution-model-routing-019: the durable record is the only source a
         /// cold process may consult for a fixed DevOps target.
         let resolveDurableDevopsTarget resolve sessionId =
-            resolve sessionId
-            |> Option.map parseDurableModelTarget
+            resolve sessionId |> Option.map parseDurableModelTarget
 
         let tryResolveDurableDevopsTarget sessionId =
-            durableResolver |> Option.bind (fun resolve -> resolveDurableDevopsTarget resolve sessionId)
+            durableResolver
+            |> Option.bind (fun resolve -> resolveDurableDevopsTarget resolve sessionId)
 
         /// A recorded fixed DevOps target, from this process' binding or the
         /// durable store. No record means the session is an ordinary demand: a
@@ -457,11 +466,7 @@ module ModelRouting =
             | _ -> ()
 
         /// The fixed DevOps target binding belongs to the owner execution only
-        let enforceImmutableDevopsBinding
-            (sessionId: string)
-            (role: Role)
-            (target: ModelRoutingTarget)
-            =
+        let enforceImmutableDevopsBinding (sessionId: string) (role: Role) (target: ModelRoutingTarget) =
             if not (isNull scheduler) then
                 enforceDevopsBindingNormal sessionId role target
 
@@ -799,7 +804,11 @@ module ModelRouting =
             | None ->
                 let oldPhysicalUserMessageId = currentPhysicalUserMessageId sessionId
 
-                let previous = if isNull scheduler then hostTarget else previousForFreshPurpose purpose sessionId role
+                let previous =
+                    if isNull scheduler then
+                        hostTarget
+                    else
+                        previousForFreshPurpose purpose sessionId role
 
                 let replacePrevious () =
                     let previousPhysical =
@@ -1340,8 +1349,14 @@ module ModelRouting =
                 && current.Target = target
                 ->
                 let nextTarget = selectedTarget |> Option.defaultValue target
+
                 let replacement =
-                    capacity.ContinueExecution(sessionId, identity.PhysicalUserMessageId, physicalUserMessageId, nextTarget)
+                    capacity.ContinueExecution(
+                        sessionId,
+                        identity.PhysicalUserMessageId,
+                        physicalUserMessageId,
+                        nextTarget
+                    )
 
                 supersededPhysical.Add(sessionId, identity.PhysicalUserMessageId) |> ignore
                 supersedeCurrentDemand sessionId
@@ -1377,7 +1392,15 @@ module ModelRouting =
             | Error error -> failedTask<ExecutionAdmissionAcquisition> error
             | Ok(normSessionId, normPhysicalUserMessageId, normRole, normParticipant) ->
                 let normLender = lenderSessionId |> Option.bind normalizeSessionId
-                acquireManagedSafe normSessionId normPhysicalUserMessageId normRole normParticipant purpose normLender hostTarget
+
+                acquireManagedSafe
+                    normSessionId
+                    normPhysicalUserMessageId
+                    normRole
+                    normParticipant
+                    purpose
+                    normLender
+                    hostTarget
 
         member internal _.RetainContinuationInput(previous: ExecutionAdmissionLease, physicalUserMessageId: string) =
             lock gate (fun () ->
@@ -1415,7 +1438,9 @@ module ModelRouting =
                     |> Seq.toArray
                     |> Array.iter releaseContinuationInputLocked))
 
-        member internal _.ContinueExecutionAdmission(previous: ExecutionAdmissionLease, physicalUserMessageId: string, ?selectedTarget: ModelRoutingTarget) =
+        member internal _.ContinueExecutionAdmission
+            (previous: ExecutionAdmissionLease, physicalUserMessageId: string, ?selectedTarget: ModelRoutingTarget)
+            =
             try
                 let acquired =
                     lock gate (fun () -> continueExecutionAdmissionLocked previous physicalUserMessageId selectedTarget)
@@ -1556,8 +1581,7 @@ module ModelRouting =
         member _.DropSession(sessionId: string) : unit =
             lock gate (fun () -> boundDevopsTargetBySession.Remove sessionId |> ignore)
 
-        member _.SetDurableDevopsResolver(resolver: string -> string option) =
-            durableResolver <- Some resolver
+        member _.SetDurableDevopsResolver(resolver: string -> string option) = durableResolver <- Some resolver
 
         member _.SeedBoundDevOpsModel(sessionId: string, value: string) =
             let target = parseDurableModelTarget value
@@ -1795,9 +1819,18 @@ module ModelRouting =
             )
         | None -> None
 
-    let internal continueExecutionAdmission (previous: ExecutionAdmissionLease) (physicalId: PhysicalUserMessageId) (target: ModelRoutingTarget) =
+    let internal continueExecutionAdmission
+        (previous: ExecutionAdmissionLease)
+        (physicalId: PhysicalUserMessageId)
+        (target: ModelRoutingTarget)
+        =
         match lock sharedGate (fun () -> sharedRuntime) with
-        | Some runtime -> runtime.ContinueExecutionAdmission(previous, PhysicalUserMessageId.value physicalId, selectedTarget = target)
+        | Some runtime ->
+            runtime.ContinueExecutionAdmission(
+                previous,
+                PhysicalUserMessageId.value physicalId,
+                selectedTarget = target
+            )
         | None ->
             failedTask<ExecutionAdmissionAcquisition> (InvalidOperationException "model-routing runtime is unavailable")
 

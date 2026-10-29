@@ -42,12 +42,13 @@ module JsToolSpec =
         let readCheck = JsToolPolicy.defaultReadCheck surface.RoleName readCheck
 
         let inputOf (args: HostToolArguments) : obj option =
-            if not (hasOnlyAllowedArguments args.Raw) then None
+            if not (hasOnlyAllowedArguments args.Raw) then
+                None
             else
-            match args.OptionalText "name", args.OptionalText "program", args.OptionalText "intent" with
-            | Some name, Some program, Some intent ->
-                Some(createObj [ "name" ==> name; "program" ==> program; "intent" ==> intent ])
-            | _ -> None
+                match args.OptionalText "name", args.OptionalText "program", args.OptionalText "intent" with
+                | Some name, Some program, Some intent ->
+                    Some(createObj [ "name" ==> name; "program" ==> program; "intent" ==> intent ])
+                | _ -> None
 
         let callFenceOf (ctx: HostToolContext) =
             match ctx.ProviderRunId, ctx.ToolCallId with
