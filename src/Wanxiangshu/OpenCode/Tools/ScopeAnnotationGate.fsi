@@ -19,6 +19,8 @@ module ScopeAnnotationGate =
         journalOpt: AgentJournal option ->
         snapshotPort: ISessionSnapshotPort option ->
         inner: (HostToolArguments -> HostToolContext -> Task<string>) ->
-            HostToolArguments -> HostToolContext -> Task<string>
+        HostToolArguments ->
+        HostToolContext ->
+            Task<string>
 
     val injectArgument: factory: HostToolFactory -> spec: ToolSpec -> ToolSpec
