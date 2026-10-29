@@ -250,7 +250,7 @@ test('WHAT[work-008] provider barrier: registered OMP context hook keeps user me
 // (call and result together). The successor still has to see the commission,
 // the barrier, and its own later turns; a retired turn of the predecessor that
 // finished after the cut stays hidden.
-test('OpenCode-shaped relay keeps the successor own turns without tenureId', async () => {
+test('WHAT[work-008] OpenCode-shaped relay keeps the successor own turns without tenureId', async () => {
   const { cutVisible } = await import('../../../../dist/Mission/Work/OpenCode/NarrativeTransform.js')
   const user = (id, body) => ({ info: { id, role: 'user' }, parts: [{ type: 'text', text: body }] })
   const asst = (id, parentID, parts) => ({ info: { id, role: 'assistant', parentID }, parts })
@@ -275,7 +275,7 @@ test('OpenCode-shaped relay keeps the successor own turns without tenureId', asy
 // guard nudges before the cut, and every user message after it. When the cut
 // is not in view the successor still gets all user messages, never an empty
 // conversation.
-test('relay cut keeps every user message, even without a visible barrier', async () => {
+test('WHAT[work-008] relay cut keeps every user message, even without a visible barrier', async () => {
   const { cutVisible } = await import('../../../../dist/Mission/Work/OpenCode/NarrativeTransform.js')
   const user = (id, body, extra = {}) => ({ info: { id, role: 'user' }, parts: [{ type: 'text', text: body, ...extra }] })
   const asst = (id, parentID, parts) => ({ info: { id, role: 'assistant', parentID }, parts })

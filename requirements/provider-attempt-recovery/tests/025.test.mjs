@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as owner from '../../../dist/Participant/Provider/Attempt/Fallback/ProviderFailureSurface.js'
 
-test('stop-wait timeout is not supersession and not delegate success', () => {
+test('WHAT[provider-attempt-recovery-025] stop-wait timeout is not supersession and not delegate success', () => {
   assert.equal(owner.stopWaitVerdict(false, 'TimedOut'), 'ReceiptUnknown')
   assert.notEqual(owner.stopWaitVerdict(false, 'TimedOut'), 'Superseded')
   assert.equal(owner.delegateRetryObservation('ReceiptUnknown').startsWith('Error:'), true)
@@ -14,7 +14,7 @@ test('stop-wait timeout is not supersession and not delegate success', () => {
   assert.notEqual(owner.delegateRetryObservation(admittedTimeout), 'Ok')
 })
 
-test('a refused stop wait is not a missing receipt, not supersession, and not success', () => {
+test('WHAT[provider-attempt-recovery-025] a refused stop wait is not a missing receipt, not supersession, and not success', () => {
   assert.equal(owner.stopWaitVerdict(false, 'Denied'), 'WaitDenied')
   assert.equal(owner.stopWaitVerdict(true, 'Denied'), 'WaitDenied')
   assert.notEqual(owner.stopWaitVerdict(false, 'Denied'), 'ReceiptUnknown')

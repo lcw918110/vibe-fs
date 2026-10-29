@@ -100,4 +100,4 @@ DevOps、Engineer、Advisor 等短工照旧：耗尽即报失败。用户取消�
 
 ## [025] 上游仅含思考无正文的错误统一并入可修复续行
 
-当上游模型 API 返回仅含 `reasoning` 思考部分而无正式正文的错误或结束响应时，终态分类器将其统一视为需要续行修复的未完成态（`TurnFailed` 或 `TurnNeedsContinuation`），`formalContentUnusable` 判定正式正文不可用，并触发 Engineer / DevOps 的交互修复催促。
+当上游模型 API 返回仅含 `reasoning` 思考部分而无正式正文的错误或结束响应时，终态分类器将其统一视为需要续行修复的未完成态（`TurnFailed` 或 `TurnNeedsContinuation`），`formalContentUnusable` 判定正式正文不可用，并触发 Engineer / DevOps 的交互修复催促。同一执行面的 stop-wait 回执分类：等待超时不是取代也不是委托成功（保留 `ReceiptUnknown`），被拒的停等既不是回执缺失也不是取代或成功（`WaitDenied`），已准入且 `Stopped` 才结算真取代。
