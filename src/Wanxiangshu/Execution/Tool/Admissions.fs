@@ -52,15 +52,20 @@ module ToolAdmissions =
     let assume: ToolAdmission =
         officeRole (fun role -> OfficeCapability.admitsUtility role "assume")
 
-    /// resetScope is the context-protocol tool: every role that holds the
-    /// ResetScope office capability may archive its own scope.
-    let resetScope: ToolAdmission =
+    /// Scope protocol capability (ToolPermission.ResetScope): archive reanchor
+    /// via scope.kind=resetScope annotation on any tool, and askPreviousScope.
+    /// There is no standalone resetScope tool; this admission is only used by
+    /// askPreviousScope (and any future protocol verbs that need the same right).
+    let scopeProtocol: ToolAdmission =
         officeRole (fun r -> r <> Role.Advisor && OfficeCapability.isAllowed r ToolPermission.ResetScope)
+
+    /// Backward-compatible alias — do not register a resetScope tool against it.
+    let resetScope: ToolAdmission = scopeProtocol
 
     /// Non-authorizing protocol: only bound delegates can submit questions.
     let negotiate: ToolAdmission = officeRole (fun role -> role <> Role.Advisor)
 
-    let askPreviousScope: ToolAdmission = resetScope
+    let askPreviousScope: ToolAdmission = scopeProtocol
 
     let fetch: ToolAdmission =
         officeRole (fun r -> OfficeCapability.isAllowed r ToolPermission.Fetch)

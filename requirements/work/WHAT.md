@@ -1,5 +1,9 @@
 # work — WHAT
 
+
+> **COMPAT（2026-10-29）现行口径**：Scope 生命周期入口是任意工具上的打平注解 `scope.kind` ∈ {`resetScope`,`keepLast`,`removeLast`,`meToo`} 与 retention（`wanxiangli/scope-retention` + 共同法 «Scope»）。**无独立 `resetScope` 宿主工具**；档案重锚 = 注解 `resetScope` → `ScopeReset.commit`。**无** `remainingScopeTurnsEstimate`／`turnBudget`／KPI 倍率产品契约；Stall／ResetDue 估计路径已从宿主产品面退役。下文若仍写独占工具、估计必填或倒计时后缀，以本条为准。PairHint 屏障优先认 `scope.kind=resetScope`，旧工具名只读兼容。
+
+
 本包是唯一的 work 生命周期合同。公开入口只有 review。Plan 的里程碑是「事实与取舍 → 理解与路径 → 流程与伪代码 → 待执行」。Manager 的里程碑是「执行 → 收尾 → 已完成」。任期只有 Originator 与 Successor。空账询问「我需要干什么？」，清空才接力，接任第一次空账晋级，收尾空账且阻塞解除则结案。生命周期工具目录只注册 review。
 
 ## [001] 词表

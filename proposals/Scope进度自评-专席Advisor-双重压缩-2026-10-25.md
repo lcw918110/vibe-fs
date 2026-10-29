@@ -1,5 +1,8 @@
 # Scope 进度自评、专席 Advisor 与压缩协作 — 定稿
 
+> **历史实施契约（估计路径已退役）**：`remainingScopeTurnsEstimate` 不再进工具 schema，Stall／ResetDue 不再开顾问。Scope 生命周期以共同法 «Scope»／`scope-retention` 为准。下文可作 `scope-progress` 包考古，**勿当现行产品入口**。
+
+
 状态：APPROVED FOR IMPLEMENTATION（2026-10-25）；本文件是实施契约。每一阶段需记录真实代码与物理验收，不能把“设计已定稿”误写为已实现。
 
 ## 1. 唯一进度单位

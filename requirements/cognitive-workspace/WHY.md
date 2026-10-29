@@ -6,7 +6,7 @@
 
 - `assume` 只负责“已笃定”的认知承诺点；
 - 编程面 `todowrite-for-<role>` 负责当前待办，插件不改写工具定义与参数；
-- context-compression 由显式 `resetScope` 宿主工具屏障管理细粒度状态闭环与上下文清理。
+- context-compression 由显式 `scope.kind=resetScope` 注解屏障管理细粒度状态闭环与上下文清理。
 
 旧 Cognition journal 仍须可读，是为了诚实恢复历史，不是为了保留产品能力。兼容读取必须停在 no-op tombstone，不能借迁移之名重新生成 canvas projection。
 

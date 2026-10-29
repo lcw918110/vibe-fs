@@ -75,7 +75,6 @@ module StaticTools =
           "todowrite-for-devops"
           "todowrite-for-bookkeeper"
           "todowrite-for-plan"
-          "resetScope"
           "negotiate"
           "askPreviousScope" ]
 

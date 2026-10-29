@@ -63,9 +63,11 @@ module ToolHostCodec =
     val optionalNumberSchema: factory: HostToolFactory -> HostSchema
     val optionalNonNegativeIntegerSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
     val nonNegativeIntegerSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
+    val optionalNonNegativeNumberSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
     val nonNegativeNumberSchemaDescribed: description: string -> factory: HostToolFactory -> HostSchema
     val optionalStringArraySchema: factory: HostToolFactory -> HostSchema
     val stringArraySchema: factory: HostToolFactory -> HostSchema
+    val scopeAnnotationSchema: factory: HostToolFactory -> HostSchema
     val objectSchemaOf: fields: (string * HostSchema) list -> factory: HostToolFactory -> HostSchema
 
     /// Optional object schema: the caller may omit the whole object.

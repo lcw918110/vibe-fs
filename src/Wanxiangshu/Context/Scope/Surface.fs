@@ -31,6 +31,7 @@ module Surface =
         owner?adjustBudgetForKpi (estimate, completion)
 
     let turnBudget (sessionId: string) : int = owner?turnBudget (sessionId)
+    let setRetentionBudget (sessionId: string) (remaining: int) : unit = owner?setRetention (sessionId, remaining)
     let isScopeInitialized (sessionId: string) : bool = owner?isInitialized (sessionId)
     let onTurnStart (sessionId: string) : unit = owner?startTurn (sessionId)
     let resetScopeState (sessionId: string) (budget: int) : unit = owner?resetSession (sessionId, budget)

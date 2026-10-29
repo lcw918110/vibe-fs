@@ -1,5 +1,9 @@
 # context-compression — WHY
 
+
+> **COMPAT（2026-10-29）现行口径**：Scope 生命周期入口是任意工具上的打平注解 `scope.kind` ∈ {`resetScope`,`keepLast`,`removeLast`,`meToo`} 与 retention（`wanxiangli/scope-retention` + 共同法 «Scope»）。**无独立 `resetScope` 宿主工具**；档案重锚 = 注解 `resetScope` → `ScopeReset.commit`。**无** `remainingScopeTurnsEstimate`／`turnBudget`／KPI 倍率产品契约；Stall／ResetDue 估计路径已从宿主产品面退役。下文若仍写独占工具、估计必填或倒计时后缀，以本条为准。PairHint 屏障优先认 `scope.kind=resetScope`，旧工具名只读兼容。
+
+
 模型能容纳多少历史并不可靠可知。围绕真实失败与已有证据恢复，可以避免容量猜测变成新的控制权。200 KiB 限制解决的是单次记录输入有界，不能拿来推断模型还剩多少空间。
 
 上下文过度堆积会导致模型注意力涣散与推理恶化。传统的扁平累积让过程性工具输出永久驻留；`resetScope` 协议将长程任务组织为显式的细粒度状态闭环（State Closed-Loop）：每个闭环代表一个自洽的工作阶段（如探索定位、代码修改、验证复核等）。

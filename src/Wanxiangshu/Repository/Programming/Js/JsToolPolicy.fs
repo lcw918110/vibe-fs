@@ -65,6 +65,7 @@ module JsToolPolicy =
     let argIntentProse () : string =
         ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) "tool/js-program/arg-intent" Map.empty
 
+    // RETIRED path name tool/js-program/arg-estimate — returns retired notice only; do not wire into schema.
     let argEstimateProse () : string =
         ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) "tool/js-program/arg-estimate" Map.empty
 

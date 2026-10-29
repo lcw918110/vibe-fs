@@ -16,17 +16,9 @@ open Wanxiangshu.Repository.Programming.Js
 /// commit) and the result renders through JsToolsResult (JS-016).
 module JsToolSpec =
 
-    [<Import("scopeProgress", "wanxiangli/scope-progress")>]
-    let private scopeProgress: obj = jsNative
-
-    [<Emit("($0 != null && typeof $0 === 'object' && !Array.isArray($0) && Object.keys($0).length === 4 && Object.keys($0).every(k => ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'].includes(k)))")>]
+    [<Emit("($0 != null && typeof $0 === 'object' && !Array.isArray($0) && Object.keys($0).every(k => ['name', 'program', 'intent', 'scope'].includes(k)) && ['name','program','intent'].every(k => Object.prototype.hasOwnProperty.call($0, k)))")>]
     let private hasOnlyAllowedArguments (_source: obj) : bool = jsNative
 
-    let private progressRefusal (receipt: obj) : string option =
-        if isNull receipt?ok || not (unbox<bool> receipt?ok) then
-            Some("Scope progress refused: " + string receipt?reason)
-        else
-            None
 
     /// Build a ToolSpec for one generated surface.
     ///
@@ -49,19 +41,13 @@ module JsToolSpec =
         : ToolSpec =
         let readCheck = JsToolPolicy.defaultReadCheck surface.RoleName readCheck
 
-        let inputOf (args: HostToolArguments) : (obj * float) option =
-            if not (hasOnlyAllowedArguments args.Raw) then
-                None
+        let inputOf (args: HostToolArguments) : obj option =
+            if not (hasOnlyAllowedArguments args.Raw) then None
             else
-                match
-                    args.OptionalText "name",
-                    args.OptionalText "program",
-                    args.OptionalText "intent",
-                    args.OptionalNonNegativeNumber "remainingScopeTurnsEstimate"
-                with
-                | Some name, Some program, Some intent, Ok(Some estimate) ->
-                    Some(createObj [ "name" ==> name; "program" ==> program; "intent" ==> intent ], estimate)
-                | _ -> None
+            match args.OptionalText "name", args.OptionalText "program", args.OptionalText "intent" with
+            | Some name, Some program, Some intent ->
+                Some(createObj [ "name" ==> name; "program" ==> program; "intent" ==> intent ])
+            | _ -> None
 
         let callFenceOf (ctx: HostToolContext) =
             match ctx.ProviderRunId, ctx.ToolCallId with
@@ -77,20 +63,6 @@ module JsToolSpec =
             | None -> None
             | Some _ -> Some(DeliverySettlement.DeferredDelivery(fun () -> settlementOf ctx))
 
-        let recordProgress (ctx: HostToolContext) (estimate: float) =
-            match callFenceOf ctx with
-            | None -> None
-            | Some(providerRun, toolCallId) ->
-                let receipt: obj =
-                    scopeProgress?record (
-                        ctx.SessionId,
-                        epochOf ctx,
-                        ProviderRunIdentity.value providerRun,
-                        ToolCallId.value toolCallId,
-                        estimate
-                    )
-
-                progressRefusal receipt
 
         let runProgramCall (ctx: HostToolContext) (input: obj) (declaration: obj) =
             task {
@@ -137,23 +109,16 @@ module JsToolSpec =
                 return JsToolPolicy.renderCommitted ctx.SessionId callIdentity declaration outcome
             }
 
-        let launchAccepted ctx input estimate =
-            match recordProgress ctx estimate with
-            | Some reason -> Task.FromResult reason
-            | None -> runProgramCall ctx input null
-
         { Name = surface.ToolName
           Description = surface.Description
           Arguments =
             [ "name", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argNameProse ()) factory
               "program", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argProgramProse ()) factory
-              "intent", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argIntentProse ()) factory
-              "remainingScopeTurnsEstimate",
-              ToolHostCodec.nonNegativeNumberSchemaDescribed (JsToolPolicy.argEstimateProse ()) factory ]
+              "intent", ToolHostCodec.stringSchemaDescribed (JsToolPolicy.argIntentProse ()) factory ]
           Execute =
             fun args ctx ->
                 match inputOf args with
-                | Some(input, estimate) -> launchAccepted ctx input estimate
+                | Some input -> runProgramCall ctx input null
                 | None -> Task.FromResult(JsToolPolicy.missingProgramResult ()) }
 
     let create

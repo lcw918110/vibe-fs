@@ -14,7 +14,5 @@
     <Compile Include="OpenCode/Tools/BashHoneypotTool.fs" />
     <Compile Include="OpenCode/Tools/AssumeTool.fsi" />
     <Compile Include="OpenCode/Tools/AssumeTool.fs" />
-    <Compile Include="OpenCode/Tools/ResetScopeTool.fsi" />
-    <Compile Include="OpenCode/Tools/ResetScopeTool.fs" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,9 @@
 # repository-programming — WHAT
 
+
+> **COMPAT（2026-10-29）现行口径**：Scope 生命周期入口是任意工具上的打平注解 `scope.kind` ∈ {`resetScope`,`keepLast`,`removeLast`,`meToo`} 与 retention（`wanxiangli/scope-retention` + 共同法 «Scope»）。**无独立 `resetScope` 宿主工具**；档案重锚 = 注解 `resetScope` → `ScopeReset.commit`。**无** `remainingScopeTurnsEstimate`／`turnBudget`／KPI 倍率产品契约；Stall／ResetDue 估计路径已从宿主产品面退役。下文若仍写独占工具、估计必填或倒计时后缀，以本条为准。PairHint 屏障优先认 `scope.kind=resetScope`，旧工具名只读兼容。
+
+
 ## [001] Capability 投影面与单一权限源
 
 每次请求的 `todowrite-for-ROLE` 只从当前 Attempt 的唯一权威能力集生成，公开成员与运行时准入使用同一投影，不另算角色权限。有实际可生成的编程成员才提供编程工具；Join 只授权独立 `join()`，不单独产生编程面。旧 Attempt、目标程序原有权限和合法工具名不能代替本次授权。文件、评审、Ask 和委派继续受既有业务门禁约束。

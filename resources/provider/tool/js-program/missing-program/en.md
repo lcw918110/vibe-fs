@@ -1,1 +1,1 @@
-Invalid tool arguments. Provide exactly three required strings (name, program and intent) and one required nonnegative number (remainingScopeTurnsEstimate), fractions included. name and program must not be blank; intent must not be empty. program defines class Js extends JsProgram with async run().
+Invalid tool arguments. Provide exactly three required strings (name, program and intent), optionally with a `scope` annotation; no other fields. name and program must not be blank; intent must not be empty. program defines class Js extends JsProgram with async run().

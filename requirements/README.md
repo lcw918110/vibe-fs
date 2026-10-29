@@ -1,5 +1,7 @@
 # 功能说明书目录 (Requirement Packages)
 
+> **Scope 现行口径（2026-10-29）**：生命周期入口是工具注解 `scope.kind`（retention），**无独立 resetScope 工具**，亦无 `remainingScopeTurnsEstimate` 必填。各包 WHAT 若仍写旧工具／估计／turnBudget，以共同法 «Scope» 与本句为准，差分改文，禁止把全库 requirements 考古当验收。
+
 > 本目录收录万象术各领域的**功能说明书与行为边界**。
 > 一切机制皆为产品唯一总流程服务：**用户提出需求 → 合理交互与调查 → 稳妥修改代码 → 真实做成结束**。
 > 说明书（SPEC）是功能浪花的描述，用于指导工程实现与日常自保测试，**不是凌驾于用户意志之上的唯一真理，不搞 proof ownership 证明宗教，亦不搞 AI 包办验收**。若说明书与当前实现存在差距，以文中标注的【程序待改】为准。

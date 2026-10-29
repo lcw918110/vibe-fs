@@ -1,5 +1,9 @@
 # prefix-stability — WHAT
 
+
+> **COMPAT（2026-10-29）现行口径**：Scope 生命周期入口是任意工具上的打平注解 `scope.kind` ∈ {`resetScope`,`keepLast`,`removeLast`,`meToo`} 与 retention（`wanxiangli/scope-retention` + 共同法 «Scope»）。**无独立 `resetScope` 宿主工具**；档案重锚 = 注解 `resetScope` → `ScopeReset.commit`。**无** `remainingScopeTurnsEstimate`／`turnBudget`（已退役；现行 retentionBudget）／KPI 倍率产品契约；Stall／ResetDue 估计路径已从宿主产品面退役。下文若仍写独占工具、估计必填或倒计时后缀，以本条为准。PairHint 屏障优先认 `scope.kind=resetScope`，旧工具名只读兼容。
+
+
 ## [001] 同 epoch append-only prefix law
 
 同一 PrefixEpoch 内，未发生 `ScopeReanchored`、`ContextReanchored` 或 `TenureReanchored` 重锚时，前一次 provider wire 已保留的前缀必须是后一次的精确字节前缀。比较范围见 [013]；tools 必须完全一致，不以追加工具视为前缀稳定。请求级上下文清理统一由 `resetScope` 驱动并作为 `ScopeReanchored` 冷边界推进 epoch，不授权宿主在同 epoch 内改写留下的前缀。
@@ -8,7 +12,7 @@
 
 Epoch 只由 Host compaction 重锚（`ContextReanchored`）、Plan tenure 交接重锚（`TenureReanchored`）或显式 scope 重置重锚（`ScopeReanchored`）推进，且每次恰好加一。不得按容量或 Token 数由宿主主动估算切换。
 
-- Scope 重锚：模型调用 `resetScope` 产生 `ScopeReanchored` 事实（context-compression [035]），epoch 加一、清除旧 wire 快照；同一 `toolCallId` 不重锚两次。
+- Scope 重锚：模型走 `scope.kind=resetScope` 产生 `ScopeReanchored` 事实（context-compression [035]），epoch 加一、清除旧 wire 快照；同一 `toolCallId` 不重锚两次。
 - Plan tenure 交接重锚：Planner 任期交接触发 `TenureReanchored` 事件，epoch 加一、清除旧快照；同一 incumbencyId 不重锚两次。
 - Host compaction 重锚：Host compaction 触发 `ContextReanchored` 事件，epoch 加一、清除旧快照；同一 compaction 不重锚两次。
 
@@ -66,6 +70,6 @@ Plan tenure 交接通过 `TenureReanchored` 收容：epoch 加一、清除旧快
 
 ## [016] Scope 后缀不能随剩余预算回写历史前缀
 
-同一 `ActivePrefixEpoch` 内，工具结果首次进入 provider 请求副本时确定的提示后缀必须以工具调用身份（无 ID 时以同 epoch 中稳定的消息／part 位置）固定并逐字重放。后续 `turnBudget` 递减、新 operator steer、重复 provider transform、甚至同一输出之后新增工具结果，均不得重新计算已呈现结果的字节。新结果首次呈现时才使用当次剩余预算；agent side-request 不能提前冻结正常请求尚未呈现的结果。
+同一 `ActivePrefixEpoch` 内，工具结果首次进入 provider 请求副本时确定的提示后缀必须以工具调用身份（无 ID 时以同 epoch 中稳定的消息／part 位置）固定并逐字重放。后续 `turnBudget`（已退役；现行 retentionBudget） 递减、新 operator steer、重复 provider transform、甚至同一输出之后新增工具结果，均不得重新计算已呈现结果的字节。新结果首次呈现时才使用当次剩余预算；agent side-request 不能提前冻结正常请求尚未呈现的结果。
 
 只有确已提交的 `ScopeReanchored` 允许在新 epoch 重新生成保留的历史 reset 调用／结果后缀。不能因需要新预算而把单一历史工具结果从 `N` 改为 `N-1`：这会让前缀缓存从那条结果起失效，违反 [001]，不是合法的追加。此条保证请求热修正的重复呈现字节稳定，不声称独立进程重启后的冻结状态恢复已获证明，也不替代真实 provider 命中率观察。

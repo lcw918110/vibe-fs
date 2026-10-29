@@ -29,7 +29,6 @@ module ToolAdmissionTable =
           "review", ToolAdmissions.review
           "bash-honeypot", ToolAdmissions.bashHoneypot
           "assume", ToolAdmissions.assume
-          "resetScope", ToolAdmissions.resetScope
           "negotiate", ToolAdmissions.negotiate
           "askPreviousScope", ToolAdmissions.askPreviousScope
           "fetch", ToolAdmissions.fetch

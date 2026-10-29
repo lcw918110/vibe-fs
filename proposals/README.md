@@ -9,9 +9,9 @@
 
 | 提案 / 规范 | 状态与性质 | 核心内容 |
 |---|---|---|
-| [todowrite：命名程序与 program/runtime clean-break](todowrite-program-runtime-clean-break-2026-10-24.md) | 现行实施契约（2026-10-24） | `name/program/intent` 参数与统一请求期限，支持 call、park、unpark 与受控退出，推进 clean-break。 |
-| [Scope 进度自评、专席 Advisor 与双重压缩](Scope进度自评-专席Advisor-双重压缩-2026-10-25.md) | 现行实施契约（2026-10-25） | 单物理回合进度计费，通过 `remainingScopeTurnsEstimate` 自评触发专席 Advisor，去除虚假进度与多余监督。 |
-| [跨 Scope 回问：向过去的自己澄清](跨Scope回问-2026-10-24.md) | 部分实现设计（2026-10-24） | resetScope 后新模型可依据交接材料向旧 Scope 提问，维持因果与注意力连贯。 |
+| [todowrite：命名程序与 program/runtime clean-break](todowrite-program-runtime-clean-break-2026-10-24.md) | 现行实施契约（2026-10-24；**估计字段已删**） | `name/program/intent` + `scope` 注解；统一请求期限；call／park／unpark。 |
+| [Scope 进度自评、专席 Advisor 与双重压缩](Scope进度自评-专席Advisor-双重压缩-2026-10-25.md) | **历史**（估计路径已退役） | 曾用 `remainingScopeTurnsEstimate` 驱 Stall／Advisor；现行 Scope 走 retention 注解。 |
+| [跨 Scope 回问：向过去的自己澄清](跨Scope回问-2026-10-24.md) | **历史／部分落地**（工具签名已迁） | askPreviousScope 仍在；入口改为 `scope.kind=resetScope`，勿按旧 resetScope 工具稿施工。 |
 | [长程任务不停机与显式用户询问](long-work-user-question-static-handoff.md) | 现行契约（2026-10-15） | 任务未完成时禁止静默停止或以空回复交差；缺信息时通过显式提问等待用户决断。 |
 | [验收驱动接力：Wanxiangli Clean-break 重构方案](验收驱动.md) | 已实施的架构方案（2026-10-26） | 围绕 `work`、`durable-work`、`projection` 重构生命周期；明确保留 `delivery` 包（材料交还与去重）；残留见其第七节。 |
 

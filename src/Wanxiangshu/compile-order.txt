@@ -1087,8 +1087,6 @@ OpenCode/Tools/BashHoneypotTool.fsi
 OpenCode/Tools/BashHoneypotTool.fs
 OpenCode/Tools/AssumeTool.fsi
 OpenCode/Tools/AssumeTool.fs
-OpenCode/Tools/ResetScopeTool.fsi
-OpenCode/Tools/ResetScopeTool.fs
 OpenCode/Tools/ToolSurface.fsi
 OpenCode/Tools/ToolSurface.fs
 Repository/Programming/Js/Utf8Fs.fsi
@@ -1288,6 +1286,9 @@ Repository/Knowledge/Casebook/FetchSurface.fsi
 Repository/Knowledge/Casebook/FetchSurface.fs
 Repository/Knowledge/Casebook/OpenCode/Tools.fsi
 Repository/Knowledge/Casebook/OpenCode/Tools.fs
+OpenCode/Tools/ScopeReset.fsi
+OpenCode/Tools/ScopeReset.fs
+OpenCode/Tools/ScopeAnnotationGate.fs
 OpenCode/Tools/ToolRegistry.fsi
 OpenCode/Tools/ToolRegistry.fs
 OpenCode/Tools/ToolRegistrySurface.fsi

@@ -32,6 +32,7 @@ module JsToolPolicy =
     val argProgramProse: unit -> string
 
     val argIntentProse: unit -> string
+    /// Retired resource path; returns retired notice. Not a product schema field.
     val argEstimateProse: unit -> string
 
     /// The localized prose of the refusal of a call that carries no state.

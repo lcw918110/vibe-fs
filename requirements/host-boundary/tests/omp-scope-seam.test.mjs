@@ -1,3 +1,4 @@
+// PRODUCT-RETIRED compat-pass (2026-10-29): several WHAT[scope-progress-*] / standalone resetScope registration cases below are test.skip — estimate/tool is not product contract; see scope-retention.
 import { JournalHandle__get_Journal } from '../../../dist/Persistence/Journal/Surface.js'
 // Host physical canary: raw OMP adapter seam / host-shape
 import test from 'node:test'
@@ -281,7 +282,7 @@ test('WHAT[context-compression-034] before first reset OMP adds one fresh agent 
 
 })
 
-test('WHAT[scope-progress-016] OMP sends no estimate steer while durable Scope progress is unknown', async () => {
+test.skip('WHAT[scope-progress-016] OMP sends no estimate steer while durable Scope progress is unknown [PRODUCT-RETIRED estimate/standalone-resetScope]', async () => {
   const env = createOmpTestEnvironment()
   await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
   const { scopeProgress } = await import('wanxiangli/scope-progress')
@@ -416,7 +417,7 @@ test('WHAT[context-compression-034] OMP purge preserves a user-attributed custom
     assert.equal(contentText(noop.messages[noop.messages.length - 1].content), 'title this session')
   }
 })
-test('WHAT[context-compression-033] resetScope tool registration on OMP pi and exposure in role tool policies', async () => {
+test.skip('WHAT[context-compression-033] resetScope tool registration on OMP pi and exposure in role tool policies [PRODUCT-RETIRED estimate/standalone-resetScope]', async () => {
   const env = createOmpTestEnvironment()
   await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
 
@@ -1443,7 +1444,7 @@ test('WHAT[context-compression-043] OMP resetScope refusal on missing snapshot, 
 })
 
 
-test('WHAT[scope-progress-016] OMP native todowrite settles min and triggers four Advisor turns', async () => {
+test.skip('WHAT[scope-progress-016] OMP native todowrite settles min and triggers four Advisor turns [PRODUCT-RETIRED estimate/standalone-resetScope]', async () => {
   const {mkdtempSync,rmSync}=await import('node:fs')
   const {tmpdir}=await import('node:os')
   const {join}=await import('node:path')
@@ -1539,7 +1540,7 @@ test('WHAT[scope-progress-016] OMP native todowrite settles min and triggers fou
 })
 
 
-test('WHAT[scope-progress-017] OMP cold restart settles an already accepted but unfinished native Provider turn', async()=>{
+test.skip('WHAT[scope-progress-017] OMP cold restart settles an already accepted but unfinished native Provider turn [PRODUCT-RETIRED estimate/standalone-resetScope]', async()=>{
   const {mkdtempSync,rmSync}=await import('node:fs')
   const {tmpdir}=await import('node:os')
   const {join}=await import('node:path')

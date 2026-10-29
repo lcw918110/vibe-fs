@@ -1,5 +1,9 @@
 # delegation — WHAT
 
+
+> **COMPAT（2026-10-29）现行口径**：Scope 生命周期入口是任意工具上的打平注解 `scope.kind` ∈ {`resetScope`,`keepLast`,`removeLast`,`meToo`} 与 retention（`wanxiangli/scope-retention` + 共同法 «Scope»）。**无独立 `resetScope` 宿主工具**；档案重锚 = 注解 `resetScope` → `ScopeReset.commit`。**无** `remainingScopeTurnsEstimate`／`turnBudget`／KPI 倍率产品契约；Stall／ResetDue 估计路径已从宿主产品面退役。下文若仍写独占工具、估计必填或倒计时后缀，以本条为准。PairHint 屏障优先认 `scope.kind=resetScope`，旧工具名只读兼容。
+
+
 ## [001] 委托的四项要素
 
 委托必须明确 charge、允许产生的 office 后果、logical owner 和返回给调用方的 bounded 后果。以权能后果识别委托，不以 persona 名称或工具白名单代替。
@@ -169,7 +173,7 @@ Engineer 完成工作或到达需 Manager 决定的边界即返回，不自行�
 
 父→子首 prompt 的当前任务与当前 RootRequirements 以顶层 `# ...` 指令行渲染，任务正文恰好呈现一次，**不再生成任何 `content`、`context` 或 `attached_view` 数据字段**；子→父自然停机报告仍由 assistant 散文与允许的返回 carry 独立呈现，两方向不得混淆。
 
-受委托的新工作先接收**当前指令**，接收方必须首次调用单参数 `negotiate(questions: string)`，鼓励把相关的多个问题集中问出；工具调用立刻返回「已接受发送」的回执，不等待委托者回答。问题在委托者上下文上的临时、不开副作用的模型回合里解答，答复可能迟到数轮。在首次 `negotiate` 调用被受理之前，会话处于协商 pending 状态。**在 pending 期间，时序与预算完全冻结**：请求副本不呈现 `\0\uFEFF[Remaining turnBudget: N]` 预算后缀、物理回合不递减 `turnBudget`、初始化时序不前进、弱提醒保持关闭；操作员消息、**每一个新首次呈现的非 resetScope 工具结果**与 **assistant tool part** 均在请求副本中持续携带 `NegotiateReminder` 的 MUST 提醒（同一呈现身份只写一次并逐字重放，不再整体抑制工具结果提示）；普通工作工具调用不被阻断，但 `resetScope` 自身执行自拒且不得提交 `ScopeReanchored`。**negotiate 受理即完成**：首次有效调用被宿主受理（返回回执）时 pending 立即解除，时序继续，可立即调用 `resetScope`；不管、也不等答复 steer，答复迟到或投递失败都不重新上锁，也不再催促 negotiate。首次受理之后可随时再次 `negotiate`，但属于普通追问，不会重新进入 pending 状态，亦不会抑制或重启已激活的 `resetScope`。
+受委托的新工作先接收**当前指令**，接收方必须首次调用单参数 `negotiate(questions: string)`，鼓励把相关的多个问题集中问出；工具调用立刻返回「已接受发送」的回执，不等待委托者回答。问题在委托者上下文上的临时、不开副作用的模型回合里解答，答复可能迟到数轮。在首次 `negotiate` 调用被受理之前，会话处于协商 pending 状态。**在 pending 期间，时序与预算完全冻结**：请求副本不呈现 `\0\uFEFF[Remaining turnBudget: N]` 预算后缀、物理回合不递减 `turnBudget`、初始化时序不前进、弱提醒保持关闭；操作员消息、**每一个新首次呈现的非 scope.kind=resetScope 注解结果**与 **assistant tool part** 均在请求副本中持续携带 `NegotiateReminder` 的 MUST 提醒（同一呈现身份只写一次并逐字重放，不再整体抑制工具结果提示）；普通工作工具调用不被阻断，但 `resetScope` 自身执行自拒且不得提交 `ScopeReanchored`。**negotiate 受理即完成**：首次有效调用被宿主受理（返回回执）时 pending 立即解除，时序继续，可立即走 `scope.kind=resetScope`；不管、也不等答复 steer，答复迟到或投递失败都不重新上锁，也不再催促 negotiate。首次受理之后可随时再次 `negotiate`，但属于普通追问，不会重新进入 pending 状态，亦不会抑制或重启已激活的 `resetScope`。
 
 **与跨 Scope 回问的对称性与交叉引用**：本协商 pending 状态与 `context-compression` [044] 中定义的跨 Scope 回问（`askPreviousScope`）pending 机制共用完全相同的底层 `PairHint` 呈现路径与时序冻结规则（请求副本不呈现预算后缀、不递减、弱提示关闭、每个新首次呈现的工具结果及 assistant part 持续携带 MUST 提醒且逐字重放、普通工具不被拦、`resetScope` 自身自拒）；两者解除条件相同：首问有效调用的 receipt 经宿主受理后即刻解除 pending 并恢复时序；协商即告完成，不等待答复。若取得答复，可能随后作为 steer 补到，只是内容，不是门禁，也不作送达承诺。
 
@@ -207,14 +211,14 @@ Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话�
 
 `askPreviousScope`／`negotiate`／Advisor 答复的迟到停机（[021]）只在进入普通 transform 各阶段之前、对 Host 交来的未投影消息历史裁决一次。投影之后的出站副本不得再拿来裁决：已提交的 `resetScope` 会退休最新 reset 之前的普通工具 part 与思考；`resetScope` 自身及 `assume`／`negotiate`／`askPreviousScope`／`advisor` 的调用照常保留，但答复之前那条只调普通工具（如 `todowrite`）的 assistant 回合在 OpenCode 副本里只剩 `step-start`／`step-finish` 空壳，仍带 `time.completed`，于是看起来像“已完成且无工具调用”。旧判据只看答复**之前**最近的 assistant，从不看答复之后的回合，所以随后那条保留下来的 `resetScope` 也救不了它。答复之后已有 assistant 回合时，答复已在活循环里被消费，本次请求是普通续跑，同样不得中断。
 
-现场依据：2026-10-28 00:11:47 UTC，Engineer `ses_e80299a17ffe…` 接到前一 Scope 答复后继续工作并调用 `resetScope`；下一步开始 48 ms 后被插件 `session.abort`（opencode.log `message=cancel`），此后再无消息，Manager join 一直等待。opencode.log 在 2026-10-27/28 共 11 例相同形态（紧接 `resetScope`、最后一条 user 为 `wanxiangshu_consultation_steer` 答复、之后零消息）。旧实现在各阶段之后对投影副本第二次调用 `StopCompletedContinuation`，且只看答复之前的 assistant：该会话原始尾部为 `askPreviousScope` → `todowrite` → 答复 → `todowrite` → `resetScope`，原始历史判定看到 `todowrite` 不停；投影后同一回合只剩空壳，第二次判定命中“已完成且无工具”而停机。验收：`requirements/delegation/tests/037.test.mjs`——答复后已有回合（含随后 `resetScope`）不发 AbortSession；完成且无工具的回合之后才落地的答复仍停机。
+现场依据：2026-10-28 00:11:47 UTC，Engineer `ses_e80299a17ffe…` 接到前一 Scope 答复后继续工作并走 `scope.kind=resetScope`；下一步开始 48 ms 后被插件 `session.abort`（opencode.log `message=cancel`），此后再无消息，Manager join 一直等待。opencode.log 在 2026-10-27/28 共 11 例相同形态（紧接 `resetScope`、最后一条 user 为 `wanxiangshu_consultation_steer` 答复、之后零消息）。旧实现在各阶段之后对投影副本第二次调用 `StopCompletedContinuation`，且只看答复之前的 assistant：该会话原始尾部为 `askPreviousScope` → `todowrite` → 答复 → `todowrite` → `resetScope`，原始历史判定看到 `todowrite` 不停；投影后同一回合只剩空壳，第二次判定命中“已完成且无工具”而停机。验收：`requirements/delegation/tests/037.test.mjs`——答复后已有回合（含随后 `resetScope`）不发 AbortSession；完成且无工具的回合之后才落地的答复仍停机。
 
 
 ## [038] prose 收尾报告之后不得再调用 resetScope
 
 `resetScope` 只用于结束当前 Scope 并开启带新目标（`newScopeObjective`）的下一个 Scope。子代理用 prose 写完收尾报告即任务结束，没有下一个目标；委派人经 join 收到的是子代理**最后一个回合**的正文（`JoinResultRenderer`：final-turn prose）。收尾后再调 `resetScope` 是一次工具调用，运行因此不结束，而是在一个虚构的新 Scope 里继续，收尾报告被挤出最后一个回合。
 
-模型侧必须明说，三处中英文一致：`delegation/fork-child-base`（收尾报告是最后一个动作，之后即使有 steer 要求也不调 `resetScope`）；`host/scope-steer/reset-due`（估计为 0 的强 steer 在 ResetDue 存续期间每次出站请求都会追加，收尾后到达的续跑请求——如迟到咨询答复——同样带上它，硬规则写明收尾后不调、直接自然结束）；`resetScope` 工具描述。
+模型侧必须明说，三处中英文一致：`delegation/fork-child-base`（收尾报告是最后一个动作，之后即使有 steer 要求也不调 `resetScope`）；`host/scope-steer/reset-due`（估计为 0 的强 steer 在 ResetDue 存续期间每次出站请求都会追加，收尾后到达的续跑请求——如迟到咨询答复——同样带上它，硬规则写明收尾后不调、直接自然结束）；`scope.kind=resetScope` 注解描述。
 
 现场关联：[037] 的 11 例都是答复落地后紧接 `resetScope` 再被误停；判停已改为只读原始历史，本条从源头不再诱导收尾后的重置。验收：`requirements/delegation/tests/038.test.mjs`。
 

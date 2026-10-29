@@ -14,6 +14,7 @@ module ToolAdmissions =
     val bashHoneypot: ToolAdmission
     val assume: ToolAdmission
     val fetch: ToolAdmission
+    val scopeProtocol: ToolAdmission
     val resetScope: ToolAdmission
     val negotiate: ToolAdmission
     val askPreviousScope: ToolAdmission

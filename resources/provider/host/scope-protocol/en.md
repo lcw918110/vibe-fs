@@ -1,9 +1,11 @@
-## Scope & Context Management (`resetScope`)
+## Scope and context
 
-`resetScope` is the context reanchoring tool and an execution barrier in the tool-call sequence. One provider request counts as one `turn`. The displayed `turnBudget` is an observation of the current scope's budget, not proof of completion or a limit on the assigned work.
+Scope lifecycle rides on the required `scope` annotation on every tool call (injected by the host hook; see common law «Scope»). There is **no standalone reset tool**. Archive reanchor is `scope.kind=resetScope` on any tool. In old transcripts the tool name `resetScope` may still act as a PairHint barrier for compatibility only.
 
-The system sends an initialization instruction only on requests that actually require one. It also determines from scope state whether the first delegated negotiation is still pending. Once shown, tool-result suffixes remain byte-stable within the same prefix epoch. Raw tool results and durable history are unchanged. Do not infer or rewrite session state from these messages.
+`scope.kind` is a flat enum: `resetScope` | `keepLast` | `removeLast` | `meToo`. `newScopeRetentionBudget` is the keep quota (information capacity), not a model-turn count. Any budget observation still appended on tool results is observational only — not proof of completion and not an execution ceiling.
 
-Calling `resetScope` removes the old scope's process context from later provider requests. Operator-authored user messages and earlier `resetScope` calls with their matching results survive in original order; everything after the reset belongs to the new scope. Carry exact bytes that must survive (such as function signatures, error stacks or precise line numbers) in `oldScopeVerboseVerbatimExperience`; the host does not guess which evidence matters.
+`resetScope` clears prior-scope process context from later model requests. Operator user prose and successive reset barriers remain in order; the new scope keeps all work after the reset. Exact bytes needed later (signatures, stacks, line numbers) belong in `oldScopeVerboseVerbatim`; the host does not invent the handoff.
 
-Tool calls in the same batch obey the real execution barrier. Calls before `resetScope` finish first and their old-scope results are cleared; calls after the barrier wait and belong to the new scope. Each scope is one self-contained state closed-loop.
+`removeLast` collapses the previous beat (tool calls, thinking, and output) outbound into one assistant message (`replacement` must include the lesson; side effects must be stated) plus an idle-spin counter note; the durable store is not rewritten.
+
+Parallel tool calls in one batch run in real order: calls before a reset barrier finish in the old scope and are cleared; calls after wait for the barrier and become new-scope content. Each scope promises one self-contained state closed-loop.

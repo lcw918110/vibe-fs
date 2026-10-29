@@ -313,6 +313,9 @@ module ToolHostCodec =
     [<Emit("$0.schema.number().min(0).describe($1)")>]
     let private rawNonNegativeNumberSchemaDescribed (tool: obj) (description: string) : obj = jsNative
 
+    [<Emit("$0.schema.number().min(0).describe($1).optional()")>]
+    let private rawOptionalNonNegativeNumberSchemaDescribed (tool: obj) (description: string) : obj = jsNative
+
     [<Emit("$0.schema.number().int().nonnegative().describe($1).optional()")>]
     let private rawOptionalNonNegativeIntegerSchemaDescribed (tool: obj) (description: string) : obj = jsNative
 
@@ -354,6 +357,9 @@ module ToolHostCodec =
 
     [<Emit("$0.schema.object($1)")>]
     let private rawObjectSchemaOf (tool: obj) (fields: obj) : obj = jsNative
+
+    [<Emit("$0.schema.object($1).describe($2)")>]
+    let private rawObjectSchemaDescribed (tool: obj) (fields: obj) (description: string) : obj = jsNative
 
     [<Emit("$0.schema.object($1).optional()")>]
     let private rawOptionalObjectSchemaOf (tool: obj) (fields: obj) : obj = jsNative
@@ -512,6 +518,9 @@ module ToolHostCodec =
     let nonNegativeNumberSchemaDescribed description (HostToolFactory factory) =
         HostSchema(rawNonNegativeNumberSchemaDescribed factory description)
 
+    let optionalNonNegativeNumberSchemaDescribed description (HostToolFactory factory) =
+        HostSchema(rawOptionalNonNegativeNumberSchemaDescribed factory description)
+
     let optionalStringArraySchema (HostToolFactory factory) =
         HostSchema(rawOptionalStringArraySchema factory)
 
@@ -523,6 +532,30 @@ module ToolHostCodec =
             fields |> List.map (fun (name, HostSchema schema) -> name, schema) |> createObj
 
         HostSchema(rawObjectSchemaOf factory fieldsObj)
+
+    /// Required flat Scope annotation on every tool. Semantics: common law «Scope».
+    let scopeAnnotationSchema (HostToolFactory factory) =
+        let hf = HostToolFactory factory
+        let fieldsObj =
+            createObj
+                [ "kind",
+                  schemaValue (
+                      enumSchemaDescribed
+                          [ "resetScope"; "keepLast"; "removeLast"; "meToo" ]
+                          "resetScope | keepLast | removeLast | meToo"
+                          hf
+                  )
+                  "oldScopeVerboseVerbatim", schemaValue (optionalStringSchema hf)
+                  "newScopeGoal", schemaValue (optionalStringSchema hf)
+                  "newScopeRetentionBudget",
+                  schemaValue (
+                      optionalNonNegativeIntegerSchemaDescribed "1..48 keep slots; required with resetScope" hf
+                  )
+                  "replacement", schemaValue (optionalStringSchema hf) ]
+        HostSchema(
+            rawObjectSchemaDescribed factory fieldsObj "Scope lifecycle annotation. See common law «Scope»."
+        )
+
 
     /// Optional object schema: the caller may omit the whole object.
     let optionalObjectSchema fields (HostToolFactory factory) =

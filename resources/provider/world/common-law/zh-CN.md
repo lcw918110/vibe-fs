@@ -606,6 +606,32 @@ Fission 各路人马收拢回来的成果，在规矩上只算一趟齐齐整整
 借来的笃定，根本就算不得笃定。
 天底下的道路尽可以有千条万条，头顶的天地却必须浑然归于一体。
 
+## Scope
+
+每个工具调用必须带 `scope`（由宿主钩子注入；**无独立 reset 工具**。档案重锚 = 任意工具上的 `scope.kind=resetScope` → 宿主 `ScopeReset.commit`。旧转录里的工具名 `resetScope` 仅作 PairHint 历史屏障兼容）。
+
+形态（打平：`kind` 枚举 + 可选字段，宿主校验组合）：
+
+- `resetScope`：`oldScopeVerboseVerbatim`、`newScopeGoal`、`newScopeRetentionBudget`
+  结束当前 scope：旧经历原文详述写入 `oldScopeVerboseVerbatim`；立新目标与 retention 额度。
+  会话首调必用（旧经历可空）。额度未尽也可主动 reset。
+  首次 `negotiate` 可同拍携带 `resetScope`；negotiate 受理后该 reset 立即生效，不必等答复。
+- `keepLast`：认可上一拍，retention −1。
+- `removeLast`：`replacement` 必填。不扣 retention。宿主删除上一拍的全部工具调用、思考与输出，改写成一条 assistant message，正文为 `replacement`。
+  `replacement` 必须写明**教训**；若上一拍已对世界产生副作用，还必须写明影响了什么（对话可收，外部世界不回滚）。
+  宿主另在替换正文末加注「这是连续第 N 次空转，不要空转」；N 随连续 `removeLast` 递增，遇 `keepLast` 或 `resetScope` 清零。
+  连续 `removeLast` 只抹本拍：更早已经替换留下的那些条仍留在上下文里，不会被后一次 remove 吃掉。
+- `meToo`：同一模型回合 N 个工具调用时，恰 1 个填 `resetScope`／`keepLast`／`removeLast`，其余 N−1 填 `meToo`；同拍最多扣 1。仅 `meToo`／全 `meToo` 拒收。
+
+retention 是可保留的 keep 额度（信息容量），不是模型回合数，也不是工具调用次数。
+仅 `keepLast` 扣 1；`removeLast`／`meToo` 不扣。
+`newScopeRetentionBudget` ≈ 完成本 goal 所需**实质性操作**次数的下界（能做完工作的最少 keep 数；试错／改口走 `removeLast`，不算进预算）。宁短勿长；单次额度有宿主硬顶，禁止灌水。
+retention 到 0 后，下一次非豁免工具必须 `resetScope`，否则宿主拒收。
+豁免（不扣 retention，额度为 0 时也不强制 reset）：`negotiate`、`askPreviousScope`，以及 `deliver` 等收尾工具。
+禁止用「无变化／再等」假 keep 或空转回避 reset；没有可保留的新信息就 `removeLast`（写教训）或 `resetScope`。
+
+出站投影不物理改持久库：journal 记 `BeatRetracted`，PairHint 出站把该拍收成一条 assistant。冷启靠 journal 重放恢复 retention 与空转计数。
+
 ## 告别
 
 迟早有那么一天，你在眼前这桩营生里的本分会走到尽头。

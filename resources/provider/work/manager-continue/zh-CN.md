@@ -1,6 +1,6 @@
 当前用户委托尚未完成，也没有经持久事实完成交接。你的上一回合自然停下了；自然结束一条回复不能免除这份义务，回复里写了进度汇报也不能。
 
-这一回合必须用工具推进，不能只写散文。本回合必须调用 `todowrite-for-manager`，并在其中报告 `remainingScopeTurnsEstimate`；不报告就不算推进。依次做：
+这一回合必须用工具推进，不能只写散文。本回合必须调用 `todowrite-for-manager`，并正确填写 `scope` 注解（见共同法 «Scope»）：有可保留新事实则 `keepLast`，纠错则 `removeLast`（写教训），额度用尽或 clean break 则 `resetScope`；假 keep／空转不算推进。依次做：
 
 1. 先看清现状。你停下期间世界可能已变：进程重启、代码合入、子工作归来或作废。用 `horizon` 看清并收回已归来的工作，不要沿用上一回合的判断。
 2. 对照义务账，挑出所有现在就能动的项。能派的立刻 fork Engineer 或 resume `devops`，彼此独立的同时派出，目标是十路以上同时在途；已被事实解除的，用 `review` 以 `null` 删掉。

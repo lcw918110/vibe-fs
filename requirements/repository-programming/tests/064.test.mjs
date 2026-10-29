@@ -37,7 +37,7 @@ const WAIT = 'Give this named program enough time to reach the requested operati
 const program = body => `class Js extends JsProgram { async run() { ${body} } }`
 const parkProgram = program("return await this.park({ stage: 'host-schema' });")
 const writeProgram = program("await this.write('probe.txt', 'ran'); return { wrote: true };")
-const input = (name, source = writeProgram, intent = WAIT) => ({ name, program: source, intent, remainingScopeTurnsEstimate: 5 })
+const input = (name, source = writeProgram, intent = WAIT) => ({ name, program: source, intent })
 const register = dir => createRegistered(toolModule(), 'Engineer', 'en', dir, null)
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), 'wxs-064-contract-'))
@@ -57,22 +57,19 @@ test.afterEach(async () => {
   else process.env.WANXIANGSHU_PROVIDER_LANGUAGE = previousLanguage
   language.refreshGlobalLanguage()
 })
-test('WHAT[repository-programming-064] the physical Host ToolSpec requires the progress estimate in addition to the three sandbox strings', t => {
+test('WHAT[repository-programming-064] the physical Host ToolSpec requires three sandbox strings; estimate retired', t => {
   const { registered } = fixture(t)
-  assert.deepEqual(argumentNames(registered), ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'])
+  assert.deepEqual(argumentNames(registered), ['name', 'program', 'intent'])
   for (const key of ['name', 'program', 'intent']) {
     const schema = argumentSchema(registered, key)
     assert.equal(schema.type, 'string')
     assert.notEqual(schema.optional, true)
   }
-  const estimate = argumentSchema(registered,'remainingScopeTurnsEstimate')
-  assert.notEqual(estimate.optional, true)
-  assert.equal(estimate.type,'number','the estimate is a real number, not an integer')
-  assert.notEqual(estimate.integer, true, 'a fractional estimate must remain valid')
-  for (const former of ['unpark', 'abandon', 'prefixUntil', 'carry'])
+  assert.equal(argumentSchema(registered, 'remainingScopeTurnsEstimate'), null, 'estimate retired from product schema')
+  for (const former of ['unpark', 'abandon', 'prefixUntil', 'carry', 'remainingScopeTurnsEstimate'])
     assert.equal(argumentSchema(registered, former), null)
 })
-test('WHAT[repository-programming-064] four top-level fields execute at the actual Host ToolSpec entry', async t => {
+test('WHAT[repository-programming-064] three top-level fields execute at the actual Host ToolSpec entry (estimate optional-ignored if present)', async t => {
   const { dir, registered } = fixture(t)
   const result = await execute(registered, input('write'), { sessionID: 'ses-064-write' })
   assert.equal(result.startsWith('# ok'), true, result)

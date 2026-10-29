@@ -24,10 +24,11 @@ const withTool = (check, role = 'Coder') => {
 
 const sample = 'class Js extends JsProgram { async run() { return { ok: true }; } }'
 
-test('WHAT[repository-programming-049] todowrite requires three strings and a nonnegative estimate', () => {
+test('WHAT[repository-programming-049] todowrite requires name/program/intent; estimate field retired', () => {
   for (const role of ['Coder', 'Engineer', 'Manager', 'DevOps', 'Plan', 'Orchestrator']) {
     withTool(handle => {
-      assert.deepEqual(argumentNames(handle), ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'], `${role} must expose the required estimate`)
+      assert.deepEqual(argumentNames(handle), ['name', 'program', 'intent'], `${role} must not expose remainingScopeTurnsEstimate`)
+      assert.equal(argumentSchema(handle, 'remainingScopeTurnsEstimate'), null, 'estimate retired from product schema')
       const program = argumentSchema(handle, 'program')
       assert.equal(program.safeParse(undefined).success, false, 'program is required')
       assert.equal(program.safeParse(null).success, false)
@@ -37,19 +38,14 @@ test('WHAT[repository-programming-049] todowrite requires three strings and a no
       const name = argumentSchema(handle, 'name')
       const intent = argumentSchema(handle, 'intent')
       for (const schema of [name, intent]) {
-        assert.equal(schema.safeParse(undefined).success,false)
-        assert.equal(schema.safeParse(42).success,false)
-        assert.equal(schema.safeParse('value').success,true)
+        assert.equal(schema.safeParse(undefined).success, false)
+        assert.equal(schema.safeParse(42).success, false)
+        assert.equal(schema.safeParse('value').success, true)
       }
-      const remainingScopeTurnsEstimate = argumentSchema(handle,'remainingScopeTurnsEstimate')
-      assert.equal(remainingScopeTurnsEstimate.safeParse(-1).success,false)
-      assert.equal(remainingScopeTurnsEstimate.safeParse(0).success,true)
-      assert.equal(remainingScopeTurnsEstimate.safeParse(2.5).success,true,'the estimate is a real number')
-      assert.equal(remainingScopeTurnsEstimate.safeParse(undefined).success,false)
-      const modelSchema = z.object({ name, program, intent, remainingScopeTurnsEstimate }).strict()
-      assert.deepEqual(z.toJSONSchema(modelSchema).required, ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'])
+      const modelSchema = z.object({ name, program, intent }).strict()
+      assert.deepEqual(z.toJSONSchema(modelSchema).required, ['name', 'program', 'intent'])
       assert.equal(modelSchema.safeParse({}).success, false, 'an empty tool call must be schema-invalid')
-      for (const retired of ['unpark', 'abandon', 'handle']) {
+      for (const retired of ['unpark', 'abandon', 'handle', 'remainingScopeTurnsEstimate']) {
         assert.equal(argumentSchema(handle, retired), null, retired + ' is not a Host tool argument')
       }
     }, role)
@@ -59,10 +55,11 @@ test('WHAT[repository-programming-049] todowrite requires three strings and a no
 test('WHAT[repository-programming-049] tool description leads with the three required string arguments', () => {
   withTool(handle => {
     const text = description(handle)
-    assert.match(text.slice(0,420), /program.*required|required.*program/i)
-    assert.match(text.slice(0,520), /class Js extends JsProgram/)
+    assert.match(text.slice(0, 420), /program.*required|required.*program/i)
+    assert.match(text.slice(0, 520), /class Js extends JsProgram/)
     assert.match(text, /async run\(\)/)
-    assert.doesNotMatch(text.slice(0,520), /optional.*program/i)
+    assert.doesNotMatch(text.slice(0, 520), /optional.*program/i)
+    assert.match(text, /remainingScopeTurnsEstimate|do not report|不要再报/i)
   })
 })
 
@@ -72,12 +69,16 @@ test('WHAT[repository-programming-049] the actual OpenCode plugin exposes requir
     for (const role of ['manager', 'engineer', 'devops', 'plan', 'orchestrator']) {
       const registered = hooks.tool[`todowrite-for-${role}`]
       assert.ok(registered, role + ' must expose a generated tool')
-      assert.deepEqual(Object.keys(registered.args), ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'])
+      const keys = Object.keys(registered.args)
+      assert.ok(keys.includes('name') && keys.includes('program') && keys.includes('intent'), role + ' must expose three sandbox strings')
+      assert.ok(!keys.includes('remainingScopeTurnsEstimate'), role + ' must not expose estimate')
+      // host may inject `scope` annotation schema alongside the three strings
       const schema = z.toJSONSchema(z.object(registered.args))
-      assert.deepEqual(schema.required, ['name', 'program', 'intent', 'remainingScopeTurnsEstimate'], role + ' must require program and progress')
+      for (const k of ['name', 'program', 'intent']) assert.ok((schema.required || []).includes(k), role + ' requires ' + k)
+      assert.ok(!(schema.required || []).includes('remainingScopeTurnsEstimate'))
       assert.equal(schema.properties.program.type, 'string')
       assert.equal(z.object(registered.args).safeParse({}).success, false)
-      assert.match(registered.description.slice(0,520), /program.*required|required.*program|唯一.*program|program.*必填|必填.*program/i)
+      assert.match(registered.description.slice(0, 520), /program.*required|required.*program|唯一.*program|program.*必填|必填.*program/i)
     }
   })
 })

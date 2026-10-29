@@ -1,5 +1,9 @@
 # context-compression — WHAT
 
+
+> **COMPAT（2026-10-29）现行口径**：Scope 生命周期入口是任意工具上的打平注解 `scope.kind` ∈ {`resetScope`,`keepLast`,`removeLast`,`meToo`} 与 retention（`wanxiangli/scope-retention` + 共同法 «Scope»）。**无独立 `resetScope` 宿主工具**；档案重锚 = 注解 `resetScope` → `ScopeReset.commit`。**无** `remainingScopeTurnsEstimate`／`turnBudget`／KPI 倍率产品契约；Stall／ResetDue 估计路径已从宿主产品面退役。下文若仍写独占工具、估计必填或倒计时后缀，以本条为准。PairHint 屏障优先认 `scope.kind=resetScope`，旧工具名只读兼容。
+
+
 ## [001] 不推导容量，只向模型披露计量与声明常量
 
 严禁从自身观察推导、估算或缓存任何模型上下文窗口大小；禁止上下文余量、模型容量表，或把字节/token 换算成窗口比例的逻辑。唯一允许的字节计量为合法的文件与进程计量。
@@ -10,11 +14,11 @@
 
 在请求发送前，宿主严禁判断是否接近容量上限，禁止根据投影长度比例、剩余预算或累计 Token 主动选择压缩点或触发自动裁剪。真实的 provider attempt 失败是唯一的恢复触发信号。
 
-向模型披露进度计量（[001]、[034]）不构成窗口剩余量预测：系统只比较模型实际报告的非负整数。显式 `resetScope` 才推进工作 Scope；系统自动 compaction 是独立容量保护动作，不代表重锚。
+向模型披露进度计量（[001]、[034]）不构成窗口剩余量预测：系统只比较模型实际报告的非负整数。显式 `scope.kind=resetScope` 才推进工作 Scope；系统自动 compaction 是独立容量保护动作，不代表重锚。
 
 ## [003] 取消独立 Y 轴与 200 KiB Blogger delta 合同
 
-系统不再设独立的 Y 轴、Blogger、Chronicle、200 KiB delta 切块或 `MemoryPreamble` / `FrozenRecordPrefix` 物化管线。上下文的清理边界完全由模型显式调用 `resetScope` 宿主工具作为唯一执行屏障（见 [033]）决定；最新一次 reset 之后的活跃 scope 原样保留，不另设独立的 Y 物化覆盖证明。
+系统不再设独立的 Y 轴、Blogger、Chronicle、200 KiB delta 切块或 `MemoryPreamble` / `FrozenRecordPrefix` 物化管线。上下文的清理边界完全由模型在任意工具上标注 `scope.kind=resetScope`（见 [033]）决定；无独立 reset 宿主工具；最新一次 reset 之后的活跃 scope 原样保留，不另设独立的 Y 物化覆盖证明。
 
 ## [004] 输出预算属 provider
 
@@ -34,7 +38,7 @@
 
 ## [008] 主工作会话不发压缩请求
 
-主工作会话不向主模型发送“请总结自身历史以节省容量”的人工压缩指令。工作 Scope 重锚只由模型显式调用 `resetScope`；另行允许宿主系统自动 compaction（`auto=true`, `prune=false`, `autocontinue=true`），它不推进 Scope epoch，也不更改计费估计、Advisor 专席与在途委托事实。
+主工作会话不向主模型发送“请总结自身历史以节省容量”的人工压缩指令。工作 Scope 重锚只由模型显式标注 `scope.kind=resetScope`；另行允许宿主系统自动 compaction（`auto=true`, `prune=false`, `autocontinue=true`），它不推进 Scope epoch，也不更改计费估计、Advisor 专席与在途委托事实。
 
 ## [013] 诊断不是控制输入
 
@@ -59,38 +63,34 @@ Provider retry 的 correctness path 严禁读取 wall clock、构造 `TimeSpan`�
 
 每次 `resetScope` 都必须**原样保留所有历史 `assume` 调用及其成对结果**；与 `negotiate`、`askPreviousScope`（含旧拼法 `askPrevious`）、`advisor` 一样，不因后续任何重置而删除。模型不必再靠交接材料重抄这些工具的输入与输出。普通非豁免工具与过程文本仍按最近一次 reset 清理。
 
-## [033] resetScope 屏障与原文逐字保留
+## [033] Scope 注解屏障与原文逐字保留
 
-`resetScope` 是宿主独占工具，公开参数只有两段文本：
+**无独立 `scope.kind=resetScope` 注解。** 重锚入口是任意工具调用上的打平注解：
 
 ```ts
-resetScope(
-  oldScopeVerboseVerbatimExperience?: string | null,
-  newScopeObjective: string
-)
+scope: {
+  kind: "resetScope",
+  oldScopeVerboseVerbatim?: string,
+  newScopeGoal: string,
+  newScopeRetentionBudget: number // 1..MaxRetentionBudget；keep 额度，不是回合数
+}
 ```
 
-**没有** `newScopeTurnBudget` 或 `kpiCompletion`。成功的 durable `ScopeReanchored` 开始下一 Scope，并使单一 `ScopeProgress` 在新 epoch 重新建立首次计费估计；失败、Unknown 或同调用重放不得提前更新进度。
+成功的 durable `ScopeReanchored`（宿主 `ScopeReset.commit`／OMP 等价）开始下一 Scope，并由 `scope-retention` 在新 epoch 种下 retention；失败、Unknown 或同调用重放不得提前更新。旧 `newScopeTurnBudget`／KPI／`remainingScopeTurnsEstimate` 不是现行入口。
 
-请求副本清理普通旧工具过程与旧 Scope 的 thinking/reasoning，但历次真人 operator 消息、所有实际可取得的 assistant 文本、`resetScope` 以及 `assume / negotiate / askPreviousScope / askPrevious / advisor` 真正关键工具的**完整调用及其按 toolCallId 配对的原结果**，跨任意次数 reset 保留。不能因 assistant 与被清理的 read/bash 同消息就误删 assistant 正文；thinking 只在最新 reset 之后保留；不得保留孤儿工具结果。代理 attributed user 不冒充 operator。真正在途 fork/resume/commission 从 durable HandleLedger 与子会话最后一次已接受派出提示词读取，reset 成功结果可以附尚未归队工作清单，不改写历史工具返回值。
+请求副本清理普通旧工具过程与旧 Scope 的 thinking/reasoning，但历次真人 operator 消息、所有实际可取得的 assistant 文本、**带 `scope.kind=resetScope` 的工具调用**（PairHint 对旧转录仍兼容工具名 `resetScope`）以及 `assume / negotiate / askPreviousScope / askPrevious / advisor` 的**完整调用及其按 toolCallId 配对的原结果**，跨任意次数 reset 保留。不能因 assistant 与被清理的 read/bash 同消息就误删 assistant 正文；thinking 只在最新 reset 之后保留；不得保留孤儿工具结果。代理 attributed user 不冒充 operator。真正在途 fork/resume/commission 从 durable HandleLedger 与子会话最后一次已接受派出提示词读取，reset 成功结果可以附尚未归队工作清单，不改写历史工具返回值。
 
-OpenCode 和 OMP 只能按照同一 PairHint 中立过滤计划物理投影；reset 成功仍须先写完整可验证的 Provider archive/blob，再提交 `ScopeReanchored`。完整历史归档是 durable 事实，不等同于咨询时保存多份快照。
+OpenCode 和 OMP 只能按照同一 PairHint 中立过滤计划物理投影；重锚成功仍须先写完整可验证的 Provider archive/blob，再提交 `ScopeReanchored`。完整历史归档是 durable 事实，不等同于咨询时保存多份快照。
 
-## [034] todowrite 计费回合、最小估计、ResetDue 与 Advisor
+## [034] 估计路径已退役（历史）
 
-进度计费单位是**包含至少一次真实有效 `todowrite` 的 Provider LLM 回合**，不等于所有 LLM 请求。没有 `todowrite` 的回合免费，不提交估计，也不触发进度比较。同一实际 `providerRunId` 无论执行多少次有效 `todowrite`，仅计一次；取所有报告值的最小实数 `min(remainingScopeTurnsEstimate[])`。工具 Schema 保证每项报告的 `remainingScopeTurnsEstimate` 必填、非负实数（允许小数）；额外字段拒绝。每个 toolCallId 仅采信一次，不得因 Provider 回执重放重复结算。同回合全部受理的工具集合结束后，由下一次真实 Provider 请求边界统一结算，不按某个工具完成的时间抢先收费。
-
-当前 Scope 第一份估计建立基线；此后每个计费回合的估计应比上一计费回合至少下降 `0.1`，判定按 `oldEstimate - newEstimate >= 0.08`（`JudgedDrop`）继续工作，否则（持平、上升或降幅不足）自动产生专席 Advisor Process。对外文案只承诺 `0.1`（`DocumentedDrop`）；判定留得更宽 `0.02`，正好覆盖十进制小数无法被二进制精确表示带来的误差，让按承诺报数不被误判，而不是把 0.1 暗中抬高。这个估计同样是模型求助的通道：如实报数，需要帮助时数字自然降不下来，系统据此安排 Advisor。求助要早：一旦判断剩余回合装不下当前 Scope，就在同一回合把估计调到真实预期并接住由此触发的顾问对话；早谈一次的代价远低于磨到弹尽粮绝才求助，提示词据此明写鼓励及时、主动求助，而不是鼓励闷头硬扛。`todowrite` 参数描述按此措辞公开规则，也**不指示模型不得策略性报数**。估计到 0 时由宿主记下 `ResetDue`，从下一次正常工作请求开始追加单独的强 agent-attributed `resetScope` steer，直到真实重锚；重置前再次计费也触发 Advisor。没有已确认估计时，正常工作请求强提醒**通过 `todowrite` 提交首次估计**，而不是催模型先 reset。代理侧请求／标题摘要请求不追加进度提示，不递减和修改进度。真人新消息和代理答复都不自动鼓励 reset。
-
-工具执行结果、assistant 原文和历史工具调用**绝不**附带旧的 `[Remaining turnBudget: N]` 后缀；`turnBudget` 倒计时、KPI 倍率、首次无预算强制 reset 与零预算弱提醒全部退役。进度所有权在 `wanxiangli/scope-progress`，PairHint 只决定历史过滤和待首问 negotiate／askPreviousScope 的强 steer；两宿主不得复制一份预算状态。
-
-ScopeProgress 的工作 Scope 身份以持久投影中不同 `ScopeReanchored` 调用的已提交数量为准。`ContextReanchored`（系统 compaction）和 `TenureReanchored` 会改变 PrefixEpoch，但不会开启新的工作 Scope，因而不得使下一次有效 `todowrite` 报告被误判为 epoch mismatch，不得丢失上一估计或清除 `ResetDue`。只有真正成功的 `ScopeReanchored` 才重新建立基线、取消旧 Scope 的 Advisor 在途咨询；重复同一次 reset 不改变身份。
+`remainingScopeTurnsEstimate`、Stall／ResetDue、按估计开专席 Advisor 的产品契约**已退役**。现行生命周期是 retention：`keepLast` 扣额度，耗尽后下一次非豁免工具须 `scope.kind=resetScope`；连续 `removeLast` 空转由 `scope-retention` 的 `advisorDue` 提示（与旧估计顾问不同源）。`wanxiangli/scope-progress` 包可仍存 durable 计费／顾问队列实现与测试，但**不得再写成 todowrite 必填字段或宿主强契约**。工具结果**绝不**附 `[Remaining turnBudget: N]`。PairHint 只做历史过滤与 negotiate／askPreviousScope 强 steer，以及注解优先的 reset 屏障。
 
 ## [035] ScopeReanchored 冷前缀边界
 
-`resetScope` 调用的落地构成明确的冷前缀边界（Cold Prefix Boundary）。
+`scope.kind=resetScope`（→ `ScopeReanchored`）的落地构成明确的冷前缀边界（Cold Prefix Boundary）。
 
-当执行并提交一次合法的 `resetScope` 时，系统向持久化日志追加一条不可逆的 `ScopeReanchored` 事实，记录前一 epoch、新 epoch 以及本次 `resetScope` 的精确调用身份（`toolCallId`）。`ActivePrefixEpoch` 恰好加一，且系统幂等清空已缓存的 provider wire 前缀快照。
+当注解重锚成功并提交 `ScopeReanchored` 时，系统向持久化日志追加一条不可逆的 `ScopeReanchored` 事实，记录前一 epoch、新 epoch 以及本次重锚工具调用的精确身份（`toolCallId`）。`ActivePrefixEpoch` 恰好加一，且系统幂等清空已缓存的 provider wire 前缀快照。
 
 `prefix-stability` 将重锚后的下一次请求视为全新 epoch 的起点，重新建立精确字节前缀，不把旧 scope 清理造成的历史字节缺失判定为前缀漂移或违反同 epoch 前缀追加律（prefix-stability [001]）。同一 `toolCallId` 严禁重复产生重锚事实。
 
@@ -158,7 +158,7 @@ askPreviousScope(
 1. **不可变档案存储与原子提交**：当执行合法的 `resetScope` 时，宿主必须依据导致该次调用发生的真实 Provider 出站请求，捕获完整的 system、messages、model/variant、工具目录及必要 run 身份，并首先将其作为不可变内容地址 blob 写入持久存储（`.Herdchestra/`）。随后，在同一笔原子 durable 提交中，将 `ScopeReanchored(epoch -> epoch + 1)`、该档案的内容地址引用（`archiveRef` / digest）以及**仅从第二次成功 reset 起**的新 epoch 首问义务（`AwaitFirstPreviousScopeQuestion`）共同落盘。第一次成功 reset 只建立真正的预算和档案，不构造旧我必须答复的义务。
 2. **提交确证先于内存状态更新**：内存中的活跃 scope 状态与当前 epoch（进度基线由下一次有效 todowrite 独立建立）**只有在上述 durable 提交确证成功（Committed）之后**方可更新。提交完成前、提交失败或持久化结果 Unknown 时，严禁更新内存状态；若 Provider 出站视图不可捕获或档案 blob 写入失败，宿主必须直接报错，严禁伪造无档案的成功 reset。
 3. **调用重放与幂等边界**：同一 `resetScope` 的 `toolCallId` 重放时，必须识别为已提交的重锚，直接返回既有确证结果，严禁新开第二个 epoch，严禁重复产生新的首问义务或重复追加 `ScopeReanchored` 事实。
-4. **原始返回文本不变**：`resetScope` 工具在 Host 层面执行成功的原始返回值严格保持为 `"Scope reset. Objective: <newScopeObjective>"`。首问义务提示、预算倒计时与 MUST 提醒均仅在即将发往模型的请求副本中进行热修正呈现（见 [034] 与 [044]），严禁改写盘上工具原始执行结果或持久化历史。
+4. **原始返回文本不变**：`scope.kind=resetScope` 注解在 Host 层面执行成功的原始返回值严格保持为 `"Scope reset. Objective: <newScopeObjective>"`。首问义务提示、预算倒计时与 MUST 提醒均仅在即将发往模型的请求副本中进行热修正呈现（见 [034] 与 [044]），严禁改写盘上工具原始执行结果或持久化历史。
 5. **在途咨询收尾与资源结清**：
    - **再次 reset**：当模型在当前 epoch 再次成功执行 `resetScope` 时，前一 epoch 尚未完成的在途回问（in-flight consultation）立即结清并标记为 Stale，其临时执行资源被释放，迟到答案不得污染新 epoch。
    - **会话退场**：当接收到 `session.deleted` 或会话销毁事件时，属于该会话的全部在途回问进程与临时会话资源必须立即排空并终止，未落地的回答一并作废。
@@ -175,7 +175,7 @@ askPreviousScope(
    - 只有实际受理且完成同一 Provider 回合的 `todowrite` 才参与 ScopeProgress 的一次 `min` 结算；
    - 初始化时序不前进（`initialized` 保持为 `false`）；
    - 零预算弱提示（weak reminder）保持关闭。
-5. **resetScope 自身执行自拒**：在 pending 未解除期间，模型若再次尝试调用 `resetScope`，该工具自身直接拒绝执行，返回说明文字提示模型必须先完成当前首问义务。该拒绝由工具自身返回，不产生任何 durable 提交或 `ScopeReanchored` 事实，且不影响其他普通工具的正常调用。
+5. **resetScope 自身执行自拒**：在 pending 未解除期间，模型若再次尝试走 `scope.kind=resetScope`，该工具自身直接拒绝执行，返回说明文字提示模型必须先完成当前首问义务。该拒绝由工具自身返回，不产生任何 durable 提交或 `ScopeReanchored` 事实，且不影响其他普通工具的正常调用。
 6. **对称性与解除条件**：
    - **结构对称**：`negotiate` 与 `askPreviousScope` 遵循相同的时序冻结（无预算后缀、不递减、弱提示关闭）、相同的每请求强 steer 持续 MUST 提醒，以及相同的 `resetScope` 自拒行为。
    - **解除条件（均为首问受理即解除）**：
@@ -184,15 +184,13 @@ askPreviousScope(
 7. **初始与后续重锚**：首次成功 `resetScope` 不建立回问 pending；从第二次成功重锚起，每个新 epoch 才建立一次首问 pending 与有效前任询问义务。首问 receipt 受理后，模型发起的后续追问属于普通咨询，不进入 pending 状态，不阻塞时序，不重复产生首问义务。
 
 
-## [045] 旧 KPI 倍率与 turnBudget 已退役
+## [045] 旧 KPI／turnBudget／估计字段已退役
 
-`resetScope` 仅接受 `oldScopeVerboseVerbatimExperience?: string | null` 与 `newScopeObjective: string`。`kpiCompletion`、`newScopeTurnBudget`、按 KPI 档位乘预算因子、`[Remaining turnBudget: N]` 工具结果后缀均已删除，不得在 OpenCode 或 OMP 维护兼容影子判断。新 Scope 第一次有效 `todowrite` 建立计费回合估计基线；估计较上一计费回合少降判定门槛（对外 0.1，判定 0.08）时自动触发内部专席、报 0 后从下一主回合持续强 steer 要求重置。
-
-证明：`wanxiangli/src/scope-progress/tests/001.test.mjs` 及 OpenCode 注册 `todowrite-for-*` 的 `WHAT[context-compression-052]`、OMP/OpenCode 两文本 `resetScope` 物理测试。
+`kpiCompletion`、`newScopeTurnBudget`、`remainingScopeTurnsEstimate`、按 KPI 乘预算、`[Remaining turnBudget: N]` 后缀均已删除，不得在 OpenCode 或 OMP 维护兼容影子判断。现行重锚字段见 [033]：`oldScopeVerboseVerbatim`／`newScopeGoal`／`newScopeRetentionBudget`。专席顾问挂 retention `advisorDue`（空转／额度耗尽），不挂估计 Stall／ResetDue。
 
 ## [046] 跨 Scope 永存工具原始成对输入与输出
 
-`wanxiangli/pair-hint` 按工具调用身份保留 `assume`、`negotiate`、`askPreviousScope` / `askPrevious`、`advisor` 的调用及结果。无论位于最新 reset 前多少代、与普通调用共处一个 assistant 多 part 批次、或结果独立成消息，均精确保留。对其它工具仍严格裁剪；不保留无对应调用 ID 的伪结果或其相邻普通调用。OpenCode 与 OMP 只能投影该中立过滤计划，不能按英文工具名重复维护自己的历史保留清单。实际是 `this.advisor` 等程序内成员、而不是物理 `advisor` 工具时，必须先由生产调用归属给出确证身份，不能猜测脚本文本并误判。
+`wanxiangli/pair-hint` 按工具调用身份保留 `assume`、`negotiate`、`askPreviousScope` / `askPrevious`、`advisor`，以及带 `scope.kind=resetScope` 的调用及结果（旧工具名 `resetScope` 只读兼容）。无论位于最新 reset 前多少代、与普通调用共处一个 assistant 多 part 批次、或结果独立成消息，均精确保留。对其它工具仍严格裁剪；不保留无对应调用 ID 的伪结果或其相邻普通调用。OpenCode 与 OMP 只能投影该中立过滤计划，不能按英文工具名重复维护自己的历史保留清单。实际是 `this.advisor` 等程序内成员、而不是物理 `advisor` 工具时，必须先由生产调用归属给出确证身份，不能猜测脚本文本并误判。
 
 证明：`wanxiangli/src/pair-hint/tests/011.test.mjs`、Host 已注册请求副本与多次 reset 前缀稳定性反例。
 
@@ -213,7 +211,7 @@ OMP **已真实实现并在本地 OMP SDK + SSE 假 Provider 验证**原生旧�
 
 ## [050] 首次进度估计、真实后续消息与首次不回问
 
-每个 Scope 还没有任何已结算 `remainingScopeTurnsEstimate` 时，普通模型请求在不改用户原文或工具结果的条件下追加一条独立强 agent steer，要求下次 `todowrite` 提供首次估计；此时**不要求重置**。其后只有已确认的 `ResetDue` 才持续强催 `resetScope`。真正的用户、协商、旧我及其它代理答复只作为当前 Scope 的继续输入，不自动清零进度、开启新 Scope 或因为消息到达催 reset。side-request 不制造主回合提示。
+每个 Scope 尚未用 `scope.kind=resetScope` 立下 retention 时，普通模型请求可追加独立强 agent steer，催注解初始化（资源路径名可仍叫 missing-estimate，文案已是 retention）；**不**再催 `todowrite` 估计。额度耗尽后催下一次 `scope.kind=resetScope`。真正的用户、协商、旧我及其它代理答复只作为当前 Scope 的继续输入，不自动清零进度、开启新 Scope 或因为消息到达催 reset。side-request 不制造主回合提示。
 
 第一次成功 `resetScope` 建立第一个显式重锚，不要求 `askPreviousScope`；第二次及以后才有前任真实工作 Scope 与首问义务。pending 通过单独强 steer 呈现，不硬阻断普通工具。工具结果无旧预算倒计时后缀。
 
@@ -221,13 +219,13 @@ OMP **已真实实现并在本地 OMP SDK + SSE 假 Provider 验证**原生旧�
 
 ## [051] 冷恢复没有进度证据时建立首次计费估计，而不是编造旧预算
 
-即使历史里有 `resetScope`，当前进程仍不能从默认 0 猜测已提交的剩余计费估计。`wanxiangli/scope-progress` 现在可通过真实 SQLite 计费事实（逐 toolCall 的 `Recorded`、经 CAS 一次提交的 `Settled`）按原 Session/Scope 重建上个付费回合估计、最小值、`ResetDue` 以及未结算 Provider 回合。OpenCode 在启动时已加入同一 `.Herdchestra/wanxiangshu/advisor-process.sqlite` 的持久 Journal 工厂接线，**官方宿主 Fable 与 JS module-linkage 已通过，真实 OpenCode 014 已证明清空内存后按 SQLite 恢复计费余额，015 已证明并存工作区的 Session 不会串写**。没有任何能证明该 Scope 的计费事实时仍必须 `known=false`，下一次正常工作请求催 `todowrite(remainingScopeTurnsEstimate)` 建立新基线；不能伪造 `[Remaining turnBudget: 0]`、不触发零预算弱提醒，也不能仅因冷恢复要求 `resetScope`。只有 SQLite 已确认的零估计锁存才允许继续催真实重锚。
+即使历史里有 `resetScope`，当前进程仍不能从默认 0 猜测已提交的剩余计费估计。`wanxiangli/scope-progress` 现在可通过真实 SQLite 计费事实（逐 toolCall 的 `Recorded`、经 CAS 一次提交的 `Settled`）按原 Session/Scope 重建上个付费回合估计、最小值、`ResetDue` 以及未结算 Provider 回合。OpenCode 在启动时已加入同一 `.Herdchestra/wanxiangshu/advisor-process.sqlite` 的持久 Journal 工厂接线，**官方宿主 Fable 与 JS module-linkage 已通过，真实 OpenCode 014 已证明清空内存后按 SQLite 恢复计费余额，015 已证明并存工作区的 Session 不会串写**。没有任何能证明该 Scope 的计费事实时仍必须 `known=false`，下一次正常工作请求催 `scope.kind=resetScope` 建立 retention 基线；不能伪造 `[Remaining turnBudget: 0]`、不触发零预算弱提醒，也不能仅因冷恢复要求 `scope.kind=resetScope`。只有 SQLite 已确认的零估计锁存才允许继续催真实重锚。
 
 证明：`wanxiangli/src/pair-hint/tests/015.test.mjs`、`scope-progress/tests/001.test.mjs`、`scope-progress/tests/007–008.test.mjs` 的真实 SQLite/SIGKILL/CAS 恢复，以及 `requirements/host-boundary/tests/scope-hni-physical.test.mjs` 中的 `context-compression-051`。OpenCode `requirements/advisor/tests/014.test.mjs`（真实计费冷恢复）及 `015.test.mjs`（两个并行插件隔离持久工厂）均已通过。
 
 ## [052] 单个真实 Provider 回合只计费一次并取最小实数估计
 
-同一个真实 Provider 回合里多次调用 `todowrite`，只按该回合结一次账，取所有报告的 `min(remainingScopeTurnsEstimate)`；调用方给的 `remainingScopeTurnsEstimate` 是必填非负实数，Schema 接受小数。回合识别以宿主真实回合边界为准，不因某个工具先完成就先扣一次。
+同一个真实 Provider 回合里多次调用 `todowrite`，只按该回合结一次账，取所有报告的 `min(`remainingScopeTurnsEstimate`（已退役估计字段；现行用 retention）)`；现行不再要求 `remainingScopeTurnsEstimate`；本条仅描述已退役计费包行为。回合识别以宿主真实回合边界为准，不因某个工具先完成就先扣一次。
 
 证明：`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `context-compression-052`（真实注册工具、真实 `chat.params` 结算、`2.5` 物理接受）与 `wanxiangli/src/scope-progress/tests/001.test.mjs` 的多报告取最小用例。
 

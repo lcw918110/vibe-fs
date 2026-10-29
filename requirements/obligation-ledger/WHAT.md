@@ -1,6 +1,9 @@
 # obligation-ledger — WHAT
 
-本包规定待办义务的消极边界（Negative Boundary）：宿主原生 `todowrite` 已退役，不进入 `StaticTools.knownToolNames`、能力权限矩阵、投机调查分类或 ablation 映射；插件不得维护第二份待办账本。上下文压缩边界唯一由 `resetScope` 宿主工具承接（见 context-compression [033]）。各角色的活规划与工作推进由其 `todowrite-for-<role>` 编程面承担，不得产生压缩 checkpoint，也不得改写或注入压缩协议字段。
+> **COMPAT（2026-10-29）现行口径**：Scope 入口是 `scope.kind` 注解 + retention；无独立 resetScope 工具；无 estimate／turnBudget 产品契约。下文旧句以本条为准。
+
+
+本包规定待办义务的消极边界（Negative Boundary）：宿主原生 `todowrite` 已退役，不进入 `StaticTools.knownToolNames`、能力权限矩阵、投机调查分类或 ablation 映射；插件不得维护第二份待办账本。上下文压缩边界唯一由 `scope.kind=resetScope` 注解承接（见 context-compression [033]）。各角色的活规划与工作推进由其 `todowrite-for-<role>` 编程面承担，不得产生压缩 checkpoint，也不得改写或注入压缩协议字段。
 
 ## [001] 宿主原生 todowrite 退役，待办归角色编程面
 
@@ -8,7 +11,7 @@
 
 ## [002] 编程面调用不产生第二份待办真相与 checkpoint
 
-编程面调用按原样由 Host executor 执行并记录真实 Host ToolPart 状态；插件不得为其追加任何 checkpoint 事实或待办投影。宿主不得按待办替模型裁剪历史，上下文边界完全由模型调用 `resetScope` 自主划定。
+编程面调用按原样由 Host executor 执行并记录真实 Host ToolPart 状态；插件不得为其追加任何 checkpoint 事实或待办投影。宿主不得按待办替模型裁剪历史，上下文边界完全由模型走 `scope.kind=resetScope` 自主划定。
 
 ## [003] 不维护第二份 desired/applied 待办投影
 

@@ -12,6 +12,7 @@ module Surface =
     val budgetSuffix: budget: int -> string
     val adjustBudgetForKpi: estimate: int -> completion: string -> int
     val turnBudget: sessionId: string -> int
+    val setRetentionBudget: sessionId: string -> remaining: int -> unit
     val isScopeInitialized: sessionId: string -> bool
     val onTurnStart: sessionId: string -> unit
     val resetScopeState: sessionId: string -> budget: int -> unit

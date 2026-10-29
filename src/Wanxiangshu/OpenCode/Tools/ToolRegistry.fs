@@ -883,7 +883,7 @@ module ToolRegistry =
         let negotiateSpec: ToolSpec =
             { Name = "negotiate"
               Description =
-                "Ask your delegator clarifying questions. The first call is required before resetScope initialization; once it is accepted, negotiation is complete and resetScope is available immediately. Later calls are optional and can happen at any time. Pass all questions together in questions (plural). Acceptance completes the negotiation and the timeline continues; do not wait for an answer. If the delegator's answer is obtained, it may arrive later as a user steer; it never blocks resetScope or ongoing work."
+                "Ask your delegator clarifying questions. The first call is required before Scope initialization; once accepted, negotiation is complete — you may carry scope.kind=resetScope on the same turn and it takes effect on acceptance. Later calls are optional. Pass all questions in questions (plural). Do not wait for an answer. See common law «Scope»."
               Arguments =
                 [ "questions",
                   ToolHostCodec.stringSchemaDescribed
@@ -918,8 +918,6 @@ module ToolRegistry =
               yield FissionTool.spec factory runtime
               yield BashHoneypotTool.spec
               yield AssumeTool.spec factory
-              yield ResetScopeTool.spec factory runtime.Journal runtime.Snapshot
-
               yield! casebookToolSpecs
               yield! generatedJsSpecs () ]
 
@@ -947,7 +945,18 @@ module ToolRegistry =
             fun args (ctx: HostToolContext) -> ToolExecuteGate.execute gateFacts gated managerPermission args ctx
 
         let specs =
-            baseSpecs |> List.map (fun spec -> { spec with Execute = gateExecute spec })
+            baseSpecs
+            |> List.map (fun spec ->
+                let injected = ScopeAnnotationGate.injectArgument factory spec
+
+                { injected with
+                    Execute =
+                        ScopeAnnotationGate.wrap
+                            injected.Name
+                            scopeProgressEpoch
+                            runtime.Journal
+                            runtime.Snapshot
+                            (gateExecute injected) })
 
         { Tools = ToolHostCodec.registry factory specs
           Runtime = runtime }

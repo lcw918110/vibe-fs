@@ -58,6 +58,9 @@ module PluginTransforms =
     [<Import("scopeProgress", "wanxiangli/scope-progress")>]
     let private scopeProgress: obj = jsNative
 
+    [<Import("scopeRetention", "wanxiangli/scope-retention")>]
+    let private scopeRetention: obj = jsNative
+
 
     // The real Host session contains ONLY its negotiation question. This
     // process-live view is what the model receives instead, reusing the last
@@ -153,11 +156,8 @@ module PluginTransforms =
 
     let consultationStartPrevious (tempId: string) (sourceSessionId: string) (metadata: obj) : Result<unit, string> =
         let response = Surface.startTemporaryPrevious tempId sourceSessionId metadata
-
-        if not (isNull response?ok) && unbox<bool> response?ok then
-            Ok()
-        else
-            Error(responseErrorReason response "previous Scope source is unavailable in latest provider view")
+        if not (isNull response?ok) && unbox<bool> response?ok then Ok()
+        else Error(responseErrorReason response "previous Scope source is unavailable in latest provider view")
 
     let consultationModelForTemporary (tempId: string) : obj = Surface.modelForTemporary tempId
 
@@ -206,16 +206,14 @@ module PluginTransforms =
 
         // The temporary turn's own steps after its question (a vetoed tool call
         // and its denial) stay visible, so the model reads the rebuke.
-        let messages = negotiationMessages outObj
-
-        let trailingFrom question =
-            match Array.tryFindIndexBack (fun m -> obj.ReferenceEquals(m, question)) messages with
-            | Some index -> messages[index + 1 ..]
-            | None -> [||]
-
         let trailing =
+            let messages = negotiationMessages outObj
+
             match questionOpt with
-            | Some question -> trailingFrom question
+            | Some question ->
+                match Array.tryFindIndexBack (fun m -> obj.ReferenceEquals(m, question)) messages with
+                | Some index -> messages[index + 1 ..]
+                | None -> [||]
             | None -> [||]
 
         let projectedOpt =
@@ -276,26 +274,24 @@ module PluginTransforms =
         | StopDelivery of DeliveryAttemptFence
 
     type NormalTransformCapabilities =
-        {
-            BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
-            StopCompletedContinuation: string option -> PhysicalUserMessageId option -> obj -> Task<bool>
-            BindSessionStartedAt: string option -> Task<DateTimeOffset option>
-            ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
-            ApplyTenureIsolation: string option -> obj -> Task<unit>
-            CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
-            RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
-            ApplyCompanion: string option -> obj -> obj -> Task<unit>
-            ApplyXWire: obj -> Task
-            FreezeProviderAttemptPlan: string option -> PhysicalUserMessageId option -> Task<unit>
-            InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
-            SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
-            SanitizeMessages: string option -> obj -> unit
-            /// Advisor is pure chat: no Pair Hint plan, steer or estimate request.
-            IsPureChatSession: string option -> bool
-            AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
-            StopAfterDelivery:
-                string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit>
-        }
+        { BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
+          StopCompletedContinuation: string option -> PhysicalUserMessageId option -> obj -> Task<bool>
+          BindSessionStartedAt: string option -> Task<DateTimeOffset option>
+          ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
+          ApplyTenureIsolation: string option -> obj -> Task<unit>
+          CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
+          RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
+          ApplyCompanion: string option -> obj -> obj -> Task<unit>
+          ApplyXWire: obj -> Task
+          FreezeProviderAttemptPlan: string option -> PhysicalUserMessageId option -> Task<unit>
+          InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
+          SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
+          SanitizeMessages: string option -> obj -> unit
+          /// Advisor is pure chat: no Pair Hint plan, steer or estimate request.
+          IsPureChatSession: string option -> bool
+          AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
+          StopAfterDelivery:
+              string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit> }
 
     type TransformBranchCapabilities = { RegisterOwned: string -> unit }
 
@@ -821,63 +817,52 @@ module PluginTransforms =
         let finishedConsultationTurn (physical: PhysicalUserMessageId option) (outObj: obj) =
             let messages = ProviderWireDecode.messagesFromTransformOutput outObj
             let physicalId = physical |> Option.map PhysicalUserMessageId.value
-
             let current =
                 messages
                 |> List.tryFindIndex (fun message -> ProviderWireDecode.hostMessageId message = physicalId)
-
             match current with
             | None -> false
             | Some index ->
                 let message = List.item index messages
-
                 let marked =
                     ProviderWireDecode.rawPartsOf message
-                    |> List.exists (fun part ->
-                        not (isNull part?metadata)
-                        && part?metadata?wanxiangshu_consultation_steer = box true)
-
+                    |> List.exists (fun part -> not (isNull part?metadata) && part?metadata?wanxiangshu_consultation_steer = box true)
                 let isAssistant item =
                     ProviderWireDecode.firstString (ProviderWireDecode.infoObject item) [ "role" ] = Some "assistant"
                 // The agent already ran a model step after this answer landed:
                 // the answer was consumed inside a live loop, so this request is
                 // ordinary work, never a late wake-up to suppress.
                 let answeredAlready = messages |> List.skip (index + 1) |> List.exists isAssistant
-                let previous = messages |> List.take index |> List.rev |> List.tryFind isAssistant
-
+                let previous =
+                    messages |> List.take index |> List.rev |> List.tryFind isAssistant
+                // WHAT[delegation-041]: Manager, Orchestrator and Plan own long
+                // work. Their tool-free stop is no closing report; the answer
+                // is the nudge that carries the work on, never a wake-up to stop.
                 let agentOf item =
                     let info = ProviderWireDecode.infoObject item
-
                     ProviderWireDecode.firstString info [ "agent" ]
                     |> Option.orElseWith (fun () -> ProviderWireDecode.firstString info [ "mode" ])
-
                 let longRunning =
                     message :: Option.toList previous
                     |> List.exists (fun item ->
                         agentOf item
                         |> Option.bind Roles.tryParseRole
                         |> Option.exists Roles.isLongRunning)
-
-                marked
-                && not answeredAlready
-                && not longRunning
-                && (previous
-                    |> Option.exists (fun assistant ->
-                        let info = ProviderWireDecode.infoObject assistant
-                        let finished = not (isNull info?time) && not (isNull info?time?completed)
-
-                        let calls =
-                            ProviderWireDecode.rawPartsOf assistant
-                            |> List.exists (fun part -> ProviderWireDecode.firstString part [ "type" ] = Some "tool")
-
-                        let prose =
-                            ProviderWireDecode.rawPartsOf assistant
-                            |> List.exists (fun part ->
-                                ProviderWireDecode.firstString part [ "type" ] = Some "text"
-                                && (ProviderWireDecode.firstString part [ "text" ]
-                                    |> Option.exists (fun text -> not (String.IsNullOrWhiteSpace text))))
-
-                        finished && not calls && prose))
+                marked && not answeredAlready && not longRunning && (previous |> Option.exists (fun assistant ->
+                    let info = ProviderWireDecode.infoObject assistant
+                    let finished = not (isNull info?time) && not (isNull info?time?completed)
+                    let calls = ProviderWireDecode.rawPartsOf assistant |> List.exists (fun part -> ProviderWireDecode.firstString part [ "type" ] = Some "tool")
+                    // WHAT[delegation-040]: an empty finished turn (finish=length,
+                    // no prose) is no closing report. The answer is then the only
+                    // thing that keeps the run alive; stopping it left nothing to
+                    // settle and nothing to continue.
+                    let prose =
+                        ProviderWireDecode.rawPartsOf assistant
+                        |> List.exists (fun part ->
+                            ProviderWireDecode.firstString part [ "type" ] = Some "text"
+                            && (ProviderWireDecode.firstString part [ "text" ]
+                                |> Option.exists (fun text -> not (String.IsNullOrWhiteSpace text))))
+                    finished && not calls && prose))
 
         /// 条款 3：本次 attempt 是否存在一次已成立的交付。判据只认真实交付
         /// 事实——交付登记时的物理输入必须仍是当前请求的物理输入，物理输入
@@ -893,10 +878,11 @@ module PluginTransforms =
         /// 只是「无法证明成立」——条款 3 只认真实交付事实，无法证明成立就不能
         /// 当作已完成，所以这里既不停本次请求，也不把交付呈现为已完成。
         let fenceObjOf (fence: DeliveryAttemptFence) : obj =
-            createObj
-                [ "sessionId" ==> SessionId.value fence.SessionId
-                  "providerRun" ==> ProviderRunIdentity.value fence.ProviderRun
-                  "callId" ==> ToolCallId.value fence.CallId ]
+            createObj [
+                "sessionId" ==> SessionId.value fence.SessionId
+                "providerRun" ==> ProviderRunIdentity.value fence.ProviderRun
+                "callId" ==> ToolCallId.value fence.CallId
+            ]
 
         let adjudicateDelivery (sessionText: string) (outObj: obj) : DeliveryAdjudication =
             let physical =
@@ -910,27 +896,15 @@ module PluginTransforms =
             let inMemory: DeliveryAttemptFence option =
                 let found: obj option =
                     deliveryAttemptLedger?tryFindEstablished (SessionId.value sessionId, physicalStr)
-
                 found
                 |> Option.bind (fun res ->
                     let fence = res?fence
-
-                    if isNull fence then
-                        None
+                    if isNull fence then None
                     else
                         Some
                             { SessionId = SessionId.create (string fence?sessionId)
                               ProviderRun = ProviderRunIdentity.create (string fence?providerRun)
                               CallId = ToolCallId.create (string fence?callId) })
-
-            let decodeFence (f: obj) =
-                if isNull f then
-                    None
-                else
-                    Some
-                        { SessionId = SessionId.create (string f?sessionId)
-                          ProviderRun = ProviderRunIdentity.create (string f?providerRun)
-                          CallId = ToolCallId.create (string f?callId) }
 
             let durableConfirmed: DeliveryAttemptFence option =
                 match journal, physicalStr with
@@ -940,18 +914,23 @@ module PluginTransforms =
                         |> Map.toList
                         |> List.filter (fun ((s, _, _), _) -> s = sessionId)
                         |> List.map (fun ((s, r, c), witness) ->
-                            createObj
-                                [ "sessionId" ==> SessionId.value s
-                                  "providerRun" ==> ProviderRunIdentity.value r
-                                  "callId" ==> ToolCallId.value c
-                                  "physicalUserMessageId"
-                                  ==> PhysicalUserMessageId.value witness.Fence.PhysicalUserMessageId ])
+                            createObj [
+                                "sessionId" ==> SessionId.value s
+                                "providerRun" ==> ProviderRunIdentity.value r
+                                "callId" ==> ToolCallId.value c
+                                "physicalUserMessageId" ==> PhysicalUserMessageId.value witness.Fence.PhysicalUserMessageId
+                            ])
                         |> List.toArray
-
                     let confirmed: obj option =
                         deliveryAttemptLedger?tryFindDurableEstablished (deliveries, SessionId.value sessionId, phys)
-
-                    confirmed |> Option.bind decodeFence
+                    confirmed
+                    |> Option.bind (fun f ->
+                        if isNull f then None
+                        else
+                            Some
+                                { SessionId = SessionId.create (string f?sessionId)
+                                  ProviderRun = ProviderRunIdentity.create (string f?providerRun)
+                                  CallId = ToolCallId.create (string f?callId) })
                 | _ -> None
 
             inMemory
@@ -974,11 +953,6 @@ module PluginTransforms =
                     return Error ex.Message
             }
 
-        let interruptOutcomeObject outcome =
-            match outcome with
-            | Ok() -> createObj [ "ok" ==> true ]
-            | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
-
         /// 条款 4/6：发出本次 attempt 的中断。「已发出」与「已观察到结算结果」
         /// 是两个分别登记的事实：请求发出不是成功，宿主拒绝了这次中断也不是
         /// 交付失败。中断未确认时已提交的交付仍然成立。
@@ -997,12 +971,14 @@ module PluginTransforms =
                 | false ->
                     let interrupt = requestRetiredAttemptInterrupt exactSessionId
 
-                    deliveryAttemptLedger?recordInterruptIssued (fenceObj, interrupt :> Task)
-                    |> ignore
+                    deliveryAttemptLedger?recordInterruptIssued (fenceObj, interrupt :> Task) |> ignore
 
                     let! outcome = interrupt
 
-                    let outcomeObj = interruptOutcomeObject outcome
+                    let outcomeObj =
+                        match outcome with
+                        | Ok() -> createObj [ "ok" ==> true ]
+                        | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
 
                     deliveryAttemptLedger?recordInterruptObserved (fenceObj, outcomeObj) |> ignore
 
@@ -1040,14 +1016,18 @@ module PluginTransforms =
 
         let recordRetiredInterruptIssued (fence: DeliveryAttemptFence option) (issued: Task) =
             match fence with
-            | Some exact -> deliveryAttemptLedger?recordInterruptIssued (fenceObjOf exact, issued) |> ignore
+            | Some exact ->
+                deliveryAttemptLedger?recordInterruptIssued (fenceObjOf exact, issued) |> ignore
             | None -> ()
 
         let recordRetiredInterruptObserved (fence: DeliveryAttemptFence option) (outcome: Result<unit, string>) =
             match fence with
             | Some exact ->
-                deliveryAttemptLedger?recordInterruptObserved (fenceObjOf exact, interruptOutcomeObject outcome)
-                |> ignore
+                let outcomeObj =
+                    match outcome with
+                    | Ok() -> createObj [ "ok" ==> true ]
+                    | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
+                deliveryAttemptLedger?recordInterruptObserved (fenceObjOf exact, outcomeObj) |> ignore
             | None -> ()
 
         /// 本次退休 attempt 的中断是否已经发出过。同一退休 attempt 的第二次
@@ -1175,11 +1155,6 @@ module PluginTransforms =
           StopCompletedContinuation =
             fun sidOpt physical outObj ->
                 task {
-                    let interrupt sid =
-                        match boot.PortOpt with
-                        | Some port -> port.AbortSession sid
-                        | None -> Task.FromResult(Error "No Host transport: cannot interrupt consultation")
-
                     if sidOpt.IsSome && physical.IsSome && finishedConsultationTurn physical outObj then
                         let sid = SessionId.create (Option.get sidOpt)
                         ModelRouting.suppressProviderStep sid (Option.get physical)
@@ -1189,10 +1164,11 @@ module PluginTransforms =
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.record
                             sid
                             (PhysicalUserMessageId.value (Option.get physical))
-
                         RelayNarrativeTransform.clearRequestMessages outObj
-
-                        let! outcome = interrupt sid
+                        let! outcome =
+                            match boot.PortOpt with
+                            | Some port -> port.AbortSession sid
+                            | None -> Task.FromResult(Error "No Host transport: cannot interrupt consultation")
 
                         Diagnostic.emit
                             "completed-continuation-interrupt-observed"
@@ -1505,6 +1481,19 @@ module PluginTransforms =
         | "error" when isText errorText -> "errorText"
         | _ -> ""
 
+    /// Pull scope annotation off a tool part for PairHint reset barriers.
+    let private scopeAnnotationOf (part: obj) : obj =
+        let fromBag (bag: obj) =
+            if isNull bag then null else scopeField bag "scope"
+        let state = scopeField part "state"
+        let candidates =
+            [ fromBag part
+              fromBag (scopeField part "arguments")
+              fromBag (scopeField part "input")
+              fromBag (scopeField state "input")
+              fromBag state ]
+        candidates |> List.tryFind (fun v -> not (isNull v)) |> Option.defaultValue null
+
     let private neutralPart (part: obj) : obj =
         let kind = scopeText (scopeField part "type")
 
@@ -1512,7 +1501,15 @@ module PluginTransforms =
             let tool = scopeField part "tool"
             let name = if isNull tool then scopeField part "name" else tool
             let resultField = scopeTerminalField (scopeField part "state")
-            createObj [ "id", scopeToolId part; "tool", name; "terminalField", box resultField ]
+            let scope = scopeAnnotationOf part
+            if isNull scope then
+                createObj [ "id", scopeToolId part; "tool", name; "terminalField", box resultField ]
+            else
+                createObj
+                    [ "id", scopeToolId part
+                      "tool", name
+                      "terminalField", box resultField
+                      "scope", scope ]
         elif kind = "toolResult" || kind = "tool-result" || kind = "tool_result" then
             createObj [ "resultFor", scopeToolId part ]
         else
@@ -1640,11 +1637,6 @@ module PluginTransforms =
             emitJsExpr rewritten "delete $0.providerPayload; delete $0.responseId" |> ignore
             rewritten
 
-    let private requestScopeSteers: obj = emitJsExpr () "new WeakSet()"
-
-    let private isRequestScopeSteer (message: obj) : bool =
-        emitJsExpr (requestScopeSteers, message) "$0.has($1)"
-
     let private openCodeScopeSteer (messages: obj array) (prose: string) (strong: bool) : obj array =
         let last = messages |> Array.tryLast |> Option.defaultValue null
         let originalInfo = scopeField last "info"
@@ -1659,8 +1651,100 @@ module PluginTransforms =
                   "attribution", box "agent"
                   "strong", box strong ]
 
-        emitJsExpr (requestScopeSteers, steer) "$0.add($1)" |> ignore
         Array.append messages [| steer |]
+
+    /// Collapse a retracted beat's assistant message to one text part (removeLast projection).
+    /// Match keys: message/info id, responseId, providerRunId, and any tool-call /
+    /// step id on the message against BeatRetracted.beatId + aliases.
+    let private messageBeatKeys (message: obj) : string list =
+        let info = scopeField message "info"
+        let top =
+            [ scopeField info "id"
+              scopeField message "id"
+              scopeField message "responseId"
+              scopeField info "responseId"
+              scopeField message "providerRunId"
+              scopeField info "providerRunId"
+              scopeField message "provider_run_id"
+              scopeField info "runId" ]
+            |> List.choose (fun v -> if isNull v then None else Some(scopeText v))
+            |> List.filter (fun s -> s <> "")
+        let parts = scopeField message "parts"
+        let fromParts =
+            if isNull parts then []
+            else
+                try
+                    let arr: obj array = unbox parts
+                    arr
+                    |> Array.toList
+                    |> List.collect (fun part ->
+                        [ scopeField part "id"
+                          scopeField part "callID"
+                          scopeField part "callId"
+                          scopeField part "toolCallId"
+                          scopeField part "providerRunId"
+                          scopeField (scopeField part "state") "id" ]
+                        |> List.choose (fun v -> if isNull v then None else Some(scopeText v))
+                        |> List.filter (fun s -> s <> ""))
+                with _ ->
+                    []
+        (top @ fromParts) |> List.distinct
+
+    let private collapseRetracted (sessionId: string) (messages: obj array) : obj array =
+        let rows: obj array = unbox (scopeRetention?retractions(sessionId))
+        if isNull (box rows) || rows.Length = 0 then messages
+        else
+            // Map every alias → replacement text.
+            let byKey =
+                rows
+                |> Array.fold
+                    (fun (acc: Map<string, string>) row ->
+                        let replacement = scopeText (scopeField row "replacement")
+                        let beat = scopeText (scopeField row "beatId")
+                        let aliasField = scopeField row "aliases"
+                        let aliases =
+                            let baseKeys = if beat = "" then [] else [ beat ]
+                            if isNull aliasField then baseKeys
+                            else
+                                try
+                                    let arr: obj array = unbox aliasField
+                                    baseKeys
+                                    @ (arr
+                                       |> Array.toList
+                                       |> List.map scopeText
+                                       |> List.filter (fun s -> s <> ""))
+                                with _ ->
+                                    baseKeys
+                        aliases
+                        |> List.distinct
+                        |> List.fold (fun m key -> Map.add key replacement m) acc)
+                    Map.empty
+            if Map.isEmpty byKey then messages
+            else
+                let mutable used = Set.empty<string>
+                messages
+                |> Array.map (fun message ->
+                    if scopeRole message <> "assistant" then message
+                    else
+                        let keys = messageBeatKeys message
+                        let hit =
+                            keys
+                            |> List.tryPick (fun key ->
+                                match Map.tryFind key byKey with
+                                | Some replacement when not (Set.contains key used) -> Some(key, replacement)
+                                | _ -> None)
+                        match hit with
+                        | None -> message
+                        | Some(key, replacement) ->
+                            used <- Set.add key used
+                            let info = scopeField message "info"
+                            createObj
+                                [ "info", box info
+                                  "parts",
+                                  box
+                                      [| createObj
+                                             [ "type", box "text"
+                                               "text", box replacement ] |] ])
 
     let private prepareNeutralScope (sessionId: string) (raw: obj array) : obj array =
         let normal = raw |> Array.map neutralScopeMessage
@@ -1668,33 +1752,17 @@ module PluginTransforms =
         let staged = Array.copy raw
         unbox<obj array> plan?hints |> Array.iter (applyNeutralHint staged)
         let selected = unbox<obj array> plan?slots |> Array.map (applyNeutralSlot staged)
-        let progress: obj = scopeProgress?status (sessionId)
-        let progressUnknown = not (isNull progress?ok) && not (unbox<bool> progress?ok)
-
-        if not (unbox<bool> plan?active) then
-            selected
-        elif not (isNull plan?strong) then
-            openCodeScopeSteer selected (scopeText plan?strong) true
-        elif progressUnknown then
-            selected
-        elif not (isNull progress?resetDue) && unbox<bool> progress?resetDue then
-            openCodeScopeSteer
-                selected
-                (ProviderProse.render
-                    (ProviderLanguageBinding.forSessionText sessionId)
-                    "host/scope-steer/reset-due"
-                    Map.empty)
-                true
-        elif isNull progress?known || not (unbox<bool> progress?known) then
-            openCodeScopeSteer
-                selected
-                (ProviderProse.render
-                    (ProviderLanguageBinding.forSessionText sessionId)
-                    "host/scope-steer/missing-estimate"
-                    Map.empty)
-                true
-        else
-            selected
+        let collapsed = collapseRetracted sessionId selected
+        let retention: obj = scopeRetention?status(sessionId)
+        if not (unbox<bool> plan?active) then collapsed
+        elif not (isNull plan?strong) then openCodeScopeSteer collapsed (scopeText plan?strong) true
+        elif not (isNull retention?known) && unbox<bool> retention?known
+             && not (isNull retention?remaining) && unbox<int> retention?remaining = 0 then
+            openCodeScopeSteer collapsed (ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) "host/scope-steer/reset-due" Map.empty) true
+        elif isNull retention?known || not (unbox<bool> retention?known) then
+            // No retention scope yet — nudge scope.kind=resetScope (resource path name is historical).
+            openCodeScopeSteer collapsed (ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) "host/scope-steer/missing-estimate" Map.empty) true
+        else collapsed
 
     let private purgeAndSuffixSession (sessionId: string) (rawMessages: obj array) (outObj: obj) : unit =
         let sideRequest =
@@ -1750,18 +1818,6 @@ module PluginTransforms =
 
         runStages stages frame
 
-    let private removeRequestOnlyMessages outObj =
-        let remove messages =
-            let retained =
-                messages
-                |> Array.filter (fun message ->
-                    not (isRequestScopeSteer message || HostMessageProjection.isRequestSeparator message))
-
-            if retained.Length <> messages.Length then
-                HostMessageProjection.replaceMessagesInPlace outObj (Array.toList retained)
-
-        tryGetOutMessages outObj |> Option.iter remove
-
     let normalTransform
         (caps: NormalTransformCapabilities)
         (projectionSessionIdOpt: string option)
@@ -1769,17 +1825,12 @@ module PluginTransforms =
         (outObj: obj)
         : Task<unit> =
         task {
-            removeRequestOnlyMessages outObj
-
             // One owner view: capture the exact transform input before any Scope purge.
             // The paired output is published only after the real transform finishes.
             let incomingMessages: obj array =
                 let raw = scopeField outObj "messages"
-
-                if isNull raw then
-                    [||]
-                else
-                    unbox (emitJsExpr raw "structuredClone($0)")
+                if isNull raw then [||]
+                else unbox (emitJsExpr raw "structuredClone($0)")
 
             // 预读：在 Relay 投影改写消息数组之前捕获原始物理用户消息 id。
             let physicalUserMessageId =
@@ -1958,9 +2009,7 @@ module PluginTransforms =
             projectionSessionIdOpt
             |> Option.iter (fun sid ->
                 let transformed = negotiationMessages outObj
-
-                if transformed.Length > 0 then
-                    Surface.rememberTransform sid incomingMessages transformed)
+                if transformed.Length > 0 then Surface.rememberTransform sid incomingMessages transformed)
 
             outboundViewStore?recordMessages (outObj?messages) |> ignore
 

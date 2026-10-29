@@ -1,5 +1,9 @@
 # attention-regulation — WHAT
 
+
+> **COMPAT（2026-10-29）现行口径**：Scope 生命周期入口是任意工具上的打平注解 `scope.kind` ∈ {`resetScope`,`keepLast`,`removeLast`,`meToo`} 与 retention（`wanxiangli/scope-retention` + 共同法 «Scope»）。**无独立 `resetScope` 宿主工具**；档案重锚 = 注解 `resetScope` → `ScopeReset.commit`。**无** `remainingScopeTurnsEstimate`／`turnBudget`／KPI 倍率产品契约；Stall／ResetDue 估计路径已从宿主产品面退役。下文若仍写独占工具、估计必填或倒计时后缀，以本条为准。PairHint 屏障优先认 `scope.kind=resetScope`，旧工具名只读兼容。
+
+
 本包现为退休边界：`enough`、`abandon` 与 `defer` 工具及其 `Attention` 持久投影均已退役，职责由 `assume` 与 `resetScope` 协议承接。保留这些条款，是为了锚定替代路径并防止已退役的注意力状态机回流生产路径。
 
 ## [001] enough 语义并入 assume

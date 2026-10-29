@@ -16,5 +16,5 @@ The world may have changed. A restart is often the very act that loads new code 
 Do this now:
 
 1. Look again at the child work you own (offices that have `horizon` use it): whatever was voided but is still needed, send out or do again.
-2. Go through the obligations you still hold, fix the next step for each, and move them forward in this turn; move independent ones at the same time. Offices with a todowrite program entry report `remainingScopeTurnsEstimate` truthfully in this turn's call.
+2. Go through the obligations you still hold, fix the next step for each, and move them forward in this turn; move independent ones at the same time. Fill the `scope` annotation on every tool call (see common law «Scope»); offices with a todowrite program entry must still call that entry this turn.
 3. Do not end this turn with "no change", "waiting for handover", "waiting for the restart" or similar. If every useful action truly depends on a fact that has not arrived, name that fact and where it will come from.

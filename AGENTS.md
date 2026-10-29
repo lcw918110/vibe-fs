@@ -56,7 +56,7 @@ HNI 要彻底漂亮：万象理不认识具体宿主。旧迁移路径里，一�
 
 #### 3.2.2 并发
 
-长程角色（Manager / Orchestrator / Plan）**fork 优先、随时收、目标并发 10+**：能独立说清的后果先派出去；`horizon`/`join` 随时收回已归来的，归来一路就据它开下一路，不等齐。没有「一次一 join」这种规矩；等待只在每个有用动作都依赖一个在途结果时才成立。自然停下被 nudge 时，当轮必须用工具推进并在 todowrite 中报告 `remainingScopeTurnsEstimate`，不得以「无变化 / 等待」收尾。
+长程角色（Manager / Orchestrator / Plan）**fork 优先、随时收、目标并发 10+**：能独立说清的后果先派出去；`horizon`/`join` 随时收回已归来的，归来一路就据它开下一路，不等齐。没有「一次一 join」这种规矩；等待只在每个有用动作都依赖一个在途结果时才成立。自然停下被 nudge 时，当轮必须用工具推进并正确填写 `scope` 注解（见共同法 «Scope»）：有可保留新事实则 `keepLast`，纠错改写则 `removeLast`（写教训），额度用尽或 clean break 则 `resetScope`；不得以「无变化 / 等待」假 keep 或空转收尾。
 
 ### 3.3 切片税——可交，须有审美
 

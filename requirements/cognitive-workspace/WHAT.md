@@ -24,7 +24,7 @@
 
 ## [006] assume 不产生 compression 边界
 
-`assume` 成功不产生 compression 边界。原视图声明与 compression checkpoint 准入已彻底退役，上下文压缩边界唯一由显式 `resetScope` 宿主工具调用划定（见 context-compression [033] 与 obligation-ledger [001]）。
+`assume` 成功不产生 compression 边界。原视图声明与 compression checkpoint 准入已彻底退役，上下文压缩边界唯一由显式 `scope.kind=resetScope` 注解调用划定（见 context-compression [033] 与 obligation-ledger [001]）。
 
 ## [007] 待办写入不通过 canvas 兼容桥
 
