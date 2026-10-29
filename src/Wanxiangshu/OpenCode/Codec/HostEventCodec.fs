@@ -117,6 +117,9 @@ module HostEventCodec =
         // crash-reconciliation-008) and supersede (a newer attempt already owns the fact).
         // Semantic failures such as tool-call errors never reach here: OpenCode
         // resolves them inside its own loop and reports parts, not session errors.
+        // One external hard stop is named here because nothing downstream can
+        // undo it: an account out of credits / over its spending limit refuses
+        // every request, so it is ProviderPermanent (no retry, no continuation).
         let errName = errorNameOf error
         let reason = failureReasonOf error
         let isUpstreamAbort = reason.ToLowerInvariant().Contains("upstream_error")
@@ -131,6 +134,7 @@ module HostEventCodec =
             | _ -> ExecutionFailure.ProviderTransient
 
         match isUpstreamAbort with
+        | _ when ProviderCreditExhaustion.isReason reason -> ExecutionFailure.ProviderPermanent
         | true -> ExecutionFailure.ProviderTransient
         | false -> fromName ()
 

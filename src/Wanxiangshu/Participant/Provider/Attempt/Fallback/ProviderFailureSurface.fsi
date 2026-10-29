@@ -56,3 +56,4 @@ module ProviderFailureSurface =
     /// Continuation path a role gets when automatic retry gives up; empty when the turn stops.
     val longWorkContinuationPath: role: string -> failure: string -> string
     val longWorkContinuationPathForReason: role: string -> failure: string -> reason: string -> string
+    val confirmedFailureIsHardStop: failure: string -> reason: string -> bool

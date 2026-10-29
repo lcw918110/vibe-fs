@@ -98,6 +98,8 @@ Manager、Orchestrator、Plan 的工作在会话里还开着。上游可恢复�
 
 DevOps、Engineer、Advisor 等短工照旧：耗尽即报失败。用户取消与非瞬时错误不在此列。上下文窗口溢出（`input_too_large`、context window 超限等）不是网关类瞬时错误：原样重发不可能成功，不得续工 nudge，也不得作为可无限重试的瞬时失败。
 
+账户额度耗尽同理且更硬：xAI `personal-team-blocked:spending-limit: You have run out of credits or need a Grok subscription`、OpenAI `insufficient_quota` 等「没额度／超支出上限／需订阅」是外部硬停。宿主边界把它归为 `ProviderPermanent`；确认失败即本拍终态失败并原文报出，不重试、不续工 nudge、不发缺报告提醒，长短角色一律。其余真瞬时错误（502、网络等）照旧重试／续工。
+
 ## [025] 上游仅含思考无正文的错误统一并入可修复续行
 
 当上游模型 API 返回仅含 `reasoning` 思考部分而无正式正文的错误或结束响应时，终态分类器将其统一视为需要续行修复的未完成态（`TurnFailed` 或 `TurnNeedsContinuation`），`formalContentUnusable` 判定正式正文不可用，并触发 Engineer / DevOps 的交互修复催促。同一执行面的 stop-wait 回执分类：等待超时不是取代也不是委托成功（保留 `ReceiptUnknown`），被拒的停等既不是回执缺失也不是取代或成功（`WaitDenied`），已准入且 `Stopped` 才结算真取代。

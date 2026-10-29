@@ -34,6 +34,8 @@ module ProviderRecoveryWorkflow =
     /// every other role and failure: those stop with the turn's terminal failure.
     val longWorkContinuationPath: role: Role option -> failure: ExecutionFailure -> string option
     val isContextOverflowReason: reason: string -> bool
+    val isHardStopReason: reason: string -> bool
+    val isHardStop: failure: ExecutionFailure -> reason: string -> bool
 
     val continueAfterConfirmedFailure:
         sessionPort: ISessionHostPort ->

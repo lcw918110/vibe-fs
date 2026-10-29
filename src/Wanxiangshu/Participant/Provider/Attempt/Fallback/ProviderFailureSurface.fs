@@ -823,10 +823,20 @@ module ProviderFailureSurface =
         ProviderRecoveryWorkflow.longWorkContinuationPath (Roles.tryParseRole role) failureKind
         |> Option.defaultValue ""
 
-    /// Same as `longWorkContinuationPath`, but a context-window overflow reason
-    /// never earns a continuation: resending the oversized input cannot succeed.
+    /// Same as `longWorkContinuationPath`, but a hard-stop reason (context-window
+    /// overflow, exhausted credits / spending limit) never earns a continuation:
+    /// resending cannot succeed.
     let longWorkContinuationPathForReason (role: string) (failure: string) (reason: string) : string =
-        if ProviderRecoveryWorkflow.isContextOverflowReason reason then
-            ""
-        else
-            longWorkContinuationPath role failure
+        if ProviderRecoveryWorkflow.isHardStopReason reason then ""
+        else longWorkContinuationPath role failure
+
+    /// Whether confirmed-failure recovery stops the turn outright: no retry, no
+    /// continuation, no missing-report nudge.
+    let confirmedFailureIsHardStop (failure: string) (reason: string) : bool =
+        let failureKind =
+            match failure with
+            | "ProviderTransient" -> ExecutionFailure.ProviderTransient
+            | "ProviderPermanent" -> ExecutionFailure.ProviderPermanent
+            | other -> invalidArg "failure" $"unsupported failure '{other}'"
+
+        ProviderRecoveryWorkflow.isHardStop failureKind reason

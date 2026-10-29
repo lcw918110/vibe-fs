@@ -90,6 +90,19 @@ module ProviderRecoveryWorkflow =
         || text.Contains "prompt is too long"
         || text.Contains "maximum context length"
 
+    /// An external hard stop: resending cannot succeed, so the failure earns neither
+    /// a retry nor a continuation nudge. A context-window overflow and an account out
+    /// of credits / over its spending limit are the two observed cases.
+    let isHardStopReason (reason: string) : bool =
+        isContextOverflowReason reason || ProviderCreditExhaustion.isReason reason
+
+    /// A confirmed ProviderPermanent failure is the turn's terminal: the classifier
+    /// only names a failure permanent when resending the same request cannot succeed
+    /// (credentials, context overflow, exhausted credits). Retrying it, or nudging a
+    /// long-running role to continue, is an unbounded loop against a wall.
+    let isHardStop (failure: ExecutionFailure) (reason: string) : bool =
+        failure = ExecutionFailure.ProviderPermanent || isHardStopReason reason
+
     let private sendLongWorkContinuation
         (sessionPort: ISessionHostPort)
         (rootWorkspace: IRootWorkspaceReader)
@@ -148,7 +161,7 @@ module ProviderRecoveryWorkflow =
         task {
             match longWorkContinuationPath turn.Role failure with
             | None -> notifyFailure eventPort turn reason
-            | Some _ when isContextOverflowReason reason -> notifyFailure eventPort turn reason
+            | Some _ when isHardStop failure reason -> notifyFailure eventPort turn reason
             | Some path ->
                 match! sendLongWorkContinuation sessionPort rootWorkspace durable turn path with
                 | LongWorkAfterStop.Continued -> ()
@@ -432,6 +445,7 @@ module ProviderRecoveryWorkflow =
                             currentFailure projections turn.SessionId ProviderRequestKind.WorkMain))
 
             match hasCapacity, recoveryContext with
+            | _ when isHardStop failure error -> notifyFailure eventPort turn error
             | false, _ -> notifyFailure eventPort turn "All candidate providers exhausted (zero capacity)"
             | true, None ->
                 let prompt =
@@ -516,6 +530,7 @@ module ProviderRecoveryWorkflow =
                 |> Option.bind (fun requestKind -> currentFailure projections turn.SessionId requestKind)
 
             match hasCapacity, recoveryContext with
+            | _ when isHardStop failure error -> return RetryVerdict.Terminal error
             | false, _ -> return RetryVerdict.Terminal "All candidate providers exhausted (zero capacity)"
             | true, None ->
                 let prompt =
