@@ -250,19 +250,26 @@ export function check(context) {
     entries = collectControlPyramidEntries(root, DEFAULT_SOURCE_ROOT)
   }
   const hits = scanControlPyramidEntries(entries)
-  return {
-    issues: hits.map((hit) => ({
-      code: hit.kind,
-      path: hit.file,
-      line: hit.line,
-      message: `depth=${hit.depth} chain=${hit.chain.join(' → ')}: ${hit.text}`,
-      outerLine: hit.outerLine,
-      depth: hit.depth,
-      chain: hit.chain,
-      text: hit.text,
-    })),
-    hits,
+  // 报告不拦路：金字塔存量连主仓 master 自身都未清零（门禁引入时即 170+），
+  // 先观察，设 PYRAMID_STRICT=1 才升级为硬门禁。与 shard-edge-audit 同形状。
+  if (process.env.PYRAMID_STRICT) {
+    return {
+      issues: hits.map((hit) => ({
+        code: hit.kind,
+        path: hit.file,
+        line: hit.line,
+        message: `depth=${hit.depth} chain=${hit.chain.join(' → ')}: ${hit.text}`,
+        outerLine: hit.outerLine,
+        depth: hit.depth,
+        chain: hit.chain,
+        text: hit.text,
+      })),
+      hits,
+    }
   }
+  console.error(`fsharp-control-pyramid (report-only): ${hits.length} finding(s)`)
+  console.error('  Set PYRAMID_STRICT=1 to make this gate fail.')
+  return { issues: [], hits }
 }
 
 export const runCli = (argv = process.argv.slice(2)) => {
