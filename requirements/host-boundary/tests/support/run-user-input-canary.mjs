@@ -144,7 +144,6 @@ const handleProvider = async (request, response) => {
           for (const chunk of buildToolCallChunks('child-tool', 'todowrite-for-engineer', JSON.stringify({
             name: 'child-tool-result',
             intent: '等待子程序结果，保留当前子会话工作。',
-            remainingScopeTurnsEstimate: 3,
             program: 'class Js extends JsProgram { async run() { return "CHILD_TOOL_RESULT"; } }',
           }), 1)) response.write(`data: ${JSON.stringify(chunk)}\n\n`)
         }
@@ -183,7 +182,6 @@ const handleProvider = async (request, response) => {
       sendSSE(response, buildToolCallChunks('fork-child', 'todowrite-for-manager', JSON.stringify({
         name: 'fork-child',
         intent: '等待派工回执，保留已经发出的子工作。',
-        remainingScopeTurnsEstimate: 3,
         program: 'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Ada", charge: "USER_INPUT_CHILD_WORK" }); } }',
       }), 1))
     } else sendSSE(response, buildToolCallChunks('join-child', 'join', '{}', 1))
@@ -198,7 +196,6 @@ const handleProvider = async (request, response) => {
       sendSSE(response, buildToolCallChunks('guide-child', 'todowrite-for-manager', JSON.stringify({
         name: 'guide-child',
         intent: '等待指导投递回执，保留原子工作。',
-        remainingScopeTurnsEstimate: 3,
         program: 'class Js extends JsProgram { async run() { return await this.resume({ name: "Ada", charge: "USER_INPUT_GUIDANCE_ONLY" }); } }',
       }), 1))
     } else if (step === 1) sendSSE(response, buildToolCallChunks('join-guided-child', 'join', '{}', 1))
@@ -218,7 +215,6 @@ const handleProvider = async (request, response) => {
       sendSSE(response, buildToolCallChunks('held-tool', 'todowrite-for-manager', JSON.stringify({
         name: 'held-user-input',
         intent: '等待当前工具步骤完成，再处理新用户消息。',
-        remainingScopeTurnsEstimate: 3,
         program: 'class Js extends JsProgram { async run() { return "USER_INPUT_HELD_TOOL"; } }',
       }), 1))
     } else {
