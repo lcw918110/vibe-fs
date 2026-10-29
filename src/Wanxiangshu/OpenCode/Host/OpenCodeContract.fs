@@ -22,3 +22,6 @@ type IOpenCodePort =
     abstract CreateChildSession: parentId: SessionId -> options: ChildSessionOptions -> Task<Result<SessionId, string>>
     abstract ListChildren: parentId: SessionId -> Task<Result<ChildSessionInfo list, string>>
     abstract CloseChildSession: childId: SessionId -> Task<Result<unit, string>>
+    /// HOST-037: true while the Host still reports this session busy (its
+    /// runner has not reached idle). A Host without a status API reports false.
+    abstract IsRunnerBusy: sessionId: SessionId -> directory: string option -> Task<Result<bool, string>>

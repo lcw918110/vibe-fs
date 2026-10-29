@@ -7,6 +7,9 @@ open Wanxiangshu.Persistence.Journal
 
 /// Provider-start lifecycle: freeze the exact attempt plan from the transform's
 /// physical evidence and persist ProviderStarted from the real Host observation.
+/// The bound plan comes from the process-local frozen plan when present and is
+/// otherwise rebuilt from the durable Accepted fact, so a real Host run is never
+/// refused for a missing cache entry.
 /// Both operations work directly on the (SessionId, PhysicalUserMessageId) key;
 /// they keep no state table of their own and reuse AttemptPlanner and the
 /// managed-chat lifecycle owner.
@@ -17,7 +20,6 @@ module ProviderLifecycle =
         | DurableJournalUnavailable
         | PhysicalUserMessageMissing of SessionId
         | AttemptPlanFreezeFailed of 'bindingError
-        | FrozenAttemptPlanMissing of ChatExecutionKey * ProviderRunIdentity
         | AcceptedExecutionMissing of ChatExecutionKey
         | AcceptedExecutionAlreadyTerminal of ChatExecutionKey
         | AuthorityEvidenceInvalid of AcceptedChatExecutionEvidence
@@ -34,6 +36,6 @@ module ProviderLifecycle =
 
     val persistProviderStartedFromObservation:
         journal: AgentJournal option ->
-        bindAttemptPlan: (SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> AttemptPlan option) ->
+        bindAttemptPlan: (SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> PendingAttemptPlan -> AttemptPlan) ->
         observation: ExactProviderStartObservation ->
             Task<Result<bool, ProviderStartObservationError<unit>>>

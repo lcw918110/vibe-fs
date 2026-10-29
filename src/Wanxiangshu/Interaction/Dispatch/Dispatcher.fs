@@ -473,15 +473,7 @@ module PromptDispatcher =
                     { SessionId = evidence.SessionId
                       PhysicalUserMessageId = evidence.PhysicalUserMessageId }
 
-                let persistence = journal.ChatAcceptancePersistence()
-
-                match persistence.ReadExact key with
-                | Some established when established.acceptedEvidence = evidence ->
-                    ManagedChatAcceptance.acceptWith persistence key evidence
-                | _ ->
-                    Task.FromResult(
-                        Error(ManagedChatAcceptanceError.IntentRejected "Input has no exact accepted evidence")
-                    )
+                ManagedChatAcceptance.acceptWith (journal.ChatAcceptancePersistence()) key evidence
 
             match intent with
             | ChatAdmissionIntent.Decision.ExternalRootIntent evidence ->

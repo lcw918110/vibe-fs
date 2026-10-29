@@ -68,6 +68,7 @@ type private SatelliteSessionPort(physical: bool, conflict: bool, queryError: bo
             else
                 Task.FromResult(Ok existing)
 
+        member _.AwaitRunnerIdle(_, _) = Task.FromResult(()) :> Task
         member _.FamilyRootOf _ = SessionId.create "work"
 
 module SatelliteSurface =

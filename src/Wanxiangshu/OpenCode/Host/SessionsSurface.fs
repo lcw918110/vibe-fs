@@ -145,6 +145,7 @@ module SessionsSurface =
 
             member _.ListChildren _ = Task.FromResult(Ok [])
             member _.CloseChildSession _ = Task.FromResult(Ok())
+            member _.IsRunnerBusy _ _ = Task.FromResult(Ok false)
 
     /// Exercise the production flattening membrane, not a duplicated family-root
     /// algorithm or the logical-parent argument above the Host adapter.
@@ -231,6 +232,7 @@ module SessionsSurface =
                 Task.FromResult(Ok(children |> List.map ChildSession.toInfo))
 
             member _.CloseChildSession _ = Task.FromResult(Ok())
+            member _.IsRunnerBusy _ _ = Task.FromResult(Ok false)
 
     /// HOST-015: restored child owner whose process-local family map is empty
     /// resolves physical parent to the authoritative Host family root, inherits
@@ -606,3 +608,35 @@ module SessionsSurface =
                       "otherError", box otherError
                       "abortCount", box transport.Aborts.Length ]
         }
+
+    /// HOST-037: InjectedSessionPort.AwaitRunnerIdle over a controlled Host
+    /// status. `isBusy` is a JS `(sessionId) => boolean | Promise<boolean>`;
+    /// a thrown or rejected read is an unreadable status.
+    let awaitRunnerIdle (isBusy: obj) (sessionId: string) : Task =
+        let transport =
+            { new IOpenCodePort with
+                member _.SendPrompt _ _ _ = Task.FromResult(Fatal "unused")
+                member _.AbortSession _ = Task.FromResult(Ok())
+                member _.CreateSession _ _ = Task.FromResult(Error "unused")
+                member _.GetSessionParent _ = Task.FromResult(Ok None)
+                member _.CreateChildSession _ _ = Task.FromResult(Error "unused")
+                member _.ListChildren _ = Task.FromResult(Ok [])
+                member _.CloseChildSession _ = Task.FromResult(Ok())
+
+                member _.IsRunnerBusy session _ =
+                    task {
+                        try
+                            let read: Task<bool> =
+                                emitJsExpr (isBusy, SessionId.value session) "Promise.resolve($0($1))"
+
+                            let! busy = read
+
+                            return Ok busy
+                        with ex ->
+                            return Error ex.Message
+                    } }
+
+        let port =
+            InjectedSessionPort(Some transport, Events.newTerminalSource ()) :> ISessionHostPort
+
+        port.AwaitRunnerIdle(SessionId.create sessionId, None)

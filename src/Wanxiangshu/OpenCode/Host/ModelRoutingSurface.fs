@@ -939,3 +939,14 @@ module ModelRoutingSurface =
             let! outcome = (portOf port).SendPrompt (SessionId.create sessionId) text (promptOptionsOf options)
             return outcomeToJs outcome
         }
+
+    /// HOST-037: the SDK port's reading of Host session status.
+    let runnerBusy (port: obj) (sessionId: string) (directory: string) : Task<obj> =
+        task {
+            let! outcome = (portOf port).IsRunnerBusy (SessionId.create sessionId) (Option.ofObj directory)
+
+            return
+                match outcome with
+                | Ok busy -> box {| ok = true; busy = busy; error = null |}
+                | Error error -> box {| ok = false; busy = false; error = error |}
+        }

@@ -9,9 +9,9 @@ import { withExecutablePlugin } from '../../verification-system/tests/support/pl
 // OpenCode 1.19 triggers chat.message with `{ agent: input.agent, ... }`, so a
 // prompt sent without an agent arrives as an OWN `agent` key whose value is
 // `undefined`. JSON has no undefined: that carrier is absent, not malformed.
-// Treating it as malformed rejects every agent-less plugin prompt as
-// MalformedIdentityCarrier Agent. The decode-layer semantics live in
-// dispatch-protocol 015; this file pins the same distinction on the real
+// A genuinely malformed carrier is absent too — it decodes to no explicit agent
+// and follows the same agent-less admission path. The decode-layer semantics
+// live in dispatch-protocol 015; this file pins the same distinction on the real
 // registered chat.message hook, end to end through admission. Model
 // projection details are pinned by 003 and deliberately not asserted here.
 
@@ -55,13 +55,13 @@ test('WHAT[managed-chat-execution-016] an own undefined agent key is an absent c
   })
 })
 
-test('WHAT[managed-chat-execution-016] a hook-reachable malformed agent carrier still rejects as MalformedIdentityCarrier with zero side effects', async () => {
+test('WHAT[managed-chat-execution-016] a hook-reachable malformed agent carrier is absent, admitted like any agent-less prompt with zero side effects', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const sessionId = 'ses-agent-malformed'
     const messageId = 'msg-agent-malformed'
     // Same shape as the admitted agent-less prompt above, except the agent
-    // carrier: a non-string primitive is genuinely malformed at the hook
-    // (003 already pins this rejection on the registered hook).
+    // carrier: a non-string primitive is genuinely malformed at the hook, and a
+    // malformed carrier is an absent carrier — no explicit agent, no rejection.
     const input = {
       sessionID: sessionId,
       messageID: messageId,
@@ -81,9 +81,11 @@ test('WHAT[managed-chat-execution-016] a hook-reachable malformed agent carrier 
     }
     const before = routing.sharedCapacitySnapshot()
 
-    await assert.rejects(hooks['chat.message'](input, output), /IntentRejected.*MalformedIdentityCarrier/)
+    await hooks['chat.message'](input, output)
 
     assert.deepEqual(output.message.model, { providerID: 'host', modelID: 'placeholder' })
+    // No explicit agent and no other managed carrier: unmanaged, so no admission,
+    // no capacity and no provider prompt — the same path an agent-less prompt takes.
     assert.equal(recovery.journalExecutionStatus(runtime.journal, sessionId, messageId), null)
     assert.deepEqual(routing.sharedCapacitySnapshot(), before)
     assert.equal(runtime.prompts.length, 0)

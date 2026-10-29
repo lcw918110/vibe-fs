@@ -1,1 +1,1 @@
-You stopped unexpectedly just now. Continue the work.
+You stopped unexpectedly just now without delivering a result. Do not repeat what you already said, and do not answer with a bare "continuing". Take the next step directly: move the current task with tools; if the task is in fact done, write the closing report — what was achieved, what evidence backs it, and what is still open.

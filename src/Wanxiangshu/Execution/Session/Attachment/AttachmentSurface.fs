@@ -229,6 +229,7 @@ module AttachmentSurface =
 
                         Task.FromResult(Ok(listed |> List.map ChildSession.toInfo))
 
+                    member _.AwaitRunnerIdle(_, _) = Task.FromResult(()) :> Task
                     member _.FamilyRootOf _ = ownerId }
 
             let companion = CompanionLeaseRuntime(host, registry)

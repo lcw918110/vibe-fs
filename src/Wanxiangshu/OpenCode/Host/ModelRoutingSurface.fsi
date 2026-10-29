@@ -112,3 +112,4 @@ module ModelRoutingSurface =
     val pendingContractVersion: runtime: obj -> int
     val createSdkClientPort: client: obj -> obj
     val sendPrompt: port: obj -> sessionId: string -> text: string -> options: obj -> Task<obj>
+    val runnerBusy: port: obj -> sessionId: string -> directory: string -> Task<obj>

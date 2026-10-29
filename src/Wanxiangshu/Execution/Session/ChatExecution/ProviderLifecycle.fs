@@ -23,7 +23,6 @@ module ProviderLifecycle =
         | DurableJournalUnavailable
         | PhysicalUserMessageMissing of SessionId
         | AttemptPlanFreezeFailed of 'bindingError
-        | FrozenAttemptPlanMissing of ChatExecutionKey * ProviderRunIdentity
         | AcceptedExecutionMissing of ChatExecutionKey
         | AcceptedExecutionAlreadyTerminal of ChatExecutionKey
         | AuthorityEvidenceInvalid of AcceptedChatExecutionEvidence
@@ -34,11 +33,18 @@ module ProviderLifecycle =
         | ProviderStartObservationError.DurableJournalUnavailable -> "durable-journal-unavailable"
         | ProviderStartObservationError.PhysicalUserMessageMissing _ -> "physical-user-message-missing"
         | ProviderStartObservationError.AttemptPlanFreezeFailed _ -> "attempt-plan-freeze-failed"
-        | ProviderStartObservationError.FrozenAttemptPlanMissing _ -> "frozen-attempt-plan-missing"
         | ProviderStartObservationError.AcceptedExecutionMissing _ -> "accepted-execution-missing"
         | ProviderStartObservationError.AcceptedExecutionAlreadyTerminal _ -> "accepted-execution-already-terminal"
         | ProviderStartObservationError.AuthorityEvidenceInvalid _ -> "authority-evidence-invalid"
         | ProviderStartObservationError.PersistenceFailed _ -> "persistence-failed"
+
+    /// The ordinary attempt plan is a pure function of the durable Accepted
+    /// fact, so it can always be rebuilt from that fact.
+    let private ordinaryPlanOf<'bindingError>
+        (accepted: AcceptedChatExecutionEvidence)
+        : Result<PendingAttemptPlan, ProviderStartObservationError<'bindingError>> =
+        AttemptPlanner.freezeOrdinary accepted (AttemptPlanner.ordinaryRequestKind accepted.Origin)
+        |> Result.mapError (fun _ -> ProviderStartObservationError.AuthorityEvidenceInvalid accepted)
 
     let private freezeOrdinaryPlan<'bindingError>
         (durable: AgentJournal)
@@ -53,12 +59,7 @@ module ProviderLifecycle =
                 |> Result.requireSome (ProviderStartObservationError.AcceptedExecutionMissing key)
 
             let accepted = execution.acceptedEvidence
-            let requestKind = AttemptPlanner.ordinaryRequestKind accepted.Origin
-
-            let! pending =
-                AttemptPlanner.freezeOrdinary accepted requestKind
-                |> Result.mapError (fun _ -> ProviderStartObservationError.AuthorityEvidenceInvalid accepted)
-
+            let! pending = ordinaryPlanOf accepted
             return accepted, pending
         }
 
@@ -101,7 +102,7 @@ module ProviderLifecycle =
 
     let private persistObservedProviderStart
         (durable: AgentJournal)
-        (bindAttemptPlan: SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> AttemptPlan option)
+        (bindAttemptPlan: SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> PendingAttemptPlan -> AttemptPlan)
         (observation: ExactProviderStartObservation)
         =
         let key =
@@ -124,11 +125,17 @@ module ProviderLifecycle =
                     |> Option.map _.acceptedEvidence
                     |> Result.requireSome (ProviderStartObservationError.AcceptedExecutionMissing key)
 
-                let! plan =
-                    bindAttemptPlan observation.SessionId observation.PhysicalUserMessageId observation.ProviderRun
-                    |> Result.requireSome (
-                        ProviderStartObservationError.FrozenAttemptPlanMissing(key, observation.ProviderRun)
-                    )
+                // The durable Accepted fact is the plan's source; the process-local
+                // frozen plan is only a cache of it. A cache miss rebuilds the
+                // ordinary plan instead of refusing the Host's real run.
+                let! ordinary = ordinaryPlanOf acceptedEvidence
+
+                let plan =
+                    bindAttemptPlan
+                        observation.SessionId
+                        observation.PhysicalUserMessageId
+                        observation.ProviderRun
+                        ordinary
 
                 let profile = plan.Profile
 
@@ -146,7 +153,7 @@ module ProviderLifecycle =
 
     let persistProviderStartedFromObservation
         (journal: AgentJournal option)
-        (bindAttemptPlan: SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> AttemptPlan option)
+        (bindAttemptPlan: SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> PendingAttemptPlan -> AttemptPlan)
         (observation: ExactProviderStartObservation)
         : Task<Result<bool, ProviderStartObservationError<unit>>> =
         match journal with

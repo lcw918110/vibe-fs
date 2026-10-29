@@ -215,6 +215,8 @@ module OrchestratorHostSurface =
                     return plainResult value (fun item -> arrayOf item |> Array.toList |> List.map childInfo)
                 }
 
+            member _.AwaitRunnerIdle(_, _) = Task.FromResult(()) :> Task
+
             member _.FamilyRootOf(sessionId) =
                 sessionValue (invokeRawValue raw "FamilyRootOf" [| box (SessionId.value sessionId) |])
 

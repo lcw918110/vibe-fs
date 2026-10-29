@@ -38,8 +38,17 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     for (const agent of ['manager', 42]) {
       const conflict = { message: { id: input.messageID, sessionID: input.sessionID, role: 'user', agent,
         model: { providerID: 'host', modelID: 'conflict-placeholder' } }, parts: [] }
-      await assert.rejects(hooks['chat.message']({ ...input, agent }, conflict),
-        agent === 'manager' ? /IntentRejected.*AcceptedParticipantConflict/ : /IntentRejected.*MalformedIdentityCarrier/)
+      if (agent === 'manager') {
+        await assert.rejects(hooks['chat.message']({ ...input, agent }, conflict), /IntentRejected.*AcceptedParticipantConflict/)
+      } else {
+        // A malformed agent carrier is absent: a replay carrying the committed
+        // model keeps its accepted identity — no failure on a carrier the wire
+        // never owed us.
+        const consistent = { message: { id: input.messageID, sessionID: input.sessionID, role: 'user', agent,
+          model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] }
+        await hooks['chat.message']({ ...input, agent }, consistent)
+        assert.deepEqual(consistent.message.model, { providerID: 'fixture', modelID: 'engineer-model' })
+      }
       assert.deepEqual(conflict.message.model, { providerID: 'host', modelID: 'conflict-placeholder' })
       assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, input.sessionID, input.messageID), {
         phase: 'Accepted', disposition: null,
@@ -47,8 +56,12 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     }
     const foreignCarrier = { message: { id: input.messageID, sessionID: 'ses-foreign-carrier', role: 'user', agent: input.agent,
       model: { providerID: 'host', modelID: 'foreign-placeholder' } }, parts: [] }
-    await assert.rejects(hooks['chat.message'](input, foreignCarrier), /IntentRejected.*MalformedIdentityCarrier/)
+    // Conflicting sessionId carriers are absent (no sessionId). The message
+    // still carries an explicit agent, so the managed intent is rejected for
+    // the missing session — the legitimate guard, never a carrier refusal.
+    await assert.rejects(hooks['chat.message'](input, foreignCarrier), /IntentRejected.*ManagedIntentMissingSessionId/)
     assert.deepEqual(foreignCarrier.message.model, { providerID: 'host', modelID: 'foreign-placeholder' })
+    const beforeFresh = routing.sharedCapacitySnapshot()
     const fresh = { message: { id: 'msg-fresh-human', sessionID: input.sessionID, role: 'user', agent: input.agent,
       model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] }
     await hooks['chat.message']({ ...input, messageID: fresh.message.id }, fresh)
@@ -57,7 +70,7 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, input.sessionID, input.messageID), {
       phase: 'Accepted', disposition: null,
     })
-    assert.deepEqual(routing.sharedCapacitySnapshot(), replayCapacity,
+    assert.deepEqual(routing.sharedCapacitySnapshot(), beforeFresh,
       'accepting additional material cannot revoke the lease before the Host selects that material')
     runtime.pushHostMessage(input.sessionID, {
       info: {
@@ -85,6 +98,22 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     assert.deepEqual(lateRoot.message.model, { providerID: 'host', modelID: 'late-root-placeholder' })
     assert.deepEqual(routing.sharedCapacitySnapshot(), currentCapacity)
     assert.deepEqual(dispatch.projectionObservation(runtime.journal, input.sessionID).activeLogicalRun, currentAuthority)
+    // A host-declared model that differs from the committed lease is rejected
+    // once the execution is already a Cancelled terminal: the terminal check
+    // runs before the model-lease guard, so the replay is refused as
+    // AlreadyTerminal and the settled state is untouched.
+    {
+      const before = routing.sharedCapacitySnapshot()
+      const leaseConflict = { message: { id: input.messageID, sessionID: input.sessionID, role: 'user', agent: input.agent,
+        model: { providerID: 'host', modelID: 'conflict-placeholder' } }, parts: [] }
+      await assert.rejects(hooks['chat.message'](input, leaseConflict), /AlreadyTerminal.*Cancelled/)
+      assert.deepEqual(leaseConflict.message.model, { providerID: 'host', modelID: 'conflict-placeholder' })
+      assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, input.sessionID, input.messageID), {
+        phase: 'Terminal', disposition: 'Cancelled',
+      })
+      assert.deepEqual(routing.sharedCapacitySnapshot(), before)
+    }
+
     assert.deepEqual(runtime.abortedIds, aborted)
     assert.deepEqual(recovery.journalExecutionStatus(runtime.journal, input.sessionID, input.messageID), {
       phase: 'Terminal', disposition: 'Cancelled',

@@ -86,6 +86,13 @@ type PluginRuntimeScope =
         providerRun: ProviderRunIdentity ->
             AttemptPlan option
 
+    member BindAttemptPlan:
+        sessionId: SessionId ->
+        physicalUserMessageId: PhysicalUserMessageId ->
+        providerRun: ProviderRunIdentity ->
+        ordinary: PendingAttemptPlan ->
+            AttemptPlan
+
     member TryAttemptPlan: sessionId: SessionId -> providerRun: ProviderRunIdentity -> AttemptPlan option
 
     member ConsumeAttemptPlan: sessionId: SessionId -> providerRun: ProviderRunIdentity -> AttemptPlan option

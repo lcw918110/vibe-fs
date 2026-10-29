@@ -496,7 +496,7 @@ module HostSignalBootstrap =
                                 let! providerStarted =
                                     ProviderLifecycle.persistProviderStartedFromObservation
                                         journal
-                                        scope.TryBindAttemptPlan
+                                        scope.BindAttemptPlan
                                         started
 
                                 do! continueProviderStart started providerStepEnded terminal providerStarted
@@ -1267,10 +1267,12 @@ module HostSignalBootstrap =
                         output
                 | ChatAdmissionIntent.Decision.ExternalRootIntent _, _, _
                 | ChatAdmissionIntent.Decision.ActiveHumanContinuationIntent _, _, _
-                | ChatAdmissionIntent.Decision.PendingPromptIntent _, _, _ ->
-                    rejectedChatMessage (IntentRejected ChatAdmissionIntent.Rejection.DurableAuthorityUnavailable)
+                | ChatAdmissionIntent.Decision.PendingPromptIntent _, _, _
                 | ChatAdmissionIntent.Decision.AcceptedInputIntent _, _, _ ->
-                    rejectedChatMessage (IntentRejected ChatAdmissionIntent.Rejection.DurableAuthorityUnavailable)
+                    // A managed verdict with no durable journal / admission transaction is an
+                    // infrastructure invariant violation, not a user-visible rejection: fail loudly
+                    // instead of dressing the failure up as the user's message being refused.
+                    invalidOp "managed chat admission requires the durable journal and admission transaction"
 
             let includedInput durable (selected: AcceptedChatExecutionEvidence) message =
                 let info = ProviderWireDecode.infoObject message
@@ -1362,10 +1364,10 @@ module HostSignalBootstrap =
                     let projection = createObj [ "message" ==> info; "parts" ==> message?parts ]
                     let decoded = PromptIngressCodec.decodeWith info projection
 
-                    match decoded.InvalidIdentityCarrier, decoded.SessionId with
-                    | None, Some sessionId ->
+                    match decoded.SessionId with
+                    | Some sessionId ->
                         do! admitContinuationInput durable createTransaction physicalId projection messages sessionId
-                    | _ -> ()
+                    | None -> ()
                 }
 
             /// managed-chat-execution-017: the execution a Host compaction

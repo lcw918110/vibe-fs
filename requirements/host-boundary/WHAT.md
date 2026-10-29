@@ -187,3 +187,16 @@ omp 入口模块（`src/Wanxiangshu/Composition/Omp/` 下携带 `[<ExportDefault
 2026-10-27 实测：上一轮仅 system/params 旁路不能修复 title。未标记的 Scope steer 使真实 DevOps 会话不发出 title 请求；补齐 synthetic 后，OpenCode 1.19.4 在开启插件的真实 DevOps 新会话中发出 `small=true agent=title`，并将持久标题更新为「自动标题生成诊断」。普通 DevOps 模型请求在诊断上限被停止，此证据仅证明后台自动标题完成，不冒充普通任务完成。
 
 源码依据：[OpenCode v1.19.4 request.ts](https://github.com/anomalyco/opencode/blob/v1.19.4/packages/opencode/src/session/llm/request.ts)、[compaction.ts](https://github.com/anomalyco/opencode/blob/v1.19.4/packages/opencode/src/session/compaction.ts)、[prompt.ts](https://github.com/anomalyco/opencode/blob/v1.19.4/packages/opencode/src/session/prompt.ts)。
+
+## [037] 空闲续轮只在宿主 runner 真正空闲后投递
+
+由空闲许可派生的续轮（ManagerGuard、JoinGuard 的空闲门提醒、Interaction Repair）必须等宿主 runner 离开当前 run 后，才做物理发送准入与 `SendPrompt`。理由是宿主语义：OpenCode 1.19.4 的 `SessionRunState.ensureRunning` 在 runner 仍处 Running 时，把新 prompt 并入那个 run 的结果；而 run 在 `exiting loop` 之后还要跑完尾段（prune、读取最后的 assistant）才转 Idle。落在这段尾窗里的 prompt 会落库成 user 消息，却不会开新 loop。[029] 允许用确切完成的 assistant `message.updated` 铸造空闲许可，而它早于宿主 idle，所以续轮必须另行等待 runner 空闲。
+
+- 等待依据只取宿主自报的会话状态：`session.status` 中该会话 busy/retry 即未空闲，缺席或 idle 即空闲。轮询退避、总时长有界；状态读不到或宿主没有状态 API 时，按原来的立即发送处理，不新增拒收。
+- 等待发生在去重检查与许可消费之前；准入检查与 Host 调用仍是同步相邻的两步。等待期间如有新物理输入，许可照旧被撤销，续轮按 Superseded 放弃。
+- 非空闲派生的发送（AgentOwnerRoot、ManagedDelegationAssignment、BusyAgentNudge steer、接力后继提示）不等待，语义不变。
+- 长程角色（Manager/Orchestrator/Plan）无工具自然结束得到的 nudge 必须真的开出下一轮；不得出现「nudge 已落库、宿主不调度」。
+
+真实事故（2026-10-29 05:23:50 JST，Manager `ses_e7ed7cdb2ffe…`）：`msg_1842ec5e0` 以正文 stop 结束；ManagerGuard nudge `msg_1842eecaa` 在 `exiting loop` 之后 87 ms 落库，此后再没有 `loop step=0`。之后的 session.idle 也没有再开出续轮，Manager 静止约 1.5 小时。此前几十次同样的 nudge 都在 runner 回到 Idle 之后才到达，所以碰巧生效。
+
+物理证明：tests/037.test.mjs 覆盖三处：SDK 端口按 `session.status` 读 busy；InjectedSessionPort 在 runner busy 期间持续等待、转 idle 后放行；真实 ManagerWorkflow 空闲续轮在 runner 空闲前不调用 SendPrompt，空闲后同一条 nudge 才发出。

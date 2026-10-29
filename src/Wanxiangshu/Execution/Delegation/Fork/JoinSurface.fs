@@ -258,6 +258,7 @@ module JoinSurface =
                 Task.FromResult(Error "join probe has no child sessions")
 
             member _.ListChildren _ = Task.FromResult(Ok [])
+            member _.AwaitRunnerIdle(_, _) = Task.FromResult(()) :> Task
             member _.FamilyRootOf sessionId = sessionId
 
     type private JoinProbeHandle(parentId: SessionId, runtime: HostForkRuntime) =

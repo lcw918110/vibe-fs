@@ -60,6 +60,15 @@ type PluginRecoveryScope =
         providerRun: ProviderRunIdentity ->
             AttemptPlan option
 
+    /// Provider-start binding: always yields the plan for the Host's exact run,
+    /// from the frozen plan or else from the durable-rebuilt ordinary plan.
+    member BindAttemptPlan:
+        sessionId: SessionId ->
+        physicalUserMessageId: PhysicalUserMessageId ->
+        providerRun: ProviderRunIdentity ->
+        ordinary: PendingAttemptPlan ->
+            AttemptPlan
+
     /// Consumes the frozen plan exactly once on terminal reconciliation.
     member ConsumeAttemptPlan: sessionId: SessionId -> providerRun: ProviderRunIdentity -> AttemptPlan option
 

@@ -75,7 +75,7 @@ Replay 只返回 typed owner effect request；不得写 fact、清 counter、释
 
 ## [015] Provider 启动边界拒绝的精确定夺
 
-transform 在 provider 启动边界拒绝某个 exact execution 时（例如 attempt plan freeze 失败：`accepted-execution-missing`、`frozen-attempt-plan-missing`、`attempt-plan-freeze-failed`、`blogger-request-missing`、`authority-evidence-invalid`、`persistence-failed`），该拒绝必须作为一次 typed pre-provider failure 报告给 settlement owner；报告携带 exact `(SessionId, PhysicalUserMessageId)` 与诊断码，free-form 文本只作诊断，不决定 disposition。
+transform 在 provider 启动边界拒绝某个 exact execution 时（例如 attempt plan freeze 失败：`accepted-execution-missing`、`attempt-plan-freeze-failed`、`blogger-request-missing`、`authority-evidence-invalid`、`persistence-failed`），该拒绝必须作为一次 typed pre-provider failure 报告给 settlement owner；报告携带 exact `(SessionId, PhysicalUserMessageId)` 与诊断码，free-form 文本只作诊断，不决定 disposition。
 
 该 physical identity 必须在消息投影改写前从本次真实 Host 输入取得，并贯穿 attempt freeze、ProviderStarted 确认和拒绝报告。合成消息 id、摘要或投影后的最后一条 user 消息不得替代它；也不得读取 session-current id 为旧请求补身份。
 
@@ -89,3 +89,9 @@ transform 在 provider 启动边界拒绝某个 exact execution 时（例如 att
 宿主自动压缩上下文后自行写入的续轮（`metadata.compaction_continue` 的合成「Continue…」行，或紧随压缩摘要重放的用户行）不经过 `chat.message`，到达 provider 启动边界时没有 `Accepted` 记录。它不是新的权威：系统在该边界把它受理为被压缩执行的同 run 续轮——继承同一 `LogicalRunId`、Authority Root 与身份种子，origin 为续轮——并由普通续轮准入把该执行持有的 lease 交给它；被压缩的那一步按同 run 续轮常规被取代，不向父方发布终态。
 
 无可继承的活执行（会话不再持有 lease，或继承受理失败）时，不伪造执行，原始 `accepted-execution-missing` 拒绝照旧上抛；同时必须向等待该 run 的父方发布一次 `Failed` 终态（按该会话未终结执行的 Authority Root），不得让父方 join 静默空等。非压缩续轮的未受理行不适用本条。
+
+## [018] Provider 启动不向进程内缓存要证明
+
+Host 已为一条 durable `Accepted` 的 physical user message 建出真实 assistant run 时，这次 run 的 attempt plan 总能给出：有 transform 冻结的 plan 就用它，没有就从该 `Accepted` 事实重建同一份 ordinary plan。进程内的冻结 plan 只是缓存，缓存缺了、被并发消费或该 run 先前绑在别的 physical 上，都不构成拒收理由；Host 亲口给出的 run→physical 关系优先。`ProviderStarted` 照常落盘，provider 照常启动，不报启动边界拒绝，也不因此写 `Failed` 终态。
+
+来由：2026-10-28 18:32 UTC，Manager 正在跑时 Advisor 答复作为新的 user 行插进 loop，下一步的 transform 以 `MANAGED-CHAT-005 … frozen-attempt-plan-missing` 被拒，Manager 空转 38 分钟。

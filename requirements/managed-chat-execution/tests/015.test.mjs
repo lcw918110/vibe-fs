@@ -94,7 +94,7 @@ test('WHAT[managed-chat-execution-015] a provider-start-boundary rejection termi
         host,
         session,
         physical,
-        'frozen-attempt-plan-missing',
+        'attempt-plan-freeze-failed',
       )
 
       assert.equal(outcome.result, 'terminalized', 'the rejection must decide the exact accepted execution')
@@ -113,7 +113,7 @@ test('WHAT[managed-chat-execution-015] a provider-start-boundary rejection termi
         host,
         session,
         physical,
-        'frozen-attempt-plan-missing',
+        'attempt-plan-freeze-failed',
       )
       assert.equal(repeated.result, 'already-terminal', 'a repeated rejection is idempotent')
       assert.equal(executionCount(session, physical), 0, 'a repeated rejection must not double-release')

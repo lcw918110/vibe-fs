@@ -175,7 +175,7 @@ test('WHAT[dispatch-protocol-015] malformed parts and boolean lookalikes are abs
 })
 }
 
-test('WHAT[dispatch-protocol-015] actual ingress cannot reinterpret a malformed PromptKey as an external user root', async () => {
+test('WHAT[dispatch-protocol-015] actual ingress treats a malformed PromptKey as absent and admits by the valid explicit agent', async () => {
   const { default: assert } = await import('node:assert/strict')
   const { withExecutablePlugin } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
   const dispatch = await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
@@ -186,16 +186,16 @@ test('WHAT[dispatch-protocol-015] actual ingress cannot reinterpret a malformed 
       model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [] })
     await hooks['chat.message']({ sessionID: 'valid-carrier-control', messageID: 'valid-physical', agent: 'engineer' }, output('valid-carrier-control', 'valid-physical'))
     assert.notEqual(dispatch.projectionObservation(runtime.journal, 'valid-carrier-control').activeLogicalRun, null)
-    try {
-      await hooks['chat.message']({ sessionID: 'invalid-key', messageID: 'invalid-key-physical', agent: 'engineer', metadata: { wanxiangshu_prompt_key: 7 } }, output('invalid-key', 'invalid-key-physical'))
-    } catch (error) {
-      assert.match(String(error), /carrier|malformed|invalid|identity|prompt/i)
-    }
-    assert.equal(dispatch.projectionObservation(runtime.journal, 'invalid-key').activeLogicalRun, null, 'invalid synthetic metadata must not grant a new external authority')
+    // A malformed PromptKey is an absent PromptKey: the message is exactly the
+    // plain explicit-agent prompt it otherwise looks like, and with no active run
+    // in a fresh session it is admitted as a new external root by that agent.
+    await hooks['chat.message']({ sessionID: 'invalid-key', messageID: 'invalid-key-physical', agent: 'engineer', metadata: { wanxiangshu_prompt_key: 7 } }, output('invalid-key', 'invalid-key-physical'))
+    assert.notEqual(dispatch.projectionObservation(runtime.journal, 'invalid-key').activeLogicalRun, null,
+      'a malformed prompt key is absent; the valid explicit agent grants the external root on its own')
   })
 })
 
-test('WHAT[dispatch-protocol-015] malformed explicit agent cannot inherit identity from an otherwise valid pending claim', async () => {
+test('WHAT[dispatch-protocol-015] a malformed explicit agent is absent and the pending claim still admits the prompt', async () => {
   const { default: assert } = await import('node:assert/strict')
   const { withExecutablePlugin } = await import('../../verification-system/tests/support/plugin-fixture.mjs')
   const dispatch = await import('../../../dist/Interaction/Dispatch/DispatchSurface.js')
@@ -206,18 +206,15 @@ test('WHAT[dispatch-protocol-015] malformed explicit agent cannot inherit identi
     assert.equal(seed.ok, true)
     const sent = await dispatch.sendAgentOwnerRootAwait(hostPort(async () => dispatch.admittedWithReceipt('accepted-carrier')), runtime.journal, 'carrier-child', 'assignment', seed.value)
     assert.equal(sent.ok, true)
-    try {
-      await hooks['chat.message']({ sessionID: 'carrier-child', messageID: 'carrier-physical', agent: 7, metadata: { wanxiangshu_prompt_key: sent.key } }, {
-        message: { sessionID: 'carrier-child', id: 'carrier-physical', agent: 'engineer', role: 'user',
-          model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [],
-      })
-    } catch (error) {
-      assert.match(String(error), /carrier|malformed|invalid|identity|prompt/i)
-    }
+    // The malformed agent carrier is absent, so the exact pending claim carries the
+    // message on its own — the same path as a prompt sent without an agent field.
+    await hooks['chat.message']({ sessionID: 'carrier-child', messageID: 'carrier-physical', agent: 7, metadata: { wanxiangshu_prompt_key: sent.key } }, {
+      message: { sessionID: 'carrier-child', id: 'carrier-physical', agent: 'engineer', role: 'user',
+        model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: [],
+    })
     const projection = dispatch.projectionObservation(runtime.journal, 'carrier-child')
-    assert.equal(projection.activeLogicalRun, null)
-    assert.equal(projection.pendingClaims.length, 1)
-    assert.equal(projection.pendingClaims[0].promptKey, sent.key)
+    assert.notEqual(projection.activeLogicalRun, null, 'the pending claim admits its prompt without an explicit agent')
+    assert.equal(projection.pendingClaims.length, 0)
   })
 })
 
@@ -227,7 +224,7 @@ const { default: test } = await import("node:test");
 const { decodeIngress } = await import("../../../dist/OpenCode/Codec/ProviderProjectionSurface.js");
 test('WHAT[dispatch-protocol-015] an own carrier key holding undefined is absent, as OpenCode 1.19 chat.message sends it', () => {
   // OpenCode 1.19.4 triggers chat.message with { agent: input.agent, ... }; an agent-less prompt_async
-  // therefore arrives with agent: undefined. That must decode as no explicit agent, not MalformedIdentityCarrier Agent.
+  // therefore arrives with agent: undefined. That must decode as no explicit agent.
   const decoded = decodeIngress(
     { sessionID: 's-undef', agent: undefined, model: undefined, messageID: 'm-undef', variant: undefined },
     { message: { sessionID: 's-undef', id: 'm-undef', agent: 'manager', role: 'user' }, parts: [] },

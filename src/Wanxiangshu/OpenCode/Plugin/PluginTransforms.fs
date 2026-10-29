@@ -422,7 +422,7 @@ module PluginTransforms =
         let persistProviderRun key observed =
             task {
                 let! persisted =
-                    ProviderLifecycle.persistProviderStartedFromObservation journal scope.TryBindAttemptPlan observed
+                    ProviderLifecycle.persistProviderStartedFromObservation journal scope.BindAttemptPlan observed
 
                 match persisted with
                 | Error error ->

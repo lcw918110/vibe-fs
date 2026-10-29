@@ -1,1 +1,1 @@
-Delegated work you sent out has not come back yet. Continue the work.
+Delegated work you sent out has not come back yet, so you cannot finish now. First see which parts have returned and which are still in flight: gather what has returned at once and move the next step from it; for what is still in flight, if you hold any useful action that does not depend on it, do that first; wait for it only when every action depends on it. Continue the work.

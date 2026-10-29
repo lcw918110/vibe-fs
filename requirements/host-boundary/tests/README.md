@@ -40,3 +40,5 @@ TESTS_MJS_FILES="$(rg --files requirements/host-boundary/tests | rg '/[0-9]{3}\.
 ```
 
 019/029/032 的 TODO 阻断完整验收。013旧基线曾出现断言后不退出，未取得本基线闭合证据。023、032与033需要真实Host及本机端口权限；026真实编译用例需开启integration。2026-09-28 的历史构建为 822 模块、harness 为 278 通过，范围见[当时记录](../../../proposals/archive/2026-10-03/20模块上游适配记录-2026-09-28.md)；本批新增证据与正式结果以[Host就绪与Guard替代修复记录](../../../proposals/archive/2026-10-03/Host就绪与Guard替代修复-2026-10-03.md)为准。各轮数字不能相加，也不消除上述 TODO；残余跨包案例和物理证明缺口见[GAP](../../GAP.md)。
+
+- 037.test.mjs：空闲续轮等宿主 runner 空闲后再发；复现 2026-10-29 Manager nudge 落进收尾中的 run、宿主不开新 loop 的事故。SDK 状态读取、端口等待、真实 ManagerWorkflow 顺序三段均为 dist 物理调用。

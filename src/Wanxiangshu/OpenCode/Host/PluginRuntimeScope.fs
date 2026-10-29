@@ -239,6 +239,14 @@ type PluginRuntimeScope
     member this.TryAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) =
         recovery.TryAttemptPlan sessionId providerRun
 
+    member this.BindAttemptPlan
+        (sessionId: SessionId)
+        (physicalUserMessageId: PhysicalUserMessageId)
+        (providerRun: ProviderRunIdentity)
+        (ordinary: PendingAttemptPlan)
+        =
+        recovery.BindAttemptPlan sessionId physicalUserMessageId providerRun ordinary
+
     member this.ConsumeAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) =
         recovery.ConsumeAttemptPlan sessionId providerRun
 

@@ -680,6 +680,7 @@ module SyncDelegateSurface =
                     |> Ok
                     |> Task.FromResult
 
+            member _.AwaitRunnerIdle(_, _) = Task.FromResult(()) :> Task
             member _.FamilyRootOf sessionId =
                 match observationMode with
                 | Some _ -> SessionId.create "host-family-root"
@@ -1500,7 +1501,6 @@ module SyncDelegateSurface =
                 let message: ChatAdmissionIntent.DecodedMessage =
                     { SessionId = Some child
                       PhysicalUserMessageId = Some physicalId
-                      InvalidIdentityCarrier = None
                       ExplicitAgent = None
                       PromptKey = Some key
                       IsHostCompaction = false

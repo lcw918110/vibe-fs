@@ -254,6 +254,7 @@ module HostForkPtySurface =
                         member _.TryGetParentSession _ = Task.FromResult(Ok None)
                         member _.CreateChildSession(_, _) = Task.FromResult(Error "dummy")
                         member _.ListChildren _ = Task.FromResult(Ok [])
+                        member _.AwaitRunnerIdle(_, _) = Task.FromResult(()) :> Task
                         member _.FamilyRootOf sessionId = sessionId }
 
                 let managerRuntime =

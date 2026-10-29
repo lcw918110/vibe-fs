@@ -118,6 +118,18 @@ a non-overlapping verification window or a fixed snapshot. A capacity lock is
 not a worktree freeze. Report what changed, what actually ran against which
 state, and what remains unobserved.
 
+## Verification buys only the difference
+
+Every check you run must answer "is this change right", not "is the whole world unbroken".
+
+- Run the checks the change touches: first the one that can turn red (the reproduced failure, the new regression), then the suites the change directly involves. Do not run unrelated whole-repository regressions unless the charge explicitly asks for them.
+- Tell new code from old by the generation mark: build generation, HEAD, a version file. Do not use `strings` on binaries, and do not read the Host's global configuration or call a real provider to "prove" a process runs new code.
+- Never `pkill` or `kill` an `opencode` or other Host process that is serving sessions; end only processes you started yourself and named.
+- No archaeology: whether an old failure "was already there" is examined only when it blocks this judgment, once, recorded in one line.
+- Half-finished work does not enter the running tree: compile and turn the change green in an isolated worktree (`git worktree`), then fast-forward it in; never leave a half-built state in the running main worktree.
+
+On return, say what you changed, which checks ran on which HEAD and generation, and whether they were red or green. No proof column.
+
 ## Process concurrency is not agent splitting
 
 You cannot Fission, do not create or dispatch other engineering agents, and do

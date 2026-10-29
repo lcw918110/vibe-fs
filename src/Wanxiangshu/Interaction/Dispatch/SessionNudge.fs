@@ -566,23 +566,33 @@ module HostSessionNudge =
         (profile: PromptAuthority.AuthorityExecutionProfile)
         : Task<IdleContinuationOutcome> =
         let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
+        let target = liveDirectory rootWorkspace directory
 
-        if rt.GateNudgeAlreadyAdmitted profile continuation gateKind terminalProviderRun then
-            Task.FromResult IdleContinuationOutcome.AlreadyAdmitted
-        else
-            rt.SendIdleGateNudge
-                (toDispatchPort sessionPort)
-                sessionId
-                prompt
-                continuation
-                gateKind
-                terminalProviderRun
-                profile
-                (liveDirectory rootWorkspace directory)
-                awaitMode
-                physicalAdmission
-                observer
-            |> TaskValue.map (gateIdleOutcome releaseAdmission)
+        task {
+            // HOST-037: an idle permit may be minted from the exact completed
+            // assistant, before the Host runner has finished its run. A prompt
+            // sent then joins the finishing run and never starts a new one, so
+            // the continuation is admitted only after the runner is idle.
+            do! sessionPort.AwaitRunnerIdle(sessionId, target)
+
+            if rt.GateNudgeAlreadyAdmitted profile continuation gateKind terminalProviderRun then
+                return IdleContinuationOutcome.AlreadyAdmitted
+            else
+                return!
+                    rt.SendIdleGateNudge
+                        (toDispatchPort sessionPort)
+                        sessionId
+                        prompt
+                        continuation
+                        gateKind
+                        terminalProviderRun
+                        profile
+                        target
+                        awaitMode
+                        physicalAdmission
+                        observer
+                    |> TaskValue.map (gateIdleOutcome releaseAdmission)
+        }
 
     let private trySendGateContinuationWithAdmissionObserved
         (physicalAdmission: unit -> Result<unit, QuiescencePermitFailure>)
@@ -757,19 +767,26 @@ module HostSessionNudge =
         (profile: PromptAuthority.AuthorityExecutionProfile)
         : Task<IdleContinuationOutcome> =
         let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
+        let target = liveDirectory rootWorkspace directory
 
-        if rt.RepairAlreadyClaimed profile requestId terminalProviderRun repairKind then
-            Task.FromResult IdleContinuationOutcome.AlreadyAdmitted
-        else
-            rt.SendIdleInteractionRepair
-                (toDispatchPort sessionPort)
-                sessionId
-                prompt
-                requestId
-                terminalProviderRun
-                repairKind
-                profile
-                (liveDirectory rootWorkspace directory)
-                PromptDispatcher.AwaitMode.Await
-                (fun () -> quiescence.TryConsume permit)
-            |> TaskValue.map (gateIdleOutcome (fun () -> quiescence.TryRelease permit))
+        task {
+            // HOST-037: same runner-idle precondition as an idle gate nudge.
+            do! sessionPort.AwaitRunnerIdle(sessionId, target)
+
+            if rt.RepairAlreadyClaimed profile requestId terminalProviderRun repairKind then
+                return IdleContinuationOutcome.AlreadyAdmitted
+            else
+                return!
+                    rt.SendIdleInteractionRepair
+                        (toDispatchPort sessionPort)
+                        sessionId
+                        prompt
+                        requestId
+                        terminalProviderRun
+                        repairKind
+                        profile
+                        target
+                        PromptDispatcher.AwaitMode.Await
+                        (fun () -> quiescence.TryConsume permit)
+                    |> TaskValue.map (gateIdleOutcome (fun () -> quiescence.TryRelease permit))
+        }

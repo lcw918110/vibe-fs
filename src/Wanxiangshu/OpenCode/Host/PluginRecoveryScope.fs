@@ -183,6 +183,30 @@ type PluginRecoveryScope(journal: AgentJournal option) =
         else
             Some(unbox<AttemptPlan> res)
 
+    /// Provider-start binding: always yields the plan for the Host's exact run.
+    /// The frozen plan is used when present; otherwise the caller's ordinary
+    /// plan, rebuilt from the durable Accepted fact, is bound. The Host's own
+    /// run→physical relation replaces any older binding of the same run.
+    member this.BindAttemptPlan
+        (sessionId: SessionId)
+        (physicalUserMessageId: PhysicalUserMessageId)
+        (providerRun: ProviderRunIdentity)
+        (ordinary: PendingAttemptPlan)
+        : AttemptPlan =
+        let bindFn (pendingObj: obj) : obj =
+            box (AttemptPlanner.bindProviderRun providerRun (unbox<PendingAttemptPlan> pendingObj))
+
+        let res: obj =
+            store?BindAttemptPlan(
+                SessionId.value sessionId,
+                PhysicalUserMessageId.value physicalUserMessageId,
+                ProviderRunIdentity.value providerRun,
+                bindFn,
+                box ordinary
+            )
+
+        unbox<AttemptPlan> res
+
     /// Owning CE consumes the frozen plan exactly once on terminal reconciliation.
     /// Provisional/unknown turns must use TryAttemptPlan (peek) to keep the plan alive;
     /// only terminal outcomes (TurnCompleted/TurnFailed/TurnAborted) call ConsumeAttemptPlan.

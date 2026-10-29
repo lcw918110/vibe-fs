@@ -209,8 +209,7 @@ module ChatAdmissionIntentSurface =
               AcceptedExecutionEvidence = None }
 
     let private decodedMessage (value: obj) : ChatAdmissionIntent.DecodedMessage =
-        { InvalidIdentityCarrier = None
-          SessionId = optionalString value?sessionId |> Option.map SessionId.create
+        { SessionId = optionalString value?sessionId |> Option.map SessionId.create
           PhysicalUserMessageId =
             optionalString value?physicalUserMessageId
             |> Option.map PhysicalUserMessageId.create
@@ -232,11 +231,9 @@ module ChatAdmissionIntentSurface =
 
     let private rejectionName (rejection: ChatAdmissionIntent.Rejection) : string =
         match rejection with
-        | ChatAdmissionIntent.Rejection.MalformedIdentityCarrier _ -> "MalformedIdentityCarrier"
         | ChatAdmissionIntent.Rejection.ManagedIntentMissingSessionId -> "ManagedIntentMissingSessionId"
         | ChatAdmissionIntent.Rejection.ManagedIntentMissingPhysicalUserMessageId ->
             "ManagedIntentMissingPhysicalUserMessageId"
-        | ChatAdmissionIntent.Rejection.DurableAuthorityUnavailable -> "DurableAuthorityUnavailable"
         | ChatAdmissionIntent.Rejection.InvalidExplicitAgent _ -> "InvalidExplicitAgent"
         | ChatAdmissionIntent.Rejection.AcceptedParticipantConflict _ -> "AcceptedParticipantConflict"
         | ChatAdmissionIntent.Rejection.PromptKeyNotClaimed _ -> "PromptKeyNotClaimed"

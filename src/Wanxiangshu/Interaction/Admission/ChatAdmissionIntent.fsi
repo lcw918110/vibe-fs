@@ -6,15 +6,8 @@ open Wanxiangshu.Interaction.Authority
 
 [<RequireQualifiedAccess>]
 module ChatAdmissionIntent =
-    [<RequireQualifiedAccess>]
-    type IdentityCarrierError =
-        | SessionId
-        | Agent
-        | PromptKey
-
     type DecodedMessage =
-        { InvalidIdentityCarrier: IdentityCarrierError option
-          SessionId: SessionId option
+        { SessionId: SessionId option
           PhysicalUserMessageId: PhysicalUserMessageId option
           ExplicitAgent: string option
           PromptKey: PromptKey option
@@ -33,10 +26,8 @@ module ChatAdmissionIntent =
 
     [<RequireQualifiedAccess>]
     type Rejection =
-        | MalformedIdentityCarrier of IdentityCarrierError
         | ManagedIntentMissingSessionId
         | ManagedIntentMissingPhysicalUserMessageId
-        | DurableAuthorityUnavailable
         | InvalidExplicitAgent of string
         | AcceptedParticipantConflict of ChatExecutionKey * acceptedAgent: string * requestedAgent: string
         | PromptKeyNotClaimed of PromptKey

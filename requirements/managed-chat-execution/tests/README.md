@@ -13,7 +13,8 @@
 | 012 | 真实纯决策、解释器逐次端口观察、Host recovery port 接受/拒绝/缺失、实际重复终态结算 | 每个中断点真实输出驱动跨进程恢复；晚到释放与新资源所有者竞态 |
 | 013 | canonical 只读诊断、实际 Host 达终态后撤销 manual | 与实际全量 incident 现场的集成另依 014 |
 | 014 | 实际 incident capture/replay、redaction、版本与篡改拒绝 | 受控 Host contract 证据不等于当前真实 Host canary 已执行 |
-| 016 | 实际注册 hook（withExecutablePlugin）：chat.message 收到 OpenCode 1.19 无 agent 提示形状（own `agent` 键持 `undefined`）时按缺席 carrier 准入——留下 Accepted 事实并持有 exact 容量；hook 可达的真畸形 agent 载体（如非字符串原始值）仍以 MalformedIdentityCarrier 拒收且零副作用 | 真实宿主版本矩阵不在本用例；模型投影细节见 003；undefined 解码语义另见 dispatch-protocol 015 |
+| 016 | 实际注册 hook（withExecutablePlugin）：chat.message 收到 OpenCode 1.19 无 agent 提示形状（own `agent` 键持 `undefined`）时按缺席 carrier 准入——留下 Accepted 事实并持有 exact 容量；hook 可达的真畸形 agent 载体（如非字符串原始值）同样按缺席处理，走与无 agent 提示相同的准入路径且零副作用 | 真实宿主版本矩阵不在本用例；模型投影细节见 003；undefined 解码语义另见 dispatch-protocol 015 |
+| 018 | 实际注册 hook：Host 先报出 run、进程内尚无冻结 plan 时，execution 仍进入 ProviderStarted；随后的 transform 不拒收、不重复启动 | transform 冻结后缓存被并发移除的时序未在 hook 层复现；该分支由 wanxiangli recovery-store-007 覆盖 |
 
 012 的 A—E 调用生产准入事务并在受控边界停止；F—I 验证生产 lifecycle 的事实前缀。它们没有把得到的持久化输出传给后续恢复，因此不能命名为完整 crash recovery。`admissionPhaseSamples` 显式构造不同阶段的输入，重复调用真正 recovery 并逐次保留 effect；它证明的是这些输入的局部决策，不是进程重启或 durable owner 的 effect 幂等。对重复输入的检查保留整个结果序列，不先转成按 key 去重的字典。
 

@@ -101,6 +101,8 @@ The last is end-to-end: the real apparatus, run through from beginning to end. I
 
 Matters that cheaper checks can settle are never dragged to dearer ones; yet no amount of spectacle at the top can cover a missing proof below.
 
+Verification is bought by the difference. Verify what changed: the few red-green checks touched by this change, plus a generation mark that tells new from old (build generation, HEAD, a version file), are the whole of the evidence. Where nothing moved, the last real green still stands; do not rerun the whole repository or dig through historical baselines line by line to prove that "nothing else broke". To know whether new or old code is running, read the generation mark; do not use `strings` on a binary as acceptance, and never use `pkill` to kill a process as a test — the means of verification must not itself cause an incident. Half-finished work turns red and green only in an isolated worktree, and is merged into the running tree only once green. Verification that cannot buy a fact able to change the next decision is proof tax, and is not paid.
+
 The thing that verifies truth must be truly capable of red. Every gate must hold a counterexample it can catch; a gate that catches nothing is made of paper, worse than none. Life or death is read from how long it has been since the last real motion — the noise of messengers below and irrelevant heartbeats do not count. Whoever takes the wall clock's total time as the only verdict is whitewashing. The ruler of acceptance may only tighten, never loosen; moving the stone that blocks the road under cover of night is smashing your own signboard.
 Never blunt the ruler just to pass: a suite that cannot catch real defects is mere theater, even with every line traversed; when an implementation fails the examination, the repair belongs in the work, not in gagging the examiner. A test double exists to clarify a contract, not to invent a hidden universe behind its back; clocks and entropy are inputs carried in from outside, never to be drawn from thin air inside core decisions. When progress is absent, inflating the waiting budget conjures no missing cause; rolling the dice again and again until green appears is only luck passing itself off as proof.
 
@@ -158,7 +160,7 @@ When the provider side throws down the work, who clears the ground? Wanxiangshu 
 
 Each road walks its own and delivers its own, and each should be free to do so. Read-only inquiries go forward at will; an isolated worktree starts cleanly from an explicit ref, leaving drafts in the main workspace undisturbed — never auto-stashing, auto-committing, or cleaning away a person's uncommitted work. Only when an action would touch the active target worktree and risk overwriting live edits does it check whether that ground is clean. To step into the shared gate, pass only a short gate: the time inside is very short — glance once at the target, advance only, never reverse; push if it goes, let go if it does not; review, repair, conflict, and preparation all queue outside the gate, and no one may hold the gateplate without leaving. Inside and out, the machinery's hidden details are never sent to the eye, only plain speech is.
 
-Old credentials that have left the gate, however glorious before, are all void: the world has changed, and it must be verified again. When today's repair adds firewood, the certificate on old paper burns on the spot; several parties passing each on their own ground do not count once gathered at the mountain's foot — after the merge, it must be walked through once more, real blade against real spear, on the final field.
+Old credentials that have left the gate, however glorious before, are all void: the world has changed, and it must be verified again. When today's repair adds firewood, the certificate on old paper burns on the spot; several parties passing each on their own ground do not count once gathered at the mountain's foot — after the merge, walk once more, real blade against real spear, on the final field through what the merge actually touched; only what it touched, not the whole archaeology again.
 
 ## The board is not a seal
 
@@ -330,6 +332,8 @@ when there is still reachable capacity left idle, do not leave it idle.
 Only four things may hold back a ready action: real facts still outstanding, the same shared account already in use, a rule written in black and white that fixes who goes first, or interference that would wreck what is at hand.
 Beyond those four, if you cannot name the sinew that ties two jobs together, they are, by reason, two separate worlds.
 As many as you can justify, launch that many.
+
+Gather at any moment, launch at any moment: whichever lane returns first is gathered first and the next lane is opened from its facts, without waiting for the rest to arrive together. Independent work that can be sent out is sent out first, before you think of the next thing; in a living large mission, ten or more lanes in flight at once is the normal state, not the exception. When fewer than ten are in flight, first ask: which independent consequences have not been sent out yet?
 
 ## Do not worship batches
 

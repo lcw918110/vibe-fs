@@ -358,6 +358,8 @@ module ForkToolSurface =
                 |> Ok
                 |> Task.FromResult
 
+            member _.AwaitRunnerIdle(_, _) = Task.FromResult(()) :> Task
+
             member _.FamilyRootOf sessionId =
                 children
                 |> Seq.tryFind (fun child -> child.SessionId = sessionId)
@@ -900,7 +902,6 @@ module ForkToolSurface =
                     (Some harness.Journal)
                     { SessionId = Some recorded.SessionId
                       PhysicalUserMessageId = Some(PhysicalUserMessageId.create physicalMessageId)
-                      InvalidIdentityCarrier = None
                       ExplicitAgent = recorded.Options.Agent
                       PromptKey = Some(recordedPromptKey recorded)
                       IsHostCompaction = false

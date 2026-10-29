@@ -14,3 +14,4 @@ module SessionsSurface =
     val interruptRejectedAdapterProbe: unit -> Task<obj>
     val terminationProbe: rejectAbort: bool -> Task<obj>
     val interruptTerminatedAdapterProbe: unit -> Task<obj>
+    val awaitRunnerIdle: isBusy: obj -> sessionId: string -> Task

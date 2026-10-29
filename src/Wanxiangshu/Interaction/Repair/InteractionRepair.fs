@@ -168,6 +168,7 @@ module InteractionRepairWorkflow =
             match context.Turn.Role with
             | Some Role.Manager -> "work/manager-continue"
             | Some Role.Plan -> "work/plan-continue"
+            | Some Role.Orchestrator -> "work/orchestrator-continue"
             | _ -> ""
 
         if System.String.IsNullOrEmpty path then

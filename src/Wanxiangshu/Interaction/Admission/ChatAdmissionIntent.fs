@@ -13,15 +13,8 @@ open Wanxiangshu.Execution.Session.ChatExecution
 [<RequireQualifiedAccess>]
 module ChatAdmissionIntent =
 
-    [<RequireQualifiedAccess>]
-    type IdentityCarrierError =
-        | SessionId
-        | Agent
-        | PromptKey
-
     type DecodedMessage =
-        { InvalidIdentityCarrier: IdentityCarrierError option
-          SessionId: SessionId option
+        { SessionId: SessionId option
           PhysicalUserMessageId: PhysicalUserMessageId option
           ExplicitAgent: string option
           PromptKey: PromptKey option
@@ -41,10 +34,8 @@ module ChatAdmissionIntent =
     [<RequireQualifiedAccess>]
     /// DSL-class: Evidence
     type Rejection =
-        | MalformedIdentityCarrier of IdentityCarrierError
         | ManagedIntentMissingSessionId
         | ManagedIntentMissingPhysicalUserMessageId
-        | DurableAuthorityUnavailable
         | InvalidExplicitAgent of string
         | AcceptedParticipantConflict of ChatExecutionKey * acceptedAgent: string * requestedAgent: string
         | PromptKeyNotClaimed of PromptKey
@@ -126,12 +117,6 @@ module ChatAdmissionIntent =
         || message.IsHostSynthetic
         || (message.ExplicitAgent |> Option.exists ManagedAgent.isFunctionalName)
 
-    let private identityCarrierName =
-        function
-        | IdentityCarrierError.SessionId -> "SessionId"
-        | IdentityCarrierError.Agent -> "agent"
-        | IdentityCarrierError.PromptKey -> "PromptKey"
-
     let private tryRootIdentity (value: string) =
         ParticipantIdentity.resolveAtRoot value
         |> Result.toOption
@@ -208,9 +193,7 @@ module ChatAdmissionIntent =
         let text value = value |> Option.toObj
 
         createObj
-            [ "invalidCarrier"
-              ==> (message.InvalidIdentityCarrier |> Option.map identityCarrierName |> text)
-              "sessionId" ==> (message.SessionId |> Option.map SessionId.value |> text)
+            [ "sessionId" ==> (message.SessionId |> Option.map SessionId.value |> text)
               "physicalId"
               ==> (message.PhysicalUserMessageId |> Option.map PhysicalUserMessageId.value |> text)
               "promptKey" ==> (message.PromptKey |> Option.map PromptKey.value |> text)
@@ -275,11 +258,8 @@ module ChatAdmissionIntent =
         (verdict: obj)
         : Rejection =
         match unbox<string> verdict?reason with
-        | "malformed-carrier" ->
-            Rejection.MalformedIdentityCarrier(required "malformed-carrier" message.InvalidIdentityCarrier)
         | "missing-session" -> Rejection.ManagedIntentMissingSessionId
         | "missing-physical" -> Rejection.ManagedIntentMissingPhysicalUserMessageId
-        | "authority-unavailable" -> Rejection.DurableAuthorityUnavailable
         | "invalid-explicit-agent" ->
             Rejection.InvalidExplicitAgent(required "invalid-explicit-agent" message.ExplicitAgent)
         | "accepted-participant-conflict" ->

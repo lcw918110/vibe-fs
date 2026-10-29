@@ -77,6 +77,43 @@ module private FamilyTreeInterop =
     [<Import("SessionFamilyTree", "wanxiangli/ownership")>]
     let sessionFamilyTreeClass: obj = jsNative
 
+/// HOST-037: wait for the Host runner to leave its current run before an
+/// idle-derived continuation is admitted. Host status is the truth; polling
+/// backs off and is bounded so an unreadable or stuck status degrades to the
+/// previous immediate send instead of holding the continuation forever.
+module private RunnerIdleWait =
+    [<Import("setTimeout", "node:timers/promises")>]
+    let private sleep (milliseconds: int) : Task<unit> = jsNative
+
+    [<Literal>]
+    let private firstPollMs = 25
+
+    [<Literal>]
+    let private maxPollMs = 500
+
+    [<Literal>]
+    let private boundMs = 120000
+
+    let rec private poll (port: IOpenCodePort) (sessionId: SessionId) (directory: string option) waited pollMs =
+        task {
+            match! port.IsRunnerBusy sessionId directory with
+            | Ok false -> return ()
+            | Ok true when waited >= boundMs ->
+                Diagnostic.emit
+                    "host-runner-idle-wait-bounded"
+                    [ "session_id", SessionId.value sessionId; "waited_ms", string waited ]
+            | Ok true ->
+                do! sleep pollMs
+                return! poll port sessionId directory (waited + pollMs) (min maxPollMs (pollMs * 2))
+            | Error reason ->
+                Diagnostic.emit
+                    "host-runner-status-unreadable"
+                    [ "session_id", SessionId.value sessionId; "reason", reason ]
+        }
+
+    let untilIdle (port: IOpenCodePort) (sessionId: SessionId) (directory: string option) : Task =
+        poll port sessionId directory 0 firstPollMs :> Task
+
 type InjectedSessionPort
     (
         underlyingPort: IOpenCodePort option,
@@ -345,3 +382,8 @@ type InjectedSessionPort
         member _.ListChildren(parentId) = listChildren parentId
 
         member _.FamilyRootOf(sessionId) = familyRoot sessionId
+
+        member _.AwaitRunnerIdle(sessionId, directory) =
+            match underlyingPort with
+            | Some port -> RunnerIdleWait.untilIdle port sessionId directory
+            | None -> Task.FromResult(()) :> Task

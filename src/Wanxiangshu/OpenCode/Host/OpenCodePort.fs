@@ -118,6 +118,11 @@ module OpenCodePortAdapter =
                 return ""
         }
 
+    /// HOST-037: OpenCode's session status map lists only non-idle sessions.
+    let private runnerBusyIn (statuses: obj) (sessionId: SessionId) =
+        let status = if isNull statuses then null else statuses?(SessionId.value sessionId)
+        not (isNull status) && string status?``type`` <> "idle"
+
     [<Emit("fetch($0, $1)")>]
     let private jsFetch (url: string) (init: obj) : Task<obj> = jsNative
 
@@ -328,6 +333,31 @@ module OpenCodePortAdapter =
                         return! Error ex.Message
                 }
 
+            member _.IsRunnerBusy (sessionId: SessionId) (directory: string option) =
+                task {
+                    try
+                        let sessObj = client?session
+                        let statusFn = if isNull sessObj then null else sessObj?status
+
+                        if isNull statusFn then
+                            return Ok false
+                        else
+                            let directoryFields =
+                                match directory |> Option.orElse workspaceDirectory with
+                                | Some dir -> [ "query", box (createObj [ "directory", box dir ]); "directory", box dir ]
+                                | None -> []
+
+                            let payload = createObj ([ "headers", box (headersObj directory) ] @ directoryFields)
+                            let! res = unbox<Task<obj>> (statusFn?call (sessObj, payload))
+
+                            if not (isNull res) && not (isNull res?error) then
+                                return Error(sprintf "Host rejected session status: %A" res?error)
+                            else
+                                return Ok(runnerBusyIn (responseBody res) sessionId)
+                    with ex ->
+                        return Error ex.Message
+                }
+
             member this.CloseChildSession(childId: SessionId) =
                 taskResult {
                     try
@@ -487,6 +517,12 @@ module OpenCodePortAdapter =
                         return childrenFromResponse data
                     with ex ->
                         return! Error ex.Message
+                }
+
+            member _.IsRunnerBusy (sessionId: SessionId) (_directory: string option) =
+                taskResult {
+                    let! statuses = getJson "/session/status"
+                    return runnerBusyIn statuses sessionId
                 }
 
             member _.CloseChildSession(childId: SessionId) =

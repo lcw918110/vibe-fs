@@ -29,3 +29,9 @@ type ISessionHostPort =
     /// children and identify exact managed children by durable ID rather than assuming exclusive immediate sub-sessions.
     abstract ListChildren: parentId: SessionId -> Task<Result<ChildSessionInfo list, string>>
     abstract FamilyRootOf: sessionId: SessionId -> SessionId
+    /// HOST-037: completes once the Host runner for this session has left its
+    /// current run. OpenCode joins a prompt that arrives while a run is still
+    /// finishing (after its exit decision) to that finishing run: the user
+    /// message is stored but no new provider loop starts. An idle-derived
+    /// continuation therefore waits here before its admission and send.
+    abstract AwaitRunnerIdle: sessionId: SessionId * directory: string option -> Task
