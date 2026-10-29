@@ -536,6 +536,7 @@ module ToolHostCodec =
     /// Required flat Scope annotation on every tool. Semantics: common law «Scope».
     let scopeAnnotationSchema (HostToolFactory factory) =
         let hf = HostToolFactory factory
+
         let fieldsObj =
             createObj
                 [ "kind",
@@ -552,9 +553,8 @@ module ToolHostCodec =
                       optionalNonNegativeIntegerSchemaDescribed "1..48 keep slots; required with resetScope" hf
                   )
                   "replacement", schemaValue (optionalStringSchema hf) ]
-        HostSchema(
-            rawObjectSchemaDescribed factory fieldsObj "Scope lifecycle annotation. See common law «Scope»."
-        )
+
+        HostSchema(rawObjectSchemaDescribed factory fieldsObj "Scope lifecycle annotation. See common law «Scope».")
 
 
     /// Optional object schema: the caller may omit the whole object.
