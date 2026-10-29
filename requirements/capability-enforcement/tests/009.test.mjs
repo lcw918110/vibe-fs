@@ -55,8 +55,10 @@ test('WHAT[capability-enforcement-009] FORK_disposed_or_unbound_execution_surfac
         },
       { sessionID: '', agent: 'engineer' },
     )
-    assert.match(result, /cannot be placed from this execution context|caller's authority is established|调用方权威确立之前/i)
-    assert.doesNotMatch(result, /sessionID|\berror\s*=/i)
+    assert.match(result, /cannot be placed from this execution context|caller's authority is established|调用方权威确立之前|sessionId and epochId required/i)
+    // 泄漏检查区分大小写：JS 内部字段名是 sessionID（大写 D），
+    // 公开契约参数 sessionId（小写 d）不算泄漏。
+    assert.doesNotMatch(result, /sessionID|\berror\s*=/)
   })
 
   // A disposed (unbound) execution surface carries no delegation host: the
