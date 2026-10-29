@@ -269,24 +269,35 @@ module RelayNarrativeTransform =
         let callAt = neutral |> Array.tryFindIndex (carries "toolCallId")
         let resultAt = neutral |> Array.tryFindIndex (carries "resultFor")
 
-        match callAt, resultAt with
-        | Some call, Some result ->
-            let cut = max call result
+        let cut =
+            match callAt, resultAt with
+            | Some call, Some result -> Some(max call result)
+            | _ -> None
 
-            let successorParents =
-                [ for index in cut + 1 .. messages.Length - 1 do
-                      if (roleText messages.[index]).ToLowerInvariant() = "user" then
-                          match messageId messages.[index] with
-                          | Some id -> yield id
-                          | None -> () ]
-                |> Set.ofList
+        let userAnchorsAfter (index: int) =
+            (roleText messages.[index]).ToLowerInvariant() = "user"
 
-            for index in cut + 1 .. messages.Length - 1 do
-                match parentOf messages.[index] with
-                | Some parent when Set.contains parent successorParents ->
-                    emitJsStatement (neutral.[index], successor) "$0.tenureId = $1"
-                | _ -> ()
-        | _ -> ()
+        let anchorIdsAfter index =
+            let id = messageId messages.[index]
+
+            match id with
+            | Some value when userAnchorsAfter index -> [ value ]
+            | _ -> []
+
+        let successorParents =
+            match cut with
+            | None -> Set.empty
+            | Some cut -> [ cut + 1 .. messages.Length - 1 ] |> List.collect anchorIdsAfter |> Set.ofList
+
+        let stampSuccessorTenure index =
+            match parentOf messages.[index] with
+            | Some parent when Set.contains parent successorParents ->
+                emitJsStatement (neutral.[index], successor) "$0.tenureId = $1"
+            | _ -> ()
+
+        match cut with
+        | Some cut -> [ cut + 1 .. messages.Length - 1 ] |> List.iter stampSuccessorTenure
+        | None -> ()
 
     /// Keep the successor's own messages after the committed review barrier.
     /// Returns None when this work has no barrier for the active tenure, so the
