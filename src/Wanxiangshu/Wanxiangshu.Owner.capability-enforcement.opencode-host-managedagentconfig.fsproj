@@ -58,6 +58,7 @@
     <Compile Include="OpenCode/Host/ManagedAgentConfigSurface.fs"/>
     <Compile Include="OpenCode/Tools/ScopeReset.fsi"/>
     <Compile Include="OpenCode/Tools/ScopeReset.fs"/>
+    <Compile Include="OpenCode/Tools/ScopeAnnotationGate.fsi"/>
     <Compile Include="OpenCode/Tools/ScopeAnnotationGate.fs"/>
     <Compile Include="OpenCode/Tools/ToolRegistry.fsi"/>
     <Compile Include="OpenCode/Tools/ToolRegistry.fs"/>

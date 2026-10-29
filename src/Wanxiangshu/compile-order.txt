@@ -1288,6 +1288,7 @@ Repository/Knowledge/Casebook/OpenCode/Tools.fsi
 Repository/Knowledge/Casebook/OpenCode/Tools.fs
 OpenCode/Tools/ScopeReset.fsi
 OpenCode/Tools/ScopeReset.fs
+OpenCode/Tools/ScopeAnnotationGate.fsi
 OpenCode/Tools/ScopeAnnotationGate.fs
 OpenCode/Tools/ToolRegistry.fsi
 OpenCode/Tools/ToolRegistry.fs
