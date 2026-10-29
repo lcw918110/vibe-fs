@@ -63,7 +63,9 @@ module Model =
     let private validateKeys value =
         let actualKeys = keys value |> Set.ofArray
         let requiredSet = Set.singleton "findings"
-        let allowedSet = requiredSet |> Set.add "note"
+        // `scope` is the Host-injected annotation every tool call carries
+        // (common law «Scope»); ScopeAnnotationGate consumes it before the body.
+        let allowedSet = requiredSet |> Set.add "note" |> Set.add "scope"
 
         if not (Set.isSubset requiredSet actualKeys) then
             Error "review arguments must contain the findings array"

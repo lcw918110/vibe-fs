@@ -2,7 +2,7 @@
 
 | 仓 | HEAD | 备注 |
 |---|---|---|
-| vibe-fs | `86c103a9`（+本 handoff 提交） | 合 #70（`15a7b718`）后清债：剩余独立 resetScope／estimate 用例 skip、proposals 补注、scope-progress 宿主边界注释 |
+| vibe-fs | `089d8c7f`（+本 handoff 提交；见文末「全量红测分拣」） | 合 #70（`15a7b718`）后清债：剩余独立 resetScope／estimate 用例 skip、proposals 补注、scope-progress 宿主边界注释 |
 | wanxiangli | `4a7e98a` | 合 #8（UTF-8 projection bound）；含 `3ea4f68` scope-progress 产品边界 |
 
 ## Stash（保留）
@@ -52,3 +52,30 @@
 - **新待裁**：capability-enforcement 026 剩 3 红（D07／D09／D11）——「被拒派工不得追加任何 durable 字节」，而 keepLast 注解在业务拒绝前已由 scope-retention 落盘（新建 `.Herdchestra/wanxiangshu/advisor-process.sqlite`）。是零副作用断言应豁免 scope-retention 流，还是门应在业务拒绝时不落注解——未改，待裁。
 - 剩余 37 红文件里其余均与 scope 注解无关（基线既有），本轮未动。OMP `askPreviousScope`+`scope.kind=resetScope` 静默丢仍**待裁**。
 
+
+## 全量红测分拣（本轮，`f4a0efd2`/`089d8c7f`）
+全量 789 文件逐文件 `node --test`（build gen48，dist 已重建）：基线 `1eeeb576` **52 败／37 文件红**（另 time-capability 004 挂起超时）→ **11 败／9 文件红**（3902 过，116 skip）；无新增失败用例名（ce-025 P15 见下）。
+
+**产品小回归（修产品，口径已明）：**
+- `ScopeAnnotationGate.fs` 缺同名 `.fsi` → 补 `.fsi`（compile-order／owner fsproj 同步）。一处违法连带 causal-wait 009、delegation 028/029、durable-events 022/023、host-boundary 026/027/028/031、structured-workflow 011/012/013/014、time-capability 008 整文件红。
+- review 参数白名单不认宿主注入的 `scope` → 生产里每次带注解的 review 都被拒「unexpected fields」。`Review/Model.fs` 允许 `scope`（work 009×2、019#3 绿）。
+- `716d30d8`（docs 语气 pass）误把 js-program header（en 50 行／zh 42 行）与 js-bookkeeper description（各 9 行）截成首行 → 还原正文、只保留新首行（knowledge-reuse 006×2、repo-programming 005 绿）。
+- `scope-steer/reset-due` 在 `bb8bcc07` 丢了「收尾报告后不得 reset」硬规则 → 以 `scope.kind=resetScope` 口径补回 en/zh（delegation-038 四例绿）。
+- Omp/Adapter、PluginTransforms 新 mutable 补 `// DSL-MUTABLE:`（resource／algorithm-scratch）。
+
+**测旧（改测）：** cap-002 允许矩阵与准入去 `resetScope`（仍断言 advisor/unknown fail closed）；cog-env 013/017 边界改断言 «Scope»+`scope` 注解；cc-034 尾注 `Remaining retention`；cc-039 missing-budget 文案；rp-022 三个必填参数（en+zh）；emr-010 正则跟随 `ScopeAnnotationGate.wrap (gateExecute injected)`；cog-env 005 排除 git `fast-forward`；mce-003 去掉 #70 合并残留 `beforeReplay`（保留 model 对象同一性断言）；time-capability 004 OMP 工具表去 `resetScope` 与只记估计的 `todowrite`；second-host-time 夹具给 `wxs_deliver` 带 keepLast 并开 retention（此前缺注解致挂起）；delegation-038 ResetScopeTool.js 例 skip [PRODUCT-RETIRED]。
+
+**仍红（未动）：**
+| 测 | 类别 | 要点 |
+|---|---|---|
+| capability-enforcement 026 D07/D09/D11 | **待裁**（不动） | keepLast 落盘 vs 零副作用公理 |
+| capability-enforcement 009 #2 | 需裁定 | 空 sessionID 时注解门先回 retention 内部错 `sessionId and epochId required`，盖过执行面拒绝文案；门先后／文案归属待定 |
+| work-019 #4 | 需裁定 | 无任期 `review([])` 现回 `kind=Asked`（与 #3「首个 review 开工」并存），测期望 `binding-unavailable` |
+| time-capability 004 #1 | 需裁定／作者 | `OpenCode/Host/Sessions.fs:85` 原生 `setTimeout`（`e412e0c4` RunnerIdleWait）；改走时间端口或进精确文件豁免，非小修 |
+| js-semantic-surface 002 | 需裁定 | `dispatch-protocol/tests/016`（#70 带入）深引 dist 内部模块＋DU 形状；改公面或登记 canary 属边界政策 |
+| requirement-system 017 | 需用户 | #70 带入的测无 WHAT 条款：mce 016、dispatch-protocol 016、crash-reconciliation 022、work 056/057（「notify the user」）|
+| managed-chat-execution 005 #5 | 不确定 | `message.updated` 已让 providerStarted 先于 transform 落盘；测期望 false。基线既有，未判 |
+| managed-session-lifecycle 022 #5 | 不确定 | EngineerCaseCaptured 1≠2。基线既有，未判 |
+| capability-enforcement 025 P15 | 负载抖动 | P8 并发下 rg 先退出（ESRCH），单跑 3/3 绿 |
+
+仍悬：OMP `askPreviousScope`+`scope.kind=resetScope` 静默丢（待裁，未动）；被 skip 的独立 reset 档案链路尚无注解路径等价新测；scope 注解 schema 未承载「收尾后不得 reset」（delegation-038 第 5 例 skip 后的欠账）。

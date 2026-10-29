@@ -48,9 +48,11 @@ module Adapter =
 
     /// Bound when product hooks register; product-tool resetScope annotations
     /// commit ScopeReanchored through this handle.
+    // DSL-MUTABLE: resource — host registration binding (set once in registerProductHooks)
     let mutable private boundScopeJournal: AgentJournal option = None
 
     /// Set in registerProductHooks once ompCommitResetScope is in scope.
+    // DSL-MUTABLE: resource — host registration binding (set once in registerProductHooks)
     let mutable private runScopeReanchor:
         (string -> obj -> string -> string option -> int -> Task<obj>) option = None
 
@@ -2444,6 +2446,7 @@ module Adapter =
                     Map.empty
             if Map.isEmpty byKey then messages
             else
+                // DSL-MUTABLE: algorithm-scratch — beat keys already consumed by this projection pass
                 let mutable used = Set.empty<string>
                 messages
                 |> Array.map (fun message ->

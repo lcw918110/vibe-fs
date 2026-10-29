@@ -62,7 +62,8 @@ test('WHAT[repository-programming-022] JS_description_is_action_first_then_teach
   const lessonText = coder.description.replace(/\s+/g, ' ')
 
   assert.equal(
-    lessonText.startsWith('Submit exactly four required arguments:'),
+    // [PRODUCT-RETIRED estimate] the estimate argument is gone: three required arguments.
+    lessonText.startsWith('Submit exactly three required arguments:'),
     true,
     'the first screen must identify the required argument before the long editing discipline',
   )
@@ -116,9 +117,9 @@ test('WHAT[repository-programming-022] JS_description_is_action_first_then_teach
   ).description.replace(/\s+/g, ' ')
 
   assert.equal(
-    zh.startsWith('提交且只提交四个必填参数：'),
+    zh.startsWith('提交且只提交三个必填参数：'),
     true,
-    '中文第一屏先交代四个必填参数',
+    '中文第一屏先交代三个必填参数',
   )
   assert.match(zh.slice(0, 380), /name.*program.*intent/)
   const zhContractEnd = zh.indexOf('不另加解释字段。')

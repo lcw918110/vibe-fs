@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { normalTransform, DeliveryAdjudication } from '../../../dist/OpenCode/Plugin/PluginTransforms.js'
 import { resetScopeState, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
 
-const MISSING_ESTIMATE = /no estimate of remaining billable rounds/
+// [PRODUCT-RETIRED estimate] host/scope-steer/missing-estimate now asks for a retention budget.
+const MISSING_ESTIMATE = /no retention budget yet[\s\S]*newScopeRetentionBudget/
 const user = (id, text, created) => ({ info: { id, role: 'user', time: { created } }, parts: [{ type: 'text', text }] })
 const assistant = (id, ...parts) => ({ info: { id, role: 'assistant', time: { created: 2 } }, parts })
 const tool = (callID, name, output, status = 'completed') => ({ type: 'tool', callID, tool: name, state: { status, input: {}, ...(status === 'error' ? { error: output } : { output }) } })

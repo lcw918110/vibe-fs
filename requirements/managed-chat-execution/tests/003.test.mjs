@@ -145,6 +145,7 @@ test('WHAT[managed-chat-execution-003] an exact admission after concurrent admis
     const first = output()
     const second = output()
     const late = output()
+    const models = [first, second, late].map(output => output.message.model)
     // The current contract has no model write-back to hook: the plugin only
     // reads the host-provided model and verifies the committed lease. The late
     // public hook therefore joins the same in-process admission flight while
@@ -156,12 +157,14 @@ test('WHAT[managed-chat-execution-003] an exact admission after concurrent admis
     assert.deepEqual(initial.map((admission) => admission.status), ['fulfilled', 'fulfilled'])
     assert.ok(lateAdmission, 'the late public hook joins the open admission flight')
     await lateAdmission
-    for (const projected of [first, second, late]) {
+    for (const [index, projected] of [first, second, late].entries()) {
+      assert.equal(projected.message.model, models[index], 'admission must not replace the Host model object')
       assert.deepEqual({ ...projected.message.model }, { providerID: 'fixture', modelID: 'engineer-model' },
         'every joined admission keeps its own host-provided model; the plugin verifies and never rewrites it')
     }
+    // Merge #70 kept a `beforeReplay` snapshot from the sequential variant; the
+    // late hook here joins the open flight, so capacity reuse is the count below.
     const capacity = routing.sharedCapacitySnapshot()
-    assert.deepEqual(capacity, beforeReplay)
     assert.equal(capacity.executions.filter((execution) => execution.sessionId === input.sessionID).length, 1)
     assert.equal(capacity.tokens.filter((token) => token.owner.sessionId === input.sessionID).length, 1)
   })

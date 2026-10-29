@@ -11,7 +11,8 @@ test('WHAT[cognitive-environment-017] permanent host prompts carry no state-spec
     assert.doesNotMatch(guideline, /\[System:|<think>|<\/think>/)
     assert.doesNotMatch(scopeProtocol, /\[System:|Then call resetScope immediately|single exception|唯一例外/)
     assert.doesNotMatch(scopeProtocol, /When .*resetScope|每当.*resetScope|如果.*resetScope/)
-    assert.match(guideline, /resetScope/)
+    // [PRODUCT-RETIRED standalone-resetScope] guideline names the `scope` annotation.
+    assert.match(guideline, /«Scope»[\s\S]*`scope`/)
     assert.match(scopeProtocol, /resetScope/)
   }
 })

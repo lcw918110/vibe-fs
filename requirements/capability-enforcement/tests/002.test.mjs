@@ -104,7 +104,6 @@ const cognitiveUtilityAllowFor = (_role) => COGNITIVE_UTILITY_ALLOW
 const ROLE_ALLOW = {
   Manager: [
     'negotiate',
-    'resetScope',
     'askPreviousScope',
     'fork',
     'resume',
@@ -113,11 +112,10 @@ const ROLE_ALLOW = {
     'review',
     'todowrite-for-manager',
   ],
-  Orchestrator: ['negotiate', 'resetScope', 'askPreviousScope', 'commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
-  Engineer: ['negotiate', 'resetScope', 'askPreviousScope', 'bash-honeypot', 'fetch', 'fission', 'todowrite-for-engineer'],
+  Orchestrator: ['negotiate', 'askPreviousScope', 'commission', 'join', 'horizon', 'todowrite-for-orchestrator'],
+  Engineer: ['negotiate', 'askPreviousScope', 'bash-honeypot', 'fetch', 'fission', 'todowrite-for-engineer'],
   DevOps: [
     'negotiate',
-    'resetScope',
     'askPreviousScope',
     'join',
     'horizon',
@@ -258,18 +256,18 @@ test('WHAT[capability-enforcement-002] TOOLSPEC_plugin_owned_cognitive_utility_t
 test('WHAT[capability-enforcement-002] TOOLSPEC_negotiation_and_reset_admission_excludes_the_tool_less_advisor_seat', () => {
   // The dedicated Advisor seat is tool-less (`tools:false`): its Host
   // AgentConfig, Provider tool map and execution admission all refuse every
-  // tool, including the protocol-only `negotiate` and `resetScope`.
-  assert.equal(admissionAuthority('resetScope'), 'office', 'resetScope must have an office-role admission')
-  for (const role of ['manager', 'orchestrator', 'engineer', 'devops', 'plan']) {
-    assert.equal(rolePredicate('resetScope', role), true, `resetScope must be admitted for ${role}`)
-  }
-  assert.equal(rolePredicate('resetScope', 'advisor'), false, 'the tool-less Advisor seat must not be admitted to resetScope')
+  // tool, including the protocol-only `negotiate`.
+  // [PRODUCT-RETIRED standalone-resetScope] the `resetScope` ToolSpec is
+  // deleted; reset rides `scope.kind=resetScope` on any admitted tool, so
+  // its admission is that tool's admission. Only fail-closed remains.
+  assert.notEqual(admissionAuthority('resetScope'), 'office', 'no office admission remains for the deleted resetScope tool')
   assert.equal(admissionAuthority('negotiate'), 'office')
   for (const role of ['manager', 'orchestrator', 'engineer', 'devops', 'plan']) {
     assert.equal(rolePredicate('negotiate', role), true, `the protocol-only negotiation tool is admitted for ${role}`)
   }
   assert.equal(rolePredicate('negotiate', 'advisor'), false, 'the tool-less Advisor seat must not be admitted to negotiate')
   assert.equal(rolePredicate('negotiate', 'unknown'), false, 'unknown callers cannot negotiate')
+  assert.equal(rolePredicate('resetScope', 'advisor'), false, 'the tool-less Advisor seat is never admitted to resetScope')
   assert.equal(rolePredicate('resetScope', 'unknown'), false, 'resetScope must fail closed for unknown role')
 })
 }

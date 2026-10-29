@@ -5,6 +5,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Time as TimeTesting } from 'wanxiangli/runtime'
+import { scopeRetention } from 'wanxiangli/scope-retention'
 
 export const terminalEntry = (text) => ({
   type: 'message',
@@ -87,7 +88,15 @@ export async function withSecondHostTime(activateWithTiming, work) {
       execute(text) {
         const tool = host.tools.get('wxs_deliver')
         assert.ok(tool, JSON.stringify(host.errors))
-        return tool.execute(prefix + '-call', { text }, null, null, context)
+        // Common law «Scope»: every OMP tool call carries a `scope` annotation;
+        // open retention the way a prior (elided) reset would, then keepLast.
+        const sessionId = context.sessionManager.getSessionId()
+        const status = scopeRetention.status(sessionId)
+        if (!(status?.known && status.remaining !== null && status.remaining > 0)) {
+          scopeRetention.ensureEpoch(sessionId, status?.epoch == null || status.epoch === '' ? '0' : String(status.epoch))
+          scopeRetention.seed(sessionId, 48)
+        }
+        return tool.execute(prefix + '-call', { text, scope: { kind: 'keepLast' } }, null, null, context)
       },
       nextDelay: () => host.timer.nextDelay(),
     }

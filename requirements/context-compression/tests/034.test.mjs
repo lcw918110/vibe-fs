@@ -43,7 +43,8 @@ test('WHAT[context-compression-034] new operator prompts after reset keep the sc
 })
 
 test('WHAT[context-compression-034] request-copy suffix does not double append for text or blocks', () => {
-  const suffix='[Remaining turnBudget: 5]'
+  // [PRODUCT-RETIRED estimate] the observational tail names retention, not a turn budget.
+  const suffix='[Remaining retention: 5]'
   assert.equal(budgetSuffix(5),suffix)
   const once=appendTailOnce('output',suffix)
   assert.equal(once,'output\0\uFEFF'+suffix)

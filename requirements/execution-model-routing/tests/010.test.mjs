@@ -701,7 +701,9 @@ test('WHAT[execution-model-routing-010] EMR_010_managed_tool_execution_ends_the_
 
   assert.match(
     hostRegistry,
-    /baseSpecs \|> List\.map \(fun spec -> \{ spec with Execute = gateExecute spec \}\)/,
+    // The Scope annotation gate now sits outside: every body is still
+    // `gateExecute`, wrapped once more by `ScopeAnnotationGate.wrap`.
+    /baseSpecs\s*\|>\s*List\.map \(fun spec ->[\s\S]*?Execute =\s*ScopeAnnotationGate\.wrap[\s\S]*?\(gateExecute injected\)\s*\}\)/,
     'every registered tool body is wrapped by the gate',
   )
   assert.match(

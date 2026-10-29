@@ -15,10 +15,12 @@ test('WHAT[cognitive-environment-013] Pair Hint carries the bound-language ancho
   assert.doesNotMatch(en, /<think>|Every reasoning chain/)
   assert.doesNotMatch(zh, /80\/20|80%|20%|强制铁律|重构上下文/)
   assert.doesNotMatch(en, /80\/20|80%|20%|mandatory|iron rule|restructure the context/)
-  assert.match(zh, /resetScope/)
+  // [PRODUCT-RETIRED standalone-resetScope] the boundary is the `scope`
+  // annotation under common law «Scope», not a standalone tool name.
+  assert.match(zh, /«Scope»[\s\S]*`scope`/)
   assert.match(zh, /状态闭环/)
-  assert.match(en, /resetScope/)
-  assert.match(en, /state closed-loop/)
+  assert.match(en, /«Scope»[\s\S]*`scope`/)
+  assert.match(en, /closed-loop is retention|state closed-loop/)
   assert.match(zh, /落盘的因果/)
   assert.match(en, /committed cause and effect/)
 })
@@ -28,8 +30,8 @@ test('WHAT[cognitive-environment-013] permanent Pair Hint carries no state-depen
     assert.doesNotMatch(text, /\[System:|Then call resetScope immediately|每当出现新的操作员用户消息/)
     assert.doesNotMatch(text, /<think>|<\/think>/)
   }
-  assert.match(en, /resetScope/)
-  assert.match(zh, /resetScope/)
+  assert.match(en, /«Scope»[\s\S]*`scope`/)
+  assert.match(zh, /«Scope»[\s\S]*`scope`/)
 })
 
 test('WHAT[cognitive-environment-013] full work disciplines live in Common Law; Pair Hint keeps only the mnemonic', () => {

@@ -89,7 +89,9 @@ test('WHAT[time-capability-004] an adapter exception applies only to the exact f
 test('WHAT[time-capability-004] the registered second-host tool returns an observed terminal without a timer delay', async () => {
   await withSecondHostTime(activateWithTiming, async fixture => {
     const host = await fixture.activate()
-    assert.deepEqual([...host.tools.keys()], ['wxs_deliver', 'negotiate', 'resetScope', 'askPreviousScope', 'todowrite'])
+    // [PRODUCT-RETIRED standalone-resetScope / estimate] OMP no longer registers `resetScope`
+    // nor the estimate-only `todowrite` (Scope Progress); scope rides the annotation.
+    assert.deepEqual([...host.tools.keys()], ['wxs_deliver', 'negotiate', 'askPreviousScope'])
     host.setEntries([terminalEntry('actual terminal reply')])
     const result = await host.execute('request for the child')
     assert.equal(result.isError, false)
