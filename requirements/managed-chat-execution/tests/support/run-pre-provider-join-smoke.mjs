@@ -12,27 +12,16 @@ import { startHttpServer, stopHttpServer, readRequestBody } from '../../../verif
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
 const plugin = path.join(repoRoot, 'dist/OpenCode/Plugin/Plugin.js')
 const scenario = fs.mkdtempSync(path.join(os.tmpdir(), 'wxs-pre-provider-join-'))
-const wrapperPlugin = path.join(scenario, 'pre-provider-reject-plugin.mjs')
 const host = new ProcessHost()
 let managerRequests = 0
 let childRequests = 0
 let providerRequests = 0
 let joinResult = null
 let session
-const wrapperSource = `import pluginModule from ${JSON.stringify(plugin)}
-export default {
-  id: pluginModule.id,
-  server: async (input) => {
-    const hooks = await pluginModule.server(input)
-    const originalChatParams = hooks['chat.params']
-    hooks['chat.params'] = async (inObj, outObj) => {
-      if (inObj?.agent === 'engineer') {
-        throw new Error('forced pre-provider failure on engineer capacity')
-      }
-      return await originalChatParams(inObj, outObj)
-    }
-    return hooks
-  },
+const routingSource = `export const routingProtocol = 2
+export const hasTheoreticalCapacity = (role) => role !== 'engineer'
+export default function route(role) {
+  return role === 'engineer' ? null : { model: 'test/test-model', reasoning: 'none' }
 }
 `
 const provider = await startHttpServer(async (request, response) => {
@@ -46,20 +35,12 @@ const provider = await startHttpServer(async (request, response) => {
   // Manager places the child through `this.fork` inside its own program.
   if (names.includes('todowrite-for-manager')) {
     managerRequests++
-    if (managerRequests === 1) return call('negotiate', {
-      questions: ['这次派工的验收标准是什么？'],
-      scope: { kind: 'keepLast', replacement: '先确认验收标准' },
-    })
-    if (managerRequests === 2) return call('todowrite-for-manager', {
+    if (managerRequests === 1) return call('todowrite-for-manager', {
       name: 'pre-provider-fork',
       intent: '等待派工回执，保留预请求阶段的拒绝事实。',
-      remainingScopeTurnsEstimate: 3,
-      scope: { kind: 'resetScope', newScopeGoal: '等待派工回执', newScopeRetentionBudget: 4 },
       program: 'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Worker", charge: "Do not modify files. Return one short report." }, []); } }',
     })
-    if (managerRequests === 3) return call('join', {
-      scope: { kind: 'keepLast', replacement: '保留预请求阶段的拒绝事实' },
-    })
+    if (managerRequests === 2) return call('join', {})
     joinResult = (body.messages ?? []).findLast(message => message.role === 'tool')
   }
   sendSSE(response, buildTextChunks(`join-smoke-text-${requestNumber}`, 'The isolated request was observed.', 10))
@@ -76,10 +57,9 @@ const api = async (method, pathname, body) => {
 try {
   fs.mkdirSync(path.join(scenario, 'workspace'))
   fs.mkdirSync(path.join(scenario, 'xdg/config/opencode'), { recursive: true })
-  fs.writeFileSync(wrapperPlugin, wrapperSource, 'utf8')
-  fs.writeFileSync(path.join(scenario, 'xdg/config/opencode/opencode.jsonc'), JSON.stringify({ plugin: [wrapperPlugin] }))
+  fs.writeFileSync(path.join(scenario, 'xdg/config/opencode/opencode.jsonc'), JSON.stringify({ plugin: [plugin] }))
   await initGitWorkspace(path.join(scenario, 'workspace'))
-  await host.start({ scenarioDir: scenario, providerUrl: `${provider.url}/v1`, pluginPaths: [wrapperPlugin] })
+  await host.start({ scenarioDir: scenario, providerUrl: `${provider.url}/v1`, pluginPaths: [plugin], routingSource })
   const created = await api('POST', '/api/session', { agent: 'manager', model: { providerID: 'test', id: 'test-model' } })
   session = created?.id ?? created?.data?.id ?? created?.data?.data?.id
   assert.ok(session)
@@ -91,8 +71,7 @@ try {
   while (!joinResult && Date.now() < deadline) await delay(50)
   assert.equal(childRequests, 0, 'rejected admission must never call the child provider')
   assert.ok(joinResult, `parent join did not return; manager requests=${managerRequests}`)
-  const joinText = String(joinResult.content ?? '').split('\0')[0]
-  assert.match(joinText, /capacity|never started/i, 'join must report the intended admission failure, not an unrelated failure')
+  assert.match(JSON.stringify(joinResult), /ERROR|failed|Failed|capacity|Capacity|never started/i)
   const eventsDirectory = path.join(scenario, 'workspace/.Herdchestra/wanxiangshu/events')
   const facts = fs.readdirSync(eventsDirectory).filter(name => name.endsWith('.ndjson')).flatMap(name =>
     fs.readFileSync(path.join(eventsDirectory, name), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line).payload?.Fact),

@@ -5,7 +5,7 @@ import { acceptAuthorityRoot, withExecutablePlugin, withPlugin } from '../../ver
 integrationTest('WHAT[action-affordance-014] the registered assume schema exposes only assumption', async () => {
   await withPlugin(async (hooks) => {
     const args = hooks.tool.assume.args
-    assert.deepEqual(Object.keys(args), ['assumption'])
+    assert.deepEqual(Object.keys(args).sort(), ['assumption', 'scope'])
     assert.equal(args.assumption.safeParse('Use the smaller state machine.').success, true)
     assert.equal(args.assumption.safeParse(undefined).success, false)
     assert.equal(Object.prototype.hasOwnProperty.call(args, 'update'), false)
