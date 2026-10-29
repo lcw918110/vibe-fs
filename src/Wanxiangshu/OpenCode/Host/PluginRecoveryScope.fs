@@ -197,7 +197,7 @@ type PluginRecoveryScope(journal: AgentJournal option) =
             box (AttemptPlanner.bindProviderRun providerRun (unbox<PendingAttemptPlan> pendingObj))
 
         let res: obj =
-            store?BindAttemptPlan(
+            store?BindAttemptPlan (
                 SessionId.value sessionId,
                 PhysicalUserMessageId.value physicalUserMessageId,
                 ProviderRunIdentity.value providerRun,

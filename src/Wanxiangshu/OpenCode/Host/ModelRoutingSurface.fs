@@ -947,6 +947,14 @@ module ModelRoutingSurface =
 
             return
                 match outcome with
-                | Ok busy -> box {| ok = true; busy = busy; error = null |}
-                | Error error -> box {| ok = false; busy = false; error = error |}
+                | Ok busy ->
+                    box
+                        {| ok = true
+                           busy = busy
+                           error = null |}
+                | Error error ->
+                    box
+                        {| ok = false
+                           busy = false
+                           error = error |}
         }
