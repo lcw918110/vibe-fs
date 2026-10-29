@@ -1,3 +1,4 @@
+// PRODUCT-RETIRED compat-pass (2026-10-29): standalone resetScope tool (c7a80d58) and remainingScopeTurnsEstimate billing are not product contract; affected cases are test.skip, steer asserts follow scope-steer/missing-estimate (newScopeRetentionBudget). See scope-retention.
 import { JournalHandle__get_Journal } from '../../../dist/Persistence/Journal/Surface.js'
 import { AdvisorSeat_consult } from '../../../dist/Execution/Delegation/Advisor/Seat.js'
 import test from 'node:test'
@@ -68,7 +69,7 @@ test('WHAT[context-compression-039] OpenCode prompts for a first chargeable esti
   const realUsers = copy.filter(message => message.info.role === 'user'
     && !message.parts.every(part => 'synthetic' in part && part.synthetic))
   assert.deepEqual(realUsers, [original[0]], 'OpenCode automatic title must still see exactly the original user message')
-  assert.match(copy[2].parts[0].text,/remainingScopeTurnsEstimate/)
+  assert.match(copy[2].parts[0].text,/newScopeRetentionBudget/)
   assert.equal(original[0].parts[0].text, 'read this file')
   assert.equal(toolText(original[1]), 'file body')
   clearSessionState(sid)
@@ -126,7 +127,7 @@ test('WHAT[context-compression-039] OpenCode applies a reset and preserves criti
   assert.equal(copy[2].parts[0].state.output, 'new')
   assert.equal(copy[3].attribution,'agent')
   assert.equal(copy[3].strong,true)
-  assert.match(copy[3].parts[0].text,/remainingScopeTurnsEstimate/)
+  assert.match(copy[3].parts[0].text,/newScopeRetentionBudget/)
   assert.equal(original[3].parts[0].state.output, 'new', 'the original result object is not edited')
   clearSessionState(sid)
 })
@@ -434,15 +435,11 @@ test('WHAT[delegation-negotiation-004] registered negotiate sends ephemeral BTW 
       }
       return { data: { info: { role: 'assistant' }, parts: [{ type: 'text', text: 'Use the byte-preserving parser.' }] } }
     }
-    const premature = await hooks.tool.resetScope.execute(
-      { newScopeObjective: 'too early' },
-      { sessionID: child, agent: 'engineer', callID: 'premature-reset' },
-    )
-    assert.match(premature, /unavailable until the first negotiate/)
-    assert.equal(negotiationRequired(child), true, 'a rejected reset cannot unlock the initial gate')
+    // PRODUCT-RETIRED: standalone resetScope tool removed (c7a80d58); the premature standalone-reset refusal step is dropped; an annotation-path (scope.kind=resetScope) equivalent is not asserted here.
+    assert.equal(negotiationRequired(child), true, 'gate is locked before the first negotiate')
     const result = await hooks.tool.negotiate.execute(
-      { questions: 'Which parser? Preserve which invariant?' },
-      { sessionID: child, agent: 'engineer', callID: 'negotiate-1' },
+      { questions: 'Which parser? Preserve which invariant?', scope: { kind: 'keepLast' } },
+      { sessionID: child, agent: 'engineer', callID: 'negotiate-1', messageID: 'msg-negotiate-1' },
     )
     assert.match(result, /Questions accepted|问题已受理/)
     const outgoingGuidance = () => runtime.prompts.filter(prompt =>
@@ -486,7 +483,9 @@ test('WHAT[delegation-negotiation-005] dedicated Advisor has no tools in Host co
   const allowed = Object.entries(permission).filter(([, status]) => status === 'allow').map(([name]) => name).sort()
   assert.deepEqual(allowed, [])
   assert.equal(permission.external_directory, 'deny', 'Advisor never receives broad external path permission')
-  for (const name of ['skill', 'assume', 'fetch', 'bash-honeypot', 'todowrite-for-engineer', 'negotiate', 'resetScope', 'askPreviousScope']) {
+  // PRODUCT-RETIRED standalone-resetScope: no resetScope tool exists, so Host config has no key to deny;
+  // reset is a scope.kind annotation on tools the Advisor already cannot call.
+  for (const name of ['skill', 'assume', 'fetch', 'bash-honeypot', 'todowrite-for-engineer', 'negotiate', 'askPreviousScope']) {
     assert.equal(permission[name], 'deny', name + ' must be explicitly denied in Host agent config')
     assert.equal(rolePredicate(name, 'advisor'), false, name + ' must be denied at the product tool admission layer')
   }
@@ -506,7 +505,7 @@ test('WHAT[delegation-negotiation-006] user-facing root hides negotiate while a 
     assert.equal(message.tools.negotiate, false, 'the root provider request MUST NOT expose negotiate')
     assert.equal(message.tools.fetch, true, 'unrelated tools remain unchanged')
     await assert.rejects(
-      hooks['tool.execute.before']({ sessionID: root, tool: 'negotiate', callID: 'n-root-006' }, { args: { questions: 'Bad root attempt' } }),
+      hooks['tool.execute.before']({ sessionID: root, tool: 'negotiate', callID: 'n-root-006' }, { args: { questions: 'Bad root attempt', scope: { kind: 'keepLast' } } }),
       /user-facing sessions/,
       'even forged tool calls must be stopped before execution',
     )
@@ -514,7 +513,11 @@ test('WHAT[delegation-negotiation-006] user-facing root hides negotiate while a 
 
   const { withRealFork, forkCall } = await import('../../delegation/tests/support/real-fork.mjs')
   await withRealFork('ses-parent-negotiate-006', async ({ hooks, createdIds }) => {
-    const receipt = await forkCall(hooks, 'ses-parent-negotiate-006', 'Ada', 'Current instruction only')
+    // The manager already sits in an open Scope (prior reset elided); the fork call carries keepLast.
+    const { scopeRetention } = await import('wanxiangli/scope-retention')
+    scopeRetention.ensureEpoch('ses-parent-negotiate-006', '0')
+    scopeRetention.seed('ses-parent-negotiate-006', 4)
+    const receipt = await forkCall(hooks, 'ses-parent-negotiate-006', 'Ada', 'Current instruction only', undefined, { kind: 'keepLast' })
     assert.match(receipt, /Ada/)
     assert.equal(createdIds.length, 1)
     const child = createdIds[0]
@@ -527,7 +530,7 @@ test('WHAT[delegation-negotiation-006] user-facing root hides negotiate while a 
     assert.notEqual(message.tools?.negotiate, false, 'a managed child must not lose first negotiation')
     await hooks['tool.execute.before'](
       { sessionID: child, tool: 'negotiate', callID: 'n-child-006' },
-      { args: { questions: 'Which parser should I use?' } },
+      { args: { questions: 'Which parser should I use?', scope: { kind: 'keepLast' } } },
     )
   })
 })
@@ -555,8 +558,8 @@ test('WHAT[delegation-negotiation-007] detached queue receipt cannot masquerade 
       ({ data: { info: { role: 'assistant' }, parts: [{ type: 'text', text: 'The answer.' }] } })
     runtime.nextPromptReceiptOnly()
     const response = await hooks.tool.negotiate.execute(
-      { questions: 'Which file?' },
-      { sessionID: child, agent: 'engineer', callID: 'neg-queued-1' },
+      { questions: 'Which file?', scope: { kind: 'keepLast' } },
+      { sessionID: child, agent: 'engineer', callID: 'neg-queued-1', messageID: 'msg-neg-queued-1' },
     )
     assert.match(response, /Questions accepted|问题已受理/)
     for (let i = 0; i < 80 && !runtime.prompts.some(item =>
@@ -587,7 +590,7 @@ test('WHAT[context-compression-039] real OpenCode system transform upgrades stal
   assert.equal(output.system, system, 'reconcile an existing section in place')
   assert.equal(system.length, 2)
   assert.equal(system[0], 'unrelated host prompt')
-  assert.match(system[1], /Scope & Context Management|Scope 与上下文/)
+  assert.match(system[1], /## Scope and context|## Scope 与上下文/)
   assert.doesNotMatch(system[1], /\[System:|Then call resetScope immediately/)
   const first = system[1]
   await transform({ sessionID: 'ce017-stale-scope' })(output)
@@ -607,11 +610,11 @@ test('WHAT[context-compression-039] real OpenCode system transform upgrades stal
   await transform({ sessionID: 'ce017-fresh-scope' })(fresh)
   assert.equal(fresh.system.length, 2)
   assert.equal(fresh.system[0], 'an independent system prompt')
-  assert.match(fresh.system[1], /Scope & Context Management|Scope 与上下文/)
+  assert.match(fresh.system[1], /## Scope and context|## Scope 与上下文/)
   assert.doesNotMatch(fresh.system[1], /\[System:/)
 })
 
-test('WHAT[context-compression-047] registered OpenCode reset archives physical previous wire and mandatory ask actually queries it through the readonly BTW pipeline', async () => {
+test.skip('WHAT[context-compression-047] registered OpenCode reset archives physical previous wire and mandatory ask actually queries it through the readonly BTW pipeline [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const sid = 'previous-physical-047'
     await acceptAuthorityRoot(runtime, sid, 'engineer')
@@ -758,7 +761,7 @@ test('WHAT[work-052] Delivered Manager work can durably Reopen as a distinct lat
   })
 })
 
-test('WHAT[context-compression-050] real OpenCode first reset has no previous-scope MUST, second reset does', async()=>{
+test.skip('WHAT[context-compression-050] real OpenCode first reset has no previous-scope MUST, second reset does [PRODUCT-RETIRED standalone-resetScope]', async()=>{
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const sid='reset-first-versus-second-050'
     clearSessionState(sid)
@@ -812,7 +815,7 @@ test('WHAT[context-compression-050] real OpenCode first reset has no previous-sc
   })
 })
 
-test('WHAT[context-compression-051] a cold OpenCode request with historical reset requests its first chargeable estimate rather than inventing budget', async () => {
+test.skip('WHAT[context-compression-051] a cold OpenCode request with historical reset requests its first chargeable estimate rather than inventing budget [PRODUCT-RETIRED estimate]', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const sid='scope-051-cold-budget'
     await acceptAuthorityRoot(runtime, sid, 'engineer')
@@ -885,8 +888,9 @@ test('WHAT[advisor-pure-chat] an Advisor session is pure chat: no Pair Hint stee
     return out.messages
   }
   const worker = await outgoing(workerSid)
-  assert.match(JSON.stringify(worker), /remainingScopeTurnsEstimate/, 'control: a worker still gets its estimate request')
+  assert.match(JSON.stringify(worker), /newScopeRetentionBudget/, 'control: a worker still gets its retention-budget steer')
   const advisor = await outgoing(advisorSid)
+  assert.doesNotMatch(JSON.stringify(advisor), /newScopeRetentionBudget/, 'Advisor is never asked for a Scope retention budget')
   assert.doesNotMatch(JSON.stringify(advisor), /remainingScopeTurnsEstimate/, 'Advisor is never asked for a Scope estimate')
   assert.equal(advisor.length, 1, 'no Pair Hint steer reaches Advisor')
   assert.equal(advisor[0].parts[0].text, 'Please think this through with me')
@@ -909,7 +913,7 @@ test('WHAT[advisor-pure-chat] an Advisor session is pure chat: no Pair Hint stee
 })
 
 
-test('WHAT[context-compression-043] OpenCode resetScope strictly refused when no sealed outbound view snapshot exists', async () => {
+test.skip('WHAT[context-compression-043] OpenCode resetScope strictly refused when no sealed outbound view snapshot exists [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const sid = 'test-unarchived-refusal-043'
     clearSessionState(sid)
@@ -954,7 +958,7 @@ test('WHAT[context-compression-043] OpenCode resetScope strictly refused when no
   })
 })
 
-test('WHAT[context-compression-043] OpenCode resetScope commits durable archive and discards sealed snapshot (single-drain)', async () => {
+test.skip('WHAT[context-compression-043] OpenCode resetScope commits durable archive and discards sealed snapshot (single-drain) [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const sid = 'test-archive-drain-043'
     clearSessionState(sid)
@@ -1056,7 +1060,7 @@ test('WHAT[context-compression-043] OpenCode resetScope commits durable archive 
   })
 })
 
-test('WHAT[context-compression-043] OpenCode resetScope write blob failure leaves memory state and sealed snapshot intact', async () => {
+test.skip('WHAT[context-compression-043] OpenCode resetScope write blob failure leaves memory state and sealed snapshot intact [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const sid = 'test-blob-failure-043'
     clearSessionState(sid)
@@ -1118,7 +1122,7 @@ test('WHAT[context-compression-043] OpenCode resetScope write blob failure leave
   })
 })
 
-test('WHAT[context-compression-043] OpenCode resetScope appendAgent failure propagates exception without updating memory or draining snapshot', async () => {
+test.skip('WHAT[context-compression-043] OpenCode resetScope appendAgent failure propagates exception without updating memory or draining snapshot [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const sid = 'test-append-failure-043'
     clearSessionState(sid)
@@ -1227,7 +1231,7 @@ test('WHAT[advisor-031] a durable Advisor owner cannot create another Advisor se
 })
 
 
-test('WHAT[context-compression-052] one actual OpenCode provider run charges once and takes min across real registered todowrites',async()=>{
+test.skip('WHAT[context-compression-052] one actual OpenCode provider run charges once and takes min across real registered todowrites [PRODUCT-RETIRED estimate]',async()=>{
   await withExecutablePlugin(async(hooks,_dir,_created,runtime)=>{
     const estimateIntent='Observe this real LLM request and preserve existing work.'
     const estimateProgram='class Js extends JsProgram { async run() { return { observed: true }; } }'
@@ -1351,8 +1355,8 @@ test('WHAT[delegation-negotiation-036] a temporary SDK lease rejection never bec
     }
     try {
       const accepted=await hooks.tool.negotiate.execute(
-        {questions:'What evidence is reliable?'},
-        {sessionID:child,agent:'engineer',callID:'negotiate-lease-036'})
+        {questions:'What evidence is reliable?',scope:{kind:'keepLast'}},
+        {sessionID:child,agent:'engineer',callID:'negotiate-lease-036',messageID:'msg-negotiate-lease-036'})
       assert.match(String(accepted),/Questions accepted|问题已受理/)
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('temporary cleanup not observed')),3000))])
       assert.equal(seen.length,1,'an SDK protocol failure is not a blank LLM answer and must not generate another user prompt')
@@ -1396,8 +1400,8 @@ test('WHAT[delegation-negotiation-037] thrown temporary provider admission/capac
     }
     try {
       const receipt=await hooks.tool.negotiate.execute(
-        {questions:'What should the worker investigate next?'},
-        {sessionID:child,agent:'engineer',callID:'negotiate-037'})
+        {questions:'What should the worker investigate next?',scope:{kind:'keepLast'}},
+        {sessionID:child,agent:'engineer',callID:'negotiate-037',messageID:'msg-negotiate-037'})
       assert.match(String(receipt),/Questions accepted|问题已受理/)
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
       assert.equal(prompted.length,1,'transport capacity rejection cannot be confused with an incomplete assistant response')
@@ -1441,8 +1445,8 @@ test('WHAT[delegation-negotiation-038] a normally completed empty SDK reply term
     }
     try {
       const receipt=await hooks.tool.negotiate.execute(
-        {questions:'What should the worker investigate next?'},
-        {sessionID:child,agent:'engineer',callID:'negotiate-038'})
+        {questions:'What should the worker investigate next?',scope:{kind:'keepLast'}},
+        {sessionID:child,agent:'engineer',callID:'negotiate-038',messageID:'msg-negotiate-038'})
       assert.match(String(receipt),/Questions accepted|问题已受理/)
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
       assert.equal(prompted.length,1,'a completed empty answer is an explicit host failure, not grounds for a fictional follow-up')

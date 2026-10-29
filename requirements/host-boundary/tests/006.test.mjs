@@ -2,23 +2,31 @@ import test from 'node:test'
 
 {
 const { default: assert } = await import("node:assert/strict");
-const { mkdtemp, rm } = await import("node:fs/promises");
+const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
 const { default: test, after } = await import("node:test");
 const routing = await import("../../../dist/OpenCode/Host/ModelRoutingSurface.js");
 const { runListenerRefcountScenario } = await import("./support/listener-refcount.mjs");
 
-// WHAT[execution-model-routing-001]: the wanxiangshu.mjs scheduler is retired;
-// model choice belongs to the host. The shared runtime keeps scheduler = null
-// and every fresh admission carries the host target explicitly.
-await routing.initialize()
-
 const originalHome = process.env.HOME
 const originalUserProfile = process.env.USERPROFILE
 const home = await mkdtemp(join(tmpdir(), 'wanxiangshu-host-binding-home-'))
 process.env.HOME = home
 process.env.USERPROFILE = home
+await mkdir(join(home, '.config', 'opencode'), { recursive: true })
+await writeFile(
+  join(home, '.config', 'opencode', 'wanxiangshu.mjs'),
+  `
+export const routingProtocol = 2
+export const hasTheoreticalCapacity = () => true
+export default function route(role, running, previous, purpose) {
+  return { model: 'test/system', reasoning: 'none' }
+}
+`,
+  'utf8',
+)
+await routing.initialize()
 after(async () => {
   if (originalHome === undefined) delete process.env.HOME
   else process.env.HOME = originalHome
@@ -27,7 +35,6 @@ after(async () => {
   await rm(home, { recursive: true, force: true })
 })
 const model = { providerID: 'openai', modelID: 'gpt-5' }
-const hostTarget = { model: 'openai/gpt-5', reasoning: 'none' }
 const modelFromLease = async (sessionId, physicalUserMessageId, role, participant, lenderSessionId) => {
   const outcome = await routing.acquireSharedExecutionAdmission(
     sessionId,
@@ -35,8 +42,8 @@ const modelFromLease = async (sessionId, physicalUserMessageId, role, participan
     role,
     participant,
     lenderSessionId,
-    undefined,
-    hostTarget,
+    'normal',
+    { model: 'test/system', reasoning: 'none' },
   )
   assert.equal(outcome.kind, 'Acquired')
   const target = routing.sharedExecutionAdmissionTarget(outcome.lease)

@@ -1,0 +1,486 @@
+{
+  "before": {
+    "id": "contracts-20261028-fixed-baseline",
+    "commit": "8e80217cf76f3f1be621013898d11f65223a1e55",
+    "wallMs": 343352.757084,
+    "exitCode": 0,
+    "sourceStable": true,
+    "inputDigest": "caddf5c7468eee1b294b6aac6938c4e5c40b6bbf649306d8653b0b6822a5efc8",
+    "manifestSha256": "938bdce788714efb6e71e0f468dbae18387f78e1d9cec4abd6643f2218248cb0",
+    "logSha256": "7e425312a0623a7a84b4272bd93e8181bccfc6db701402781df9f910982efb7b",
+    "startedFiles": 800,
+    "drainedFiles": 800,
+    "summary": "[test-summary] 800 file(s), 4167 passed, 0 failed, 110 skipped, 261 todo (342.89s wall, 521.07s test time)",
+    "startedBodyCount": 4428,
+    "startedBodyIdentitySha256": "19abf8da8c5226efba7933143e487fb07af63314c0b31ba1ed0edfe03790a548",
+    "exclusionCount": 371,
+    "slowestFiles": [
+      {
+        "file": "requirements/verification-system/tests/016.test.mjs",
+        "startMs": 190668.363,
+        "endMs": 342925.6435,
+        "durationMs": 152257.2805
+      },
+      {
+        "file": "requirements/verification-system/tests/006.test.mjs",
+        "startMs": 181898.841208,
+        "endMs": 210202.960916,
+        "durationMs": 28304.119708000013
+      },
+      {
+        "file": "requirements/delegation/tests/026.test.mjs",
+        "startMs": 32457.263500000005,
+        "endMs": 49641.440082999994,
+        "durationMs": 17184.17658299999
+      },
+      {
+        "file": "requirements/managed-session-lifecycle/tests/028.test.mjs",
+        "startMs": 123132.733125,
+        "endMs": 139792.319583,
+        "durationMs": 16659.586458000005
+      },
+      {
+        "file": "requirements/capability-enforcement/tests/026.test.mjs",
+        "startMs": 8342.599957999999,
+        "endMs": 21311.375458000002,
+        "durationMs": 12968.775500000003
+      },
+      {
+        "file": "requirements/repository-programming/tests/006.test.mjs",
+        "startMs": 148932.145041,
+        "endMs": 160806.585708,
+        "durationMs": 11874.440666999988
+      },
+      {
+        "file": "requirements/durable-events/tests/006.test.mjs",
+        "startMs": 55195.253082999996,
+        "endMs": 64213.323165999995,
+        "durationMs": 9018.070082999999
+      },
+      {
+        "file": "requirements/durable-events/tests/024.test.mjs",
+        "startMs": 66761.55600000001,
+        "endMs": 75690.41158300001,
+        "durationMs": 8928.855582999997
+      },
+      {
+        "file": "requirements/managed-session-lifecycle/tests/008.test.mjs",
+        "startMs": 113878.703125,
+        "endMs": 122522.146125,
+        "durationMs": 8643.443
+      },
+      {
+        "file": "requirements/host-boundary/tests/scope-hni-physical.test.mjs",
+        "startMs": 88548.310333,
+        "endMs": 96438.72075000001,
+        "durationMs": 7890.410417000006
+      },
+      {
+        "file": "requirements/delegation/tests/024.test.mjs",
+        "startMs": 26563.719041,
+        "endMs": 33921.066041,
+        "durationMs": 7357.346999999998
+      },
+      {
+        "file": "requirements/intra-participant-parallelism/tests/010.test.mjs",
+        "startMs": 96944.369208,
+        "endMs": 103168.94812500001,
+        "durationMs": 6224.578917000006
+      },
+      {
+        "file": "requirements/delegation/tests/027.test.mjs",
+        "startMs": 33923.794916,
+        "endMs": 39888.795165999996,
+        "durationMs": 5965.000249999997
+      },
+      {
+        "file": "requirements/durable-events/tests/005.test.mjs",
+        "startMs": 54554.449166,
+        "endMs": 60097.614375,
+        "durationMs": 5543.165208999999
+      },
+      {
+        "file": "requirements/delegation/tests/025.test.mjs",
+        "startMs": 27060.670625000002,
+        "endMs": 32456.652208000003,
+        "durationMs": 5395.981583000001
+      }
+    ],
+    "environment": {
+      "PATH": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/npm/node_modules/.bin:/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/node-v22.23.4-darwin-arm64/bin:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/yuanxi/.bun/bin:/Users/yuanxi/.antigravity-ide/antigravity-ide/bin:/Users/yuanxi/.antigravity-ide/antigravity-ide/bin:/Users/yuanxi/.antigravity/antigravity/bin:/opt/anaconda3/condabin:/opt/homebrew/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Library/TeX/texbin:/Users/yuanxi/.codex/tmp/arg0-macos/codex-arg0FVuq8w:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/yuanxi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/yuanxi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources:/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS",
+      "NODE_TEST_CONCURRENCY": "2",
+      "UNIT_VERDICT_SILENCE_MS": "30000",
+      "SUITE_BACKSTOP_MS": "900000",
+      "WXS_ACCEPT_TODO": "1",
+      "WXS_VERIFICATION_WORKER_DIAGNOSTICS": "1",
+      "WXS_TIER_INTEGRATION": "0",
+      "WXS_TIER_RELEASE": "0",
+      "WXS_RELEASE": "0",
+      "WXS_VERIFICATION_NPM_CLI": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/npm/node_modules/npm/bin/npm-cli.js"
+    },
+    "versions": {
+      "node": "v22.23.4",
+      "npmVersion": "11.12.1",
+      "rgVersion": "ripgrep 15.2.0 (rev e89fff89ac)",
+      "dotnetVersion": "10.0.302",
+      "bunVersion": "1.3.14"
+    },
+    "loadSamples": [
+      {
+        "time": "2026-10-28T10:03:08.280Z",
+        "loadavg": [
+          3.06787109375,
+          2.83056640625,
+          2.83837890625
+        ],
+        "freemem": 264863744
+      },
+      {
+        "time": "2026-10-28T10:03:38.277Z",
+        "loadavg": [
+          3.61572265625,
+          2.98828125,
+          2.89404296875
+        ],
+        "freemem": 1480015872
+      },
+      {
+        "time": "2026-10-28T10:04:08.278Z",
+        "loadavg": [
+          3.2841796875,
+          2.970703125,
+          2.89111328125
+        ],
+        "freemem": 965394432
+      },
+      {
+        "time": "2026-10-28T10:04:38.280Z",
+        "loadavg": [
+          3.54345703125,
+          3.06640625,
+          2.927734375
+        ],
+        "freemem": 1016971264
+      },
+      {
+        "time": "2026-10-28T10:05:08.282Z",
+        "loadavg": [
+          3.0029296875,
+          2.9794921875,
+          2.89990234375
+        ],
+        "freemem": 606961664
+      },
+      {
+        "time": "2026-10-28T10:05:38.285Z",
+        "loadavg": [
+          3.07763671875,
+          2.99609375,
+          2.908203125
+        ],
+        "freemem": 657424384
+      },
+      {
+        "time": "2026-10-28T10:06:08.287Z",
+        "loadavg": [
+          2.95703125,
+          2.9775390625,
+          2.904296875
+        ],
+        "freemem": 260587520
+      },
+      {
+        "time": "2026-10-28T10:06:38.289Z",
+        "loadavg": [
+          3.060546875,
+          2.99560546875,
+          2.91259765625
+        ],
+        "freemem": 247152640
+      },
+      {
+        "time": "2026-10-28T10:07:08.291Z",
+        "loadavg": [
+          3.0546875,
+          3.00830078125,
+          2.9189453125
+        ],
+        "freemem": 311361536
+      },
+      {
+        "time": "2026-10-28T10:07:38.294Z",
+        "loadavg": [
+          2.63916015625,
+          2.91015625,
+          2.8857421875
+        ],
+        "freemem": 2789343232
+      },
+      {
+        "time": "2026-10-28T10:08:08.296Z",
+        "loadavg": [
+          2.5146484375,
+          2.85400390625,
+          2.865234375
+        ],
+        "freemem": 2027372544
+      },
+      {
+        "time": "2026-10-28T10:08:38.298Z",
+        "loadavg": [
+          3.10595703125,
+          2.97412109375,
+          2.90869140625
+        ],
+        "freemem": 3462250496
+      },
+      {
+        "time": "2026-10-28T10:08:51.629Z",
+        "loadavg": [
+          3.13720703125,
+          2.98974609375,
+          2.9150390625
+        ],
+        "freemem": 2881765376
+      }
+    ]
+  },
+  "after": {
+    "id": "contracts-20261028-after-split",
+    "commit": "b455d8eea0111e8554a637b0cc681816843933ca",
+    "wallMs": 294682.062667,
+    "exitCode": 0,
+    "sourceStable": true,
+    "inputDigest": "cd6cb2b8e675319d65e01a9495497511fde2a8d6af1a8c198df21f5fcb3d0679",
+    "manifestSha256": "938bdce788714efb6e71e0f468dbae18387f78e1d9cec4abd6643f2218248cb0",
+    "logSha256": "deae6de016a87e55b9a809ee04e106b4dd3912d0eb039ff37dca98858d733658",
+    "startedFiles": 809,
+    "drainedFiles": 809,
+    "summary": "[test-summary] 809 file(s), 4167 passed, 0 failed, 110 skipped, 261 todo (294.28s wall, 532.09s test time)",
+    "startedBodyCount": 4428,
+    "startedBodyIdentitySha256": "19abf8da8c5226efba7933143e487fb07af63314c0b31ba1ed0edfe03790a548",
+    "exclusionCount": 371,
+    "slowestFiles": [
+      {
+        "file": "requirements/verification-system/tests/nuget-project/016.test.mjs",
+        "startMs": 250591.672125,
+        "endMs": 288738.240333,
+        "durationMs": 38146.56820800001
+      },
+      {
+        "file": "requirements/verification-system/tests/npm-tool-archive/016.test.mjs",
+        "startMs": 239126.59391700002,
+        "endMs": 275263.618458,
+        "durationMs": 36137.02454099999
+      },
+      {
+        "file": "requirements/verification-system/tests/006.test.mjs",
+        "startMs": 180845.016167,
+        "endMs": 209241.61537500002,
+        "durationMs": 28396.59920800003
+      },
+      {
+        "file": "requirements/verification-system/tests/node-tool-candidate/016.test.mjs",
+        "startMs": 226839.08250000002,
+        "endMs": 250590.839542,
+        "durationMs": 23751.757041999983
+      },
+      {
+        "file": "requirements/verification-system/tests/fable-project/016.test.mjs",
+        "startMs": 214841.96429200002,
+        "endMs": 234441.068042,
+        "durationMs": 19599.10374999998
+      },
+      {
+        "file": "requirements/verification-system/tests/dotnet-tool-restore/016.test.mjs",
+        "startMs": 209242.147042,
+        "endMs": 226838.4445,
+        "durationMs": 17596.297458000015
+      },
+      {
+        "file": "requirements/delegation/tests/026.test.mjs",
+        "startMs": 31130.622708000003,
+        "endMs": 48312.452083000004,
+        "durationMs": 17181.829375
+      },
+      {
+        "file": "requirements/managed-session-lifecycle/tests/028.test.mjs",
+        "startMs": 121734.253875,
+        "endMs": 138224.743958,
+        "durationMs": 16490.49008300001
+      },
+      {
+        "file": "requirements/verification-system/tests/016.test.mjs",
+        "startMs": 189481.742833,
+        "endMs": 205643.92583300002,
+        "durationMs": 16162.18300000002
+      },
+      {
+        "file": "requirements/capability-enforcement/tests/026.test.mjs",
+        "startMs": 7813.5762079999995,
+        "endMs": 20249.726708000002,
+        "durationMs": 12436.150500000003
+      },
+      {
+        "file": "requirements/repository-programming/tests/006.test.mjs",
+        "startMs": 147596.39425,
+        "endMs": 159529.25316700002,
+        "durationMs": 11932.858917000005
+      },
+      {
+        "file": "requirements/durable-events/tests/006.test.mjs",
+        "startMs": 53724.13925,
+        "endMs": 62762.486833,
+        "durationMs": 9038.347583000002
+      },
+      {
+        "file": "requirements/durable-events/tests/024.test.mjs",
+        "startMs": 65291.306000000004,
+        "endMs": 74261.492,
+        "durationMs": 8970.185999999994
+      },
+      {
+        "file": "requirements/managed-session-lifecycle/tests/008.test.mjs",
+        "startMs": 112587.028125,
+        "endMs": 121025.448083,
+        "durationMs": 8438.419957999999
+      },
+      {
+        "file": "requirements/host-boundary/tests/scope-hni-physical.test.mjs",
+        "startMs": 87249.93824999999,
+        "endMs": 95152.022625,
+        "durationMs": 7902.084375000006
+      }
+    ],
+    "environment": {
+      "PATH": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/npm/node_modules/.bin:/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/node-v22.23.4-darwin-arm64/bin:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/yuanxi/.bun/bin:/Users/yuanxi/.antigravity-ide/antigravity-ide/bin:/Users/yuanxi/.antigravity-ide/antigravity-ide/bin:/Users/yuanxi/.antigravity/antigravity/bin:/opt/anaconda3/condabin:/opt/homebrew/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Library/TeX/texbin:/Users/yuanxi/.codex/tmp/arg0-macos/codex-arg0FVuq8w:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/yuanxi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/yuanxi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources:/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS",
+      "NODE_TEST_CONCURRENCY": "2",
+      "UNIT_VERDICT_SILENCE_MS": "30000",
+      "SUITE_BACKSTOP_MS": "900000",
+      "WXS_ACCEPT_TODO": "1",
+      "WXS_VERIFICATION_WORKER_DIAGNOSTICS": "1",
+      "WXS_TIER_INTEGRATION": "0",
+      "WXS_TIER_RELEASE": "0",
+      "WXS_RELEASE": "0",
+      "WXS_VERIFICATION_NPM_CLI": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/npm/node_modules/npm/bin/npm-cli.js"
+    },
+    "versions": {
+      "node": "v22.23.4",
+      "npmVersion": "11.12.1",
+      "rgVersion": "ripgrep 15.2.0 (rev e89fff89ac)",
+      "dotnetVersion": "10.0.302",
+      "bunVersion": "1.3.14"
+    },
+    "loadSamples": [
+      {
+        "time": "2026-10-28T10:11:12.974Z",
+        "loadavg": [
+          2.0615234375,
+          2.64892578125,
+          2.7841796875
+        ],
+        "freemem": 964116480
+      },
+      {
+        "time": "2026-10-28T10:11:42.977Z",
+        "loadavg": [
+          3.72119140625,
+          2.97314453125,
+          2.89501953125
+        ],
+        "freemem": 290684928
+      },
+      {
+        "time": "2026-10-28T10:12:12.979Z",
+        "loadavg": [
+          3.73583984375,
+          3.05224609375,
+          2.92626953125
+        ],
+        "freemem": 347897856
+      },
+      {
+        "time": "2026-10-28T10:12:42.981Z",
+        "loadavg": [
+          3.58056640625,
+          3.0654296875,
+          2.93408203125
+        ],
+        "freemem": 578551808
+      },
+      {
+        "time": "2026-10-28T10:13:12.984Z",
+        "loadavg": [
+          4.1240234375,
+          3.22265625,
+          2.99267578125
+        ],
+        "freemem": 157679616
+      },
+      {
+        "time": "2026-10-28T10:13:42.986Z",
+        "loadavg": [
+          3.56103515625,
+          3.1689453125,
+          2.98095703125
+        ],
+        "freemem": 363167744
+      },
+      {
+        "time": "2026-10-28T10:14:12.988Z",
+        "loadavg": [
+          3.77490234375,
+          3.2490234375,
+          3.015625
+        ],
+        "freemem": 916914176
+      },
+      {
+        "time": "2026-10-28T10:14:42.991Z",
+        "loadavg": [
+          12.232421875,
+          5.16650390625,
+          3.7060546875
+        ],
+        "freemem": 608157696
+      },
+      {
+        "time": "2026-10-28T10:15:12.993Z",
+        "loadavg": [
+          8.7109375,
+          4.9765625,
+          3.685546875
+        ],
+        "freemem": 2718203904
+      },
+      {
+        "time": "2026-10-28T10:15:42.995Z",
+        "loadavg": [
+          6.02978515625,
+          4.68896484375,
+          3.62548828125
+        ],
+        "freemem": 122716160
+      },
+      {
+        "time": "2026-10-28T10:16:07.658Z",
+        "loadavg": [
+          8.759765625,
+          5.4619140625,
+          3.93505859375
+        ],
+        "freemem": 1175584768
+      }
+    ]
+  },
+  "sameStartedBodies": true,
+  "sameSkippedAndTodoIdentities": true,
+  "removedBodies": [],
+  "addedBodies": [],
+  "removedExclusions": [],
+  "addedExclusions": [],
+  "sameEnvironment": true,
+  "sameVersions": true,
+  "savedMs": 48670.69441699999,
+  "savedPercent": 14.175128468560072
+}

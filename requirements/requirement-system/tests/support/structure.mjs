@@ -1,10 +1,10 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 import { parse } from 'acorn'
-import { clauseDefinitionHeadings } from '../../../../scripts/lib/spec-rules.mjs'
+import { duplicateClauseDefinitions, ruleClauseHeadings, ruleDocumentName } from '../../../../scripts/lib/spec-rules.mjs'
 
 export function packageProblems(directory) {
-  return [['WHY.md', 'file'], ['WHAT.md', 'file'], ['tests', 'directory']].flatMap(([name, kind]) => {
+  return [['WHY.md', 'file'], [ruleDocumentName(basename(directory)), 'file'], ['tests', 'directory']].flatMap(([name, kind]) => {
     const path = join(directory, name)
     const present = existsSync(path) && (kind === 'file' ? statSync(path).isFile() : statSync(path).isDirectory())
     return present ? [] : [`${name}: expected ${kind}`]
@@ -88,7 +88,11 @@ export function inspectRequirements(root) {
     const incomplete = packageProblems(directory)
     problems.push(...incomplete.map((message) => `${pkg}/${message}`))
     if (incomplete.length) continue
-    const clauses = new Set(clauseDefinitionHeadings(readFileSync(join(directory, 'WHAT.md'), 'utf8')).map(({ id }) => id))
+    const documents = ['WHAT.md', 'AXIOMS.md'].map((name) => join(directory, name))
+      .filter((file) => existsSync(file) && statSync(file).isFile())
+      .map((file) => ({ file: relative(root, file), pkg, text: readFileSync(file, 'utf8') }))
+    problems.push(...duplicateClauseDefinitions(documents).map(({ msg }) => msg))
+    const clauses = new Set(ruleClauseHeadings(readFileSync(join(directory, ruleDocumentName(pkg)), 'utf8'), pkg).map(({ id }) => id))
     const files = testFiles(join(directory, 'tests'))
     problems.push(...testFileProblems(files.map((file) => relative(root, file)), clauses))
     for (const file of files) {

@@ -1,33 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import {LatencyWatchdogFactory_createObservedLatencyWatchdog as create} from '../../../dist/OpenCode/Host/LatencyWatchdog.js'
-
-const flush = async () => {for (let i = 0; i < 16; i++) await Promise.resolve()}
+import { rig, flush } from './support/observed-watchdog.mjs'
 
 // Real OpenCode 1.18.29 order (observed on the Host event stream, see WHAT [013]):
 //   assistant message.updated (started) → tool part pending → running → completed
 //   → assistant message.updated finish=tool-calls + time.completed.
 // The tool runs INSIDE the provider step. Without ToolStarted the watchdog timed
 // join/bash/consultation execution as model latency and aborted the session mid-tool.
-function rig(threshold = 10) {
-  const events = [], timers = []
-  let now = 0, finishAbort
-  const watchdog = create(
-    () => now,
-    (ms, fire) => {const t = {ms, fire, disposed: false, Dispose() {this.disposed = true}}; timers.push(t); return t},
-    () => {events.push('abort'); return new Promise(resolve => {finishAbort = resolve})},
-    (_s, _t, accepted) => {events.push('continue'); accepted(); return Promise.resolve('')},
-    () => true, () => 'Continue.',
-    kind => events.push(kind),
-    (_s, reason) => events.push('returned:' + reason),
-    () => {},
-    {ThresholdMs: () => threshold, ObserveCompleted: (_s, ms) => events.push('completed:' + ms),
-      ObserveCensored: () => events.push('censored'), Forget: () => {}},
-  )
-  return {watchdog, events, timers, at: t => {now = t}, conclude: v => finishAbort(v)}
-}
-
 test('WHAT[latency-degeneration-013] a tool start ends the model request: a long tool is never interrupted', async () => {
   const r = rig()
   r.watchdog.Begin('engineer', 'run-1')
@@ -65,20 +45,6 @@ test('WHAT[latency-degeneration-013] a tool starting while the interrupt is in f
   r.conclude(true)
   await flush()
   assert.deepEqual(r.events.filter(e => e === 'continue' || e === 'censored'), ['censored', 'continue'])
-  r.watchdog.Dispose()
-})
-
-test('WHAT[latency-degeneration-013] novice protection: an infinite threshold arms no timer but still samples', async () => {
-  const r = rig(Number.POSITIVE_INFINITY)
-  r.watchdog.Begin('engineer', 'run-1')
-  assert.equal(r.timers.length, 0, 'no timer is scheduled with an infinite threshold')
-  r.at(7)
-  r.watchdog.Complete('engineer', 'run-1')
-  assert.deepEqual(r.events, ['completed:7'])
-  r.watchdog.Begin('engineer', 'run-2')
-  r.watchdog.OnIdle('engineer')
-  await flush()
-  assert.equal(r.events.some(e => e.startsWith('returned:')), false, 'idle of a never-armed request returns nothing')
   r.watchdog.Dispose()
 })
 

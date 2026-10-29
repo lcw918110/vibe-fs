@@ -24,6 +24,9 @@ open Wanxiangshu.Repository.Programming.Js
 /// data; completion and error unions remain inside the renderer owner.
 [<RequireQualifiedAccess>]
 module JoinSurface =
+    [<Import("PendingRunStore", "wanxiangli/handle-lifecycle")>]
+    let private pendingRunStoreClass: obj = jsNative
+
     let private text (value: obj) =
         if isNull value then "" else string value
 
@@ -320,7 +323,7 @@ module JoinSurface =
     let createVisibleInputRegistry () : obj =
         let registry: obj = emitJsExpr joinAttemptRegistryClass "new $0()"
         let activeInterrupts = Dictionary<string, JoinInterrupt>()
-        // DSL-MUTABLE: resource — monotonic attempt sequence counter for join probe.
+        // DSL-MUTABLE: algorithm-scratch — unique probe attempt identifiers
         let mutable attemptCounter = 0
 
         createObj
@@ -328,15 +331,12 @@ module JoinSurface =
               ==> (fun (sessionId: string) ->
                   attemptCounter <- attemptCounter + 1
                   let attemptId = sprintf "test-attempt-%d" attemptCounter
-                  registry?acquire (sessionId, attemptId) |> ignore
+                  registry?acquire(sessionId, attemptId) |> ignore
                   let completion = TaskCompletionSource<JoinInterruptReason>()
-
                   let interrupt =
                       { Wait = completion.Task
                         Signal = fun reason -> AsyncSupport.trySetResult completion reason |> ignore }
-
                   activeInterrupts.[sessionId] <- interrupt
-
                   createObj
                       [ "result"
                         ==> task {
@@ -347,7 +347,7 @@ module JoinSurface =
                         "abort" ==> (fun () -> interrupt.Signal JoinInterruptReason.OperatorAbort)
                         "dispose"
                         ==> (fun () ->
-                            registry?release (sessionId, attemptId) |> ignore
+                            registry?release(sessionId, attemptId) |> ignore
                             activeInterrupts.Remove sessionId |> ignore) ])
               "signal"
               ==> (fun (arg1: obj, arg2: obj) ->
@@ -357,13 +357,12 @@ module JoinSurface =
                           string arr.[0], string arr.[1]
                       else
                           string arg1, string arg2
-
-                  let verdict: obj = registry?signalVisibleUserMessage (sid, mid)
-
+                  let verdict: obj = registry?signalVisibleUserMessage(sid, mid)
                   if not (isNull verdict) && unbox<bool> verdict?woken then
                       match activeInterrupts.TryGetValue sid with
                       | true, interrupt -> interrupt.Signal JoinInterruptReason.UserMessageArrived
-                      | false, _ -> ()) ]
+                      | false, _ -> ()
+              ) ]
 
     // Production JoinTool.renderJoined releases PTY ownership tracks once a
     // batch is delivered; the probe keeps the same discipline so PtyRuns
@@ -443,8 +442,8 @@ module JoinSurface =
                   Subscription = None
                   Finished = false }
 
-            let pending = Dictionary<string, PendingHostRun>()
-            pending.Add(run.AgentId, run)
+            let pending: obj = emitJsExpr pendingRunStoreClass "new $0()"
+            pending?register(run.AgentId, run.Token, SessionId.value childId, string run.Role, run) |> ignore
 
             JsDeliveredValues.recordFencedView (SessionId.value childId) providerRun toolCallId (Some carry)
 

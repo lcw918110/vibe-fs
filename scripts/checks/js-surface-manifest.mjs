@@ -13,10 +13,10 @@ import { pathToFileURL } from 'node:url'
 import { SURFACE_MANIFEST } from '../lib/test-surface-scan.mjs'
 import { parseModule, walkSyntax } from '../lib/js-syntax.mjs'
 import { walk } from '../lib/walk.mjs'
-import { clauseDefinitionHeadings } from '../lib/spec-rules.mjs'
+import { ruleClauseHeadings, ruleDocumentName } from '../lib/spec-rules.mjs'
 
 const read = (root, path) => readFileSync(join(root, path), 'utf8')
-export const whatIds = (text) => [...new Set(clauseDefinitionHeadings(text).map(({ id }) => id))]
+export const whatIds = (text, owner) => [...new Set(ruleClauseHeadings(text, owner).map(({ id }) => id))]
 
 const sourceCompileStem = (source) => {
   const prefix = 'src/Wanxiangshu/'
@@ -92,9 +92,9 @@ export const validateSurfaceManifest = (manifest = SURFACE_MANIFEST, root = proc
     }
     if (!['pure', 'resource'].includes(entry.kind)) fail(`${label}: invalid kind ${entry.kind}`)
 
-    const ownerWhatPath = `requirements/${entry.owner}/WHAT.md`
-    if (!existsSync(join(root, ownerWhatPath))) {
-      fail(`${label}: missing owner WHAT.md (${ownerWhatPath})`)
+    const ownerRulePath = `requirements/${entry.owner}/${ruleDocumentName(entry.owner)}`
+    if (!existsSync(join(root, ownerRulePath))) {
+      fail(`${label}: missing owner rule document (${ownerRulePath})`)
       continue
     }
 
@@ -102,15 +102,15 @@ export const validateSurfaceManifest = (manifest = SURFACE_MANIFEST, root = proc
     const lawOwners = entry.lawOwners && typeof entry.lawOwners === 'object' ? entry.lawOwners : {}
     for (const law of laws) {
       const lawOwner = typeof lawOwners[law] === 'string' ? lawOwners[law] : entry.owner
-      const lawWhatPath = `requirements/${lawOwner}/WHAT.md`
-      if (!existsSync(join(root, lawWhatPath))) {
-        fail(`${label}: law ${law} owner WHAT is missing (${lawWhatPath})`)
+      const lawRulePath = `requirements/${lawOwner}/${ruleDocumentName(lawOwner)}`
+      if (!existsSync(join(root, lawRulePath))) {
+        fail(`${label}: law ${law} owner rule document is missing (${lawRulePath})`)
         continue
       }
-      const lawIds = new Set(whatIds(read(root, lawWhatPath)))
+      const lawIds = new Set(whatIds(read(root, lawRulePath), lawOwner))
       const numMatch = /-(\d{3}[a-z]?)$/.exec(law)
       const lawNum = numMatch ? numMatch[1] : null
-      if (!lawIds.has(law) && !(lawNum && lawIds.has(lawNum))) fail(`${label}: law ${law} is absent from ${lawWhatPath}`)
+      if (!lawIds.has(law) && !(lawNum && lawIds.has(lawNum))) fail(`${label}: law ${law} is absent from ${lawRulePath}`)
     }
 
     if (typeof entry.source !== 'string' || !existsSync(join(root, entry.source))) {

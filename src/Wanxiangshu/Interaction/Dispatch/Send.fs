@@ -132,8 +132,7 @@ module PromptDispatcherSend =
         registration |> Option.iter (fun owned -> owned.Dispose())
 
     let private beginOwnedConfirmation key registration (observer: ContinuationAcceptanceObserver) =
-        let outcome, subscription =
-            PromptPhysicalAcceptance.beginConfirmation key observer.Budget
+        let outcome, subscription = PromptPhysicalAcceptance.beginConfirmation key observer.Budget
 
         try
             observer.AttachDisposable subscription
@@ -217,9 +216,10 @@ module PromptDispatcherSend =
         (sendTask: Task<SendOutcome>)
         (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
         : Task<Result<PromptKey, string> * bool> =
-        // DSL-MUTABLE: single-flight — tracks whether the host refused before accepting anything so it stays NotSent.
+        // The verdict travels with the result: a Host that refused before
+        // accepting anything must stay `NotSent`, not decay into `Failed`.
+        // DSL-MUTABLE: resource — physical send receipt controls cancellation cleanup
         let mutable definitelyNotSent = false
-
         let settle =
             task {
                 let! outcome = sendTask
@@ -663,11 +663,8 @@ module PromptDispatcherSend =
                     | _ -> None
 
                 let ownedOpt = confirmation |> Option.map snd
-
                 use _ownedScope =
-                    { new System.IDisposable with
-                        member _.Dispose() =
-                            ownedOpt |> Option.iter (fun d -> d.Dispose()) }
+                    { new System.IDisposable with member _.Dispose() = ownedOpt |> Option.iter (fun d -> d.Dispose()) }
 
                 // The admission check and the Host call are deliberately
                 // synchronous neighbours. No await may reopen a window where
@@ -706,11 +703,9 @@ module PromptDispatcherSend =
                                             (fun fact -> this.Persist sessionId None fact)
                                             acceptFn
                                             (fun reason error ->
-                                                this.Abandon key sessionId reason
-                                                |> TaskValue.map (fun _ -> Error error))
+                                                this.Abandon key sessionId reason |> TaskValue.map (fun _ -> Error error))
                                             sendTask
                                             (confirmation |> Option.map fst)
-
                                     return attemptOutcomeFrom definitelyNotSent outcome
                                 }
 
@@ -960,7 +955,21 @@ module PromptDispatcherSend =
             (directory: string option)
             (tools: Map<string, bool> option)
             : Task<Result<PromptKey, string>> =
-            let sendRoot () =
+            match (this.ProjectionFor sessionId).ActiveLogicalRun with
+            | Some profile ->
+                this.SendContinuationWithDigest
+                    port
+                    sessionId
+                    text
+                    (HostDigest.sha256Hex text)
+                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
+                    profile
+                    directory
+                    PromptDispatcher.AwaitMode.Detached
+                    None
+                    None
+                    tools
+            | None ->
                 match issueIdentitySeed () with
                 | Error reason -> Task.FromResult(Error reason)
                 | Ok identitySeed ->
@@ -976,22 +985,6 @@ module PromptDispatcherSend =
                         None
                         tools
 
-            match (this.ProjectionFor sessionId).ActiveLogicalRun with
-            | Some profile ->
-                this.SendContinuationWithDigest
-                    port
-                    sessionId
-                    text
-                    (HostDigest.sha256Hex text)
-                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
-                    profile
-                    directory
-                    PromptDispatcher.AwaitMode.Detached
-                    None
-                    None
-                    tools
-            | None -> sendRoot ()
-
         member this.SendManagedAssignmentObserved
             (port: IDispatchSessionPort)
             (sessionId: SessionId)
@@ -1003,22 +996,6 @@ module PromptDispatcherSend =
             (onSendObserved: (PromptDispatcher.PromptSendObservation -> unit) option)
             (tools: Map<string, bool> option)
             : Task<Result<PromptKey, string>> =
-            let sendRoot () =
-                match issueIdentitySeed () with
-                | Error reason -> Task.FromResult(Error reason)
-                | Ok identitySeed ->
-                    this.SendAgentOwnerRootCore
-                        port
-                        sessionId
-                        text
-                        identitySeed
-                        directory
-                        awaitMode
-                        onAccepted
-                        onSendObserved
-                        None
-                        tools
-
             match (this.ProjectionFor sessionId).ActiveLogicalRun with
             | Some profile ->
                 this.SendContinuationWithDigest
@@ -1033,7 +1010,21 @@ module PromptDispatcherSend =
                     onAccepted
                     onSendObserved
                     tools
-            | None -> sendRoot ()
+            | None ->
+                match issueIdentitySeed () with
+                | Error reason -> Task.FromResult(Error reason)
+                | Ok identitySeed ->
+                    this.SendAgentOwnerRootCore
+                        port
+                        sessionId
+                        text
+                        identitySeed
+                        directory
+                        awaitMode
+                        onAccepted
+                        onSendObserved
+                        None
+                        tools
 
         /// provider-attempt-recovery-008: the one request + terminal-scoped interaction repair an unusable terminal earns.
         ///

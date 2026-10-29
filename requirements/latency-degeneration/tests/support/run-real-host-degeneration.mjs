@@ -57,7 +57,7 @@ const provider = await startHttpServer(async (req, res) => {
       if (!JSON.stringify(body.messages).includes('fork-degeneration')) {
         const program = 'class Js extends JsProgram { async run() { return await this.fork({"calling":"engineer","name":"Proof Writer","charge":"Write proof.txt."}, []); } }'
         note('manager-forks', { n })
-        return sendSSE(res, buildToolCallChunks(`r${n}`, 'todowrite-for-manager', JSON.stringify({ name: 'fork-degeneration', intent: 'Fork one engineer.', remainingScopeTurnsEstimate: 3, program }), 1))
+        return sendSSE(res, buildToolCallChunks(`r${n}`, 'todowrite-for-manager', JSON.stringify({ name: 'fork-degeneration', intent: 'Fork one engineer.', program }), 1))
       }
       note('manager-joins', { n, lastUser: u.slice(0, 160) })
       return sendSSE(res, buildToolCallChunks(`r${n}`, 'join', '{}', 1))
@@ -82,7 +82,7 @@ const provider = await startHttpServer(async (req, res) => {
   }
   if (toolNames.includes('todowrite-for-orchestrator') && !all.includes('commission-degeneration')) {
     const program = 'class Js extends JsProgram { async run() { return await this.commission({"calling":"lead","name":"Degeneration Road","charge":"Write proof.txt."}, []); } }'
-    return sendSSE(res, buildToolCallChunks(`r${n}`, 'todowrite-for-orchestrator', JSON.stringify({ name: 'commission-degeneration', intent: 'Commission one road and wait for it.', remainingScopeTurnsEstimate: 3, program }), 1))
+    return sendSSE(res, buildToolCallChunks(`r${n}`, 'todowrite-for-orchestrator', JSON.stringify({ name: 'commission-degeneration', intent: 'Commission one road and wait for it.', program }), 1))
   }
   if (toolNames.includes('todowrite-for-orchestrator')) return sendSSE(res, buildToolCallChunks(`r${n}`, 'join', '{}', 1))
   // Any other session (the managed child): stall without completing.

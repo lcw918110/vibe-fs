@@ -25,14 +25,15 @@ test('WHAT[requirement-system-001] declared clause IDs have one owner in the ind
   const unknown = dirs.filter((dir) => !fromIndex.includes(dir))
   assert.deepEqual(unknown, [], `requirements/ must not contain INDEX-external package dirs: ${unknown.join(', ')}`)
 
-  // 全树 WHAT.md 规范命题唯一所有权：任何命题在任意时刻恰归一个包所有，严禁重复定义
   const entries = []
   for (const pkg of fromIndex) {
-    const whatFile = join(REQUIREMENTS, pkg, 'WHAT.md')
-    try {
-      entries.push({ file: whatFile, pkg, text: read(whatFile) })
-    } catch {
-      // Missing file is governed by [006]/[017]
+    for (const name of ['WHAT.md', 'AXIOMS.md']) {
+      const file = join(REQUIREMENTS, pkg, name)
+      try {
+        entries.push({ file, pkg, text: read(file) })
+      } catch {
+        // Missing rule documents are governed by [006]/[017].
+      }
     }
   }
 

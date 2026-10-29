@@ -225,6 +225,75 @@ export const awaitPrompted = (sessionId) => {
   return new Promise((resolve) => promptedWaiters.set(sessionId, resolve))
 }
 
+// ── Default Scope annotation (common law «Scope») ──────────────────────────
+//
+// Production wraps every registered tool in `ScopeAnnotationGate`: a call
+// without `args.scope` is refused with "scope annotation required", and a
+// non-exempt `keepLast` on a session whose retention was never opened is
+// refused with "scope not initialized". Most layer-3 tests exercise other
+// contracts and predate the gate, so `withExecutablePlugin` wraps
+// `hooks.tool[*].execute` with this default:
+//
+//   * `args` has NO own `scope` key → the fixture injects `{ kind: 'keepLast' }`.
+//     Before the call it opens retention for the session the way a prior
+//     (elided) reset would have: `scopeRetention.ensureEpoch(session, epoch)` +
+//     `seed(session, DEFAULT_SCOPE_BUDGET)` — only when retention is unknown or
+//     exhausted. Epoch is the one retention already tracks, else "0" (the
+//     gate's default when the session has no reanchored scope).
+//     If the gate answers that this turn already carries a real annotation,
+//     the call is retried once as `{ kind: 'meToo' }` (the refusal is pre-execution).
+//     The gate also needs call id + run id (the codec drops both unless
+//     `ctx.callID` and `ctx.messageID` are present): a missing `callID` becomes
+//     `fixture-call-<n>`, a missing `messageID` becomes `msg-<callID>` (the Host
+//     always sends both).
+//   * `args` HAS an own `scope` key (any value, including null/undefined) →
+//     passed through untouched; scope-contract tests own their annotation.
+//   * `withExecutablePlugin(body, { scopeAnnotation: false })` disables the
+//     wrapper entirely (raw production tool surface). `withRestartablePlugin`,
+//     the bare plugin boot and `withPluginClient` always wrap.
+//
+// Never injects `resetScope`; reset semantics stay with the tests that assert them.
+export const DEFAULT_SCOPE_BUDGET = 48
+const { scopeRetention } = await import('wanxiangli/scope-retention')
+
+export const primeScope = (sessionId, budget = DEFAULT_SCOPE_BUDGET) => {
+  if (typeof sessionId !== 'string' || sessionId.length === 0) return
+  const status = scopeRetention.status(sessionId)
+  if (status?.known && status.remaining !== null && status.remaining > 0) return
+  const epoch = status?.epoch == null || status.epoch === '' ? '0' : String(status.epoch)
+  scopeRetention.ensureEpoch(sessionId, epoch)
+  scopeRetention.seed(sessionId, budget)
+}
+
+let fixtureCallSequence = 0
+const TURN_ALREADY_ANNOTATED = /turn already carries a real scope annotation/
+
+const withDefaultScope = (hooks) => {
+  for (const tool of Object.values(hooks?.tool ?? {})) {
+    if (tool == null || typeof tool.execute !== 'function' || tool.execute.__defaultScope) continue
+    const inner = tool.execute.bind(tool)
+    const wrapped = async (args, ctx, ...rest) => {
+      if (args != null && typeof args === 'object' && Object.prototype.hasOwnProperty.call(args, 'scope')) {
+        return inner(args, ctx, ...rest)
+      }
+      primeScope(ctx?.sessionID)
+      let callCtx = ctx
+      if (ctx != null && typeof ctx === 'object' && (ctx.callID == null || ctx.messageID == null)) {
+        const callID = ctx.callID ?? `fixture-call-${++fixtureCallSequence}`
+        callCtx = { ...ctx, callID, messageID: ctx.messageID ?? `msg-${callID}` }
+      }
+      const first = await inner({ ...(args ?? {}), scope: { kind: 'keepLast' } }, callCtx, ...rest)
+      if (typeof first === 'string' && TURN_ALREADY_ANNOTATED.test(first)) {
+        return inner({ ...(args ?? {}), scope: { kind: 'meToo' } }, callCtx, ...rest)
+      }
+      return first
+    }
+    wrapped.__defaultScope = true
+    tool.execute = wrapped
+  }
+  return hooks
+}
+
 /**
  * A plugin instance whose tools can actually execute (EXEC-002, layer 3).
  *
@@ -232,7 +301,8 @@ export const awaitPrompted = (sessionId) => {
  * shared production instances, resolved AFTER `initSpikePlugin` so `acquire`
  * returns the already-registered entries rather than booting second owners.
  */
-export const withExecutablePlugin = async (body, options = {}, createHooks = initSpikePlugin) => {
+export const withExecutablePlugin = async (body, fixtureOptions = {}, createHooks = initSpikePlugin) => {
+  const { scopeAnnotation = true, ...options } = fixtureOptions
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'wxs-plugin-exec-')))
   const previousHome = process.env.HOME
   const previousUserProfile = process.env.USERPROFILE
@@ -252,6 +322,7 @@ export const withExecutablePlugin = async (body, options = {}, createHooks = ini
       directory,
       events: options.events ?? { listen: () => () => {} },
     })
+    if (scopeAnnotation !== false) withDefaultScope(hooks)
     client.__hooks = hooks
     await configureManagedPlugin(hooks)
     let runtime
@@ -328,11 +399,11 @@ export const withRestartablePlugin = async (body) => {
     const messages = []
     const client = stubClient(createdIds, prompts, messages, abortedIds)
     const start = async (workspaceDirectory = directory) => {
-      const hooks = await initSpikePlugin({
+      const hooks = withDefaultScope(await initSpikePlugin({
         client,
         directory: workspaceDirectory,
         events: { listen: () => () => {} },
-      })
+      }))
       client.__hooks = hooks
       await configureManagedPlugin(hooks)
       liveHooks.add(hooks)
@@ -380,11 +451,11 @@ export const startPluginIncarnation = async (directory) => {
   const prompts = []
   const messages = []
   const client = stubClient(createdIds, prompts, messages, abortedIds)
-  const hooks = await initSpikePlugin({
+  const hooks = withDefaultScope(await initSpikePlugin({
     client,
     directory,
     events: { listen: () => () => {} },
-  })
+  }))
   client.__hooks = hooks
   await configureManagedPlugin(hooks)
 
@@ -643,11 +714,11 @@ export const withPluginClient = async (client, body) => {
 
   try {
     execFileSync('git', ['init', '--quiet', directory])
-    const hooks = await initSpikePlugin({
+    const hooks = withDefaultScope(await initSpikePlugin({
       client,
       directory,
       events: { listen: () => () => {} },
-    })
+    }))
     client.__hooks = hooks
     try {
       await body(hooks, directory)

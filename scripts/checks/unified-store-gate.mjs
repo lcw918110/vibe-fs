@@ -139,6 +139,12 @@ const DURABLE_SUBSTRATE_OWNER_PATHS = Object.freeze([
 const isDurableSubstrateOwnerPath = (file) =>
   DURABLE_SUBSTRATE_OWNER_PATHS.some((expected) => pathIs(file, expected))
 
+// advisor-007 owns this SQLite journal; only its two physical Host adapters name it.
+const ADVISOR_JOURNAL_HOST_PATHS = [
+  'src/Wanxiangshu/Omp/Adapter.fs',
+  'src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs',
+]
+
 const stripLineComment = (line) => line.replace(/\/\/.*/, '')
 
 /** @param {string} file */
@@ -671,9 +677,11 @@ export const scanPrivateDurableSubstrate = (text, file = '<synthetic>') => {
   if (isDurableSubstrateOwnerPath(file)) return []
 
   const lines = text.split('\n')
+  const advisorHost = ADVISOR_JOURNAL_HOST_PATHS.some(expected => pathIs(file, expected))
   const hits = []
   for (let i = 0; i < lines.length; i++) {
-    const code = stripLineComment(lines[i])
+    const original = stripLineComment(lines[i])
+    const code = advisorHost ? original.replaceAll('"advisor-process.sqlite"', '""') : original
     for (const { re } of PRIVATE_DURABLE_SUBSTRATE_RES) {
       const match = code.match(re)
       if (!match) continue

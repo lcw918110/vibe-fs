@@ -1,0 +1,89 @@
+{
+  "baselineCommit": "27b5073c5b98c8256ac3b9560f31bdf0e72fdc35",
+  "runtime": "v26.6.0",
+  "sameDependenciesAndDist": true,
+  "currentDistRebuilt": false,
+  "findingsUnchanged": true,
+  "before": {
+    "structure": [
+      "latency-degeneration: package missing from INDEX.md",
+      "requirements/host-boundary/tests/tenure-barrier.test.mjs: expected NNN.test.mjs",
+      "requirements/delegation/tests/035.test.mjs: clause 035 is absent; notify the user to resolve its tests",
+      "requirements/delegation/tests/026.test.mjs:45: expected exactly WHAT[delegation-026], got [\"delegation-021\"]",
+      "requirements/delegation/tests/035.test.mjs:6: expected exactly WHAT[delegation-035], got [\"delegation-025\"]",
+      "requirements/delegation/tests/035.test.mjs:49: expected exactly WHAT[delegation-035], got [\"delegation-031\"]",
+      "requirements/delegation/tests/035.test.mjs:87: expected exactly WHAT[delegation-035], got [\"delegation-026\"]",
+      "requirements/advisor/tests/008.test.mjs: clause 008 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/009.test.mjs: clause 009 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/010.test.mjs: clause 010 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/011.test.mjs: clause 011 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/012.test.mjs: clause 012 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/013.test.mjs: clause 013 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/014.test.mjs: clause 014 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/015.test.mjs: clause 015 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/009.test.mjs:62: expected exactly WHAT[advisor-009], got [\"advisor-005\"]",
+      "requirements/advisor/tests/009.test.mjs:115: expected exactly WHAT[advisor-009], got [\"advisor-005\"]",
+      "requirements/intra-participant-parallelism/tests/019.test.mjs: clause 019 is absent; notify the user to resolve its tests",
+      "requirements/provider-attempt-recovery/tests/025.test.mjs: clause 025 is absent; notify the user to resolve its tests",
+      "requirements/work/tests/053.test.mjs: clause 053 is absent; notify the user to resolve its tests",
+      "requirements/work/tests/054.test.mjs: clause 054 is absent; notify the user to resolve its tests",
+      "requirements/work/tests/055.test.mjs: clause 055 is absent; notify the user to resolve its tests"
+    ],
+    "surfaces": [
+      "Context/Scope/Surface.js: missing emitted surface dist/Context/Scope/Surface.js",
+      "Execution/Session/RecoveryClosureSurface.js: missing emitted surface dist/Execution/Session/RecoveryClosureSurface.js",
+      "Repository/Programming/Js/Programs.js: missing emitted surface dist/Repository/Programming/Js/Programs.js"
+    ],
+    "ablation": [
+      {
+        "code": "index-missing",
+        "message": "requirements/latency-degeneration missing from INDEX.md"
+      },
+      {
+        "code": "node-missing",
+        "message": "package latency-degeneration missing from resources/ablation/nodes.json"
+      }
+    ]
+  },
+  "after": {
+    "structure": [
+      "latency-degeneration: package missing from INDEX.md",
+      "requirements/host-boundary/tests/tenure-barrier.test.mjs: expected NNN.test.mjs",
+      "requirements/delegation/tests/035.test.mjs: clause 035 is absent; notify the user to resolve its tests",
+      "requirements/delegation/tests/026.test.mjs:45: expected exactly WHAT[delegation-026], got [\"delegation-021\"]",
+      "requirements/delegation/tests/035.test.mjs:6: expected exactly WHAT[delegation-035], got [\"delegation-025\"]",
+      "requirements/delegation/tests/035.test.mjs:49: expected exactly WHAT[delegation-035], got [\"delegation-031\"]",
+      "requirements/delegation/tests/035.test.mjs:87: expected exactly WHAT[delegation-035], got [\"delegation-026\"]",
+      "requirements/advisor/tests/008.test.mjs: clause 008 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/009.test.mjs: clause 009 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/010.test.mjs: clause 010 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/011.test.mjs: clause 011 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/012.test.mjs: clause 012 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/013.test.mjs: clause 013 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/014.test.mjs: clause 014 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/015.test.mjs: clause 015 is absent; notify the user to resolve its tests",
+      "requirements/advisor/tests/009.test.mjs:62: expected exactly WHAT[advisor-009], got [\"advisor-005\"]",
+      "requirements/advisor/tests/009.test.mjs:115: expected exactly WHAT[advisor-009], got [\"advisor-005\"]",
+      "requirements/intra-participant-parallelism/tests/019.test.mjs: clause 019 is absent; notify the user to resolve its tests",
+      "requirements/provider-attempt-recovery/tests/025.test.mjs: clause 025 is absent; notify the user to resolve its tests",
+      "requirements/work/tests/053.test.mjs: clause 053 is absent; notify the user to resolve its tests",
+      "requirements/work/tests/054.test.mjs: clause 054 is absent; notify the user to resolve its tests",
+      "requirements/work/tests/055.test.mjs: clause 055 is absent; notify the user to resolve its tests"
+    ],
+    "surfaces": [
+      "Context/Scope/Surface.js: missing emitted surface dist/Context/Scope/Surface.js",
+      "Execution/Session/RecoveryClosureSurface.js: missing emitted surface dist/Execution/Session/RecoveryClosureSurface.js",
+      "Repository/Programming/Js/Programs.js: missing emitted surface dist/Repository/Programming/Js/Programs.js"
+    ],
+    "ablation": [
+      {
+        "code": "index-missing",
+        "message": "requirements/latency-degeneration missing from INDEX.md"
+      },
+      {
+        "code": "node-missing",
+        "message": "package latency-degeneration missing from resources/ablation/nodes.json"
+      }
+    ]
+  }
+}

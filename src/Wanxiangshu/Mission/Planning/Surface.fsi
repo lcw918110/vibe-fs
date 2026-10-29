@@ -59,6 +59,7 @@ module PlanningSurface =
 
     /// reviewFinishedOnly: true once the named incumbency has finished its
     /// first review, which unlocks draft writes for that tenure.
+    val isEligible: gitCommonDir: string -> workId: string -> incumbencyId: string -> bool
     val isReviewFinished: gitCommonDir: string -> workId: string -> incumbencyId: string -> bool
 
     val PlanningSurface: obj

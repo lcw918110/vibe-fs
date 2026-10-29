@@ -11,7 +11,6 @@ const SESSION = 'ses-065-independent-programs'
 const RUN = 'run-065-independent-programs'
 const WAIT = 'Wait for the held physical command while a second independent program proves that the host does not serialize whole executions.'
 const program = body => `class Js extends JsProgram { async run() { ${body} } }`
-const withEstimate = input => ({ ...input, remainingScopeTurnsEstimate: 4 })
 async function until(predicate, label) {
   const end = Date.now() + 4000
   while (!predicate()) {
@@ -26,12 +25,12 @@ test('WHAT[repository-programming-065] another program completes while a same-me
     writeFileSync(join(directory, 'held.cjs'), `const fs = require('node:fs'); fs.writeFileSync('entered','yes'); const timer = setInterval(() => { if(fs.existsSync('release')) { clearInterval(timer); process.stdout.write('released'); } }, 10);`)
     let firstDone = false
     const context = callID => ({ sessionID: SESSION, agent: 'devops', callID, messageID: RUN })
-    const first = tool.execute(withEstimate({ name: 'held', program: program("return await this.call('node held.cjs');"), intent: WAIT }), context('call-065-held'))
+    const first = tool.execute({ name: 'held', program: program("return await this.call('node held.cjs');"), intent: WAIT }, context('call-065-held'))
       .then(result => { firstDone = true; return result })
     try {
       await until(() => existsSync(join(directory, 'entered')), 'first command must actually enter')
       const second = await Promise.race([
-        tool.execute(withEstimate({ name: 'independent', program: program("await this.write('second', 'completed'); return { ready: true };"), intent: WAIT }), context('call-065-independent')),
+        tool.execute({ name: 'independent', program: program("await this.write('second', 'completed'); return { ready: true };"), intent: WAIT }, context('call-065-independent')),
         delay(1800).then(() => { throw new Error('the waiting program blocked an independent tool call') }),
       ])
       assert.equal(firstDone, false, 'the command must still be pending when the second program returns')
@@ -67,7 +66,6 @@ test('WHAT[repository-programming-065] plugin disposal closes its paused command
       name: 'held',
       intent: 'Wait for the real command to enter and retain it for explicit cleanup.',
       program: program("try { await this.call('node held.cjs'); } finally { await this.write('closed.txt', 'closed'); }"),
-      remainingScopeTurnsEstimate: 4,
     }, lifecycleContext(session, 'held-call'))
     assert.match(String(parked), /# parked/, String(parked))
     const pid = Number(readFileSync(join(directory, 'held.pid'), 'utf8'))
@@ -87,7 +85,7 @@ test('WHAT[repository-programming-065] plugin disposal closes its paused command
 test('WHAT[repository-programming-065] disposing one plugin preserves another plugin program and releases only its own names', async () => {
   const sessionA = 'ses-065-owner-a'
   const sessionB = 'ses-065-owner-b'
-  const parkInput = name => ({ name, intent: WAIT, program: program("await this.park('held'); return { alive: true };") ,remainingScopeTurnsEstimate:4})
+  const parkInput = name => ({ name, intent: WAIT, program: program("await this.park('held'); return { alive: true };") })
   await withExecutablePlugin(async (hooksA, _directoryA, _idsA, runtimeA) => {
     await registeredDevOps(hooksA, runtimeA, sessionA)
     assert.match(String(await hooksA.tool['todowrite-for-devops'].execute(
@@ -100,7 +98,6 @@ test('WHAT[repository-programming-065] disposing one plugin preserves another pl
       const resumed = await hooksB.tool['todowrite-for-devops'].execute({
         name: 'resume-owned', intent: WAIT,
         program: program("return await this.unpark('owned');"),
-        remainingScopeTurnsEstimate:4,
       }, lifecycleContext(sessionB, 'resume-call'))
       assert.match(String(resumed), /# ok/, String(resumed))
       assert.match(String(resumed), /alive = true/, String(resumed))
@@ -109,8 +106,7 @@ test('WHAT[repository-programming-065] disposing one plugin preserves another pl
   await withExecutablePlugin(async (hooks, _directory, _ids, runtime) => {
     await registeredDevOps(hooks, runtime, sessionA)
     const fresh = await hooks.tool['todowrite-for-devops'].execute({
-      name: 'owned', intent: WAIT, program: program("return { fresh: true };"), remainingScopeTurnsEstimate:4,
-    }, lifecycleContext(sessionA, 'owned-call'))
+      name: 'owned', intent: WAIT, program: program("return { fresh: true };") }, lifecycleContext(sessionA, 'owned-call'))
     assert.match(String(fresh), /# ok/, String(fresh))
     assert.match(String(fresh), /fresh = true/, String(fresh))
   })

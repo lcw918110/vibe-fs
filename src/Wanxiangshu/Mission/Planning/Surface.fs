@@ -341,6 +341,9 @@ module PlanningSurface =
                                error = if accepted then null else reply?reason |}
         }
 
+    let isEligible (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
+        PlanKernelSeam.isEligible gitCommonDir workId incumbencyId
+
     let isReviewFinished (gitCommonDir: string) (workId: string) (incumbencyId: string) : bool =
         match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected gitCommonDir workId with
         | Some work when work.ActiveId = Some incumbencyId -> work.Reviewed

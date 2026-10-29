@@ -5,8 +5,7 @@ import {
   duplicateClauseDefinitions,
 } from '../../../scripts/lib/spec-rules.mjs'
 
-test('WHAT[requirement-system-005] formal clause definitions can only live in package WHAT.md', () => {
-  // README/AGENTS/CHANGELOG 等非 WHAT.md 路由与系统文件严禁定义正式条款
+test('WHAT[requirement-system-005] formal clause definitions can only live in the package rule document', () => {
   const entries = [
     {
       file: 'requirements/README.md',
@@ -45,5 +44,27 @@ test('WHAT[requirement-system-005] clauseDefinitionHeadings surfaces ## [NNN] de
     ].join('\n')),
     [{ id: '002', line: 2 }],
   )
+})
+
+test('WHAT[requirement-system-005] migrated test rules accept AXIOMS and reject active clauses in the old file', () => {
+  const rules = { file: 'requirements/verification-system/AXIOMS.md', pkg: 'verification-system',
+    text: '## AXIOM\n1. Truth matters.\n## SPEC\n### [001] Observable rule\n' }
+  const navigation = { file: 'requirements/verification-system/WHAT.md', pkg: 'verification-system',
+    text: '# Rules moved\n[Current rules](AXIOMS.md)\n' }
+  assert.deepEqual(duplicateClauseDefinitions([rules, navigation]), [])
+  const findings = duplicateClauseDefinitions([rules, { ...navigation, text: '## [002] Competing rule\n' }])
+  assert.equal(findings.length, 1)
+  assert.equal(findings[0].file, navigation.file)
+  assert.match(findings[0].msg, /AXIOMS/)
+  const wrongOwner = { ...rules, file: 'requirements/sample/AXIOMS.md', pkg: 'sample' }
+  assert.equal(duplicateClauseDefinitions([wrongOwner]).length, 1)
+  const outsideSpec = { ...rules, text: '## AXIOM\n### [002] Misplaced rule\n## SPEC\n### [001] Valid rule\n' }
+  const misplaced = duplicateClauseDefinitions([outsideSpec])
+  assert.equal(misplaced.length, 1)
+  assert.match(misplaced[0].msg, /SPEC/)
+  assert.equal(misplaced[0].line, 2)
+  const repeated = duplicateClauseDefinitions([{ ...rules, text: rules.text + '### [001] Duplicate\n' }])
+  assert.equal(repeated.length, 1)
+  assert.match(repeated[0].msg, /重复定义/)
 })
 

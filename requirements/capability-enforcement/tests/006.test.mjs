@@ -240,7 +240,7 @@ test('WHAT[capability-enforcement-006] AUTOINJ_active_empty_skill_call_is_denied
     assert.equal(real.parts[0].state.output, 'real skill output')
     const steer = transformed.messages.find(message => message.steering && message.strong)
     assert.ok(steer, '首次初始化通过独立强提醒呈现，不改写已有工具结果')
-    assert.match(steer.parts[0].text, /remainingScopeTurnsEstimate/, 'the first strong steer asks for the first chargeable estimate')
+    assert.match(steer.parts[0].text, /newScopeRetentionBudget/, 'the first strong steer asks for the first retention budget (scope.kind=resetScope)')
     assert.equal(rawRealToolState.output, 'real skill output',
       'the original Host-owned completed tool state remains byte-identical')
   })

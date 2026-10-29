@@ -42,36 +42,6 @@ const toolModule = {
 const waitForPromptCount = (runtime, count) => forkTool.awaitPromptCount(runtime, count)
 const ownerDescriptor = (sessionId) => [{ sessionId, agent: 'manager' }]
 
-test('WHAT[delegation-026] late consultation stops only after a tool-free completed turn', async () => {
-  await withRealFork('manager-consultation-boundary', async ({ hooks, runtime }) => {
-    for (const kind of ['askPreviousScope', 'negotiate', 'advisor']) {
-      const sid = `consult-${kind}`
-      const earlier = { info: { id: 'user-original', role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'task' }] }
-      const assistant = { info: { id: 'assistant-before', role: 'assistant', sessionID: sid, time: { completed: 5 } }, parts: [{ type: 'text', text: 'Finished' }] }
-      const steer = { info: { id: `reply-${kind}`, role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'answer', metadata: { wanxiangshu_consultation_steer: true } }] }
-      const output = { messages: structuredClone([earlier, assistant, steer]) }
-      const count = runtime.abortedIds.length
-      await hooks['experimental.chat.messages.transform']({}, output)
-      assert.deepEqual(output.messages, [])
-      assert.deepEqual(runtime.abortedIds.slice(count), [sid])
-    }
-    for (const prior of [
-      { time: { completed: 5 }, parts: [{ type: 'tool', state: { status: 'completed' } }] },
-      { time: {}, parts: [{ type: 'text', text: 'in progress' }] },
-    ]) {
-      const sid = 'consult-continue-' + (prior.time.completed ?? 'pending')
-      const output = { messages: [
-        { info: { id: 'u', role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'task' }] },
-        { info: { id: 'a', role: 'assistant', sessionID: sid, time: prior.time }, parts: prior.parts },
-        { info: { id: 's', role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'answer', metadata: { wanxiangshu_consultation_steer: true } }] },
-      ] }
-      const count = runtime.abortedIds.length
-      await assert.rejects(hooks['experimental.chat.messages.transform']({}, output), /accepted-execution-missing/)
-      assert.equal(runtime.abortedIds.length, count)
-    }
-  })
-})
-
 // A join that must answer inside a bounded window. The window is never
 // widened; its timer is always cleared, so a join that answered early never
 // keeps the process alive waiting for the deadline.

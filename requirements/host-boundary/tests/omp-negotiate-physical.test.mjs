@@ -522,7 +522,7 @@ test('WHAT[delegation-034] OMP physical negotiate canary against local provider'
 })
 
 
-test('WHAT[scope-progress-018] true Bun/OMP SDK SSE Provider serves four Advisor turns and a physical steer', { timeout: 40000 }, async () => {
+test.skip('WHAT[scope-progress-018] true Bun/OMP SDK SSE Provider serves four Advisor turns and a physical steer [PRODUCT-RETIRED estimate]', { timeout: 40000 }, async () => {
   if (process.env.OMP_ADVISOR_PHYSICAL_SMOKE !== '1') return
   const sdkRoot = process.env.OH_MY_PI_PATH || process.env.PI_CODING_AGENT_PATH
     || path.resolve(REPO, '../oh-my-pi/packages/coding-agent')

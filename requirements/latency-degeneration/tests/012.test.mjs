@@ -1,8 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
-import * as signal from '../../../dist/Foundation/TerminalSignal.js'
-import {SessionIdModule_create as sid} from '../../../dist/Foundation/Identity.js'
+import * as signal from '../../../dist/OpenCode/Host/HostSignalSubscribeSurface.js'
 import {readFileSync} from 'node:fs'
 
 // [012] Advisor and SyncDelegate fail fast on Aborted. The latency watchdog's
@@ -10,20 +9,20 @@ import {readFileSync} from 'node:fs'
 // consumers ignore exactly one Aborted per interrupt sent after they armed.
 test('WHAT[latency-degeneration-012] fast-check: a cursor excuses exactly one Aborted per interrupt recorded after it opened', () => {
   fc.assert(fc.property(fc.nat(3), fc.array(fc.constantFrom('record', 'refused', 'aborted'), {maxLength: 12}), (before, steps) => {
-    const s = sid('session-' + Math.random())
-    for (let i = 0; i < before; i++) signal.DegenerationInterrupts_record(s)
-    const cursor = signal.DegenerationInterrupts_Cursor_$ctor_ZD623056(s)
+    const s = 'session-' + Math.random()
+    for (let i = 0; i < before; i++) signal.recordInterrupt(s)
+    const cursor = signal.interruptCursor(s)
     let pending = 0
     for (const step of steps) {
-      if (step === 'record') {signal.DegenerationInterrupts_record(s); pending++}
-      else if (step === 'refused' && pending > 0) {signal.DegenerationInterrupts_unrecord(s); pending--}
+      if (step === 'record') {signal.recordInterrupt(s); pending++}
+      else if (step === 'refused' && pending > 0) {signal.refuseInterrupt(s); pending--}
       else if (step === 'aborted') {
-        const own = signal.DegenerationInterrupts_Cursor__IsOwnAbort(cursor)
+        const own = cursor()
         assert.equal(own, pending > 0)
         if (own) pending--
       }
     }
-    signal.DegenerationInterrupts_forget(s)
+    signal.forgetInterrupts(s)
   }), {seed: 0xDE6E012, numRuns: 300})
 })
 

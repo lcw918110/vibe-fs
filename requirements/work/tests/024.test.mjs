@@ -57,7 +57,7 @@ test('WHAT[work-024] the Plan devops member requires bound lifecycle work and ne
     const runPlan = async (body) =>
       String(
         await hooks.tool['todowrite-for-plan'].execute(
-          { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'devops-plan-' + (++programSequence), intent: 'Wait for this planning operation without renewing the request deadline.', remainingScopeTurnsEstimate: 3 },
+          { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'devops-plan-' + (++programSequence), intent: 'Wait for this planning operation without renewing the request deadline.' },
           { sessionID, agent: 'plan' },
         ),
       )
@@ -95,7 +95,6 @@ test('WHAT[work-024] an unreviewed tenure may read the draft but cannot write it
       }
     }`, name: 'read-draft',
           intent: 'Read the current planning capability under the admitted deadline.',
-          remainingScopeTurnsEstimate: 3,
         },
       { sessionID, agent: 'plan', callID: 'call-work-024', messageID: 'run-work-024', providerRunID: 'run-work-024' },
     )
@@ -116,7 +115,6 @@ test('WHAT[work-024] real Plan writes remain locked before a substantive review 
       return String(await hooks.tool['todowrite-for-plan'].execute({
         name: id, intent: 'Check the draft write permission at the actual operation.',
         program: `class Js extends JsProgram { async run() { ${body} } }`,
-        remainingScopeTurnsEstimate: 3,
       }, { sessionID, agent: 'plan', callID: id, messageID: `run-${id}` }))
     }
     const write = () => invoke(`const result = await this.write(${JSON.stringify(path)}, "changed"); return result ?? {written:true};`)

@@ -23,6 +23,7 @@ module ScopeReset =
     [<Import("outboundViewStore", "wanxiangli/pair-hint")>]
     let private outboundViewStore: obj = jsNative
 
+    // scope-progress product boundary (WP0, 2026-10-29): only epoch bookkeeping (reset/ensureEpoch/status.epoch/bind/clear) is live here; estimate record/settle/resetDue are PACKAGE-HISTORICAL. Lifecycle budget = scope-retention.
     [<Import("scopeProgress", "wanxiangli/scope-progress")>]
     let private scopeProgress: obj = jsNative
 

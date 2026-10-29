@@ -102,7 +102,6 @@ test('WHAT[work-029] shared Plan interface reads the ordinary draft path and rej
     const run = body => hooks.tool['todowrite-for-plan'].execute(
       { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'plan-read-' + (++programSequence),
           intent: 'Wait for this plan file operation while preserving the same request deadline.',
-          remainingScopeTurnsEstimate: 3,
         },
       { sessionID, agent: 'plan', callID: 'call-work-029-' + programSequence, messageID: 'run-work-029', providerRunID: 'run-work-029' },
     )

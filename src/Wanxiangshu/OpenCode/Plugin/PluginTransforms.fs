@@ -55,9 +55,6 @@ module PluginTransforms =
     [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
     let private deliveryAttemptLedger: obj = jsNative
 
-    [<Import("scopeProgress", "wanxiangli/scope-progress")>]
-    let private scopeProgress: obj = jsNative
-
     [<Import("scopeRetention", "wanxiangli/scope-retention")>]
     let private scopeRetention: obj = jsNative
 

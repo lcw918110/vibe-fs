@@ -121,31 +121,17 @@ module AuthorityLifeClassification =
     /// not be proven" rejection path. The label-based `closureFor` remains the
     /// owner of the durable-data boundary, where a foreign payload may fail to
     /// derive a kind.
-    let private agentOwnerClosureKind life =
-        match life with
-        | "Child" -> "AgentOwnerChildWork"
-        | "Attached" -> "AgentOwnerAttachedWork"
-        | _ -> "AgentOwnerInternalLeaf"
-
     let closureKindForRoot
         (kind: PromptRootAuthorityKind)
         (isManager: bool)
         (provenLife: string option)
         : string * string option =
-        match kind with
-        | PromptRootAuthorityKind.HumanRoot ->
-            (if isManager then
-                 "HumanRootManagerLife"
-             else
-                 "HumanRootManagedRun"),
-            None
-        | PromptRootAuthorityKind.AgentOwnerRoot ->
-            let life =
-                provenLife
-                |> Option.filter (fun value -> List.contains value agentOwnerLifeLabels)
-                |> Option.defaultValue coarseAgentOwnerLife
-
-            agentOwnerClosureKind life, Some life
+        match kind, provenLife with
+        | PromptRootAuthorityKind.HumanRoot, _ when isManager -> "HumanRootManagerLife", None
+        | PromptRootAuthorityKind.HumanRoot, _ -> "HumanRootManagedRun", None
+        | PromptRootAuthorityKind.AgentOwnerRoot, Some "Attached" -> "AgentOwnerAttachedWork", Some "Attached"
+        | PromptRootAuthorityKind.AgentOwnerRoot, Some "InternalLeaf" -> "AgentOwnerInternalLeaf", Some "InternalLeaf"
+        | PromptRootAuthorityKind.AgentOwnerRoot, _ -> "AgentOwnerChildWork", Some coarseAgentOwnerLife
 
     /// The closure kind to record: the recorded one only while it belongs to
     /// this root kind, otherwise the kind the acceptance derives.

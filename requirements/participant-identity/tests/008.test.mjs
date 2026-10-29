@@ -653,6 +653,8 @@ const acquireLease = async (sessionId, physicalUserMessageId, role, participant)
     role,
     participant,
     null,
+    'normal',
+    { model: 'test/deep', reasoning: 'high' },
   )
   assert.equal(outcome.kind, 'Acquired')
   const target = routing.sharedExecutionAdmissionTarget(outcome.lease)

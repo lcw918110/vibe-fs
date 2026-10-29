@@ -75,6 +75,12 @@ module CompletedTurnClassifier =
                 | MessagePart.Activity kind -> kind = "patch" || kind = "step-start" || kind = "step-finish"
                 | _ -> false)
 
+    /// WHAT[interaction-authority-024]: a real tool call (or patch) the turn made.
+    /// OpenCode wraps every assistant step in step-start/step-finish markers, so
+    /// those markers prove only that a step ran, never that the turn called a
+    /// tool. A settled OpenCode tool part decodes as ToolResult and still counts.
+    /// `hasToolCallPart` keeps the markers as in-flight activity; whether a
+    /// `finish=stop` turn is "textless and tool-free" is judged here instead.
     let hasRealToolCall (parts: MessagePart array) : bool =
         if isNull parts then
             false
@@ -96,23 +102,23 @@ module CompletedTurnClassifier =
             upstreamAbort |> not && plainAbort
         | None -> false
 
+    let private classifyStoppedText (parts: MessagePart array) : obj =
+        match TerminalValidity.check (partsText parts) with
+        | Ok() -> box ReconcileProgram.TurnCompleted
+        | Error rejection ->
+            box (
+                ReconcileProgram.TurnNeedsContinuation(
+                    sprintf "assistant stop with %s" (TerminalValidity.describe rejection)
+                )
+            )
+
     /// CTX-004: stop is completed only when formal text passes the shared
     /// terminal validity gate; otherwise the turn earns interaction repair.
     let private classifyStopped (parts: MessagePart array) : obj =
-        let classifyText () =
-            match TerminalValidity.check (partsText parts) with
-            | Ok() -> box ReconcileProgram.TurnCompleted
-            | Error rejection ->
-                box (
-                    ReconcileProgram.TurnNeedsContinuation(
-                        sprintf "assistant stop with %s" (TerminalValidity.describe rejection)
-                    )
-                )
-
         if hasRealToolCall parts then
             box ReconcileProgram.TurnCompleted
         else
-            classifyText ()
+            classifyStoppedText parts
 
     /// Content validity alone cannot prove a provider failure.
     let formalContentUnusable (parts: MessagePart array) : bool =

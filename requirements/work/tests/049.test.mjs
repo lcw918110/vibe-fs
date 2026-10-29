@@ -77,7 +77,6 @@ test('WHAT[work-049] ask parks and records the question before the attempt inter
     const parked = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    await this.ask('Which environment?');\n    return { done: true };`), name: 'ask-plan',
           intent: 'Record the question and retain the paused program until the real user reply arrives.',
-          remainingScopeTurnsEstimate: 3,
         },
       context(session),
     )
@@ -101,7 +100,6 @@ test('WHAT[work-049] a repeated completed event does not interrupt twice', async
     await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    await this.ask('Repeat?');\n    return { done: true };`), name: 'repeat-ask',
           intent: 'Record the question and retain the paused program until the real user reply arrives.',
-          remainingScopeTurnsEstimate: 3,
         },
       context(session, 'repeat-call', 'repeat-run'),
     )
@@ -119,13 +117,12 @@ test('WHAT[work-049] an unrelated call and an old human input do not unlock the 
     const parked = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    await this.ask('Still waiting?');\n    return { done: true };`), name: 'wait-ask',
           intent: 'Record the question and retain the paused program until the real user reply arrives.',
-          remainingScopeTurnsEstimate: 3,
         },
       context(session),
     )
     await humanInput(hooks, runtime, session, 'user-root', 'Need one fact before continuing.')
     const blocked = await hooks.tool['todowrite-for-plan'].execute(
-      { name: 'abandon-question', intent: 'Request cleanup only if the pending-question gate admits this operation.', program: program('return await this.abandon(' + JSON.stringify(nameOf(parked)) + ');'), remainingScopeTurnsEstimate: 3 },
+      { name: 'abandon-question', intent: 'Request cleanup only if the pending-question gate admits this operation.', program: program('return await this.abandon(' + JSON.stringify(nameOf(parked)) + ');') },
       context(session, 'other-call', 'other-run'),
     )
     assert.match(String(blocked), /等待|waiting|不能/)
@@ -139,13 +136,12 @@ test('WHAT[work-049] a new human reply after the question unlocks the same task'
     const parked = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    const answer = await this.ask('Which environment?');\n    return { answer };`), name: 'reply-ask',
           intent: 'Record the question and retain the paused program until the real user reply arrives.',
-          remainingScopeTurnsEstimate: 3,
         },
       context(session),
     )
     await humanInput(hooks, runtime, session, 'user-reply', 'staging')
     const resumed = await hooks.tool['todowrite-for-plan'].execute(
-      { name: 'resume-question', intent: 'Resume the original question with the real user reply under this new request window.', program: program('return await this.unpark(' + JSON.stringify(nameOf(parked)) + ', "staging");'), remainingScopeTurnsEstimate: 3 },
+      { name: 'resume-question', intent: 'Resume the original question with the real user reply under this new request window.', program: program('return await this.unpark(' + JSON.stringify(nameOf(parked)) + ', "staging");') },
       context(session, 'reply-call', 'reply-run'),
     )
     assert.match(String(resumed), /# ok/)

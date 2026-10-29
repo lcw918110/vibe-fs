@@ -5,7 +5,7 @@ import * as recovery from '../../../dist/OpenCode/Host/SessionRecoveryHostSurfac
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import { withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
 
-test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and their replay project one committed target into every Host request', async () => {
+test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and their replay retain the Host target with one committed lease', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const input = { sessionID: 'ses-concurrent-admission', messageID: 'msg-concurrent-admission', agent: 'engineer' }
     const outputs = Array.from({ length: 2 }, () => ({
@@ -75,7 +75,7 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
     runtime.pushHostMessage(input.sessionID, {
       info: {
         id: 'assistant-fresh-human', sessionID: input.sessionID, parentID: fresh.message.id,
-        role: 'assistant', agent: input.agent, providerID: 'provider', modelID: 'engineer-model',
+        role: 'assistant', agent: input.agent, providerID: 'host', modelID: 'selected-model',
         time: { created: 2 },
       },
       parts: [],
@@ -126,7 +126,7 @@ test('WHAT[managed-chat-execution-003] concurrent exact chat admissions and thei
   })
 })
 
-test('WHAT[managed-chat-execution-003] an exact admission joining after committed Host projection receives its own complete model', async () => {
+test('WHAT[managed-chat-execution-003] an exact admission after concurrent admissions preserves the Host model and reuses capacity', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const get = runtime.client.session.get
     runtime.client.session.get = async (args) => args.path.id === 'ses-late-admission'
@@ -161,6 +161,7 @@ test('WHAT[managed-chat-execution-003] an exact admission joining after committe
         'every joined admission keeps its own host-provided model; the plugin verifies and never rewrites it')
     }
     const capacity = routing.sharedCapacitySnapshot()
+    assert.deepEqual(capacity, beforeReplay)
     assert.equal(capacity.executions.filter((execution) => execution.sessionId === input.sessionID).length, 1)
     assert.equal(capacity.tokens.filter((token) => token.owner.sessionId === input.sessionID).length, 1)
   })

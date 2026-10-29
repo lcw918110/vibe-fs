@@ -1,5 +1,7 @@
 # verification-system 测试说明
 
+编写、构建、运行或优化测试前读取 [AXIOMS.md](../AXIOMS.md)。它是本包唯一规则正文；旧 `WHAT.md` 仅作导航，现有测试锚点仍对应新文件中的同编号 SPEC。本文记录设施、证据与边界，不定义第二套测试规则。
+
 最新N00证据为[1eb CI](../../../proposals/archive/2026-10-06/baselines/1eb-ci/vibe-fs-1eb-ci-receipt.txt)：实际merge38141ff83，format/check/build通过，原300秒真实截断，793/821排空、006/010活动、26queued、无summary，group3068 accepted=true。010只有31.581ms名义余量且未观察body/PID，016未启动；不由last verdict认定故障，也不补造0fail或工具回收。下方ccfc的pending-only是旧输入证书。M1-A将补actual worker pre-import/exit身份与CPU累计观测；不把墙钟差叫IO，不改变判决续期、预算或并发。
 
 2026-10-06 N04-C3：正式016新增三个Darwin native integration case，先等实际Node consumer读只读member并exit73、实际进程组排空，再让action返回成功或抛原Error/null。scope必须拒绝同consumerError，或以原cause和精确两项errors聚合；每例同时验证原字节、PID ESRCH、四owner完整dev/ino/mode/size/bytes及清单恢复。gen167真实3/0；丢弃consumer失败变异0/3，null回退变异2/1，实际资源恢复先通过，生产helper已恢复原SHA256。最终固定输入的小物理和正式unit收据见[执行契约](../../../proposals/N04真实只读Fable执行契约-2026-10-05.md)。native定向运行不冒称完整integration orchestrator，默认unit的native skip不算通过；T418/T419/GAP-055及FD/backing/ABA/actualverify保持未闭合。
@@ -58,7 +60,7 @@ Node/npm 回归按实际声明的 transitive 依赖选缺库叶，不将某个 n
 
 016 增加选定 SDK 的正式轻量用例与显式 integration 入口；完整归档及原 global.json 驱动实际版本、SDK/runtime 路径、库存与回收断言。integration 要求明确 `WXS_VERIFICATION_DOTNET_ROOT`，缺少该选择不默认跳过；默认层只跳过 integration，外借实际 SDK 反例另外显式披露工具条件。实际计数和证明范围见[SDK准备记录](../../../proposals/archive/2026-10-04/S03选定SDK准备-2026-10-04.md)。不证明 NuGet、实际 Fable、只读执行或实际 verify；原两个 TODO 保留。
 
-[WHAT](../WHAT.md) 定义必要边界及必须统一的方法；本说明解释当前测试，不另立规则。2026-09-28用户确认008按命题要求判断断言完整性，并在成本核查后采用016固定隔离快照方向；016运行器改造与证明仍未完成。测试通过不表示全仓已满足每项证明义务。
+[测试规则](../AXIOMS.md) 定义必要边界及必须统一的方法；本说明解释当前测试，不另立规则。2026-09-28用户确认008按命题要求判断断言完整性，并在成本核查后采用016固定隔离快照方向；016运行器改造与证明仍未完成。测试通过不表示全仓已满足每项证明义务。
 
 ## [006] 的测试用例与证明范围
 
@@ -102,7 +104,7 @@ ProcessHost 的 health 与项目 `/path` 各自在原阶段 deadline 内观察�
 
 | 条款 | 当前证据及边界 |
 |---|---|
-| 001、003、019 | 层级、逐级证明与行为测试原则需结合人工审阅；不靠读取条文或统计断言函数证明 |
+| 001、003、019 | 层级选择、准备隔离与行为测试原则需结合人工审阅；不靠读取条文或统计断言函数证明 |
 | 002、014 | 注册、场景编译及 release 控制的真实 Long Stroke；普通套件跳过真实宿主用例，不能据此宣称发布通过 |
 | 004、005 | 受控门禁反例、非零失败、停止后续步骤；不是全仓每一门禁已逐一闭合 |
 | 006 | 见上表；全程接线和每种业务进展的有效性仍有审阅工作 |

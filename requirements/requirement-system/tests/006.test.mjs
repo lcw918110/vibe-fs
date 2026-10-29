@@ -27,3 +27,21 @@ test('WHAT[requirement-system-006] package completeness accepts the two document
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+test('WHAT[requirement-system-006] migrated package requires AXIOMS even when the old WHAT file exists', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spec-migrated-'))
+  try {
+    const directory = join(root, 'verification-system')
+    mkdirSync(join(directory, 'tests'), { recursive: true })
+    writeFileSync(join(directory, 'WHY.md'), '# Reasons\n')
+    writeFileSync(join(directory, 'AXIOMS.md'), '## SPEC\n### [001] Rule\n')
+    assert.deepEqual(packageProblems(directory), [])
+    writeFileSync(join(directory, 'WHAT.md'), '## [001] Obsolete rule\n')
+    rmSync(join(directory, 'AXIOMS.md'))
+    assert.deepEqual(packageProblems(directory), ['AXIOMS.md: expected file'])
+    mkdirSync(join(directory, 'AXIOMS.md'))
+    assert.deepEqual(packageProblems(directory), ['AXIOMS.md: expected file'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

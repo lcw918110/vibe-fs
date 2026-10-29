@@ -99,7 +99,6 @@ export const childTurn = async (hooks, runtime, child, run, prose, material, awa
       {
         name: `child-program-${run}`,
         intent: 'Observe this child program result before the host reports the provider turn ending.',
-        remainingScopeTurnsEstimate: 3,
         program: `class Js extends JsProgram { async run() { return { answer: ${JSON.stringify(material)} }; } }`,
       },
       { sessionID: child, agent: role, callID: `call-${run}`, messageID: run },
@@ -115,14 +114,20 @@ export const childTurn = async (hooks, runtime, child, run, prose, material, awa
 
 let callSequence = 0
 
-/** `this.fork` through the real plugin surface. */
-export const forkCall = (hooks, owner, name, charge, callID = 'call-fork-' + (++callSequence)) =>
+// Scope annotation (common law «Scope»): every call below goes through the
+// `withExecutablePlugin` tool wrapper (verification-system plugin-fixture.mjs),
+// which injects `{ kind: 'keepLast' }` on a seeded retention when the args carry
+// no own `scope` key. Pass an explicit `scope` only to assert the gate itself.
+
+/** `this.fork` through the real plugin surface. Optional `scope` is the flat
+ * annotation every tool call carries; omitted = fixture default (keepLast). */
+export const forkCall = (hooks, owner, name, charge, callID = 'call-fork-' + (++callSequence), scope) =>
   hooks.tool['todowrite-for-manager'].execute(
     {
       program: `class Js extends JsProgram { async run() { return await this.fork({ name: ${JSON.stringify(name)}, charge: ${JSON.stringify(charge)} }, []); } }`,
           name: callID,
           intent: 'Wait for this delegation receipt within the single admitted request window.',
-          remainingScopeTurnsEstimate: 3
+          ...(scope === undefined ? {} : { scope }),
         },
     { sessionID: owner, agent: 'manager', callID, messageID: `msg-${callID}` },
   )
@@ -133,8 +138,7 @@ export const resumeCall = (hooks, owner, name, charge, callID = 'call-resume-' +
     {
       program: `class Js extends JsProgram { async run() { return await this.resume({ name: ${JSON.stringify(name)}, charge: ${JSON.stringify(charge)}${attach === undefined ? '' : `, attach: ${JSON.stringify(attach)}`} }, []); } }`,
           name: callID,
-          intent: 'Wait for this delegation receipt within the single admitted request window.',
-          remainingScopeTurnsEstimate: 3
+          intent: 'Wait for this delegation receipt within the single admitted request window.'
         },
     { sessionID: owner, agent: 'manager', callID, messageID: `msg-${callID}` },
   )

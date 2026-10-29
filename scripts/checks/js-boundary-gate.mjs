@@ -5,8 +5,8 @@
 // by scanAll's `fable-modules` rule: same requirements file set (every .mjs/.js
 // under requirements lives under a tests/ directory), strictly broader pattern
 // (`fable_modules` matches every `dist/fable_modules` line and more), same
-// BUILD_VERIFICATION_FILES allowlist. Host physical canaries carry no
-// fable_modules lines, so scanAll's extra canary allowlist changes nothing.
+// BUILD_VERIFICATION_FILES allowlist. Explicit raw Host canaries may inspect
+// the representation they verify; neighboring semantic tests and helpers may not.
 // Run the single sweep; any A-D debt is RED.
 
 import { join, resolve } from 'node:path'

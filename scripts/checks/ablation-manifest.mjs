@@ -2,6 +2,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { ruleDocumentName } from '../lib/spec-rules.mjs'
 
 const ROOT = process.cwd()
 
@@ -22,7 +23,7 @@ export function check(context) {
       .map((entry) => entry.name)
       .filter((name) => {
         try {
-          readAt(`requirements/${name}/WHAT.md`)
+          readAt(`requirements/${name}/${ruleDocumentName(name)}`)
           return true
         } catch {
           return false

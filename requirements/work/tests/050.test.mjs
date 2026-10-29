@@ -72,7 +72,6 @@ test('WHAT[work-050] this.ask records the question and parks the program', async
     const parked = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    const answer = await this.ask('Which deployment environment should this target?');\n    return { answer };`), name: 'ask-deploy',
         intent: 'Record the question and retain the paused program until the real user reply arrives.',
-        remainingScopeTurnsEstimate: 3,
       },
       context(session),
     )
@@ -85,7 +84,7 @@ test('WHAT[work-050] this.ask records the question and parks the program', async
     // 等待门禁要求真实用户输入先到达；此后 unpark 注入的值即 await 的值。
     await humanInput(hooks, runtime, session, 'user-reply', 'staging')
     const resumed = await hooks.tool['todowrite-for-plan'].execute(
-      { name: 'resume-question', intent: 'Resume the original question with the real user reply under this new request window.', remainingScopeTurnsEstimate: 3, program: program('return await this.unpark(' + JSON.stringify(nameOf(parked)) + ', "staging");') },
+      { name: 'resume-question', intent: 'Resume the original question with the real user reply under this new request window.', program: program('return await this.unpark(' + JSON.stringify(nameOf(parked)) + ', "staging");') },
       context(session, 'plan-call-reply', 'plan-run-reply'),
     )
     assert.match(resumed, /# ok/)
@@ -122,7 +121,6 @@ test('WHAT[work-050] ask still parks after a review, and deliver is not a promot
     const output = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    await this.ask('Which fact is still missing?');\n    return { unreachable: true };`), name: 'ask-after-review',
         intent: 'Record the question and retain the paused program until the real user reply arrives.',
-        remainingScopeTurnsEstimate: 3,
       },
       context(session, 'plan-call-after', 'plan-run-after'),
     )
@@ -142,14 +140,13 @@ test('WHAT[work-050] a pending question blocks every new plan call until the use
     const parked = await hooks.tool['todowrite-for-plan'].execute(
       { program: program(`    await this.ask('Still waiting?');\n    return { done: true };`), name: 'ask-wait',
         intent: 'Record the question and retain the paused program until the real user reply arrives.',
-        remainingScopeTurnsEstimate: 3,
       },
       context(session),
     )
     assert.match(parked, /# parked/)
 
     const blocked = await hooks.tool['todowrite-for-plan'].execute(
-      { name: 'abandon-question', intent: 'Request cleanup only if the pending-question gate admits this operation.', remainingScopeTurnsEstimate: 3, program: program('return await this.abandon(' + JSON.stringify(nameOf(parked)) + ');') },
+      { name: 'abandon-question', intent: 'Request cleanup only if the pending-question gate admits this operation.', program: program('return await this.abandon(' + JSON.stringify(nameOf(parked)) + ');') },
       context(session, 'plan-call-abandon', 'plan-run-abandon'),
     )
     assert.match(String(blocked), /等待|waiting|不能/)

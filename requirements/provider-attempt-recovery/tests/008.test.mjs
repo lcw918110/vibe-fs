@@ -6,6 +6,16 @@ import * as turns from '../../../dist/Interaction/Repair/CompletedTurnSurface.js
 
 const planner = compression.attemptPlanner
 
+test('WHAT[provider-attempt-recovery-008] upstream thought-only error without output is unified into repairable continuation', () => {
+  const parts = [{ type: 'reasoning', text: 'thinking without answering' }]
+  const errorName = 'upstream_error'
+  const outcome = turns.classifyOutcome(true, null, errorName, parts)
+  assert.ok(outcome.kind === 'TurnFailed' || outcome.kind === 'TurnNeedsContinuation')
+  assert.equal(turns.formalContentUnusable(parts), true)
+  assert.equal(turns.needsInteractionRepair('engineer', false, 'stop', parts), true)
+  assert.equal(turns.needsInteractionRepair('devops', false, 'stop', parts), true)
+})
+
 test('WHAT[provider-attempt-recovery-008] idle arriving before exact empty provider error never dispatches interaction repair', async () => {
   for (const parts of [[], [{ type: 'text', text: '<tool_call>read</tool_call>' }], [{ type: 'text', text: 'partial answer' }]]) {
     const result = await reconcile.providerErrorIdleRaceScenario({

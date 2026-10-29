@@ -165,12 +165,7 @@ test('WHAT[repository-programming-031] a live parked handle is folded into the P
   // chat.message + 真实 owning assistant 执行消息 + 载体回合 transform。
   const bootstrap = async (hooks, runtime, session) => {
     const rootID = `root-${session}`
-    const root = {
-      id: rootID,
-      role: 'user',
-      model: { providerID: 'provider', modelID: 'manager-model' },
-      parts: [{ type: 'text', text: 'Continue the parked review.' }],
-    }
+    const root = { id: rootID, role: 'user', model: { providerID: 'fixture', modelID: 'manager-model' }, parts: [{ type: 'text', text: 'Continue the parked review.' }] }
     await acceptAuthorityRoot(runtime, session, 'manager')
     runtime.pushHostMessage(session, root)
     await hooks['chat.message']({ sessionID: session, messageID: rootID, agent: 'manager' }, { message: root, parts: root.parts })

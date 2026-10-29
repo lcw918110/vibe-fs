@@ -24,6 +24,24 @@ test('WHAT[js-semantic-surface-003] registration is static evidence and does not
   assert.match(validateSurfaceManifest([entry], root).join('\n'), /no .test.mjs imports/)
 })
 
+test('WHAT[js-semantic-surface-003] migrated rule owners and law owners resolve through AXIOMS without WHAT fallback', (t) => {
+  const { root, entry, write } = createManifestFixture(t)
+  const migrated = { ...entry, owner: 'verification-system', laws: ['verification-system-001'] }
+  write('requirements/verification-system/AXIOMS.md', '## SPEC\n### [001] Current rule\n')
+  assert.deepEqual(validateSurfaceManifest([migrated], root), [])
+  const borrowedLaw = { ...entry, laws: ['verification-system-001'],
+    lawOwners: { 'verification-system-001': 'verification-system' } }
+  assert.deepEqual(validateSurfaceManifest([borrowedLaw], root), [])
+  write('requirements/verification-system/WHAT.md', '## [001] Obsolete rule\n')
+  write('requirements/verification-system/AXIOMS.md', '## AXIOM\n### [001] Outside SPEC\n## SPEC\n')
+  assert.match(validateSurfaceManifest([migrated], root).join('\n'), /law verification-system-001 is absent.*AXIOMS/)
+  write('requirements/verification-system/AXIOMS.md', '## SPEC\n### [002] Different rule\n')
+  assert.match(validateSurfaceManifest([migrated], root).join('\n'), /law verification-system-001 is absent.*AXIOMS/)
+  rmSync(join(root, 'requirements/verification-system/AXIOMS.md'))
+  assert.match(validateSurfaceManifest([migrated], root).join('\n'), /missing owner.*AXIOMS/)
+  assert.match(validateSurfaceManifest([borrowedLaw], root).join('\n'), /law verification-system-001 owner.*missing.*AXIOMS/)
+})
+
 test('WHAT[js-semantic-surface-003] a body reference cannot resurrect a retired law', (t) => {
   const { root, entry, write } = createManifestFixture(t)
   write('requirements/owner/WHAT.md', '# owner\n\n## [002] Another law\nSee WHAT[OWNER-001].\n')
@@ -65,7 +83,9 @@ test('WHAT[js-semantic-surface-003] uncompiled and un-emitted sources cannot sat
 test('WHAT[js-semantic-surface-003] explicit law ownership resolves against that owner and its current headings', (t) => {
   const { root, entry, write } = createManifestFixture(t)
   const delegated = { ...entry, laws: ['other-007'], lawOwners: { 'other-007': 'other' } }
-  assert.match(validateSurfaceManifest([delegated], root).join('\n'), /owner WHAT is missing/)
+  assert.deepEqual(validateSurfaceManifest([delegated], root), [
+    'Owner/Surface.js: law other-007 owner rule document is missing (requirements/other/WHAT.md)',
+  ])
   write('requirements/other/WHAT.md', '# other\n\n## [007] Contract\n')
   assert.deepEqual(validateSurfaceManifest([delegated], root), [])
   write('requirements/other/WHAT.md', '# other\n\n## [008] Changed contract\n')

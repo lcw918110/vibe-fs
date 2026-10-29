@@ -56,22 +56,17 @@ module PromptPhysicalAcceptance =
             { new IDisposable with
                 member _.Dispose() = callDispose rawSub }
 
-        let convertRaw (raw: obj) =
-            let kind = unbox<string> (raw?kind)
-
-            if kind = "Accepted" then
-                let pid = unbox<string> (raw?physicalUserMessageId)
-                Some(PromptPhysicalOutcome.Accepted(PhysicalUserMessageId.create pid))
-            else
-                let reason = unbox<string> (raw?reason)
-                Some(PromptPhysicalOutcome.Rejected reason)
-
         let convertedTask =
             task {
                 let! (rawOpt: obj option) = rawTask
 
                 match rawOpt with
-                | Some raw when not (isNull raw) -> return convertRaw raw
+                | Some raw when not (isNull raw) && unbox<string> raw?kind = "Accepted" ->
+                    let pid = unbox<string> raw?physicalUserMessageId
+                    return Some(PromptPhysicalOutcome.Accepted(PhysicalUserMessageId.create pid))
+                | Some raw when not (isNull raw) ->
+                    let reason = unbox<string> raw?reason
+                    return Some(PromptPhysicalOutcome.Rejected reason)
                 | _ -> return None
             }
 

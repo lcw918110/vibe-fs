@@ -81,6 +81,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     /// session loop, so an accepted interrupt still owes a continuation; the
     /// measurement is parked here instead of being dropped with its recovery.
     let interruptedInFlight = Dictionary<string, LatencyMeasurement>()
+    // DSL-MUTABLE: resource — attempt generations and the watchdog disposal latch
     let mutable generation = 0
     let mutable disposed = false
 

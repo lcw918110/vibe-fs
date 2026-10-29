@@ -11,10 +11,12 @@
 每个功能包目录通常包含：
 ```text
 WHY.md      本功能在总流程中的价值与存在理由
-WHAT.md     具体的行为约定、边界与输入输出说明
+WHAT.md 或 AXIOMS.md  具体的行为约定、边界与输入输出说明
 tests/      开发自保与回归测试（NNN.test.mjs）
 APPLIES-TO  （可选）该包关心的源码文件路径参考
 ```
+
+测试规则集中在 `verification-system/AXIOMS.md`，按 AXIOM → LEMMA → SPEC 组织；该包旧 `WHAT.md` 仅作导航。其他包继续读取各自的 `WHAT.md`。
 
 待决事项与已知限制清单见 [GAP.md](GAP.md)；完整包清单见 [INDEX.md](INDEX.md)。
 
@@ -26,7 +28,7 @@ APPLIES-TO  （可选）该包关心的源码文件路径参考
 | Package | 职责说明 |
 |---|---|
 | [requirement-system](requirement-system/WHAT.md) | 说明书组织规则与包结构约定。 |
-| [verification-system](verification-system/WHAT.md) | 分层测试调度（单元测试、集成测试与端到端回归）。 |
+| [verification-system](verification-system/AXIOMS.md) | 测试编写、优化与分层调度（单元测试、集成测试与端到端回归）。 |
 | [feature-ablation](feature-ablation/WHAT.md) | 功能消融与模块开关，支持渐进式关闭未审机制。 |
 | [js-semantic-surface](js-semantic-surface/WHAT.md) | JS 语义入口约定，提供稳定的测试与调用表面。 |
 

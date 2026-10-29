@@ -100,6 +100,7 @@ module DegenerationInterrupts =
     /// One consumer's view: `IsOwnAbort()` is true once per interrupt recorded
     /// after the cursor was opened.
     type Cursor(sessionId: SessionId) =
+        // DSL-MUTABLE: subscription — this consumer's next unread interrupt
         let mutable seen = countOf sessionId
 
         member _.IsOwnAbort() : bool =

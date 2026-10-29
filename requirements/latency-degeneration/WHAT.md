@@ -8,7 +8,7 @@
 `AbortSession`（它还会摘除并中止子代理）。但 OpenCode 没有单次 Provider attempt 的中断，
 `InterruptAttempt` 在宿主侧就是对该 session 的 abort：它停止整个 Session 循环（含正在执行的工具），
 子会话本身保留。所以中断一旦受理，续跑由看门狗负责到底（见 [011]、[012]）。
-中断真实获接纳后在同一个 Session 发起 continuation，保持已产生的思考与输出。该动作以 `PromptDispatcher.AwaitMode.Detached` fire-and-forget 提交，并注册 `ContinuationAcceptanceObserver`；调用端不等待 SDK promise 或物理接受，只有 Host 的 `PhysicalAccepted` 回调能宣布已续跑。已明确拒绝或抛错则向原受管子会话的 `TerminalOutcome.Failed` 返回，供父 Join 收到失败；单纯排队不是成功。原请求的中断回执也由独立 callback 处理，不串行阻塞事件 hook。不设置第二个任意的恢复超时。`requirements/latency-degeneration/tests/002.test.mjs` 通过真实 SQLite/AgentJournal 验证 Detached 返回与物理确认的因果区别。
+中断真实获接纳后在同一个 Session 发起 continuation，保持已产生的思考与输出。该动作以 `PromptDispatcher.AwaitMode.Detached` fire-and-forget 提交，并注册 `ContinuationAcceptanceObserver`；调用端不等待 SDK promise 或物理接受，只有 Host 的 `PhysicalAccepted` 回调能宣布已续跑。已明确拒绝或抛错则向原受管子会话的 `TerminalOutcome.Failed` 返回，供父 Join 收到失败；单纯排队不是成功。原请求的中断回执也由独立 callback 处理，不串行阻塞事件 hook。不设置第二个任意的恢复超时。`tests/host/009.test.mjs` 通过真实 SQLite/AgentJournal 验证 Detached 返回与物理确认的因果区别。
 
 统计、阈值与样本语义（完整样本、右删失样本、遗忘）由 wanxiangli/degeneration
 的 RequestLatencyDetector 拥有；本域只承诺宿主侧状态机与接线行为。阈值是 p99、**无先验**，
@@ -68,15 +68,15 @@ dispose 收尾。
 
 模型返回 `finish=tool-calls` 并带真实 `time.completed` 时，该 **Provider 请求已结束**，虽然整个 Session 仍将在工具执行后继续。按 `SessionId + Assistant ProviderRunId` 精确完成本轮耗时计量，立即撤销定时器；不得把 `resetScope`、其它工具的执行、下一次模型请求累加成旧 Provider 请求的延迟并错误中断 Engineer。确认失败或用户取消亦按同一 ProviderRunId 精确撤销，但不记成功样本；迟到的旧终态不得撤销新回合。
 
-现场依据：工作树 `.Herdchestra/wanxiangshu/events/*.ndjson` 中 2026-10-27 02:38–02:47 UTC 多个 Engineer 的 `ScopeReanchored` 后出现 `ProviderRetryAttempt`，其 payload SHA-256 与 `resources/provider/runtime/latency-degeneration/zh-CN.md` 去尾换行后的文本完全一致，且取消的物理 Provider 用户请求之间持续存在不同 assistant run 的 `XTracePartAppended(tool_result)`，证明看门狗延迟超出了单次模型请求。`requirements/latency-degeneration/tests/003.test.mjs` 验证真实 Codec 工具终态与精确撤销。
+现场依据：工作树 `.Herdchestra/wanxiangshu/events/*.ndjson` 中 2026-10-27 02:38–02:47 UTC 多个 Engineer 的 `ScopeReanchored` 后出现 `ProviderRetryAttempt`，其 payload SHA-256 与 `resources/provider/runtime/latency-degeneration/zh-CN.md` 去尾换行后的文本完全一致，且取消的物理 Provider 用户请求之间持续存在不同 assistant run 的 `XTracePartAppended(tool_result)`，证明看门狗延迟超出了单次模型请求。`tests/008.test.mjs` 验证真实 Codec 工具终态与精确撤销。
 
 ## [009] 异步因果接力与 fast-check 无内部等待
 
 中断计时器的回调只尝试为确切 ProviderRun 建立单次接力，随后立即返回，不 await 任意 Host Promise。中断已受理时派发带真实物理接纳观察者的 Detached continuation；物理接纳才确认已续跑，确定拒绝则发布原受管子会话 Failed 终局，同一代际最多结算一次。Provider 真正自行继续、Session 取消、迟到旧回执或新 ProviderRun 启动必须按会话与代际围栏清除旧接力，**同时 Dispose 相应物理接纳观察器**，不能复活或覆盖新运行。 若宿主明确拒绝 InterruptAttempt，原 Provider 保留继续运行的权利；但在没有精确 Provider terminal 的情况下 Session 随后转 idle，或 idle 先抵达然后中断被拒，则原会话已无人继续，必须按本次代际一次性向父方返回 Failed，而不是只注销监测并写诊断。
 
-`tests/005.test.mjs` 进一步通过真实 HostSessionNudge、SQLite/AgentJournal 验证首次明确拒绝、迟到 Refused、真实 PhysicalAccepted 与 OutcomeUnknown 都由对应原生回执驱动。
+`tests/host/009.test.mjs` 进一步通过真实 HostSessionNudge、SQLite/AgentJournal 验证首次明确拒绝、迟到 Refused、真实 PhysicalAccepted 与 OutcomeUnknown 都由对应原生回执驱动。
 
-`tests/004.test.mjs` 的 seeded fast-check 使用生产同构 Watchdog，随机交错中断受理／拒绝／抛错、继续提交／拒绝、真实物理接纳／迟到、两种 idle 与拒绝顺序以及新旧回合切换；不使用人为的等待超时给无回执请求制造假成功。外部宿主若永远不发送任何完成或拒绝回执，领域不能伪造其结果；保证的是插件事件循环不等待它，下一次可核验 Host 事件仍能正常前进，并只凭可观察事件判定终局。
+`tests/009.test.mjs` 的 seeded fast-check 使用生产同构 Watchdog，随机交错中断受理／拒绝／抛错、继续提交／拒绝、真实物理接纳／迟到、两种 idle 与拒绝顺序以及新旧回合切换；不使用人为的等待超时给无回执请求制造假成功。外部宿主若永远不发送任何完成或拒绝回执，领域不能伪造其结果；保证的是插件事件循环不等待它，下一次可核验 Host 事件仍能正常前进，并只凭可观察事件判定终局。
 
 ## [010] 精确物理取消不等待中断 Promise 才开始接力
 
@@ -150,4 +150,4 @@ Fork 的 Join 本来就把 `Aborted` 当观察，不受影响。
 
 库侧阈值无先验，p99 至少要 100 条观测：之前 `ThresholdMs` 为 +∞。宿主照常测量与记样本（样本本身
 结束保护期），但 +∞ 阈值不调度任何定时器、不中断；这类从未武装的测量在 idle 时也不返回失败。
-验收：`tests/013.test.mjs` 的 `latency-degeneration-014`。
+验收：`tests/014.test.mjs`。

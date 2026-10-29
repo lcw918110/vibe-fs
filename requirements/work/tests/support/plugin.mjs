@@ -46,7 +46,6 @@ export const withReview = async (body, { session = 'review-manager' } = {}) => w
       name: 'kickoff-kept-review',
       program: 'class Js extends JsProgram { async run() { return await this.review([{ key: "target-gap", value: "open" }]); } }',
       intent: 'Keep the opened obligation and wait for this review to settle.',
-      remainingScopeTurnsEstimate: 3,
     },
     { sessionID: session, callID: 'kickoff-call', messageID: 'kickoff-run', agent: 'manager' },
   )
@@ -78,7 +77,7 @@ export const withReview = async (body, { session = 'review-manager' } = {}) => w
       }
     }`
     const result = await hooks.tool['todowrite-for-manager'].execute(
-      { name: 'review-' + call, program, intent: 'Wait for this review to settle and preserve its original result.', remainingScopeTurnsEstimate: 3 },
+      { name: 'review-' + call, program, intent: 'Wait for this review to settle and preserve its original result.' },
       { sessionID: session, callID: call, messageID: run, agent: 'manager' },
     )
     // The review run is finished once its tool returns. A later provider request

@@ -6,6 +6,8 @@ const CLAUSE_HEADING_RE = /^#{1,6}\s+(?:\[(\d{3})\]|([A-Za-z][A-Za-z0-9]*-\d{3}(
 const escapedAlternation = (prefixes) =>
   prefixes.map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
 
+export const ruleDocumentName = (pkg) => pkg === 'verification-system' ? 'AXIOMS.md' : 'WHAT.md'
+
 /** Return whether a path should be ignored as a proposals directory (WHAT[011]). */
 export const isProposalPath = (path) => /(?:^|[\\/])proposals(?:[\\/]|$)/.test(path)
 
@@ -71,6 +73,16 @@ export const clauseDefinitionHeadings = (text) => {
   return findings
 }
 
+export const ruleClauseHeadings = (text, pkg) => {
+  if (ruleDocumentName(pkg) !== 'AXIOMS.md') return clauseDefinitionHeadings(text)
+  let inSpec = false
+  const spec = text.split('\n').map((line) => {
+    if (/^#{1,2}\s/.test(line)) inSpec = /^## SPEC(?:\s|$)/.test(line)
+    return inSpec ? line : ''
+  }).join('\n')
+  return clauseDefinitionHeadings(spec)
+}
+
 /** Return formal Clause headings while allowing filtering by known prefixes/packages. */
 export const formalClauseDefinitionHeadings = (text, prefixes = []) => {
   const known = new Set(prefixes)
@@ -83,10 +95,10 @@ export const formalClauseDefinitionHeadings = (text, prefixes = []) => {
 /**
  * Fail-closed duplicate clause check extracted from the retired spec gate.
  *
- * Pure: takes WHAT.md entries `{ file, pkg, text }`, returns violation objects
+ * Pure: takes document entries `{ file, pkg, text }`, returns violation objects
  * `{ file, line, msg }`.
  * - WHAT[001]: reports every repeated clause ID; first definition wins.
- * - WHAT[005]: reports any clause definition in a non-WHAT.md file.
+ * - WHAT[005]: reports any clause definition outside the package rule document.
  * - WHAT[011]: ignores entries under `proposals/`.
  */
 export const duplicateClauseDefinitions = (entries) => {
@@ -97,15 +109,21 @@ export const duplicateClauseDefinitions = (entries) => {
   for (const { file, pkg, text } of entries) {
     if (isProposalPath(file)) continue
 
-    const isWhat = /(?:^|[\\/])WHAT\.md$/.test(file)
+    const ruleFile = ruleDocumentName(pkg)
+    const isRuleDocument = file.split(/[\\/]/).at(-1) === ruleFile
+    const allowedLines = new Set(ruleClauseHeadings(text, pkg).map(({ line }) => line))
 
     for (const { id, line } of clauseDefinitionHeadings(text)) {
-      if (!isWhat) {
+      if (!isRuleDocument) {
         findings.push({
           file,
           line,
-          msg: `非 WHAT 文件严禁定义正式条款：${id}（位于 ${file}:${line}）`,
+          msg: `非 ${ruleFile.slice(0, -3)} 文件严禁定义正式条款：${id}（位于 ${file}:${line}）`,
         })
+        continue
+      }
+      if (!allowedLines.has(line)) {
+        findings.push({ file, line, msg: `正式条款必须定义在 SPEC 部分：${id}（位于 ${file}:${line}）` })
         continue
       }
 

@@ -106,6 +106,8 @@ module RuntimeSurface =
 
     val recordedClosureKind: rootKindLabel: string -> isManager: bool -> agentOwnerLife: obj -> recorded: obj -> string
 
+    val closureKindForRoot: rootKindLabel: string -> isManager: bool -> provenLife: obj -> obj
+
     val rootKindOfKind: closureKind: string -> string
 
     val witnessKindOf: closureKind: string -> obj

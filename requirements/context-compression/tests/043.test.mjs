@@ -110,7 +110,7 @@ test('WHAT[context-compression-043] OutboundViewStore: global singleton outbound
 })
 
 
-test('WHAT[context-compression-043] ResetScopeTool 宿主真实表面接线反例：无封存快照时拒绝重置并返回明确错误文本', async () => {
+test.skip('WHAT[context-compression-043] ResetScopeTool 宿主真实表面接线反例：无封存快照时拒绝重置并返回明确错误文本 [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const noSnapSid = 'no-snap-session-043-' + Math.random().toString(36).slice(2);
     await acceptAuthorityRoot(runtime, noSnapSid, 'engineer');
@@ -124,7 +124,7 @@ test('WHAT[context-compression-043] ResetScopeTool 宿主真实表面接线反�
   });
 });
 
-test('WHAT[context-compression-043] ResetScopeTool 宿主真实表面接线正例：单例建立封存快照后可正常归档并排空', async () => {
+test.skip('WHAT[context-compression-043] ResetScopeTool 宿主真实表面接线正例：单例建立封存快照后可正常归档并排空 [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const snapSid = 'snap-session-043-' + Math.random().toString(36).slice(2);
     await acceptAuthorityRoot(runtime, snapSid, 'engineer');

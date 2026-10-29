@@ -108,6 +108,17 @@ module DispatchSurface =
         afterClaim: (string -> Task) ->
             Task<obj>
 
+    val sendContinuationDetachedObserved:
+        port: obj ->
+        handle: JournalHandle ->
+        session: string ->
+        prompt: string ->
+        continuation: string ->
+        onAccepted: (string -> unit) ->
+        attachRegistration: (obj -> unit) ->
+        onRefused: (string -> unit) ->
+            Task<obj>
+
     val sendContinuationWithAcceptance:
         port: obj ->
         handle: JournalHandle ->

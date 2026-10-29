@@ -113,13 +113,7 @@ test('WHAT[work-036] manager transforms do not open work; the first review does,
     await hooks['chat.message'](
       { sessionID: managerSession, agent: 'manager' },
       {
-        message: {
-          id: 'msg-mgr-1',
-          sessionID: managerSession,
-          role: 'user',
-          agent: 'manager',
-          model: { providerID: 'provider', modelID: 'manager-model' },
-        },
+        message: { id: 'msg-mgr-1', sessionID: managerSession, role: 'user', agent: 'manager', model: { providerID: 'fixture', modelID: 'manager-model' } },
         parts: [{ id: 'prt-mgr-1', type: 'text', text: 'first instruction' }],
       },
     )
@@ -229,14 +223,7 @@ test('WHAT[work-036] engineer and devops prompts open nothing; a manager review 
       const physical = `root-${sessionId}`
       await acceptAuthorityRoot(runtime, sessionId, agent, physical)
       const user = {
-        info: {
-          id: physical,
-          sessionID: sessionId,
-          role: 'user',
-          agent,
-          model: { providerID: 'provider', modelID: `${agent}-model` },
-          time: { created: 1 },
-        },
+        info: { id: physical, sessionID: sessionId, role: 'user', agent, model: { providerID: 'fixture', modelID: `${agent}-model` }, time: { created: 1 } },
         parts: [{ id: `prt-${agent}`, type: 'text', text: 'first instruction' }],
       }
       await hooks['chat.message']({ sessionID: sessionId, agent }, { message: user.info, parts: user.parts })

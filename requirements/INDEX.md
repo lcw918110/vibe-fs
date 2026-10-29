@@ -1,13 +1,13 @@
 # 规范包索引 (Package Index)
 
-当前索引收录 **48 个活跃功能说明包**与 **1 个历史包**（`epistemic-reasoning`；`institutional-learning` 已整包退役）。
+当前索引收录 **49 个活跃功能说明包**与 **1 个历史包**（`epistemic-reasoning`；`institutional-learning` 已整包退役）。
 包的划分服务于理解总流程中的各个子领域，不是官僚条款，亦不作为 AI 验收法庭的依据。
 
 ## 1. 规范与消融 (Requirement & Ablation)
 | Package | 说明 |
 |---|---|
 | `requirement-system` | 说明书组织规则与包结构约定。 |
-| `verification-system` | 测试分层与调度说明。 |
+| `verification-system` | [测试规则](verification-system/AXIOMS.md)：测试编写、优化与分层调度。 |
 | `feature-ablation` | 模块开关与消融机制。 |
 | `js-semantic-surface` | JS 语义入口契约。 |
 
@@ -69,6 +69,7 @@
 | `prefix-stability` | 前缀逐字节稳定性保障。 |
 | `execution-failure-policy` | 失败分类与应对策略。 |
 | `provider-attempt-recovery` | 模型调用异常时的换绑与恢复。 |
+| `latency-degeneration` | 请求耗时监测、中断与同会话续行。 |
 | `host-provider-failure-ownership` | 接管宿主失败，统一恢复所有权。 |
 | `crash-reconciliation` | 进程崩溃现场恢复与状态调和。 |
 

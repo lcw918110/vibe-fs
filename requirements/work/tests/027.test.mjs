@@ -208,7 +208,6 @@ test('WHAT[work-027] Engineer/DevOps natural stop completes cleanly without requ
           name: `program-${run}`,
           program,
           intent: 'Observe this program result without treating it as a business delivery.',
-          remainingScopeTurnsEstimate: 3,
         },
         { sessionID: session, agent: name, callID: `call-${session}`, messageID: run },
       )

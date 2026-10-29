@@ -1,0 +1,54 @@
+✔ WHAT[requirement-system-001] declared clause IDs have one owner in the indexed packages (25.830958ms)
+✔ WHAT[requirement-system-001] repeated definitions are rejected while package-local numbers remain distinct (0.296042ms)
+✔ WHAT[requirement-system-004] ownership accepts multiline titles, modifiers and template suffixes (3.56575ms)
+✔ WHAT[requirement-system-004] ownership rejects missing and wrong primary clauses, but accepts cross-clause references (0.371875ms)
+✔ WHAT[requirement-system-005] formal clause definitions can only live in the package rule document (0.962083ms)
+✔ WHAT[requirement-system-005] clauseDefinitionHeadings surfaces ## [NNN] definitions from any file for detection (0.409209ms)
+✔ WHAT[requirement-system-005] migrated test rules accept AXIOMS and reject active clauses in the old file (0.712417ms)
+✔ WHAT[requirement-system-006] package completeness accepts the two documents and a tests directory (3.387042ms)
+✔ WHAT[requirement-system-006] migrated package requires AXIOMS even when the old WHAT file exists (1.3885ms)
+✔ WHAT[requirement-system-007] package explanatory documents may reference clauses but cannot define them (1.068084ms)
+✔ WHAT[requirement-system-008] spec gate rejects unknown, vacant, and suffixed clause references (0.988167ms)
+✔ WHAT[requirement-system-008] spec gate expands slash lists and checks range endpoints with lowercase clause IDs (0.370708ms)
+✔ WHAT[requirement-system-008] spec gate finds ## [NNN] Clause definition headings in WHAT.md (0.483ms)
+✔ WHAT[requirement-system-011] spec gate ignores proposals directory by default (1.020042ms)
+✖ WHAT[requirement-system-017] the executable verifier scans the complete requirements tree (469.344458ms)
+✔ WHAT[requirement-system-017] real discovery reads migrated SPEC clauses and refuses old-document fallback (2.342667ms)
+✔ WHAT[requirement-system-017] a deleted clause reports its surviving test, including nested files (1.50875ms)
+✔ WHAT[requirement-system-018] files map to live clauses without requiring a file for every clause (0.609792ms)
+✔ WHAT[requirement-system-018] wrong names and retired clause numbers are rejected; split files are allowed (0.143792ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 18
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 953.691167
+
+✖ failing tests:
+
+test at requirements/requirement-system/tests/017.test.mjs:9:1
+✖ WHAT[requirement-system-017] the executable verifier scans the complete requirements tree (469.344458ms)
+  AssertionError [ERR_ASSERTION]: requirements/delegation/tests/034.test.mjs: clause 034 is absent; notify the user to resolve its tests
+  requirements/repository-programming/tests/053.test.mjs:41: expected exactly WHAT[repository-programming-053], got ["repository-programming-006"]
+  + actual - expected
+
+  + [
+  +   'requirements/delegation/tests/034.test.mjs: clause 034 is absent; notify the user to resolve its tests',
+  +   'requirements/repository-programming/tests/053.test.mjs:41: expected exactly WHAT[repository-programming-053], got ["repository-programming-006"]'
+  + ]
+  - []
+
+      at TestContext.<anonymous> (file:///Users/yuanxi/.codex/worktrees/test-optimization-20261024/vibe-fs/requirements/requirement-system/tests/017.test.mjs:11:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.start (node:internal/test_runner/test:1257:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'requirements/delegation/tests/034.test.mjs: clause 034 is absent; notify the user to resolve its tests', 'requirements/repository-programming/tests/053.test.mjs:41: expected exactly WHAT[repository-programming-053], got ["repository-programming-006"]' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

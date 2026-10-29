@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import test from 'node:test'
 import { run as runBoundaryGate } from '../../../scripts/checks/js-boundary-gate.mjs'
@@ -20,6 +21,25 @@ test('WHAT[js-semantic-surface-002] the same gate accepts a registered public im
   write(file, importSource('Internal/Unregistered.js'))
   assert.equal(runBoundaryGate({ root }), 1)
   assert.ok(hits(root).some((hit) => hit.rule === 'deep-dist-import'))
+})
+
+test('WHAT[js-semantic-surface-002] raw Host canaries do not exempt neighboring semantic tests or helpers', t => {
+  const { root, write } = createWorkspaceFixture(t)
+  const gate = new URL('../../../scripts/checks/js-boundary-gate.mjs', import.meta.url).href
+  const check = () => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `const { run } = await import(${JSON.stringify(gate)}); process.exitCode = run()`],
+  { cwd: root, encoding: 'utf8' })
+  const rawImport = importSource('OpenCode/Plugin/PluginTransforms.js')
+  write('requirements/delegation/tests/037.test.mjs', rawImport)
+  write('requirements/work/tests/host/008.test.mjs', rawImport)
+  write('requirements/managed-session-lifecycle/tests/029.test.mjs', rawImport)
+  assert.equal(check().status, 0)
+  write('requirements/delegation/tests/038.test.mjs', rawImport)
+  write('requirements/work/tests/host/support.mjs', rawImport)
+  write('requirements/managed-session-lifecycle/tests/support/029.mjs', rawImport)
+  const rejected = check()
+  assert.equal(rejected.status, 1)
+  assert.match(rejected.stderr, /3 violation\(s\) across 3 file\(s\)/)
 })
 
 test('WHAT[js-semantic-surface-002] module discovery, generated-name probing and runtime representation access are detected', (t) => {

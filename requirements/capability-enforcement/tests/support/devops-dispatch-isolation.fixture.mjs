@@ -42,7 +42,6 @@ const runManagerProgram = async (hooks, sessionID, body) =>
       program: `class Js extends JsProgram { async run() { ${body} } }`,
       name: 'devops-dispatch-test-' + (++programSequence),
       intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
-      remainingScopeTurnsEstimate: 3,
     },
     { sessionID, agent: 'manager' },
   )

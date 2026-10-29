@@ -81,7 +81,6 @@ test('WHAT[work-039] the real review member launches with the canonical draft by
     writeFileSync(join(planDir, 'plan.md'), content)
     const result = await hooks.tool['todowrite-for-plan'].execute({
       name: 'launch-with-draft', intent: 'Launch the Manager with the saved, canonical planning draft.',
-      remainingScopeTurnsEstimate: 0,
       program: 'class Js extends JsProgram { async run() { return await this.review([]); } }',
     }, { sessionID: session, agent: 'plan', callID: 'launch-draft', messageID: 'launch-run' })
     assert.match(String(result), /kind = "Launched"/)
@@ -99,7 +98,6 @@ test('WHAT[work-039] a missing draft refuses the real review member before creat
     await reachReady(root, session)
     await hooks.tool['todowrite-for-plan'].execute({
       name: 'missing-draft', intent: 'Refuse a launch with no draft instead of creating an empty Manager.',
-      remainingScopeTurnsEstimate: 1,
       program: 'class Js extends JsProgram { async run() { return await this.review([]); } }',
     }, { sessionID: session, agent: 'plan', callID: 'missing-draft', messageID: 'missing-run' })
     assert.deepEqual(created, [])
@@ -330,8 +328,7 @@ const withReadyPlanSurface = (body) => withExecutablePlugin(async (hooks, direct
     sequence += 1
     return String(await hooks.tool['todowrite-for-plan'].execute(
       { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'plan-note-' + sequence,
-        intent: 'Launch the Manager from the ready plan and wait for the launch receipt.',
-        remainingScopeTurnsEstimate: 3 },
+        intent: 'Launch the Manager from the ready plan and wait for the launch receipt.' },
       { sessionID, agent: 'plan', callID: 'call-039-note-' + sequence, messageID: 'run-039-note', providerRunID: 'run-039-note' },
     ))
   }

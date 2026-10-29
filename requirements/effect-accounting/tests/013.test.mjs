@@ -66,13 +66,13 @@ const withRealPlugin = async (body, session = SESSION) => {
     await acceptAuthorityRoot(runtime, session, 'engineer')
 
     const root = {
-      info: { id: rootId, role: 'user', sessionID: session, time: { created: 1 } },
+      info: { id: rootId, role: 'user', sessionID: session, model: { providerID: 'fixture', modelID: 'engineer-model' }, time: { created: 1 } },
       parts: [{ type: 'text', text: 'Do the work.' }],
     }
     runtime.pushHostMessage(session, root)
     await hooks['chat.message'](
       { sessionID: session, messageID: rootId, agent: 'engineer' },
-      { message: { ...root.info, agent: 'engineer', model: { providerID: 'fixture', modelID: 'engineer-model' } }, parts: root.parts },
+      { message: root.info, parts: root.parts },
     )
 
     runtime.pushHostMessage(session, {

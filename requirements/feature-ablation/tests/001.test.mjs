@@ -1,12 +1,37 @@
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { withAblationFixture } from './support/ablation-fixture.mjs'
+import { check } from '../../../scripts/checks/ablation-manifest.mjs'
 
 const root = fileURLToPath(new URL('../../..', import.meta.url))
 const nodes = JSON.parse(readFileSync(join(root, 'resources/ablation/nodes.json'), 'utf8')).nodes
+
+test('WHAT[feature-ablation-001] manifest discovery uses migrated package rules without an old-file fallback', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ablation-migrated-rules-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  const write = (path, content) => {
+    const file = join(directory, path)
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, content)
+  }
+  write('requirements/INDEX.md', '| `verification-system` | tests |\n')
+  write('requirements/verification-system/AXIOMS.md', '## SPEC\n### [001] Rule\n')
+  write('resources/ablation/nodes.json', JSON.stringify({ nodes: [
+    { id: 'verification-system', package: 'verification-system', kind: 'package', borrowed_surface: [] },
+  ], edges: [] }))
+  write('resources/ablation/tool-map.json', '{"tools":{}}')
+  write('resources/ablation/fact-map.json', '{"facts":{"fact":"verification-system"}}')
+  write('resources/ablation/profiles.json', '{"profiles":{"production":{"modes":{"verification-system":"active"}}}}')
+  write('src/Wanxiangshu/OpenCode/Tools/StaticTools.fs', 'let knownToolNames = []\n')
+  assert.deepEqual(check({ root: directory }).issues, [])
+  rmSync(join(directory, 'requirements/verification-system/AXIOMS.md'))
+  write('requirements/verification-system/WHAT.md', '## [001] Obsolete rule\n')
+  assert.deepEqual(check({ root: directory }).issues.map(({ code }) => code), ['node-orphan'])
+})
 
 test('WHAT[feature-ablation-001] every package has exactly one same-name primary node', () => {
   const packages = readdirSync(join(root, 'requirements'), { withFileTypes: true })

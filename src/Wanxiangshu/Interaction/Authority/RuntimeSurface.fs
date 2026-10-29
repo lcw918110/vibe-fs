@@ -975,6 +975,17 @@ module RuntimeSurface =
 
         AuthorityLifeClassification.recordedClosureKind rootKindLabel isManager (opt agentOwnerLife) (opt recorded)
 
+    let closureKindForRoot (rootKindLabel: string) (isManager: bool) (provenLife: obj) : obj =
+        let kind, life =
+            AuthorityLifeClassification.closureKindForRoot
+                (rootKindOf (box rootKindLabel))
+                isManager
+                (optionalString provenLife)
+
+        box
+            {| kind = kind
+               agentOwnerLife = Option.defaultValue null life |}
+
     let rootKindOfKind (closureKind: string) : string =
         AuthorityLifeClassification.rootKindOfKind closureKind
 

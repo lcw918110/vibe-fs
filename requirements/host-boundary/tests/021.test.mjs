@@ -62,12 +62,14 @@ test('WHAT[host-boundary-021] HostSignalBootstrap delegates policy to published 
   assert.match(bootstrapSource, /ModelRouting\.endProviderStep/)
 
   // Managed chat admission is one transaction. The composition root decodes
-  // once, resolves through PromptIngress, and supplies only ModelRouting's Host
-  // projection port to the transaction owner.
+  // once, resolves through PromptIngress, and checks the Host-selected target
+  // through ModelRouting without rewriting the Host message.
   assert.match(bootstrapSource, /PromptIngress\.resolveDecision/)
   assert.match(bootstrapSource, /ChatAdmissionTransaction\.production/)
   assert.match(bootstrapSource, /ChatAdmissionTransaction\.execute/)
+  assert.match(bootstrapSource, /ModelRouting\.sameTarget selected model/)
   assert.match(bootstrapSource, /createTransaction selected validateModel/)
+  assert.doesNotMatch(bootstrapSource, /ModelRouting\.projectHostModel/)
   assert.doesNotMatch(bootstrapSource, /PromptIngress\.create(?:Decision)?Hook/)
   assert.doesNotMatch(bootstrapSource, /ModelRouting\.routeChatExecution/)
   assert.doesNotMatch(bootstrapSource, /ModelRouting\.projectRoutedModel/)

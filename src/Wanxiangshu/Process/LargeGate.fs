@@ -26,7 +26,7 @@ module LargeGate =
 
     let private enqueueWaiter (ct: CancellationToken) : Task =
         let tcs = TaskCompletionSource<unit>()
-        // DSL-MUTABLE: cancellation — holds the CancellationToken registration handle for disposal on grant.
+        // DSL-MUTABLE: cancellation — registration owned by this queued acquisition
         let mutable reg: IDisposable = null
 
         let onGrant () =

@@ -54,7 +54,7 @@ test('WHAT[repository-programming-016] JS073_spec_executes_program_and_renders_r
     return { before: text };
   }
 }`
-    const result = await execute(registered, { name: "edit-016", program, intent: "Wait for this file operation and preserve the original effects.", remainingScopeTurnsEstimate: 3 }, { sessionID: 'ses-test', agent: 'coder' })
+    const result = await execute(registered, { name: "edit-016", program, intent: "Wait for this file operation and preserve the original effects." }, { sessionID: 'ses-test', agent: 'coder' })
     assert.equal(result.startsWith('# ok\n'), true)
     assert.equal(result.includes('[data]'), true)
     assert.equal(result.includes('before'), true)
@@ -228,7 +228,7 @@ test('WHAT[repository-programming-016] the surface executes in the directory its
     const registered = createRegistered(
       toolModule(), 'Coder', 'en', project.dir, null, { 'ses-road': worktree.dir },
     )
-    const result = await execute(registered, { name: 'worktree-proof', intent: 'Wait for the worktree write and report the actual result.', program: writeProgram('publish_proof.txt'), remainingScopeTurnsEstimate: 3 }, { sessionID: 'ses-road' })
+    const result = await execute(registered, { name: 'worktree-proof', intent: 'Wait for the worktree write and report the actual result.', program: writeProgram('publish_proof.txt') }, { sessionID: 'ses-road' })
 
     assert.equal(result.startsWith('# ok\n'), true, result)
     assert.equal(
@@ -253,7 +253,7 @@ test('WHAT[repository-programming-016] an unregistered session keeps the plugin 
     const registered = createRegistered(
       toolModule(), 'Coder', 'en', project.dir, null, { 'ses-other': project.dir },
     )
-    const result = await execute(registered, { name: 'workspace-proof', intent: 'Wait for the workspace write and report the actual result.', program: writeProgram('fallback.txt'), remainingScopeTurnsEstimate: 3 }, { sessionID: 'ses-unregistered' })
+    const result = await execute(registered, { name: 'workspace-proof', intent: 'Wait for the workspace write and report the actual result.', program: writeProgram('fallback.txt') }, { sessionID: 'ses-unregistered' })
 
     assert.equal(result.startsWith('# ok\n'), true, result)
     assert.equal(readFileSync(join(project.dir, 'fallback.txt'), 'utf8'), 'Published by long-stroke canary\n')

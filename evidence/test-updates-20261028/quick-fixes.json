@@ -1,0 +1,154 @@
+{
+  "baseCommit": "9e1e71ae4409b1f2ec18d695a624bc4ff24bf09f",
+  "testedSourceDiffSha256": "ff60c6be300af6883b81d8cbd7b3ede7655cfbe1e20f989520c74d2ad3d2bb9a",
+  "changedSourceFiles": [
+    "src/Wanxiangshu/Ablation/Gate.fs",
+    "src/Wanxiangshu/Ablation/Settings.fs",
+    "src/Wanxiangshu/Host/Contract/ToolResultBound.fs",
+    "src/Wanxiangshu/Interaction/Authority/LifeClassification.fs",
+    "src/Wanxiangshu/Interaction/Authority/LifeClassification.fsi",
+    "src/Wanxiangshu/Interaction/Dispatch/PhysicalAcceptance.fs",
+    "src/Wanxiangshu/Interaction/Repair/CompletedTurn.fs",
+    "src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fsi",
+    "src/Wanxiangshu/OpenCode/Tools/ResetScopeTool.fsi",
+    "src/Wanxiangshu/Process/LargeGate.fs"
+  ],
+  "sourceChanges": "Local closure classification, physical-outcome decoding and stopped-text classification; remaining changes are formatting only.",
+  "testsOrCheckersChanged": false,
+  "controlFlow": {
+    "before": 120,
+    "after": 116,
+    "removed": [
+      {
+        "kind": "branch-pyramid",
+        "file": "src/Wanxiangshu/Interaction/Dispatch/PhysicalAcceptance.fs",
+        "depth": 2,
+        "chain": [
+          "match",
+          "if"
+        ],
+        "text": "if kind = \"Accepted\" then"
+      },
+      {
+        "kind": "match-pyramid",
+        "file": "src/Wanxiangshu/Interaction/Authority/LifeClassification.fs",
+        "depth": 2,
+        "chain": [
+          "match",
+          "match"
+        ],
+        "text": "match life with"
+      },
+      {
+        "kind": "match-pyramid",
+        "file": "src/Wanxiangshu/Interaction/Authority/LifeClassification.fs",
+        "depth": 2,
+        "chain": [
+          "match",
+          "match"
+        ],
+        "text": "match provenLife with"
+      },
+      {
+        "kind": "match-pyramid",
+        "file": "src/Wanxiangshu/Interaction/Repair/CompletedTurn.fs",
+        "depth": 2,
+        "chain": [
+          "if",
+          "match"
+        ],
+        "text": "match TerminalValidity.check (partsText parts) with"
+      }
+    ],
+    "added": []
+  },
+  "formatting": {
+    "before": 109,
+    "after": 99,
+    "fixed": [
+      "src/Wanxiangshu/Ablation/Gate.fs",
+      "src/Wanxiangshu/Ablation/Settings.fs",
+      "src/Wanxiangshu/Process/LargeGate.fs",
+      "src/Wanxiangshu/Host/Contract/ToolResultBound.fs",
+      "src/Wanxiangshu/Interaction/Dispatch/PhysicalAcceptance.fs",
+      "src/Wanxiangshu/Interaction/Authority/LifeClassification.fs",
+      "src/Wanxiangshu/Interaction/Authority/LifeClassification.fsi",
+      "src/Wanxiangshu/Interaction/Repair/CompletedTurn.fs",
+      "src/Wanxiangshu/OpenCode/Tools/ResetScopeTool.fsi",
+      "src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fsi"
+    ],
+    "added": [],
+    "log": ".fable-build/verify-logs/2026-10-28T12-40-30-617Z/format-check.log"
+  },
+  "formatOnlyModules": [
+    {
+      "file": "Ablation/Gate.js",
+      "beforeSha256": "56722a570ed3420fa3349f89b923cc437758898c9d7352401e3ef0371c456766",
+      "afterSha256": "56722a570ed3420fa3349f89b923cc437758898c9d7352401e3ef0371c456766",
+      "byteIdentical": true
+    },
+    {
+      "file": "Ablation/Settings.js",
+      "beforeSha256": "d8dbe0bcdcdbb9cda90acaab3e8195bfccf8f81d76e1c67082b320684e674cfe",
+      "afterSha256": "d8dbe0bcdcdbb9cda90acaab3e8195bfccf8f81d76e1c67082b320684e674cfe",
+      "byteIdentical": true
+    },
+    {
+      "file": "Host/Contract/ToolResultBound.js",
+      "beforeSha256": "e3d7554e0c40ded0ad736902ffed524630f9156a80b99db92d28e6ade054c561",
+      "afterSha256": "e3d7554e0c40ded0ad736902ffed524630f9156a80b99db92d28e6ade054c561",
+      "byteIdentical": true
+    },
+    {
+      "file": "Process/LargeGate.js",
+      "beforeSha256": "a4dd14947f99f754b3a3728436c9d47d235cc10fc8c77dc67d75d1e5a0cc0cf9",
+      "afterSha256": "a4dd14947f99f754b3a3728436c9d47d235cc10fc8c77dc67d75d1e5a0cc0cf9",
+      "byteIdentical": true
+    }
+  ],
+  "formatOnlySignatures": [
+    {
+      "file": "src/Wanxiangshu/Interaction/Authority/LifeClassification.fsi",
+      "sameNonWhitespaceContent": true
+    },
+    {
+      "file": "src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fsi",
+      "sameNonWhitespaceContent": true
+    },
+    {
+      "file": "src/Wanxiangshu/OpenCode/Tools/ResetScopeTool.fsi",
+      "sameNonWhitespaceContent": true
+    }
+  ],
+  "build": {
+    "generation": 14,
+    "exitCode": 0,
+    "registeredSurfaces": 150,
+    "linkedModules": 752,
+    "log": "/private/tmp/vibe-fs-quick-fixes-build-20261028.log"
+  },
+  "targetedTests": {
+    "runId": "contracts-20261028-quick-fixes",
+    "wallMs": 5077.133084,
+    "exitCode": 0,
+    "inputDigestBefore": "8595ba26172429ba7f6366ebbdb57b05acccdcb14f763f87a2ccd3f3a06365f8",
+    "inputDigestAfter": "8595ba26172429ba7f6366ebbdb57b05acccdcb14f763f87a2ccd3f3a06365f8",
+    "files": 11,
+    "passed": 72,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 2,
+    "selectedFiles": "requirements/interaction-authority/tests/018.test.mjs,requirements/interaction-authority/tests/019.test.mjs,requirements/interaction-authority/tests/024.test.mjs,requirements/context-compression/tests/004.test.mjs,requirements/context-compression/tests/005.test.mjs,requirements/dispatch-protocol/tests/007.test.mjs,requirements/advisor/tests/busy-nudge/005.test.mjs,requirements/delegation/tests/021.test.mjs,requirements/delegation/tests/039.test.mjs,requirements/delegation/tests/040.test.mjs,requirements/delegation/tests/041.test.mjs",
+    "node": "v22.23.4",
+    "logPath": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/contracts-20261028-quick-fixes.log",
+    "logSha256": "2695a3912dd2f689c607445c4a154466c9110565e0c33ad37b3238449e4108b6"
+  },
+  "remaining": {
+    "formatFiles": 99,
+    "controlFlowFindings": 116,
+    "staticCheckLog": "/private/tmp/vibe-fs-quick-fixes-check-20261028.log",
+    "fullPipelineLog": "/private/tmp/vibe-fs-quick-fixes-pipeline-20261028.log",
+    "fullUnitRerun": false,
+    "integrationOrReleaseRun": false
+  }
+}

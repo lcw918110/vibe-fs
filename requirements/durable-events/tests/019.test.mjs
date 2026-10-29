@@ -534,6 +534,22 @@ test('WHAT[durable-events-019] durable file database and custom-store writer cap
     'the exact physical owner may use durable writer capabilities',
   )
 })
+test('WHAT[durable-events-019] the Advisor journal name belongs only to its physical Host adapters', () => {
+  const name = 'let database = joinPath directory "advisor-process.sqlite"'
+  for (const file of ['src/Wanxiangshu/Omp/Adapter.fs', 'src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs']) {
+    assert.deepEqual(scanPrivateDurableSubstrate(name, file), [])
+    for (const source of [
+      name.replace('advisor-process', 'private-history'),
+      name + '\nlet other = "hidden.sqlite"',
+      'let database = SQLite.open "advisor-process.sqlite"',
+      'File.WriteAllText("advisor-process.sqlite", payload)',
+      name + '; let other = "hidden.sqlite"',
+    ]) assert.ok(scanPrivateDurableSubstrate(source, file).length > 0, source)
+  }
+  for (const file of ['src/Wanxiangshu/Feature/Advisor.fs', 'src/Wanxiangshu/Omp/OtherAdapter.fs']) {
+    assert.ok(scanPrivateDurableSubstrate(name, file).length > 0, file)
+  }
+})
 test('WHAT[durable-events-019] canonical integrator and exact physical or proof readers are allowed', () => {
   const reader = [
     'let streams = ProcessEventLog.readStreams commonDir',

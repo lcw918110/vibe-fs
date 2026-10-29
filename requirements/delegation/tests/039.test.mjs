@@ -49,7 +49,6 @@ test('WHAT[delegation-039] a late consultation stop settles the run on the finis
         {
           name: `child-program-${run}`,
           intent: 'Deliver the closing material inside the report turn.',
-          remainingScopeTurnsEstimate: 0,
           program: `class Js extends JsProgram { async run() { return { answer: "REPORT-DONE" }; } }`,
         },
         { sessionID: child, agent: 'engineer', callID: `call-${run}`, messageID: run },

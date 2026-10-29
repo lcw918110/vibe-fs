@@ -38,7 +38,6 @@ const runManagerProgram = async (hooks, sessionID, body) =>
   await hooks.tool['todowrite-for-manager'].execute(
     { program: `class Js extends JsProgram { async run() { ${body} } }`, name: 'manager-program-' + (++programSequence),
           intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
-          remainingScopeTurnsEstimate: 8,
         },
     { sessionID, agent: 'manager' },
   )
@@ -50,7 +49,6 @@ const runAndSettleManagerProgram = async (hooks, sessionID, body, maxWaitMs = 40
       program: `class Js extends JsProgram { async run() { ${body} } }`,
       name,
       intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
-      remainingScopeTurnsEstimate: 8,
     },
     { sessionID, agent: 'manager' },
   )
@@ -61,7 +59,6 @@ const runAndSettleManagerProgram = async (hooks, sessionID, body, maxWaitMs = 40
       {
         resume: name,
         intent: 'Wait for the actual manager dispatch receipt without extending the request window.',
-        remainingScopeTurnsEstimate: 8,
       },
       { sessionID, agent: 'manager' },
     )

@@ -10,33 +10,17 @@ import path from 'node:path'
 import test from 'node:test'
 import { Header } from 'tar'
 import { createNpmInstallFixture } from './support/npm-install-fixture.mjs'
-import { registerNpmInstallSetupTests } from './support/npm-install-setup-tests.mjs'
-import { registerNodeToolCandidateTests } from './support/node-tool-candidate-tests.mjs'
-import { createAbortedNpmAdmissionFixture, registerNpmToolArchiveTests } from './support/npm-tool-archive-tests.mjs'
+import { createAbortedNpmAdmissionFixture } from './support/npm-tool-archive-tests.mjs'
 import { assertParentReplacementInvalidatesVerification } from './support/parent-replacement.mjs'
 import { repositoryNpmInstallTest } from './support/repository-npm-install-tests.mjs'
-import { registerDotnetSdkTests, repositoryDotnetSdkTest } from './support/dotnet-sdk-tests.mjs'
-import { registerDotnetToolRestoreTests } from './support/dotnet-tool-restore-tests.mjs'
+import { repositoryDotnetSdkTest } from './support/dotnet-sdk-tests.mjs'
 import { repositoryDotnetToolsTest } from './support/repository-dotnet-tools-tests.mjs'
-import { registerNugetProjectTests } from './support/nuget-project-tests.mjs'
 import { repositoryNugetProjectTest } from './support/repository-nuget-project-tests.mjs'
-import { registerFableProjectTests } from './support/fable-project-tests.mjs'
 import { repositoryFableProjectTest, repositoryReadonlyFableProjectTest } from './support/repository-fable-project-tests.mjs'
 import { integrationTest } from './support/tier-gate.mjs'
-import { registerArchiveNamespaceTests } from './support/archive-namespace-tests.mjs'
-import { registerReadonlyInputTests } from './support/readonly-input-tests.mjs'
 
 process.env.WXS_VERIFICATION_TOOL_DIAGNOSTICS = '1'
 
-registerReadonlyInputTests()
-registerArchiveNamespaceTests()
-registerNodeToolCandidateTests()
-registerNpmToolArchiveTests()
-registerNpmInstallSetupTests()
-registerDotnetSdkTests()
-registerDotnetToolRestoreTests()
-registerNugetProjectTests()
-registerFableProjectTests()
 const hasExplicitReadonlyContext = () => Boolean(
   process.env.WXS_VERIFICATION_DOTNET_ROOT &&
   process.env.WXS_VERIFICATION_NUGET_PROJECT_TREE_ID &&

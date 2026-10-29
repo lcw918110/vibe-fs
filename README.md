@@ -103,6 +103,8 @@ npm install wanxiangshu --registry=<私有源URL>
 | `npm run verify:release` | 发布验证：clean build、端到端与安装包完整性校验 |
 | `npm run format` | Fantomas 代码格式化写盘 |
 
+编写、构建或优化测试时，阅读[测试规则](requirements/verification-system/AXIOMS.md)；现有测试 prompt 可追加[测试效率补充段落](proposals/高效测试Prompt.md)。
+
 ### 文档与规范索引
 
 - **功能导览**：[docs/功能导览.md](docs/功能导览.md)

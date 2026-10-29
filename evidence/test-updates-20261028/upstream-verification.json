@@ -1,0 +1,282 @@
+{
+  "upstream": "4b099d0bb68d92e8c2a437d7c11909b548725e64",
+  "mergeCommit": "66f92bfdd63475b0953dc5ecd4e9b29d3f9d6a8f",
+  "testedCommit": "97c6f6462b2ab7275d54b8fd3947fc7c61a20bfe",
+  "coreCommit": "9c0230bbbdc5793f2dd45018542e3e9ec70f4336",
+  "corePullRequest": "https://github.com/PamelaSprin47685ghall/wanxiangli/pull/8",
+  "mergeStrategy": "merge preserves the published commits used by the paired performance experiment",
+  "completeUnit": {
+    "id": "contracts-20261028-upstream-merged",
+    "commit": "97c6f6462b2ab7275d54b8fd3947fc7c61a20bfe",
+    "node": "v22.23.4",
+    "selectedFiles": null,
+    "wallMs": 313270.83454199997,
+    "exitCode": 0,
+    "signal": null,
+    "inputDigestBefore": "53f923b633a574fab65c350675ffee82edd333997efcd94becc53035c45c06ff",
+    "inputDigestAfter": "53f923b633a574fab65c350675ffee82edd333997efcd94becc53035c45c06ff",
+    "manifestSha256": "46a60034369f5e7ce5da3f03e0eb6d550198f65755c063e9782509903eb2716f",
+    "logPath": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/contracts-20261028-upstream-merged.log",
+    "logSha256": "9c1525abfc4429853c3e64b06a50e33414baa1643fc5290edb8c680473f19fa4",
+    "hostLoadSamples": [
+      {
+        "time": "2026-10-28T12:13:13.557Z",
+        "loadavg": [
+          7.1640625,
+          4.8212890625,
+          3.99365234375
+        ],
+        "freemem": 240762880
+      },
+      {
+        "time": "2026-10-28T12:13:43.560Z",
+        "loadavg": [
+          6.64892578125,
+          4.955078125,
+          4.07275390625
+        ],
+        "freemem": 92045312
+      },
+      {
+        "time": "2026-10-28T12:14:13.561Z",
+        "loadavg": [
+          6.1953125,
+          5.005859375,
+          4.12060546875
+        ],
+        "freemem": 139591680
+      },
+      {
+        "time": "2026-10-28T12:14:43.563Z",
+        "loadavg": [
+          6.26220703125,
+          5.1064453125,
+          4.18505859375
+        ],
+        "freemem": 186155008
+      },
+      {
+        "time": "2026-10-28T12:15:13.565Z",
+        "loadavg": [
+          5.96484375,
+          5.14306640625,
+          4.22900390625
+        ],
+        "freemem": 154189824
+      },
+      {
+        "time": "2026-10-28T12:15:43.566Z",
+        "loadavg": [
+          5.79248046875,
+          5.189453125,
+          4.27783203125
+        ],
+        "freemem": 85819392
+      },
+      {
+        "time": "2026-10-28T12:16:13.568Z",
+        "loadavg": [
+          6.40380859375,
+          5.40576171875,
+          4.3876953125
+        ],
+        "freemem": 153387008
+      },
+      {
+        "time": "2026-10-28T12:16:43.570Z",
+        "loadavg": [
+          6.220703125,
+          5.44775390625,
+          4.4375
+        ],
+        "freemem": 1069023232
+      },
+      {
+        "time": "2026-10-28T12:17:13.572Z",
+        "loadavg": [
+          6.4580078125,
+          5.57861328125,
+          4.5185546875
+        ],
+        "freemem": 214171648
+      },
+      {
+        "time": "2026-10-28T12:17:43.574Z",
+        "loadavg": [
+          6.12890625,
+          5.5849609375,
+          4.556640625
+        ],
+        "freemem": 431865856
+      },
+      {
+        "time": "2026-10-28T12:18:13.575Z",
+        "loadavg": [
+          7.24755859375,
+          5.9482421875,
+          4.7255859375
+        ],
+        "freemem": 100073472
+      },
+      {
+        "time": "2026-10-28T12:18:26.832Z",
+        "loadavg": [
+          7.0361328125,
+          5.94873046875,
+          4.73974609375
+        ],
+        "freemem": 548290560
+      }
+    ],
+    "messages": [],
+    "npmVersion": "11.12.1",
+    "rgVersion": "ripgrep 15.2.0 (rev e89fff89ac)",
+    "dotnetVersion": "10.0.302",
+    "bunVersion": "1.3.14",
+    "environment": {
+      "PATH": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/npm/node_modules/.bin:/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/node-v22.23.4-darwin-arm64/bin:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/yuanxi/.bun/bin:/Users/yuanxi/.antigravity-ide/antigravity-ide/bin:/Users/yuanxi/.antigravity-ide/antigravity-ide/bin:/Users/yuanxi/.antigravity/antigravity/bin:/opt/anaconda3/condabin:/opt/homebrew/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Library/TeX/texbin:/Users/yuanxi/.codex/tmp/arg0-macos/codex-arg0FVuq8w:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/yuanxi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/yuanxi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources:/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS",
+      "NODE_TEST_CONCURRENCY": "2",
+      "UNIT_VERDICT_SILENCE_MS": "30000",
+      "SUITE_BACKSTOP_MS": "900000",
+      "WXS_ACCEPT_TODO": "1",
+      "WXS_VERIFICATION_WORKER_DIAGNOSTICS": "1",
+      "WXS_TIER_INTEGRATION": "0",
+      "WXS_TIER_RELEASE": "0",
+      "WXS_RELEASE": "0",
+      "WXS_VERIFICATION_NPM_CLI": "/Users/yuanxi/Workwork/vibe-fs/.Herdchestra/test-optimization/20261027/tools/npm/node_modules/npm/bin/npm-cli.js"
+    },
+    "completedFiles": 811,
+    "plannedFiles": 811,
+    "passed": 4174,
+    "failed": 0,
+    "skipped": 110,
+    "todo": 260,
+    "startedBodies": 4434,
+    "summary": "[test-summary] 811 file(s), 4174 passed, 0 failed, 110 skipped, 260 todo (312.82s wall, 573.55s test time)"
+  },
+  "coverageChangesSincePerformancePair": {
+    "addedBodies": [
+      [
+        "WHAT[delegation-040] an empty finished turn is no closing report: the queued answer is not stopped",
+        1
+      ],
+      [
+        "WHAT[delegation-041] a long-running role is never stopped by a late consultation answer",
+        1
+      ],
+      [
+        "WHAT[interaction-authority-018] closure classification covers both root kinds through the public surface",
+        1
+      ],
+      [
+        "WHAT[interaction-authority-024] OpenCode step markers are not a tool call: an empty stop shell still earns the nudge",
+        1
+      ],
+      [
+        "WHAT[participant-horizon-011] the same roster reaches a program as this.horizon data with no pace when no delegated estimate exists",
+        1
+      ],
+      [
+        "WHAT[participant-horizon-011] the fixed DevOps at rest is idle, never returned or still away",
+        1
+      ],
+      [
+        "WHAT[participant-horizon-011] returned means join hands it over; after join it is gone, and a fresh charge reads still away, never returned",
+        1
+      ],
+      [
+        "WHAT[participant-horizon-011] the roster reads join's ledger, never a process-local completion cell",
+        1
+      ]
+    ],
+    "removedBodies": [
+      [
+        "WHAT[participant-horizon-011] latest durable record selection and corrupt-latest rejection must exercise journal/blob reads; a separately implemented HorizonSurface renderer is insufficient (GAP-079)",
+        1
+      ],
+      [
+        "WHAT[participant-horizon-011] the same roster reaches a program as this.horizon data with the four numbers withheld when no delegated estimate exists",
+        1
+      ]
+    ],
+    "addedExclusions": [],
+    "removedExclusions": [
+      [
+        [
+          "todo",
+          "WHAT[participant-horizon-011] latest durable record selection and corrupt-latest rejection must exercise journal/blob reads; a separately implemented HorizonSurface renderer is insufficient (GAP-079) — reason not supplied"
+        ],
+        1
+      ]
+    ],
+    "reasonForRemovedTodo": "upstream cd55bd251 removed the retired HorizonSurface/latest-record obligation and added actual join-ledger roster tests",
+    "performanceComparison": "not comparable as an equal-coverage performance pair; upstream changed scenarios and runtime code"
+  },
+  "focused": {
+    "files": 9,
+    "passed": 70,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 1,
+    "runId": "contracts-20261028-upstream-focused"
+  },
+  "coreProjection": {
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "log": {
+      "path": "/private/tmp/wanxiangli-projection-pr-20261028.log",
+      "sha256": "cfaaccb30d03e84373850f4629b487fb46401ae84cb9d542a1c9cc620722530b"
+    }
+  },
+  "build": {
+    "generation": 13,
+    "registeredSurfaces": 150,
+    "linkedModules": 752,
+    "exitCode": 0,
+    "log": {
+      "path": "/private/tmp/vibe-fs-test-updates-upstream-boundary-build-20261028.log",
+      "sha256": "1b74bf75fbc12d1bcbf5901d0e9f62adf24963e91b6a686be5e13476c422716d"
+    }
+  },
+  "controlPyramid": {
+    "upstreamFindings": 120,
+    "branchFindings": 120,
+    "sameFindingsIgnoringLineNumbers": true,
+    "normalizedFindingsSha256": "085fa0bb3ca377240b05382d122d90211e482cb08ffe0334092e53e9dfcfd7cc",
+    "checkerChanged": false,
+    "log": {
+      "path": "/private/tmp/vibe-fs-test-updates-upstream-check-final-20261028.log",
+      "sha256": "d17a27da3e4f728eef687044d41c86c02d529fef9694d709bc136086524e3f7f"
+    }
+  },
+  "format": {
+    "failedFiles": 109,
+    "unchangedFromUpstream": 101,
+    "changedFilesAlreadyFailingUpstream": [
+      "src/Wanxiangshu/Process/LargeGate.fs",
+      "src/Wanxiangshu/Mission/Planning/Surface.fs",
+      "src/Wanxiangshu/Execution/Routing/ModelRouting.fs",
+      "src/Wanxiangshu/Interaction/Dispatch/Send.fs",
+      "src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fs",
+      "src/Wanxiangshu/OpenCode/Host/ModelRoutingSurface.fs",
+      "src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs",
+      "src/Wanxiangshu/Execution/Delegation/Fork/JoinSurface.fs"
+    ],
+    "upstreamReproductionStillApplies": true,
+    "log": {
+      "path": ".fable-build/verify-logs/2026-10-28T12-19-05-662Z/format-check.log",
+      "sha256": "8bc89c9be88a58d36984c2a79081ebb37e0758496c8f9a7b056b8af078af201a"
+    }
+  },
+  "pipeline": {
+    "exitCode": 1,
+    "stoppedAt": "format:check",
+    "laterStages": "not-run",
+    "log": {
+      "path": "/private/tmp/vibe-fs-test-updates-upstream-pipeline-final-20261028.log",
+      "sha256": "175052fa8f239107d3e4582f0a1cb0fb49c8b60a774510444d0786b5e92efcfc"
+    }
+  }
+}

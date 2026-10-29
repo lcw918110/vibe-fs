@@ -68,6 +68,11 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
   'requirements/context-compression/tests/040.test.mjs',
   'requirements/context-compression/tests/041.test.mjs',
   'requirements/prefix-stability/tests/016.test.mjs',
+  // Raw pre/post Host message projection and the exact SDK-facing tenure boundary.
+  'requirements/delegation/tests/037.test.mjs',
+  'requirements/work/tests/host/008.test.mjs',
+  // Exact assistant terminal event -> typed lifecycle observer payload, including run identity.
+  'requirements/managed-session-lifecycle/tests/029.test.mjs',
   // Physical-exit canary: the child must reach the real Diagnostic.fatal and
   // FatalProcess.trip links — a wire-level invariant, not a test seam.
   'requirements/host-boundary/tests/fixtures/fatal-process-child.fixture.mjs',
@@ -100,6 +105,16 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
  * a test wants access (TASK.md §9/§10, PR 4).
  */
 export const SURFACE_MANIFEST = [
+  {
+    module: 'OpenCode/Host/LatencyWatchdog.js',
+    owner: 'latency-degeneration',
+    laws: ['latency-degeneration-001', 'latency-degeneration-002', 'latency-degeneration-003',
+      'latency-degeneration-004', 'latency-degeneration-005', 'latency-degeneration-008',
+      'latency-degeneration-009', 'latency-degeneration-010', 'latency-degeneration-011'],
+    source: 'src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fs',
+    representation: 'opaque-capability',
+    kind: 'resource',
+  },
   {
     module: 'Context/Scope/Surface.js',
     owner: 'context-compression',
@@ -1291,7 +1306,8 @@ export const SURFACE_MANIFEST = [
   {
     module: 'OpenCode/Host/HostSignalSubscribeSurface.js',
     owner: 'host-boundary',
-    laws: ['HOST-BOUNDARY-003', 'HOST-BOUNDARY-028'],
+    laws: ['HOST-BOUNDARY-003', 'HOST-BOUNDARY-028', 'latency-degeneration-012'],
+    lawOwners: { 'latency-degeneration-012': 'latency-degeneration' },
     source: 'src/Wanxiangshu/OpenCode/Host/HostSignalSubscribeSurface.fs',
     representation: 'opaque-capability',
     kind: 'resource',
@@ -1527,7 +1543,8 @@ export const SURFACE_MANIFEST = [
   {
     module: 'OpenCode/Tools/ToolRuntimeScopeSurface.js',
     owner: 'work',
-    laws: ['WORK-009', 'WORK-044'],
+    laws: ['WORK-009', 'WORK-044', 'advisor-005', 'advisor-007'],
+    lawOwners: { 'advisor-005': 'advisor', 'advisor-007': 'advisor' },
     source: 'src/Wanxiangshu/OpenCode/Tools/ToolRuntimeScopeSurface.fs',
     representation: 'json',
     kind: 'resource',

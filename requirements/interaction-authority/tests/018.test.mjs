@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.js'
@@ -22,9 +21,16 @@ test('WHAT[interaction-authority-018] 闭合种类区分根身份与交付见证
   assert.throws(() => lifeClassification.rootKindOfKind('Unknown'))
 })
 
-test('WHAT[interaction-authority-018] closureKindForRoot covers both root kinds', () => {
-  const script = fileURLToPath(new URL('./support/closure-kind.fsx', import.meta.url))
-  execFileSync('dotnet', ['fsi', '--exec', script], { encoding: 'utf8' })
+test('WHAT[interaction-authority-018] closure classification covers both root kinds through the public surface', () => {
+  assert.deepEqual(authority.closureKindForRoot('HumanRoot', true, undefined), { kind: 'HumanRootManagerLife', agentOwnerLife: null })
+  assert.deepEqual(authority.closureKindForRoot('HumanRoot', false, undefined), { kind: 'HumanRootManagedRun', agentOwnerLife: null })
+  assert.deepEqual(authority.closureKindForRoot('AgentOwnerRoot', false, 'Attached'), { kind: 'AgentOwnerAttachedWork', agentOwnerLife: 'Attached' })
+  assert.deepEqual(authority.closureKindForRoot('AgentOwnerRoot', false, 'InternalLeaf'), { kind: 'AgentOwnerInternalLeaf', agentOwnerLife: 'InternalLeaf' })
+  assert.deepEqual(authority.closureKindForRoot('AgentOwnerRoot', false, 'Child'), { kind: 'AgentOwnerChildWork', agentOwnerLife: 'Child' })
+  // no proven life, and any unknown life label, fall to the documented coarse life
+  assert.deepEqual(authority.closureKindForRoot('AgentOwnerRoot', false, undefined), { kind: 'AgentOwnerChildWork', agentOwnerLife: 'Child' })
+  assert.deepEqual(authority.closureKindForRoot('AgentOwnerRoot', false, 'bogus'), { kind: 'AgentOwnerChildWork', agentOwnerLife: 'Child' })
+  assert.throws(() => authority.closureKindForRoot('Unknown', false, undefined), /unknown authority root kind/)
 })
 
 const hash = (value) => `H(${value})`
