@@ -16,10 +16,8 @@ module RelayNarrativeTransform =
             bool
 
     /// Messages the active successor may see. None leaves the array unchanged.
-    /// `owns` attributes an unmarked message to the successor by its physical
-    /// user message anchor; only durable acceptance evidence may say yes.
+    /// Successor turns are attributed from Host parentID facts after the barrier.
     val cutVisible:
-        owns: (string -> bool) ->
         messages: obj array ->
         work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option ->
             obj array option
