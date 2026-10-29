@@ -47,7 +47,6 @@ module ScopeReset =
     let private latestAcceptedPrompt (snapshot: ISessionSnapshotPort) (child: SessionId) : Task<string option> =
         task {
             let! fetched = snapshot.GetMessages child
-
             return
                 fetched
                 |> Result.toOption
@@ -64,25 +63,17 @@ module ScopeReset =
                 |> Option.filter (String.IsNullOrWhiteSpace >> not)
         }
 
-    let private outstandingPromptNotice
-        (snapshotPort: ISessionSnapshotPort option)
-        (handle: HandleRecord)
-        : Task<string> =
+    let private outstandingPromptNotice (snapshotPort: ISessionSnapshotPort option) (handle: HandleRecord) : Task<string> =
         task {
             let! prompt =
                 snapshotPort
                 |> Option.map (fun snapshot -> latestAcceptedPrompt snapshot handle.ChildSessionId)
                 |> Option.defaultValue (Task.FromResult None)
-
-            let text = prompt |> Option.defaultValue "最近一次派出指令全文：Host 没有提供可验证的已接受提示词快照。"
-
-            return
-                "## "
-                + handle.Byname
-                + " · "
-                + SessionId.value handle.ChildSessionId
-                + "\n"
-                + text
+            let text =
+                prompt
+                |> Option.defaultValue "最近一次派出指令全文：Host 没有提供可验证的已接受提示词快照。"
+            return "## " + handle.Byname + " · " + SessionId.value handle.ChildSessionId
+                   + "\n" + text
         }
 
     let rec private collectOutstanding (snapshotPort: ISessionSnapshotPort option) handles : Task<string list> =
@@ -95,26 +86,18 @@ module ScopeReset =
                 return current :: remaining
         }
 
-    let private outstandingReminder
-        (journal: AgentJournal)
-        (snapshotPort: ISessionSnapshotPort option)
-        (sessionId: SessionId)
-        : Task<string> =
+    let private outstandingReminder (journal: AgentJournal) (snapshotPort: ISessionSnapshotPort option) (sessionId: SessionId) : Task<string> =
         task {
             let pending = pendingChildHandles journal sessionId
             let! notices = collectOutstanding snapshotPort pending
-
-            if List.isEmpty notices then
-                return ""
-            else
-                return "\n\n尚未归队的外派工作（最近一次已接受的指令全文）：\n" + String.concat "\n\n" notices
+            if List.isEmpty notices then return ""
+            else return "\n\n尚未归队的外派工作（最近一次已接受的指令全文）：\n" + String.concat "\n\n" notices
         }
 
     let alreadyCommitted (journalOpt: AgentJournal option) (ctx: HostToolContext) =
         match journalOpt, ctx.ToolCallId with
         | Some journal, Some callId ->
             let state = AgentJournal.snapshot journal
-
             AgentProjection.tryFind (SessionId.create ctx.SessionId) state.AgentProjections
             |> Option.bind (fun session -> session.PrefixEpoch)
             |> Option.exists (PrefixEpochProjection.isScopeReanchored (ToolCallId.value callId))
@@ -134,7 +117,6 @@ module ScopeReset =
         task {
             // Verbatim rides in the sealed outbound archive; keep the arg for annotation symmetry.
             let _ = oldVerbatim
-
             if alreadyCommitted journalOpt ctx then
                 return Ok($"Scope reset. Objective: %s{objective}")
             elif Surface.negotiationRequired ctx.SessionId then
@@ -151,33 +133,25 @@ module ScopeReset =
                 | Some callId ->
                     match journalOpt with
                     | None ->
-                        return
-                            Error
-                                "scope reset requires a durable agent journal for ScopeReanchored prefix epoch advance"
+                        return Error "scope reset requires a durable agent journal for ScopeReanchored prefix epoch advance"
                     | Some journal ->
                         let rawSnap: obj = outboundViewStore?tryGetSealed (ctx.SessionId)
-
                         if isNullOrUndefined rawSnap then
-                            return
-                                Error "scope reset failed: no sealed outbound view snapshot captured for this session."
+                            return Error "scope reset failed: no sealed outbound view snapshot captured for this session."
                         else
                             let archiveJson = string (outboundViewStore?serializeSnapshot (rawSnap))
                             let! blobResult = journal.WriteBlob archiveJson
-
                             match blobResult with
                             | Error failure ->
                                 return Error($"scope reset failed: failed to write archive blob: %s{failure}")
                             | Ok receipt ->
                                 let sessionId = SessionId.create ctx.SessionId
                                 let journalSnapshot = AgentJournal.snapshot journal
-
                                 let epoch =
                                     AgentProjection.tryFind sessionId journalSnapshot.AgentProjections
                                     |> Option.bind (fun session -> session.PrefixEpoch)
                                     |> Option.defaultValue PrefixEpochProjection.empty
-
                                 let nextEpoch = PrefixEpochId.next epoch.EpochId
-
                                 let fact =
                                     ContextFact.ScopeReanchored
                                         {| SessionId = sessionId
@@ -186,14 +160,11 @@ module ScopeReset =
                                            CallId = callId
                                            ArchiveRef = Some receipt.BlobRef
                                            ArchiveDigest = Some receipt.BlobDigest |}
-
                                 let! appended =
                                     AgentJournal.appendAgent (StreamId.Session sessionId) ctx.ProviderRunId fact journal
-
                                 match appended with
                                 | Error failure -> raise (JournalAppendException failure)
                                 | Ok _ -> ()
-
                                 outboundViewStore?discardSealed (ctx.SessionId) |> ignore
                                 let nextScopeNumber = Set.count epoch.ReanchoredScopes + 1
                                 let nextEpochKey = string nextScopeNumber
@@ -203,14 +174,11 @@ module ScopeReset =
                                 advisorProcessQueue?reset (ctx.SessionId, nextEpochKey) |> ignore
                                 // New retention epoch carries the annotation budget.
                                 scopeRetention?reset (ctx.SessionId, nextEpochKey) |> ignore
-
                                 if budget >= 1 then
                                     scopeRetention?seed (ctx.SessionId, budget) |> ignore
                                     Surface.setRetentionBudget ctx.SessionId budget
-
                                 if not (Set.isEmpty epoch.ReanchoredScopes) then
                                     Surface.beginAskPreviousScope ctx.SessionId
-
                                 Surface.setHasPreviousScope ctx.SessionId true
                                 let! outstanding = outstandingReminder journal snapshotPort sessionId
                                 return Ok($"Scope reset. Objective: %s{objective}" + outstanding)

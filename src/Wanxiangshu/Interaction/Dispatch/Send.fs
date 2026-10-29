@@ -132,8 +132,7 @@ module PromptDispatcherSend =
         registration |> Option.iter (fun owned -> owned.Dispose())
 
     let private beginOwnedConfirmation key registration (observer: ContinuationAcceptanceObserver) =
-        let outcome, subscription =
-            PromptPhysicalAcceptance.beginConfirmation key observer.Budget
+        let outcome, subscription = PromptPhysicalAcceptance.beginConfirmation key observer.Budget
 
         try
             observer.AttachDisposable subscription
@@ -221,7 +220,6 @@ module PromptDispatcherSend =
         // accepting anything must stay `NotSent`, not decay into `Failed`.
         // DSL-MUTABLE: resource — physical send receipt controls cancellation cleanup
         let mutable definitelyNotSent = false
-
         let settle =
             task {
                 let! outcome = sendTask
@@ -665,11 +663,8 @@ module PromptDispatcherSend =
                     | _ -> None
 
                 let ownedOpt = confirmation |> Option.map snd
-
                 use _ownedScope =
-                    { new System.IDisposable with
-                        member _.Dispose() =
-                            ownedOpt |> Option.iter (fun d -> d.Dispose()) }
+                    { new System.IDisposable with member _.Dispose() = ownedOpt |> Option.iter (fun d -> d.Dispose()) }
 
                 // The admission check and the Host call are deliberately
                 // synchronous neighbours. No await may reopen a window where
@@ -708,11 +703,9 @@ module PromptDispatcherSend =
                                             (fun fact -> this.Persist sessionId None fact)
                                             acceptFn
                                             (fun reason error ->
-                                                this.Abandon key sessionId reason
-                                                |> TaskValue.map (fun _ -> Error error))
+                                                this.Abandon key sessionId reason |> TaskValue.map (fun _ -> Error error))
                                             sendTask
                                             (confirmation |> Option.map fst)
-
                                     return attemptOutcomeFrom definitelyNotSent outcome
                                 }
 
