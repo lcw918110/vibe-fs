@@ -140,7 +140,36 @@ const scopeReminderTexts = new Set([
   '你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。',
 ]);
 
-export const isScopeReminderText = (text) => scopeReminderTexts.has(text);
+// The contract anchor prefix (`[ANCHOR: N]\u0000\uFEFF`, stripped by `turnOf`) rides in
+// front of a scope reminder on the same user row, and the pair-guidance writer appends
+// its own `\u0000\uFEFF`-separated hint tail after the reminder text. Reminder
+// recognition therefore normalizes both: strip a leading contract anchor, cut at the
+// first separator tail, then exact-match — otherwise a decorated reminder is misread as
+// a real user turn and the step cursor lands on an undeclared key.
+const anchorPrefixPattern = /^\[ANCHOR: [1-9]\d*\]\u0000\uFEFF/;
+const separatorTailPattern = /\u0000\uFEFF/;
+
+// The wire may carry the reminder as typed chunks instead of a plain string, so the
+// text is read the same way `contentParts` does: a plain string as-is, an array of
+// `{type:'text'}` chunks joined.
+const reminderTextOf = (content) => {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return content;
+  return content
+    .map((chunk) => (typeof chunk === 'string' ? chunk : chunk?.type === 'text' ? String(chunk?.text ?? '') : ''))
+    .join('');
+};
+
+const reminderCandidates = (content) => {
+  const text = reminderTextOf(content);
+  if (typeof text !== 'string') return [];
+  const withoutAnchor = text.replace(anchorPrefixPattern, '');
+  const cut = withoutAnchor.split(separatorTailPattern)[0];
+  return Array.from(new Set([text, withoutAnchor, cut]));
+};
+
+export const isScopeReminderText = (text) =>
+  reminderCandidates(text).some((candidate) => scopeReminderTexts.has(candidate));
 
 // ── lane ────────────────────────────────────────────────────────────────────
 

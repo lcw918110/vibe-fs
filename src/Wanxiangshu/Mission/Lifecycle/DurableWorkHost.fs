@@ -119,7 +119,10 @@ module DurableWorkHost =
     let private continueEither (_promise: obj) (_ok: obj -> obj) (_err: obj -> obj) : obj = jsNative
 
     let private settle (produced: obj) (step: obj -> obj) : obj =
-        if isThenable produced then continueWith produced step else step produced
+        if isThenable produced then
+            continueWith produced step
+        else
+            step produced
 
     /// Sibling of `.Herdchestra/wanxiangshu/events/`, not inside it. The library takes a
     /// connection, not a path; this file is the host-owned journal for new work.
@@ -295,7 +298,8 @@ module DurableWorkHost =
               "createSession", box createSession
               "sendDraft", box sendDraft ]
 
-    let private succeeded (result: obj) = isRecord result && unbox<bool> result?ok
+    let private succeeded (result: obj) =
+        isRecord result && unbox<bool> result?ok
 
     /// The review coordinator calls these ports only after the domain commit.
     /// park, send, draft and stop receive one request object and return
@@ -312,14 +316,19 @@ module DurableWorkHost =
 
         let createSession (effect: obj) =
             settle (ports?``open`` (createObj [ "digest", effect?digest ])) (fun result ->
-                if succeeded result && isString result?sessionId && not (String.IsNullOrEmpty(unbox<string> result?sessionId)) then
-                    createObj
-                        [ "status", box "SessionCreated"
-                          "execSessionId", result?sessionId ]
+                if
+                    succeeded result
+                    && isString result?sessionId
+                    && not (String.IsNullOrEmpty(unbox<string> result?sessionId))
+                then
+                    createObj [ "status", box "SessionCreated"; "execSessionId", result?sessionId ]
                 elif isRecord result && unbox<bool> result?refused then
                     // The host answered and refused: the session definitely was not created.
                     let reason =
-                        if isString result?reason && not (String.IsNullOrEmpty(unbox<string> result?reason)) then
+                        if
+                            isString result?reason
+                            && not (String.IsNullOrEmpty(unbox<string> result?reason))
+                        then
                             unbox<string> result?reason
                         else
                             "manager session was not created"
@@ -334,11 +343,7 @@ module DurableWorkHost =
 
         let sendDraft (effect: obj) =
             settle
-                (ports?draft (
-                    createObj
-                        [ "sessionId", effect?execSessionId
-                          "digest", effect?digest ]
-                ))
+                (ports?draft (createObj [ "sessionId", effect?execSessionId; "digest", effect?digest ]))
                 (fun result -> if succeeded result then "Admitted" else "Unknown")
 
         let stop (effect: obj) =
@@ -368,13 +373,21 @@ module DurableWorkHost =
             let connection = openDatabase path
             let opened: obj = createNew SqliteJournal connection
 
-            let close () =
-                closeJournal (Some opened) connection
+            let close () = closeJournal (Some opened) connection
 
-            try
+            let failWith error =
+                failwith (
+                    if isNull error then
+                        "review effect failed"
+                    else
+                        string error
+                )
+
+            let runEffect () =
                 let durableWork: obj = createNew DurableWork (workId, opened, effects)
-                let produced: obj = durableWork?execute (requestId, command)
+                durableWork?execute (requestId, command)
 
+            let settleProduced (produced: obj) =
                 if isThenable produced then
                     continueEither
                         produced
@@ -383,10 +396,13 @@ module DurableWorkHost =
                             value)
                         (fun error ->
                             close ()
-                            failwith (if isNull error then "review effect failed" else string error))
+                            failWith error)
                 else
                     close ()
                     produced
+
+            try
+                settleProduced (runEffect ())
             with error ->
                 close ()
                 raise error
@@ -411,7 +427,7 @@ module DurableWorkHost =
             [ "office", box office
               "providerRunId", box providerRunId
               "toolCallId", box toolCallId
-              "updates", if isNull updates then box ([||]: obj array) else updates ]
+              "updates", (if isNull updates then box ([||]: obj array) else updates) ]
 
         let withBlockers =
             if isNull blockers then
@@ -441,8 +457,13 @@ module DurableWorkHost =
                   "incumbencyId", box (resultText receipt "incumbencyId")
                   "blockers", nested receipt.Result "blockers" ]
 
-        let raw = executeWithEffects gitCommonDir workId requestId (command "Review" withDigest) ports
-        if isThenable raw then continueWith raw present else present raw
+        let raw =
+            executeWithEffects gitCommonDir workId requestId (command "Review" withDigest) ports
+
+        if isThenable raw then
+            continueWith raw present
+        else
+            present raw
 
     let inspect (gitCommonDir: string) (workId: string) : obj =
         useWork gitCommonDir workId (fun work -> work?inspect ())
@@ -557,8 +578,7 @@ module DurableWorkHost =
         |> List.ofArray
 
     /// A completed work closes its authority run. An open milestone does not.
-    let closesAuthority (work: InspectedWork) =
-        work.Delivered || work.Stage = "已完成"
+    let closesAuthority (work: InspectedWork) = work.Delivered || work.Stage = "已完成"
 
     /// A Plan stays in 「待执行」 forever. Once it has launched a Manager, a
     /// natural stop is not unfinished planning; a new launch needs a new review.
@@ -612,8 +632,16 @@ module DurableWorkHost =
           Retirements = retirementsOf snapshot
           ProjectionCut = None
           Advances = []
-          BarrierToolCallId = if isNull barrier then None else optionalText (textOf barrier?toolCallId)
-          SuccessorTenureId = if isNull barrier then None else optionalText (textOf barrier?successorTenureId) }
+          BarrierToolCallId =
+            if isNull barrier then
+                None
+            else
+                optionalText (textOf barrier?toolCallId)
+          SuccessorTenureId =
+            if isNull barrier then
+                None
+            else
+                optionalText (textOf barrier?successorTenureId) }
 
     let private inspectedFromJournal (journal: obj) (workId: string) : InspectedWork option =
         // 同一份已校验记录只折叠一次，快照与历史属于同一修订。

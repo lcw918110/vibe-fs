@@ -64,3 +64,7 @@ Dispatch 在建立 `PhysicalAccepted` 后只向 `managed-chat-execution` 交接 
 ## [015] chat.message 身份 carrier 是封闭且无歧义的 wire 代数
 
 `PromptIngressCodec`只接受JSON record中的正式carrier。每个字符串carrier必须是原始字节保持不变的非空白字符串；`SessionId`支持`sessionID`、`sessionId`、字符串`session`及plain own-property record `session.id/sessionID/sessionId`，并在`input`、`output`、`output.message`、`output.info`四个正式source中统一收集。任一显式carrier类型非法、对象不是plain record、继承字段冒充own field、或两个合法carrier原始字节不同，整个SessionId投影必须fail-closed；缺失与非法不得合并为同一状态。多个同值carrier只产生一个opaque `SessionId`，禁止trim、字符串化、truthiness或值前缀猜测。wire 上正式传输的 PromptKey carrier 必须是无 agent 的 `PromptKey`；PromptKey 与单向只读历史解码保留的 agent 多 carrier 投影遵循同一 typed、同值唯一规则。含 agent 的 PromptKey 仅在读取持久化载荷时做单向解码，绝对不向新写回写或双写；新 dispatch 严禁携带或投影 peer/side/fallback agent。
+
+## [016] AcceptAgentOwnerRoot 在 PromptPhysicalAccepted 落账后重验 owner，窗口内 owner 关闭则 fail-closed
+
+`AcceptPhysicalAgentOwnerRoot` 对 owner 的身份种子验证两次：一次在 `PromptPhysicalAccepted` 事实持久化之前，一次在之后（fold 是唯一 writer，一切读取走 journal 投影）。两次验证之间就是 owner 可以持久关闭的窗口：若窗口内 owner 经唯一合法关闭路径（lifecycle review/relay/advance/close + `appendAuthorityLogicalRunClosed`）关闭，第二次验证必须以 `OwnerAuthorityNotActive` 拒绝，root 永不注册（`activeLogicalRun` 保持 null、无 `AuthorityRootAccepted`）；`PromptPhysicalAccepted` 事实本身持久存活（冷重开 `physicalLandingCount` 为 1、无 pending claim），冷重开与重放的 accept 同样失败且不产生权威。

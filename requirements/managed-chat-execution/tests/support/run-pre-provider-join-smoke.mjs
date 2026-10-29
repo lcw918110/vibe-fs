@@ -46,13 +46,20 @@ const provider = await startHttpServer(async (request, response) => {
   // Manager places the child through `this.fork` inside its own program.
   if (names.includes('todowrite-for-manager')) {
     managerRequests++
-    if (managerRequests === 1) return call('todowrite-for-manager', {
+    if (managerRequests === 1) return call('negotiate', {
+      questions: ['这次派工的验收标准是什么？'],
+      scope: { kind: 'keepLast', replacement: '先确认验收标准' },
+    })
+    if (managerRequests === 2) return call('todowrite-for-manager', {
       name: 'pre-provider-fork',
       intent: '等待派工回执，保留预请求阶段的拒绝事实。',
       remainingScopeTurnsEstimate: 3,
+      scope: { kind: 'resetScope', newScopeGoal: '等待派工回执', newScopeRetentionBudget: 4 },
       program: 'class Js extends JsProgram { async run() { return await this.fork({ calling: "engineer", name: "Worker", charge: "Do not modify files. Return one short report." }, []); } }',
     })
-    if (managerRequests === 2) return call('join', {})
+    if (managerRequests === 3) return call('join', {
+      scope: { kind: 'keepLast', replacement: '保留预请求阶段的拒绝事实' },
+    })
     joinResult = (body.messages ?? []).findLast(message => message.role === 'tool')
   }
   sendSSE(response, buildTextChunks(`join-smoke-text-${requestNumber}`, 'The isolated request was observed.', 10))

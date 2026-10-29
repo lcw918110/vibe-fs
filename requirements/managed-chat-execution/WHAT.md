@@ -84,6 +84,10 @@ transform 在 provider 启动边界拒绝某个 exact execution 时（例如 att
 - 禁止以 session-wide release、计数减一、idle/time 猜测代替 exact settlement；禁止调用 provider；禁止终结同一 session 的其他 execution；原始拒绝异常仍按既有 hook 失败路径上报，不得被定夺吞没。
 - terminal 提交未知时保留显式未知，不释放；诊断不改变定夺。
 
+## [016] own undefined agent key 是缺失 carrier，按 agent-less prompt 受理
+
+OpenCode 1.19 的 `chat.message` 以 `{ agent: input.agent, ... }` 触发，未带 agent 的 prompt 到达时是一个值为 `undefined` 的 own `agent` key。JSON 没有 undefined：该 carrier 是缺失，不是畸形。把它当畸形会让每个 agent-less 插件 prompt 都被拒为 `MalformedIdentityCarrier Agent`。在真实注册的 `chat.message` hook 上端到端钉死这一区分：own undefined agent key 按 agent-less prompt 正常受理（admission、capacity 各恰好一次）；hook 可达的畸形 carrier（如非字符串原始值）仍以 `MalformedIdentityCarrier` 拒绝且零副作用（不建执行、不动 capacity、不投影 model）。decode 层语义见 dispatch-protocol 015；model 投影细节由 003 钉死，此处不重复断言。
+
 ## [017] 宿主压缩后的续轮继承被压缩执行的受理
 
 宿主自动压缩上下文后自行写入的续轮（`metadata.compaction_continue` 的合成「Continue…」行，或紧随压缩摘要重放的用户行）不经过 `chat.message`，到达 provider 启动边界时没有 `Accepted` 记录。它不是新的权威：系统在该边界把它受理为被压缩执行的同 run 续轮——继承同一 `LogicalRunId`、Authority Root 与身份种子，origin 为续轮——并由普通续轮准入把该执行持有的 lease 交给它；被压缩的那一步按同 run 续轮常规被取代，不向父方发布终态。

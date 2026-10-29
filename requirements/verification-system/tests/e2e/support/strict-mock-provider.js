@@ -25,6 +25,7 @@ import {
 } from './strict-mock-server.js';
 import { faultBody } from './delivery-plan.js';
 import { wireOf } from './provider-wire.js';
+import { turnOf as turnOfDiagnostic } from './runtime-key.js';
 import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { StrictMockSignals } from './strict-mock-signals.js';
@@ -558,6 +559,10 @@ export class StrictMockProvider {
     });
     if (!this._quiet) {
       console.error(`[MOCK-FATAL] first script mismatch: reason=${reason} session=${sessId} parent=${parentSessionId || '-'} model=${JSON.stringify(parsed.model)} tools=${JSON.stringify(extractToolNames(parsed))} msgs=${msgs.length} lastUser=${JSON.stringify(fatal.lastUser)} candidates=${JSON.stringify(candidateLabels)}`);
+      try {
+        const keyTurn = turnOfDiagnostic(parsed);
+        console.error(`[MOCK-FATAL] key.turn=${JSON.stringify(keyTurn)}`);
+      } catch {}
       try {
         const roles = msgs.map((m) => `${m.role}`).join(' ');
         console.error(`[MSG-ROLES] ${roles}`);

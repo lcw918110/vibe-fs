@@ -39,6 +39,7 @@ open Fable.Core
 module private FissionLibrary =
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let fissionRuntime: obj = jsNative
+
     [<Emit("$0 === undefined")>]
     let isUndefined (_v: obj) : bool = jsNative
 
@@ -454,11 +455,17 @@ type ToolRuntimeScope
 
     let logicalOwnerFor (sessionId: SessionId) =
         let ownerOpt: obj = fissionRuntime?tryOwner (SessionId.value sessionId)
+
         let ownerSessionOpt =
-            if isNull ownerOpt || isUndefined ownerOpt || String.IsNullOrEmpty (unbox<string> ownerOpt) then
+            if
+                isNull ownerOpt
+                || isUndefined ownerOpt
+                || String.IsNullOrEmpty(unbox<string> ownerOpt)
+            then
                 None
             else
-                Some (SessionId.create (unbox<string> ownerOpt))
+                Some(SessionId.create (unbox<string> ownerOpt))
+
         ownerSessionOpt
         |> Option.orElseWith (fun () ->
             journal
@@ -940,7 +947,11 @@ type ToolRuntimeScope
               "recipient", recipient
               "delegator", delegator
               "stage", stage
-              "reason", (if String.IsNullOrWhiteSpace reason then "unspecified" else reason) ]
+              "reason",
+              (if String.IsNullOrWhiteSpace reason then
+                   "unspecified"
+               else
+                   reason) ]
 
     let deliverNegotiationReply
         (delegator: string)
@@ -954,20 +965,25 @@ type ToolRuntimeScope
 
             let admitted = not (isNull prepared?ok) && unbox<bool> prepared?ok
 
+            let reportSent recipient sent =
+                match sent with
+                | Ok() -> ()
+                | Error reason -> negotiationDeliveryFailed receipt recipient delegator "send-steer" reason
+
+            let prepareFailureReason =
+                match Option.ofObj prepared?reason with
+                | Some text -> string text
+                | None -> ""
+
             if admitted then
                 // Only the real Host PhysicalAccepted observer may unlock the
                 // first scope. A detached queue receipt is not a landed steer.
                 let recipient = string prepared?recipient
                 let! sent = steer recipient (string prepared?steer) receipt
-
-                match sent with
-                | Ok() -> ()
-                | Error reason -> negotiationDeliveryFailed receipt recipient delegator "send-steer" reason
-
+                reportSent recipient sent
                 return ()
             else
-                let reason = if isNull prepared?reason then "" else string prepared?reason
-                negotiationDeliveryFailed receipt "" delegator "prepare-reply" reason
+                negotiationDeliveryFailed receipt "" delegator "prepare-reply" prepareFailureReason
         }
 
     let settleNegotiationAnswer
@@ -1005,7 +1021,13 @@ type ToolRuntimeScope
             dispatchNegotiation delegator recipient questions receipt ask steer |> ignore
             true
         | _ ->
-            negotiationDeliveryFailed receipt recipient delegator "transport-unattached" "negotiate transport is not attached"
+            negotiationDeliveryFailed
+                receipt
+                recipient
+                delegator
+                "transport-unattached"
+                "negotiate transport is not attached"
+
             false
 
     let privateConsultationObserver
@@ -1056,14 +1078,22 @@ type ToolRuntimeScope
         (awaitPhysical: bool)
         : Task<Result<unit, string>> =
         let target = SessionId.create recipient
-        let directory = directoryFor recipient |> Option.orElse workspaceDirectory
         // A busy worker lands the steer only after its current turn ends. The
         // admission default (10s) would declare Unknown while the Host is still
         // holding a perfectly good queued message, so advice waits far longer.
-        let budget = if awaitPhysical then Some AdvisorSteerAcceptanceBudgetMs else None
-        let observer = privateConsultationObserver recipient receipt confirm budget
+        let observer =
+            privateConsultationObserver
+                recipient
+                receipt
+                confirm
+                (if awaitPhysical then
+                     Some AdvisorSteerAcceptanceBudgetMs
+                 else
+                     None)
 
-        let consultationPort = DispatchSessionPort.ofSessionPort sessions |> DispatchSessionPort.forConsultation
+        let consultationPort =
+            DispatchSessionPort.ofSessionPort sessions
+            |> DispatchSessionPort.forConsultation
 
         let active =
             journal
@@ -1077,13 +1107,18 @@ type ToolRuntimeScope
                     target
                     (AgentJournal.snapshot durable).AgentProjections)
 
-        match journal, active, last with
-        | None, _, _ -> Task.FromResult(Error "No AgentJournal: cannot enqueue visible negotiation guidance")
-        | Some _, Some current, _ ->
+        let sendToCurrent current =
+            let directory =
+                directoryFor (SessionId.value target) |> Option.orElse workspaceDirectory
+
             if awaitPhysical then
                 HostForkBusyNudge.sendObservedAwait sessions journal target current directory answer observer
             else
                 HostForkBusyNudge.sendObserved sessions journal target current directory answer observer
+
+        match journal, active, last with
+        | None, _, _ -> Task.FromResult(Error "No AgentJournal: cannot enqueue visible negotiation guidance")
+        | Some _, Some current, _ -> sendToCurrent current
         | Some durable, None, Some closed ->
             // A completed child needs a new owned logical run, not a
             // continuation of a closed run. Both paths share Dispatcher.
@@ -1094,8 +1129,11 @@ type ToolRuntimeScope
                 target
                 (LlmFacing.renderInstruction answer)
                 closed.IdentitySeed
-                directory
-                (if awaitPhysical then PromptDispatcher.AwaitMode.Await else PromptDispatcher.AwaitMode.Detached)
+                (directoryFor (SessionId.value target) |> Option.orElse workspaceDirectory)
+                (if awaitPhysical then
+                     PromptDispatcher.AwaitMode.Await
+                 else
+                     PromptDispatcher.AwaitMode.Detached)
                 (Some observer)
             |> TaskValue.map (Result.map ignore)
         | Some _, None, None -> Task.FromResult(Error "Negotiation recipient has no previous managed authority profile")
@@ -1365,15 +1403,18 @@ type ToolRuntimeScope
         sendNegotiationSteer recipient answer receipt
 
     member _.SendAdvisorSteer(recipient: string, answer: string, processId: string, isCurrent: unit -> bool) =
-        task {
+        let judgePostDelivery (delivered: Result<unit, string>) =
             if not (isCurrent ()) then
-                return Error "stale Advisor answer: source Scope is no longer current"
+                Error "stale Advisor answer: Scope advanced before physical steer confirmation"
             else
+                delivered
+
+        task {
+            if isCurrent () then
                 let! delivered = sendConsultationSteer recipient answer processId (fun _ _ -> isCurrent ()) true
-                if not (isCurrent ()) then
-                    return Error "stale Advisor answer: Scope advanced before physical steer confirmation"
-                else
-                    return delivered
+                return judgePostDelivery delivered
+            else
+                return Error "stale Advisor answer: source Scope is no longer current"
         }
 
     member _.AttachPreviousScopeTransport(ask: string -> obj -> string -> Task<Result<string, string>>) =
@@ -1614,7 +1655,7 @@ type ToolRuntimeScope
 
                 match! UserQuestionJournal.request durable request with
                 | Error reason -> return Error reason
-                | Ok () -> return! notify question
+                | Ok() -> return! notify question
             | _ -> return Error "review ask requires authority, call evidence, and a question notifier"
         }
 
@@ -1639,7 +1680,7 @@ type ToolRuntimeScope
                 let! parked = this.ParkReviewQuestion(ctx, string request?text)
 
                 match parked with
-                | Ok () -> return createObj [ "ok", box true ]
+                | Ok() -> return createObj [ "ok", box true ]
                 | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
             }
 
@@ -1664,6 +1705,11 @@ type ToolRuntimeScope
             }
 
         let openSession (request: obj) =
+            let refusedByHost (reason: obj) =
+                match box reason with
+                | :? string as text -> text.StartsWith("HTTP ", StringComparison.Ordinal)
+                | _ -> false
+
             task {
                 let options: ChildSessionOptions =
                     { Title = Some(string request?digest)
@@ -1671,31 +1717,20 @@ type ToolRuntimeScope
                       Directory = None }
 
                 match! sessions.CreateChildSession(SessionId.create ctx.SessionId, options) with
-                | Ok sessionId ->
-                    return createObj [ "ok", box true; "sessionId", box (SessionId.value sessionId) ]
+                | Ok sessionId -> return createObj [ "ok", box true; "sessionId", box (SessionId.value sessionId) ]
                 | Error reason ->
                     // Only an answer from the host (an HTTP status, not a transport
                     // failure) proves the session was never created; every other
                     // failure — timeout included — leaves creation unknown.
-                    let refused =
-                        match box reason with
-                        | :? string as text -> text.StartsWith("HTTP ", StringComparison.Ordinal)
-                        | _ -> false
-
-                    return createObj [ "ok", box false; "reason", box reason; "refused", box refused ]
+                    return createObj [ "ok", box false; "reason", box reason; "refused", box (refusedByHost reason) ]
             }
 
         let draft (request: obj) =
             task {
-                let sessionId = SessionId.create(string request?sessionId)
+                let sessionId = SessionId.create (string request?sessionId)
                 use _listener = sessions.SubscribeTerminal(sessionId, (fun _ _ -> ()))
 
-                let! outcome =
-                    sessions.SendPrompt(
-                        sessionId,
-                        string request?digest,
-                        promptOptions (Some "manager")
-                    )
+                let! outcome = sessions.SendPrompt(sessionId, string request?digest, promptOptions (Some "manager"))
 
                 if admitted outcome then
                     return createObj [ "ok", box true ]
@@ -1704,6 +1739,35 @@ type ToolRuntimeScope
             }
 
         let stop (_request: obj) =
+            let appendClosure commonDir retirementId =
+                JournalSurface.appendAuthorityLogicalRunClosed commonDir ctx.SessionId retirementId
+
+            let closeCompletedRun commonDir =
+                let retirementId =
+                    Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir ctx.SessionId
+                    |> Option.bind Wanxiangshu.Mission.Lifecycle.DurableWorkHost.completedClosureId
+                    |> Option.filter (fun _ -> this.IsRole(ctx, Role.Manager))
+
+                match retirementId with
+                | Some retirementId -> appendClosure commonDir retirementId
+                | None -> Task.FromResult(())
+
+            let closeIfCompleted () =
+                task {
+                    match this.WorkspaceDirectory with
+                    | Some workspace ->
+                        let! commonDir = RuntimePath.stateRoot workspace
+                        return! closeCompletedRun commonDir
+                    | None -> return ()
+                }
+
+            let interrupt () =
+                task {
+                    match! sessions.InterruptAttempt(SessionId.create ctx.SessionId) with
+                    | Ok() -> return createObj [ "ok", box true ]
+                    | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
+                }
+
             task {
                 // Work has already committed the retirement before invoking
                 // this effect. A genuinely Completed Manager tenure carries
@@ -1712,26 +1776,8 @@ type ToolRuntimeScope
                 // before ending that physical attempt. Relays have no
                 // Completed retirement and must never close the logical run.
                 try
-                    match this.WorkspaceDirectory with
-                    | Some workspace ->
-                        let! commonDir = RuntimePath.stateRoot workspace
-                        let retirement =
-                            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir ctx.SessionId
-                            |> Option.bind Wanxiangshu.Mission.Lifecycle.DurableWorkHost.completedClosureId
-
-                        match retirement with
-                        | Some retirementId when this.IsRole(ctx, Role.Manager) ->
-                            do!
-                                JournalSurface.appendAuthorityLogicalRunClosed
-                                    commonDir
-                                    ctx.SessionId
-                                    retirementId
-                        | _ -> ()
-                    | None -> ()
-
-                    match! sessions.InterruptAttempt(SessionId.create ctx.SessionId) with
-                    | Ok () -> return createObj [ "ok", box true ]
-                    | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
+                    do! closeIfCompleted ()
+                    return! interrupt ()
                 with error ->
                     return
                         createObj
@@ -1822,28 +1868,31 @@ type ToolRuntimeScope
                 currentPhysicalUserMessage (SessionId.value sessionId)
                 |> Option.map PhysicalUserMessageId.create
 
-        deliveryAttemptLedger?recordEstablished(
-            createObj [
-                "sessionId" ==> SessionId.value sessionId
-                "providerRun" ==> ProviderRunIdentity.value providerRun
-                "callId" ==> ToolCallId.value callId
-            ],
-            physical |> Option.map PhysicalUserMessageId.value) |> ignore
+        deliveryAttemptLedger?recordEstablished (
+            createObj
+                [ "sessionId" ==> SessionId.value sessionId
+                  "providerRun" ==> ProviderRunIdentity.value providerRun
+                  "callId" ==> ToolCallId.value callId ],
+            physical |> Option.map PhysicalUserMessageId.value
+        )
+        |> ignore
 
     /// 呈现面登记：宿主已接受该交付的工具结果。呈现不改变提交面事实。
     member _.RecordDeliveryPresented(sessionId: SessionId, providerRun: ProviderRunIdentity, callId: ToolCallId) =
-        deliveryAttemptLedger?recordPresented(
-            createObj [
-                "sessionId" ==> SessionId.value sessionId
-                "providerRun" ==> ProviderRunIdentity.value providerRun
-                "callId" ==> ToolCallId.value callId
-            ]) |> ignore
+        deliveryAttemptLedger?recordPresented (
+            createObj
+                [ "sessionId" ==> SessionId.value sessionId
+                  "providerRun" ==> ProviderRunIdentity.value providerRun
+                  "callId" ==> ToolCallId.value callId ]
+        )
+        |> ignore
 
     /// 本 session 是否存在一次已成立的交付（不绑定物理输入）。进程内台账是
     /// 快速路径，durable 交付见证是判据本身——进程重启后台账为空，见证仍在。
     member _.HasEstablishedDelivery(sessionId: string) =
         let sid = SessionId.create sessionId
-        let hasInMem: bool = deliveryAttemptLedger?hasEstablished(SessionId.value sid)
+        let hasInMem: bool = deliveryAttemptLedger?hasEstablished (SessionId.value sid)
+
         let hasDurable: bool =
             match journal with
             | Some durable ->
@@ -1851,13 +1900,13 @@ type ToolRuntimeScope
                     (AgentJournal.snapshot durable).AgentProjections.Deliveries
                     |> Map.toList
                     |> List.map (fun ((s, r, c), _) ->
-                        createObj [
-                            "sessionId" ==> SessionId.value s
-                            "providerRun" ==> ProviderRunIdentity.value r
-                            "callId" ==> ToolCallId.value c
-                        ])
+                        createObj
+                            [ "sessionId" ==> SessionId.value s
+                              "providerRun" ==> ProviderRunIdentity.value r
+                              "callId" ==> ToolCallId.value c ])
                     |> List.toArray
-                deliveryAttemptLedger?hasDurableEstablished(deliveries, SessionId.value sid)
+
+                deliveryAttemptLedger?hasDurableEstablished (deliveries, SessionId.value sid)
             | None -> false
 
         hasInMem || hasDurable
@@ -1872,13 +1921,12 @@ type ToolRuntimeScope
                 Some physicalUserMessageId
 
         let found: obj option =
-            deliveryAttemptLedger?tryFindEstablished(SessionId.value sid, physical)
+            deliveryAttemptLedger?tryFindEstablished (SessionId.value sid, physical)
 
         found
         |> Option.bind (fun res ->
             let fence = res?fence
-            if isNull fence then None
-            else Some (string fence?callId))
+            if isNull fence then None else Some(string fence?callId))
 
     /// Run-started callback wired by plugin bootstrap for Host child reconciliation.
     member _.RunStarted = onStarted
@@ -2316,7 +2364,7 @@ type ToolRuntimeScope
             |> Seq.toArray do
             questionInterrupts.Remove key |> ignore
 
-        deliveryAttemptLedger?dropSession(SessionId.value questionOwner) |> ignore
+        deliveryAttemptLedger?dropSession (SessionId.value questionOwner) |> ignore
 
         let forkRuntimes, orchestrator =
             lock gate (fun () ->

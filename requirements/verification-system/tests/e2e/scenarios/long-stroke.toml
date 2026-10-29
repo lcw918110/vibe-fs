@@ -432,6 +432,118 @@ tools = ["todowrite-for-manager", "join", "horizon", "review"]
   optional = true
   respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
+  # lifecycle-009: an unknown ask delivery no longer stalls the finish — a
+  # substantive review consumes the question and advances, so the successor's
+  # closing chain (relay → advance → complete) runs several more review steps
+  # on the same assess resource. The ladder mirrors manager-current-action:
+  # every step is an optional review, bounded only by the run itself.
+  [[turn.step]]
+  runtimeStep = 5
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 6
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 7
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 8
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 9
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 10
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 11
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 12
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  # lifecycle-009: the unknown-ask consumption can chain one more closing step than
+  # the earlier ladder measured, so the same optional review close extends here too.
+  [[turn.step]]
+  runtimeStep = 13
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 14
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 15
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 16
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 17
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 18
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 19
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 20
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 21
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 22
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 23
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 24
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 25
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
 # A fresh Manager terminal can race with the externally injected interruption
 # while its child is still outstanding. INTERACTION-AUTHORITY-014 then requires
 # this exact JoinGuard on the same Manager session. It is separate
@@ -656,6 +768,56 @@ tools = ["todowrite-for-manager", "join", "assume", "review"]
   optional = true
   respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
+  [[turn.step]]
+  runtimeStep = 26
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 27
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 28
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 29
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 30
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 31
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 32
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 33
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 34
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 35
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
 # The same nudge is also rendered as an instruction comment, so the semantic turn
 # starts with `#`. Both renderings are the same continuation.
 # After delivery the continuation is only the unfinished-work preamble. It does not carry
@@ -714,6 +876,151 @@ tools = ["todowrite-for-manager", "join", "assume", "review"]
 
   [[turn.step]]
   runtimeStep = 6
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 7
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 8
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 9
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 10
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 11
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 12
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 13
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 14
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 15
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 16
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 17
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 18
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 19
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 20
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 21
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 22
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 23
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 24
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 25
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 26
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 27
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 28
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 29
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 30
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 31
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 32
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 33
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 34
+  optional = true
+  respond = { type = "tool-call", tool = "review", args = { findings = [] } }
+
+  [[turn.step]]
+  runtimeStep = 35
   optional = true
   respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 

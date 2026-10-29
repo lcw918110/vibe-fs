@@ -158,7 +158,7 @@ test('WHAT[verification-system-014] the compiled Long Stroke scenario preserves 
   const currentActions = result.scenario.entries.filter((entry) => entry.turnId === 'manager-current-action')
   // The Manager idle-nudge cursor is bounded only by the run (work/manager-continue),
   // so the reusable ladder keeps one declared close attempt per bounded cursor.
-  assert.deepEqual(currentActions.map((entry) => entry.step), Array.from({ length: 26 }, (_, index) => index))
+  assert.deepEqual(currentActions.map((entry) => entry.step), Array.from({ length: 36 }, (_, index) => index))
   assert.ok(currentActions.every((entry) => entry.optional === true))
   assert.ok(!result.scenario.must.some((id) => id.startsWith('manager-current-action.')))
   assert.ok(!result.scenario.entries.some((entry) => entry.id.startsWith('manager-repair-resume.')))

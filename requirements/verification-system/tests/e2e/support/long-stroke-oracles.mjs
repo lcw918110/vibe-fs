@@ -386,6 +386,31 @@ export function continuedOriginator(events) {
   return !events.slice(opened + 1).some((event) => event.type === 'Reviewed' && event.payload?.incumbencyId === id);
 }
 
+/**
+ * Whether this session's work is durably complete: a Completed retirement is the
+ * last tenure event, with no later opening or continuation reopening it.
+ */
+const workCompleted = (scenario, context) => {
+  const sessionId = context?.sessionId;
+  if (typeof sessionId !== 'string' || sessionId === '') return false;
+  const events = workJournalEvents(scenario.host.workDir, { sessionId });
+  const completedAt = events.findLastIndex(
+    (event) => event.type === 'IncumbencyRetired' && event.payload?.outcome === 'Completed',
+  );
+  const completed = completedAt >= 0
+    && !events.slice(completedAt + 1).some((event) => event.type === 'IncumbencyOpened' || event.type === 'WorkContinued');
+  if (process.env.WXS_ORACLE_TRACE) {
+    console.error(`[ORACLE-TRACE] workCompleted session=${sessionId} events=${events.length} completedAt=${completedAt} => ${completed}`);
+  }
+  return completed;
+};
+
+/** The prose close a real model gives after the work is complete. */
+const closingProse = () => ({
+  type: 'text',
+  text: 'The work is complete and durably recorded; the closing report is delivered in prose.',
+});
+
 export async function bindManagerLoopSequence(scenario) {
   const runtime = scenario.provider?._scenario;
   assert.ok(runtime?.scenario?.entries, 'long-stroke: strict scenario entries required for loop tenure bind');
@@ -495,7 +520,9 @@ export async function bindManagerLoopSequence(scenario) {
               name: 'Conflict Resolver',
               charge: 'Resolve the conflicted publish_proof.txt so it contains exactly: Published by long-stroke canary',
             })
-          : retire();
+          : workCompleted(scenario, context)
+            ? closingProse()
+            : retire();
     } else if (entry?.id === 'manager-reopened-loop.1') {
  // A successor incarnation opens no work of its own unless the audit assigned it:
  // only the repair tenure forks, everything else closes with the declared close. The
@@ -508,7 +535,9 @@ export async function bindManagerLoopSequence(scenario) {
             name: 'Conflict Resolver',
             charge: 'Resolve the conflicted publish_proof.txt so it contains exactly: Published by long-stroke canary',
           })
-        : continuedReview ? clearReview() : retire();
+        : workCompleted(scenario, context)
+          ? closingProse()
+          : continuedReview ? clearReview() : retire();
     } else if (entry?.id === 'manager-loop.2' || entry?.id === 'manager-reopened-loop.2') {
       // The family is shared by both owner lanes, and only the Manager lane forks work to
       // join. The HumanRoot successor opens nothing, so its second cursor is the closing
@@ -523,7 +552,9 @@ export async function bindManagerLoopSequence(scenario) {
           ? initialLoopJoin
           : latestManagerAuditAttempt === 3
             ? initialLoopJoin
-            : retire();
+            : workCompleted(scenario, context)
+              ? closingProse()
+              : retire();
     } else if (
       (entry?.turnId === 'manager-loop' || entry?.turnId === 'manager-reopened-loop')
       && entry.step === 3
@@ -532,7 +563,17 @@ export async function bindManagerLoopSequence(scenario) {
       // observed, so every tenure clears it before the closing deliver.
       entry.respond = clearReview();
     } else if (entry?.turnId === 'manager-reopened-loop' && entry.step >= 4) {
-      entry.respond = retire();
+      // lifecycle-009: an unknown ask delivery no longer stalls the closing chain.
+      // The first closing step after the join may still hold an open question —
+      // a substantive review consumes it; every later step is the empty close.
+      // Once the work is durably complete the ladder closes in prose instead:
+      // production refuses every later review ("Work is complete"), so an
+      // endless review loop only grows the context.
+      entry.respond = entry.step === 4
+        ? clearReview()
+        : workCompleted(scenario, context)
+          ? closingProse()
+          : retire();
     } else if (entry?.id === 'manager-t1-commitment.0') {
       managerAssumptionDelivered = true;
     } else if (
@@ -540,7 +581,9 @@ export async function bindManagerLoopSequence(scenario) {
       || entry?.turnId === 'manager-current-action-comment'
       || entry?.turnId === 'manager-current-action-preamble'
     ) {
-      if (!managerAssumptionDelivered) {
+      if (workCompleted(scenario, context)) {
+        entry.respond = closingProse();
+      } else if (!managerAssumptionDelivered) {
         entry.respond = currentActionAssumptionResponse;
         managerAssumptionDelivered = true;
       } else if (latestManagerAuditAttempt === 1 && !initialWorkJoined) {

@@ -96,3 +96,7 @@ Load Phase 必须一次性结算上一 runtime 遗留、本进程无法继续持
 - 未命中缓存时的正确行为是**按需解析并回填**（`DurableChildLookup` by handle id / byname、执行身份按 durable authority 投影与 exact lease 解析、`FissionRuntime` 的 durable lane 证据），而不是回 `Unknown agent id`、`person-unavailable` 或静默跳过；
 - 装载阶段不再有“预登记/预热”特例通道：同一件事只有一个按需规则，避免重启路径每多一处读取就多一处补丁；
 - 只有进程资源归属（本进程持有的 PTY、pending run、teardown 集合、live companion host）可以只读本地表；它们描述的是进程，而不是世界。
+
+## [022] pre-provider 子失败结算为 durable Failed，装载结算仍作废孤儿子工作
+
+pre-provider 的子失败必须结算为 durable `Failed` terminal：真实信号路径（`SessionRecoveryHost`）在真实磁盘 journal 上持久化该 terminal，冷重开后仍能按子身份（session + physical message）读回 `Failed`。装载结算（load settlement）对已被结算的孤儿子工作仍产生 `ChildWorkVoided`：父方视角子工作为 `Abandoned (Voided)`，子方 `Failed` 事实各自保留，重复结算幂等（不再追加任何事实）。`ChildWorkVoided` 幂等：同一子工作的重复结算不产生新事实。父方 Join wire 输出不在本条断言范围（无公开入口可从重开 journal 重建 drain 状态）。

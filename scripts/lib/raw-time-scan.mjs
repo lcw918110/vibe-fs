@@ -65,6 +65,8 @@ export const RAW_TIME_ALLOWLIST = Object.freeze([
   'Repository/Programming/Js/ToolsBindings.fs',
   'Repository/Programming/Js/ToolWorkflow.fs',
   'OpenCode/Host/PluginSessionScope.fs',
+  // HOST-037：空闲续跑等待宿主 runner 离开当前 run，轮询退避是宿主端口的物理等待。
+  'OpenCode/Host/Sessions.fs',
   // OpenCode 物理适配器：negotiate 回执落地的轮询退避是该适配器自己的物理等待，
   // 经 NodeTiming.timerTask（wanxiangli/time）持有环境时间。
   'OpenCode/Plugin/PluginHooks.fs',

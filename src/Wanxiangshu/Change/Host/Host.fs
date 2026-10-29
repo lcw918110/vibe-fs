@@ -10,7 +10,6 @@ open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Fork.Host
 open Wanxiangshu.Execution.Session
-open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -262,16 +261,19 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         | Error error -> Task.FromResult(Error error)
         | Ok(relay, record) -> awaitLoopSignalFromRelay jobId relay record
 
-    let continueCompleted commonDir sessionId requestId stopped stopEffectId =
-        match stopped, stopEffectId with
-        | true, Some effectId ->
+    /// A recorded conflict needs one new tenure so the repair can be reviewed.
+    /// The completed work has no active tenure, and reopening it is refused
+    /// everywhere else. This is the one place that continuation is owed.
+    let continueConflict commonDir sessionId requestId stopEffectId =
+        match stopEffectId with
+        | Some effectId ->
             DurableWorkHost.execute
                 commonDir
                 sessionId
                 ("observed-stop:" + effectId)
                 (DurableWorkHost.command "Confirm" [ "effectId", box effectId; "outcome", box "Observed" ])
             |> ignore
-        | _ -> ()
+        | None -> ()
 
         let receipt =
             DurableWorkHost.execute
@@ -289,7 +291,7 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
             || receipt.Status = "Observed"
             ->
             Ok(IncumbencyId.create activeId)
-        | _ -> Error(sprintf "Manager continuation failed: %s %s" receipt.Status receipt.Reason)
+        | _ -> Error(sprintf "Conflict continuation failed: %s %s" receipt.Status receipt.Reason)
 
     /// The continuation the road owes after its last committed retirement.
     ///
@@ -318,26 +320,13 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
             let requestId =
                 "hand-off:" + ManagerJobId.value jobId + ":" + retirement.RetirementId
 
-            match retirement.Outcome, work.ActiveId with
-            | "Completed", None ->
-                let stopped =
-                    deps.Journal
-                    |> Option.exists (fun journal ->
-                        (AgentJournal.snapshot journal).AgentProjections.ChatExecutions
-                        |> ChatExecutionProjection.current
-                        |> List.exists (fun execution ->
-                            execution.key.SessionId = record.ManagerSessionId
-                            && execution.terminalDisposition.IsSome
-                            && (execution.startedEvidence
-                                |> Option.exists (fun started ->
-                                    ProviderRunIdentity.value started.ProviderRun = retirement.Fence.ProviderRunId))))
-
+            match record.ConflictDetected, retirement.Outcome, work.ActiveId with
+            | Some _, "Completed", None ->
                 return!
-                    continueCompleted
+                    continueConflict
                         commonDir
                         (SessionId.value record.ManagerSessionId)
                         requestId
-                        stopped
                         retirement.StopEffectId
             | _ ->
                 return!

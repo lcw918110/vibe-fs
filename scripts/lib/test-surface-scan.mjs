@@ -78,6 +78,10 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
   'requirements/host-boundary/tests/fixtures/fatal-process-child.fixture.mjs',
   // Physical host/SQLite/representation canaries added in recent upstream commits:
   'requirements/host-boundary/tests/tenure-barrier.test.mjs',
+  // Dispatch physical canary (upstream b94d43996): drives the real dispatcher
+  // against a real journal and observes the Fable fact representation inside
+  // the durable accept window — its subject is the raw shape, not semantics.
+  'requirements/dispatch-protocol/tests/016.test.mjs',
   'requirements/advisor/tests/007.test.mjs',
   'requirements/advisor/tests/009.test.mjs',
   'requirements/advisor/tests/010.test.mjs',

@@ -437,3 +437,11 @@ OpenCode 工具目录、角色权限表与 Plan/Manager 双语提示词统一以
 ## [055] 工作测试套件与辅助夹具彻底移除旧 S1–S3 序列与 Promoted 探针
 
 `work` 规范测试夹具与全套用例彻底清除旧 `S1,S2,S3` 阶段名、`Promoted` 评审结果及历史 probe 辅助函数，统一使用里程碑中文阶段名与 `review` 语义接口。
+
+## [056] DurableWork 外部效果已发生、confirm 未落账的重开恢复窗口
+
+外部效果已真实发生但 confirm 记录未落账（journal append 在写入前失败）时，组合已封存：不能原地重试，只能重开观察。重开后按同一效果身份（同一 request id）重开会话并投递恰好一次，`Admitted` 落账；再次重开不重发。`createSession` 已发生但 confirm 未落账：重开后按同一效果身份重开会话，投递恰好一次；`createSession` 返回 Unknown 且已落账：重开不再触发任何外部调用；`sendDraft` 已发生但 Admitted confirm 未落账：重开后投递重发一次并落账。边界为 `wanxiangli/durable-work` 公开构造器 + `wanxiangli/eventstore` 真实 SQLite journal，外部调用按真实端口名计数；SIGKILL 场景由 assembly 003 另行覆盖。
+
+## [057] createSession 端口失败的诚实映射：Unknown 与 NotStarted 不得互换
+
+`createSession` 端口失败时，组装层必须区分两种失败：宿主从未应答（传输超时等）无法区分「确定没建」与「不知道建没建」，必须报 `Unknown`、落账 `EffectConfirmed Unknown`，不得写成 `DeliveryRejected`；已落账 Unknown 的重开零重调外部端口。宿主明确应答拒绝（HTTP 状态、`refused` 标记）才报 `NotStarted`：落账 `DeliveryRejected`，不发草稿；拒绝后新一次 launch（新 requestId）可以重新开。durable-work 直连路径同样遵守：传输超时映射为 Unknown，落账后重开零外部调用。

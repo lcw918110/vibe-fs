@@ -118,7 +118,7 @@ const closeOwner = async (handle, session, directory) => {
   assert.equal(dispatch.projectionObservation(handle, session).activeLogicalRun, null)
 }
 
-test('dispatch: a root accept re-validates its owner after PromptPhysicalAccepted persists — an owner closed in that window fails closed', async () => {
+test('WHAT[dispatch-protocol-016] a root accept re-validates its owner after PromptPhysicalAccepted persists — an owner closed in that window fails closed', async () => {
   await withSharedJournal('owner-closed-in-flight', async (handle, reopen, directory) => {
     const owner = 'owner-closed-in-flight-owner'
     const child = 'owner-closed-in-flight-child'
