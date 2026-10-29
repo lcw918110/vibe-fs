@@ -8,10 +8,12 @@ open Fable.Core.JsInterop
 
 module private PtyPortSupport =
     let invokeTerminate (handler: PtyBackendHandler) (id: PtyId) =
-        try
-            handler id (PtyCommand.Signal PtySignal.Terminate) |> ignore
-        with _ ->
-            ()
+        task {
+            try
+                return! handler id (PtyCommand.Signal PtySignal.Terminate)
+            with error ->
+                return Error error.Message
+        }
 
     let claimClosedFlag (closed: bool ref) =
         lock closed (fun () ->
@@ -154,6 +156,8 @@ type PtyPort(?exitListener: PtyExitEvent -> unit, ?handler: PtyBackendHandler) a
 
         if live then
             PtyPortSupport.invokeTerminate handler id
+        else
+            Task.FromResult(Ok())
 
     /// Complete from a backend exit (onExit). This is the ONLY path that
     /// publishes completion to exit listeners. Removes from active, marks
@@ -312,7 +316,7 @@ type PtyPort(?exitListener: PtyExitEvent -> unit, ?handler: PtyBackendHandler) a
     /// Owner-initiated close: sends TERM only. Does NOT publish completion —
     /// completion is delivered by the backend's onExit → Complete / CompleteAborted.
     /// The caller must await the exit (via CloseAll or the registered exit task).
-    member this.Close(id: PtyId, ?outcome: Result<string, string>) : unit = requestTerminate id
+    member this.Close(id: PtyId, ?outcome: Result<string, string>) : unit = requestTerminate id |> ignore
 
     /// Async owner cleanup for a single PTY id: sends TERM, awaits exit with grace, then escalates to KILL if needed.
     member this.ClosePty(id: PtyId, ?graceMs: int) : Task<unit> =
@@ -322,9 +326,22 @@ type PtyPort(?exitListener: PtyExitEvent -> unit, ?handler: PtyBackendHandler) a
             let isLive = lock gate (fun () -> active.ContainsKey id)
 
             if isLive then
-                requestTerminate id
+                let clock = NodeTiming.nodeClockPort ()
+                let deadline = clock.UtcNow().AddMilliseconds(float grace)
+                let termination = requestTerminate id
+                let! answered = NodeTiming.raceExit (termination :> Task) grace
+
+                if answered then
+                    match! termination with
+                    | Error reason -> return raise (InvalidOperationException(reason))
+                    | Ok() -> ()
+
                 let exitTaskOpt = lock gate (fun () -> PtyPortSupport.findExitTask exitTasks id)
-                do! PtyPortSupport.awaitRegisteredExit handler exitTaskOpt grace id
+
+                let remaining =
+                    max 0 (int (Math.Ceiling((deadline - clock.UtcNow()).TotalMilliseconds)))
+
+                do! PtyPortSupport.awaitRegisteredExit handler exitTaskOpt remaining id
                 lock gate (fun () -> exitTasks.Remove id |> ignore)
         }
 
@@ -337,14 +354,25 @@ type PtyPort(?exitListener: PtyExitEvent -> unit, ?handler: PtyBackendHandler) a
         let grace = max 0 (defaultArg graceMs PtyOutcome.termToKillGraceMs)
         let ids = lock gate (fun () -> active.Keys |> Seq.toList)
 
+        let close id =
+            task {
+                try
+                    do! this.ClosePty(id, graceMs = grace)
+                    return None
+                with error ->
+                    return Some error
+            }
+
         task {
-            for id in ids do
-                requestTerminate id
+            let pending = ids |> List.map close |> List.toArray
+            let! outcomes = (emitJsExpr pending "Promise.all($0)": Task<exn option array>)
 
-                let exitTaskOpt = lock gate (fun () -> PtyPortSupport.findExitTask exitTasks id)
-
-                do! PtyPortSupport.awaitRegisteredExit handler exitTaskOpt grace id
-                lock gate (fun () -> exitTasks.Remove id |> ignore)
+            match Array.choose id outcomes with
+            | [||] -> ()
+            | [| error |] -> return raise error
+            | errors ->
+                let combined: exn = emitJsExpr errors "new AggregateError($0, 'PTY cleanup failed')"
+                return raise combined
         }
 
     member _.List() : PtyHandle list =

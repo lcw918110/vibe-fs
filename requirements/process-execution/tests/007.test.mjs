@@ -83,6 +83,25 @@ test('WHAT[process-execution-007] PORT_close_all_escalates_to_kill_after_grace',
   await portCloseAll(port, 0)
   assert.deepEqual(seen, ['SIGTERM', 'SIGKILL'])
 })
+
+test('WHAT[process-execution-007] pending TERM dispatch cannot prevent KILL after the shared grace', async () => {
+  const signals = []
+  const exit = exitSignal()
+  const port = createPtyPort({ handler: async (_pid, command) => {
+    if (command.kind !== 'Signal') return success
+    signals.push(command.signal)
+    if (command.signal === 'SIGTERM') return new Promise(() => {})
+    exit.resolve()
+    return success
+  } })
+  const pid = forkDefault(port, 'pty-pending-term')
+  portRegisterExitTask(port, pid, exit.promise)
+  await portCloseAll(port, 10)
+  assert.deepEqual(signals, ['SIGTERM', 'SIGKILL'])
+  assert.equal(portExists(port, pid), true, 'a resolved waiter alone cannot fabricate a completion event')
+  portComplete(port, pid, { ok: true, value: 'stopped' })
+  assert.equal(portExists(port, pid), false)
+})
 test('WHAT[process-execution-007] PORT_close_all_kill_failure_propagates', async () => {
   const exit = exitSignal()
   const port = createPtyPort({ handler: async (_pid, command) => {

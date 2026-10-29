@@ -105,14 +105,23 @@ module NodeProcessHost =
     [<Emit("""
         (async function(ProcessSession, executable, args, cwd, env, stdinText, onStdout, onStderr, onClose) {
             let session;
+            let failure = null;
+            const rememberFailure = (error) => {
+                if (failure === null) {
+                    failure = error instanceof Error ? error : new Error(String(error && error.message || error));
+                }
+                session.signal('SIGKILL');
+            };
             try {
                 session = new ProcessSession({
                     executable,
                     args: Array.from(args),
                     cwd,
                     env,
-                    tailBytes: 16777216,
+                    tailBytes: 0,
                     maxWriteBytes: 16777216,
+                }, (channel, bytes) => {
+                    (channel === 'stdout' ? onStdout : onStderr)(bytes);
                 });
             } catch (err) {
                 return { ok: false, error: (err && err.message) ? String(err.message) : 'Failed to create ProcessSession' };
@@ -124,56 +133,35 @@ module NodeProcessHost =
                     : ('Failed to spawn process: ' + executable);
                 return { ok: false, error: msg };
             }
-            let outOffset = 0;
-            let errOffset = 0;
-            const drainChannel = (channel, currentOffset, handler) => {
-                try {
-                    const slice = session.read(channel, currentOffset);
-                    if (slice && slice.bytes && slice.bytes.byteLength > 0) {
-                        const chunk = new Uint8Array(slice.bytes.buffer, slice.bytes.byteOffset, slice.bytes.byteLength);
-                        try { handler(chunk); } catch (_) {}
-                    }
-                    return (slice && typeof slice.to === 'number') ? slice.to : currentOffset;
-                } catch (_) {
-                    return currentOffset;
-                }
-            };
-            const drainBoth = () => {
-                outOffset = drainChannel('stdout', outOffset, onStdout);
-                errOffset = drainChannel('stderr', errOffset, onStderr);
-            };
-            (async () => {
+            const inputDone = (async () => {
                 try {
                     if (typeof stdinText === 'string' && stdinText.length > 0) {
                         const encoded = new TextEncoder().encode(stdinText);
                         for (let pos = 0; pos < encoded.byteLength; pos += 16777216) {
                             const part = encoded.slice(pos, Math.min(pos + 16777216, encoded.byteLength));
                             const w = await session.write(part);
-                            if (!w || w.kind !== 'Written') break;
+                            if (!w || w.kind !== 'Written') {
+                                throw new Error(w && w.error ? w.error.message : 'Input write was not confirmed');
+                            }
                         }
                     }
                     session.endInput();
-                } catch (_) {
-                    try { session.endInput(); } catch (_) {}
+                } catch (error) {
+                    rememberFailure(error);
                 }
             })();
             (async () => {
-                try {
-                    while (true) {
-                        const waited = await session.wait(20);
-                        drainBoth();
-                        if (waited && waited.kind === 'Closed') {
-                            const exitInfo = waited.state && waited.state.exit;
-                            const code = (exitInfo && typeof exitInfo.code === 'number')
-                                ? exitInfo.code
-                                : ((exitInfo && exitInfo.signal) ? 137 : 0);
-                            onClose(code);
-                            break;
-                        }
+                while (true) {
+                    const waited = await session.wait(20);
+                    if (waited.state.failure) rememberFailure(waited.state.failure);
+                    if (waited.kind === 'Closed') {
+                        await inputDone;
+                        const exitInfo = waited.state.exit;
+                        const code = exitInfo && typeof exitInfo.code === 'number' ? exitInfo.code : -1;
+                        if (!exitInfo && failure === null) failure = new Error('Process closed without an exit receipt');
+                        onClose(code, failure);
+                        break;
                     }
-                } catch (_) {
-                    drainBoth();
-                    onClose(-1);
                 }
             })();
             const killFn = () => {
@@ -191,14 +179,14 @@ module NodeProcessHost =
         (stdinText: obj)
         (onStdout: byte[] -> unit)
         (onStderr: byte[] -> unit)
-        (onClose: int -> unit)
+        (onClose: int -> obj -> unit)
         : Task<obj> =
         jsNative
 
     /// Handle returned by spawn.
     ///
-    /// `Exit` carries the real exit code and nothing else.
-    /// `Exited` is set ONLY by the close/error handlers. `Kill` must not set it:
+    /// `Exit` carries the exit code, -1 for signal exit, or a pipe/receiver failure.
+    /// `Exited` is set ONLY by the close handler. `Kill` must not set it:
     /// sending SIGKILL is not the process ending, and conflating the two makes
     /// "kill sent" look like "exit observed" to every waiter.
     /// DSL-state-combination: physical — child process exit receipt and callback buffer.
@@ -254,10 +242,16 @@ module NodeProcessHost =
         (exitTcs: TaskCompletionSource<int>)
         (onExited: (unit -> unit) ResizeArray)
         (code: int)
+        (error: obj)
         =
         if not exitedRef.Value then
             exitedRef.Value <- true
-            trySetResult exitTcs code |> ignore
+
+            if isNullOrUndefined error then
+                trySetResult exitTcs code |> ignore
+            else
+                exitTcs.SetException(unbox<exn> error)
+
             notifyExitedList onExited
 
     let private finalizeStartedSession
@@ -297,6 +291,7 @@ module NodeProcessHost =
         : Task<Result<ChildProcess, string>> =
         task {
             let exitTcs = TaskCompletionSource<int>()
+            emitJsExpr exitTcs.Task "$0.catch(() => {})" |> ignore
             // DSL-MUTABLE: algorithm-scratch — exit callback list accumulator
             let onExited = ResizeArray<unit -> unit>()
             // DSL-MUTABLE: cancellation — child process exit flag.

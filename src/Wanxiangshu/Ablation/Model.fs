@@ -79,7 +79,7 @@ module AblationMode =
 [<RequireQualifiedAccess>]
 module AblationRegistry =
     let modeFor (id: AblationNodeId) (registry: AblationRegistry) =
-        registry.Modes |> Map.tryFind id |> Option.defaultValue AblationMode.Active
+        registry.Modes |> Map.tryFind id |> Option.defaultValue AblationMode.Ablated
 
     let isActive id registry =
         modeFor id registry = AblationMode.Active

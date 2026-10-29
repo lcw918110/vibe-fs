@@ -473,6 +473,53 @@ test('WHAT[durable-events-005] line_continuation_convergence_appends_legacy_line
   })
 })
 
+test('WHAT[durable-events-005] interrupted continuation reads once and appends only missing canonical lines', async t => {
+  for (const copied of [1, 2, 3]) {
+    await t.test(`${copied} copied lines`, async () => {
+      await withRepo(async (_repo, commonDir) => {
+        const original = chain(2, 512)
+        const legacyEvents = [
+          lineOf(0x51, 512, [original.at(-1).id]),
+          lineOf(0x52, 512, [hexId(0x51)]),
+          lineOf(0x53, 512, [hexId(0x52)]),
+        ]
+        legacyEvents[1].payload.fill = '万象' + legacyEvents[1].payload.fill.slice(6)
+        const directory = eventsDir(commonDir)
+        mkdirSync(directory, { recursive: true })
+        const first = join(directory, 'resume-law-0000.ndjson')
+        const originalBytes = original.map(canonicalLine).join('')
+        writeFileSync(first, originalBytes)
+        writeFileSync(join(directory, 'resume-law-0001.ndjson'), legacyEvents.slice(0, copied).map(canonicalLine).join(''))
+        const legacy = writeLegacy(commonDir, 'resume-law', legacyEvents)
+        const expected = [...original, ...legacyEvents]
+        const before = new Map(readdirSync(directory).map(name => [name, readFileSync(join(directory, name))]))
+        const observe = () => {
+          const output = execFileSync(process.execPath, ['--input-type=module', '-e', `
+            const store = await import(process.argv[1]);
+            const handle = store.create(process.argv[2], 'resume-observer');
+            try {
+              console.log(JSON.stringify(process.argv.slice(3).map(id => store.read(handle, id))));
+            } finally { store.dispose(handle); }
+          `, new URL('../../../dist/Persistence/EventStore/Surface.js', import.meta.url).href,
+          commonDir, ...expected.map(event => event.id)], { encoding: 'utf8' })
+          assert.deepEqual(JSON.parse(output), expected)
+        }
+        observe()
+        for (const [name, bytes] of before) assert.deepEqual(readFileSync(join(directory, name)), bytes)
+        assert.deepEqual(readdirSync(directory).sort(), [...before.keys()].sort())
+        assert.deepEqual(await retention.reorganizeWithSegmentCap(commonDir, CAP), { ok: true })
+        assert.equal(existsSync(legacy), false)
+        assert.equal(readFileSync(first, 'utf8'), originalBytes)
+        const assembled = () => readdirSync(directory).sort().map(name => readFileSync(join(directory, name), 'utf8')).join('')
+        assert.equal(assembled(), expected.map(canonicalLine).join(''))
+        assert.deepEqual(await retention.reorganizeWithSegmentCap(commonDir, CAP), { ok: true })
+        assert.equal(assembled(), expected.map(canonicalLine).join(''))
+        observe()
+      })
+    })
+  }
+})
+
 test('WHAT[durable-events-005] line_continuation_with_a_half_line_still_fails_closed', async () => {
   await withRepo(async (repo, commonDir) => {
     const aChain = chain(2, CAP / 8)

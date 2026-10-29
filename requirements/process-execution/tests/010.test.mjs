@@ -113,4 +113,16 @@ test('WHAT[process-execution-010] CUT_02_non_pty_host_wires_runtime_process_sess
     spooled: false,
   })
 })
+
+test('WHAT[process-execution-010] a real stdin pipe failure cannot become a successful incomplete run', async () => {
+  const outcome = await run(
+    command(process.execPath, ['-e', 'require("node:fs").closeSync(0); setTimeout(() => process.exit(0), 100)'], process.cwd(), 'x'.repeat(2 * 1024 * 1024)),
+    estimate(10, 4096, 'medium'),
+    context(process.cwd(), 60_000),
+    createCancellationToken(false),
+  )
+  assert.equal(outcome.ok, false)
+  assert.equal(outcome.error.kind, 'ExecutionFailed')
+  assert.match(outcome.error.reason, /EPIPE|pipe|closed|write/i)
+})
 }

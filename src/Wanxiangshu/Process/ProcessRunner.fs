@@ -121,7 +121,11 @@ module ProcessRunner =
             with ex ->
                 // Cancellation or a wait failure has no outcome to own the spool file.
                 abandon collector
-                return raise ex
+
+                if ct.IsCancellationRequested then
+                    return Error(ProcessError.ProcessCancelled "Cancelled by token")
+                else
+                    return Error(ProcessError.ExecutionFailed ex.Message)
         }
 
     let private runAfterGate

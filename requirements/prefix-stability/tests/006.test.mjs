@@ -8,6 +8,20 @@ const prefix = await import("../../../dist/Context/Prefix/Surface.js");
 const reanchor = (state, { previousEpoch, nextEpoch, observedRun = 'msg_compaction' }) =>
   prefix.applyReanchor({ previousEpoch, nextEpoch, observedRun }, state)
 
+test('WHAT[prefix-stability-006] epochs beyond the JS safe range retain exact scope and compaction identities', () => {
+  const epoch = 9007199254740993n
+  const state = { ...prefix.empty, epoch }
+  const scoped = prefix.applyScopeReanchor({ previousEpoch: epoch, nextEpoch: epoch + 1n, callId: 'exact-reset' }, state)
+  assert.equal(scoped.ok, true)
+  assert.equal(prefix.epochOf(scoped.value), epoch + 1n)
+  assert.deepEqual(prefix.reanchoredScopes(scoped.value), ['exact-reset'])
+  const compacted = reanchor(scoped.value, { previousEpoch: epoch + 1n, nextEpoch: epoch + 2n, observedRun: 'exact-compaction' })
+  assert.equal(compacted.ok, true)
+  assert.equal(prefix.epochOf(compacted.value), epoch + 2n)
+  assert.deepEqual(prefix.reanchoredScopes(compacted.value), ['exact-reset'])
+  assert.deepEqual(prefix.reanchoredRuns(compacted.value), ['exact-compaction'])
+})
+
 test('WHAT[prefix-stability-006] HOST_006_reanchor_advances_the_epoch_and_records_the_compaction', () => {
   const result = reanchor(prefix.empty, { previousEpoch: 0, nextEpoch: 1 })
   assert.equal(result.ok, true, result.ok ? '' : result.error)

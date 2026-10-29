@@ -60,10 +60,10 @@ module PrefixEpochProjection =
           LastScopeArchive = None
           ScopeQuestions = Map.empty }
 
-    let private epochNumber (epoch: PrefixEpochId) : float = float (PrefixEpochId.value epoch)
+    let private epochNumber (epoch: PrefixEpochId) : int64 = PrefixEpochId.value epoch
 
     let private epochOf (value: obj) : PrefixEpochId =
-        PrefixEpochId.create (int64 (unbox<float> value))
+        PrefixEpochId.create (unbox<int64> (emitJsExpr value "BigInt($0)"))
 
     let private stateView (state: ActivePrefixEpoch) : obj =
         let baseObj =

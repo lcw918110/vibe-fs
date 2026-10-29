@@ -5,6 +5,24 @@ import * as Ablation from '../../../dist/Ablation/Surface.js'
 import { withAblationEnv } from './support/ablation-fixture.mjs'
 
 const profiles = JSON.parse(readFileSync(new URL('../../../resources/ablation/profiles.json', import.meta.url), 'utf8')).profiles
+const nodeDocument = JSON.parse(readFileSync(new URL('../../../resources/ablation/nodes.json', import.meta.url), 'utf8'))
+const nodes = nodeDocument.nodes
+const tools = Object.keys(JSON.parse(readFileSync(new URL('../../../resources/ablation/tool-map.json', import.meta.url), 'utf8')).tools)
+const facts = Object.keys(JSON.parse(readFileSync(new URL('../../../resources/ablation/fact-map.json', import.meta.url), 'utf8')).facts)
+
+const assertMappedAdmission = (allowed) => {
+  for (const tool of tools) {
+    assert.equal(Ablation.allowsTool(tool), allowed, `execution: ${tool}`)
+    assert.equal(Ablation.allowsToolSchema(tool), allowed, `schema: ${tool}`)
+  }
+  for (const fact of facts) assert.equal(Ablation.allowsFact(fact), allowed, `fact: ${fact}`)
+  assert.equal(Ablation.allowsPrimaryAgent('manager'), allowed)
+  assert.equal(Ablation.allowsPrimaryAgent('orchestrator'), allowed)
+  assert.equal(Ablation.fissionVisible(), allowed)
+  assert.equal(Ablation.allowsTool('unmapped-ablation-tool'), true)
+  assert.equal(Ablation.allowsFact('AgentFact.UnmappedFamily'), true)
+}
+
 const withEnv = (entries, run) => {
   try {
     Ablation.resetRegistry()
@@ -47,6 +65,7 @@ test('WHAT[feature-ablation-004] an override cannot bypass DAG validation', () =
     const result = Ablation.load()
     assert.equal(result.ok, false)
     assert.equal(result.kind, 'DagViolation')
+    assertMappedAdmission(false)
   })
 })
 
@@ -55,5 +74,32 @@ test('WHAT[feature-ablation-004] an unknown profile is rejected', () => {
     const result = Ablation.load()
     assert.equal(result.ok, false)
     assert.equal(result.kind, 'UnknownProfile')
+    assertMappedAdmission(false)
+  })
+})
+
+test('WHAT[feature-ablation-004] invalid modes deny mapped gates after the load fails', () => {
+  withEnv([['WANXIANGSHU_ABLATION_work', 'invalid-mode']], () => {
+    assert.throws(() => Ablation.load(), /InvalidMode/)
+    assert.equal(Ablation.installed(), null)
+    assertMappedAdmission(false)
+  })
+})
+
+test('WHAT[feature-ablation-004] an unconfigured environment activates every declared node', () => {
+  withEnv([], () => {
+    assertMappedAdmission(true)
+    const loaded = Ablation.load()
+    assert.equal(loaded.ok, true)
+    assert.deepEqual(Object.keys(loaded.modes).sort(), nodes.map(node => node.id).sort())
+    assert.ok(Object.values(loaded.modes).every(mode => mode === 'active'))
+  })
+})
+
+test('WHAT[feature-ablation-004] a supplied registry ignores an invalid ambient profile', () => {
+  withEnv([['WANXIANGSHU_ABLATION_PROFILE', 'does-not-exist']], () => {
+    Ablation.useRegistry(Ablation.registryFromNodes(nodeDocument))
+    assert.notEqual(Ablation.installed(), null)
+    assertMappedAdmission(true)
   })
 })

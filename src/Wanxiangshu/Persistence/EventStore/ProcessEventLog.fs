@@ -929,8 +929,15 @@ module ProcessEventLog =
     /// legacy file and its segment series (wanxiangli/segments `coexistence`,
     /// CUT-19-a): the read layer and the reorganization both act on it, so they
     /// can never disagree about which form is the stream.
-    let private coexistenceOf (legacyBytes: byte[]) (segmentBytes: byte[]) : string =
-        unbox<string> (segmentLaw?coexistence (legacyBytes, segmentBytes))
+    let private coexistenceOf (legacyBytes: byte[]) (segmentBytes: byte[]) : string * int =
+        let result: obj = segmentLaw?coexistence (legacyBytes, segmentBytes)
+        let kind = unbox<string> result?kind
+
+        kind,
+        (if kind = "continuation" then
+             unbox<int> result?copiedLines
+         else
+             0)
 
     /// durable-events-005: the authoritative file list of one writer's
     /// logical stream. A coexisting legacy file and segment series is only a
@@ -944,7 +951,7 @@ module ProcessEventLog =
         (writerId: string)
         (legacyFile: string)
         (segments: string list)
-        : Result<string list, string> =
+        : Result<(string * int) list, string> =
         let legacyBytes = readBytesFileSync (join2 directory legacyFile)
 
         let segmentBytes =
@@ -953,12 +960,12 @@ module ProcessEventLog =
             |> Array.concat
 
         match coexistenceOf legacyBytes segmentBytes with
-        | "series" -> Ok segments
-        | "legacy" -> Ok [ legacyFile ]
-        | "continuation" -> Ok(segments @ [ legacyFile ])
+        | "series", _ -> Ok(segments |> List.map (fun name -> name, 0))
+        | "legacy", _ -> Ok [ legacyFile, 0 ]
+        | "continuation", copied -> Ok((segments |> List.map (fun name -> name, 0)) @ [ legacyFile, copied ])
         | _ -> Error(sprintf "writer files diverged: %s" writerId)
 
-    let private logicalStreamFiles (commonDir: string) (group: WriterFileGroup) : Result<string list, string> =
+    let private logicalStreamFiles (commonDir: string) (group: WriterFileGroup) : Result<(string * int) list, string> =
         let layout: obj =
             segmentLaw?streamLayout (
                 createObj [ "writerId" ==> group.WriterId; "fileNames" ==> List.toArray group.FileNames ]
@@ -968,8 +975,8 @@ module ProcessEventLog =
             unbox<string array> layout?segments |> Array.toList
 
         match unbox<string> layout?kind with
-        | "segments" -> Ok(segmentNames ())
-        | "legacy" -> Ok [ unbox<string> layout?legacy ]
+        | "segments" -> Ok(segmentNames () |> List.map (fun name -> name, 0))
+        | "legacy" -> Ok [ unbox<string> layout?legacy, 0 ]
         | "coexisting" ->
             coexistingFormsOf (eventsDirectory commonDir) group.WriterId (unbox<string> layout?legacy) (segmentNames ())
         | _ -> Error(sprintf "multiple legacy files for one writer: %s" group.WriterId)
@@ -1075,7 +1082,9 @@ module ProcessEventLog =
 
             let! decoded =
                 files
-                |> List.traverseResultM (fun name -> decodeFileCached (join2 (eventsDirectory commonDir) name))
+                |> List.traverseResultM (fun (name, copied) ->
+                    decodeFileCached (join2 (eventsDirectory commonDir) name)
+                    |> Result.map (List.skip copied))
 
             return List.concat decoded
         }
@@ -1150,6 +1159,7 @@ module ProcessEventLog =
         (commonDir: string)
         (writerId: string)
         (legacyFile: string)
+        (copied: int)
         : Result<unit, string> =
         let directory = eventsDirectory commonDir
 
@@ -1158,7 +1168,10 @@ module ProcessEventLog =
         | Ok text ->
             let segments = seriesFilesOf commonDir writerId
             let tailName, headroom = seriesTailOf directory writerId segments
-            let pieces = splitTextIntoSegmentsWithHeadroom text (segmentCapBytes ()) headroom
+            let remaining = text.Split('\n') |> Array.skip copied |> String.concat "\n"
+
+            let pieces =
+                splitTextIntoSegmentsWithHeadroom remaining (segmentCapBytes ()) headroom
 
             // Every target name is spelled before any byte lands: an ordinal
             // past 9999 refuses here, not after part of the legacy lines moved.
@@ -1167,6 +1180,9 @@ module ProcessEventLog =
 
             List.zip names pieces
             |> List.iter (fun (fileName, piece) -> appendLegacyPiece directory fileName piece)
+
+            if copied > 0 then
+                segments |> List.iter (fun name -> durabilityBarrier (join2 directory name))
 
             unlinkSync legacyFile
             Ok()
@@ -1186,13 +1202,13 @@ module ProcessEventLog =
             |> Array.concat
 
         match coexistenceOf legacyBytes segmentBytes with
-        | "series" ->
+        | "series", _ ->
             // The segment series extends (or equals) the legacy bytes:
             // the series is authoritative; drop the legacy file.
             unlinkSync legacyFile
             Ok()
-        | "legacy" -> dropSeriesAndReassign commonDir writerId legacyFile segments
-        | "continuation" -> appendLegacyLinesToSeries commonDir writerId legacyFile
+        | "legacy", _ -> dropSeriesAndReassign commonDir writerId legacyFile segments
+        | "continuation", copied -> appendLegacyLinesToSeries commonDir writerId legacyFile copied
         | _ -> Error(sprintf "writer files diverged: %s" writerId)
 
     let internal convergeWriterFiles (commonDir: string) (writerId: string) : Result<unit, string> =

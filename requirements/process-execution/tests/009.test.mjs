@@ -14,6 +14,10 @@ const {
   spoolChunkCount,
   spoolReadPath,
   spoolDelete,
+  command,
+  context,
+  createCancellationToken,
+  run,
 } = await import('../../../dist/Process/Surface.js')
 const text = (value) => new TextEncoder().encode(value)
 const decode = (bytes) => new TextDecoder().decode(Uint8Array.from(bytes))
@@ -23,6 +27,24 @@ const readSpool = async (spool) => {
   const chunks = await spoolReadPath(spool.path)
   return decode(chunks.flatMap(chunk => Array.from(chunk)))
 }
+
+test('WHAT[process-execution-009] the real process host delivers every byte into the bounded spool', async t => {
+  const size = 32 * 1024 * 1024
+  const suffix = '\n原始输出🧭\n'
+  const script = `process.stdout.write(Buffer.alloc(${size}, 0x61));process.stdout.write(${JSON.stringify(suffix)});`
+  const result = await run(
+    command(process.execPath, ['-e', script], process.cwd(), undefined),
+    estimate(10, 1024, 'medium'),
+    context(process.cwd(), 60_000),
+    createCancellationToken(false),
+  )
+  assert.equal(result.ok, true)
+  assert.equal(result.value.kind, 'Spooled')
+  t.after(() => spoolDelete(result.value.spoolPath))
+  assert.equal(result.value.exitCode, 0)
+  assert.equal(result.value.totalBytes, size + Buffer.byteLength(suffix))
+  assert.equal(await readSpool({ path: result.value.spoolPath }), 'a'.repeat(size) + suffix)
+})
 
 test('WHAT[process-execution-009] EXEC_011_collector_concatenates_stdout_stderr_utf8', () => {
   const collector = create(10, 1000)
