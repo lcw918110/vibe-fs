@@ -821,9 +821,11 @@ module ModelRoutingSurface =
 
     let setDurableDevopsResolver (runtime: obj) (resolver: obj) : unit =
         let fn = unbox<string -> obj> resolver
-        (runtimeOf runtime).SetDurableDevopsResolver(fun sid ->
-            let res = fn sid
-            if isNull res then None else Some(string res))
+
+        (runtimeOf runtime)
+            .SetDurableDevopsResolver(fun sid ->
+                let res = fn sid
+                if isNull res then None else Some(string res))
 
     /// Seed the fixed DevOps target from a durable road's 'provider/model:reasoning'
     /// string. Decoding is fail-closed and the write reuses the same binding path a
@@ -942,6 +944,14 @@ module ModelRoutingSurface =
 
             return
                 match outcome with
-                | Ok busy -> box {| ok = true; busy = busy; error = null |}
-                | Error error -> box {| ok = false; busy = false; error = error |}
+                | Ok busy ->
+                    box
+                        {| ok = true
+                           busy = busy
+                           error = null |}
+                | Error error ->
+                    box
+                        {| ok = false
+                           busy = false
+                           error = error |}
         }

@@ -28,8 +28,7 @@ module ScopeAnnotationGate =
         if isNullish value then "" else string value
 
     let private asInt (value: obj) (fallback: int) : int =
-        if isNullish value then
-            fallback
+        if isNullish value then fallback
         else
             match System.Int32.TryParse(string value) with
             | true, n -> n
@@ -52,7 +51,6 @@ module ScopeAnnotationGate =
             | None -> Error "scope annotation requires tool call id"
             | Some call ->
                 let callText = ToolCallId.value call
-
                 let runText =
                     match ctx.ProviderRunId with
                     | Some run -> ProviderRunIdentity.value run
@@ -71,7 +69,6 @@ module ScopeAnnotationGate =
                     let goal = asString (field scope "newScopeGoal")
                     let budget = asInt (field scope "newScopeRetentionBudget") 0
                     let oldV = asString (field scope "oldScopeVerboseVerbatim")
-
                     if String.IsNullOrWhiteSpace goal then
                         Error "resetScope requires newScopeGoal"
                     elif budget < 1 then
@@ -87,7 +84,15 @@ module ScopeAnnotationGate =
                         )
                 else
                     let receipt: obj =
-                        scopeRetention?apply (ctx.SessionId, epoch, toolName, runText, callText, beatId, scope)
+                        scopeRetention?apply (
+                            ctx.SessionId,
+                            epoch,
+                            toolName,
+                            runText,
+                            callText,
+                            beatId,
+                            scope
+                        )
 
                     if isNullish receipt || not (unbox<bool> receipt?ok) then
                         let reason =
@@ -125,7 +130,6 @@ module ScopeAnnotationGate =
                         let oldV = asString receipt?oldVerbatim
                         let budget = asInt receipt?remaining 0
                         let! committed = ScopeReset.commit journalOpt snapshotPort ctx goal oldV budget
-
                         match committed with
                         | Error reason -> return reason
                         | Ok _ -> return! inner args ctx
