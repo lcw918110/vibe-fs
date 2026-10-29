@@ -177,7 +177,7 @@ module RelayNarrativeTransform =
 
     let private explicitCall (part: obj) =
         match stringField part "type" |> Option.map (fun kind -> kind.ToLowerInvariant()) with
-        | Some ("toolcall" | "tool-call" | "tool_call") ->
+        | Some("toolcall" | "tool-call" | "tool_call") ->
             stringField part "id" |> Option.orElse (stringField part "callId")
         // OpenCode's session-shaped tool part holds the call and, once
         // completed, its result. The decoder reports the completed part as a
@@ -197,7 +197,10 @@ module RelayNarrativeTransform =
         let decoded = parts |> List.choose ProviderWireDecode.decodePart
 
         let prefer (ids: string list) =
-            if List.contains barrierCall ids then Some barrierCall else List.tryHead ids
+            if List.contains barrierCall ids then
+                Some barrierCall
+            else
+                List.tryHead ids
 
         let call =
             (decoded
@@ -222,14 +225,26 @@ module RelayNarrativeTransform =
         let identified = ProviderWireDecode.hostMessageId message
 
         createObj
-            [ "id", (match identified with Some id -> box id | None -> null)
+            [ "id",
+              (match identified with
+               | Some id -> box id
+               | None -> null)
               "role", box (roleText message)
               "synthetic", box (emitJsExpr message " $0.synthetic === true")
               "semantic", box true
               "cursor", null
-              "toolCallId", (match call with Some id -> box id | None -> null)
-              "resultFor", (match answered with Some id -> box id | None -> null)
-              "tenureId", (match tenureId with Some id -> box id | None -> null) ]
+              "toolCallId",
+              (match call with
+               | Some id -> box id
+               | None -> null)
+              "resultFor",
+              (match answered with
+               | Some id -> box id
+               | None -> null)
+              "tenureId",
+              (match tenureId with
+               | Some id -> box id
+               | None -> null) ]
 
     /// The Host message a turn answers (OpenCode `info.parentID`).
     let private parentOf (message: obj) =
@@ -257,6 +272,7 @@ module RelayNarrativeTransform =
         match callAt, resultAt with
         | Some call, Some result ->
             let cut = max call result
+
             let successorParents =
                 [ for index in cut + 1 .. messages.Length - 1 do
                       if (roleText messages.[index]).ToLowerInvariant() = "user" then
@@ -287,6 +303,7 @@ module RelayNarrativeTransform =
             | Some callId, Some successor, Some active when active = successor ->
                 let neutral = messages |> Array.map (tenureMessage callId)
                 attributeSuccessorTurns messages neutral callId successor
+
                 let barrier =
                     createObj [ "toolCallId", box callId; "successorTenureId", box successor ]
 
@@ -294,7 +311,10 @@ module RelayNarrativeTransform =
                 let indexes = kept |> Array.map (fun item -> int (unbox<float> item))
                 let span = [| 0 .. messages.Length - 1 |]
 
-                if indexes.Length = span.Length && Array.forall2 (fun index value -> index = value) indexes span then
+                if
+                    indexes.Length = span.Length
+                    && Array.forall2 (fun index value -> index = value) indexes span
+                then
                     None
                 else
                     Some(indexes |> Array.map (fun index -> messages.[index]))

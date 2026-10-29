@@ -93,9 +93,12 @@ module ManagerWorkflow =
             let key = if isNull entry?key then "" else string entry?key
             let value = if isNull entry?value then "" else string entry?value
 
-            if System.String.IsNullOrWhiteSpace key then None
-            elif System.String.IsNullOrWhiteSpace value then Some("- " + key)
-            else Some("- " + key + "：" + value))
+            if System.String.IsNullOrWhiteSpace key then
+                None
+            elif System.String.IsNullOrWhiteSpace value then
+                Some("- " + key)
+            else
+                Some("- " + key + "：" + value))
         |> String.concat "\n"
 
     /// A qualified nudge names its target: the consultation the host is
@@ -119,7 +122,11 @@ module ManagerWorkflow =
                           sessionId
                           "work/manager-continue-obligations"
                           (Map [ "obligations", obligationLines work.Obligations ]) ]
-                | Some work when work.ActiveId.IsSome && work.ActiveId = work.SuccessorTenureId && not work.Reviewed ->
+                | Some work when
+                    work.ActiveId.IsSome
+                    && work.ActiveId = work.SuccessorTenureId
+                    && not work.Reviewed
+                    ->
                     [ ProviderProse.documentFor
                           sessionId
                           "work/manager-continue-successor"

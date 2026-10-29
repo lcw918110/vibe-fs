@@ -22,6 +22,7 @@ module ProviderFailureSurface =
     /// current logical identity and budget come from the supplied projection.
     val stopWaitVerdict: alreadyAdmitted: bool -> stopWait: string -> string
     val delegateRetryObservation: verdictName: string -> string
+
     val retryAttempt:
         input: obj -> current: obj -> admit: (obj -> Task<string>) -> redispatch: (obj -> Task<unit>) -> Task<string>
 

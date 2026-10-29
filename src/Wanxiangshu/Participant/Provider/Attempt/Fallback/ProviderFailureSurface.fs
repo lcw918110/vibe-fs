@@ -604,7 +604,7 @@ module ProviderFailureSurface =
         | Some RetryVerdict.ReceiptUnknown -> "ReceiptUnknown"
         | Some RetryVerdict.WaitDenied -> "WaitDenied"
         | Some RetryVerdict.Dispatched -> "Dispatched"
-        | Some (RetryVerdict.Terminal _) -> "Terminal"
+        | Some(RetryVerdict.Terminal _) -> "Terminal"
 
     let delegateRetryObservation (verdictName: string) : string =
         let verdict =
@@ -616,8 +616,9 @@ module ProviderFailureSurface =
             | other -> RetryVerdict.Terminal other
 
         match Retry.observeDelegateRetry verdict with
-        | Ok () -> "Ok"
+        | Ok() -> "Ok"
         | Error reason -> "Error:" + reason
+
     /// Record one confirmed provider failure through the production ledger using
     /// an opaque JournalHandle. Only `ExecutionFailurePolicy` may licence the
     /// advance against the single `ProviderFailureBudget.DefaultBudget`, and no
@@ -825,5 +826,7 @@ module ProviderFailureSurface =
     /// Same as `longWorkContinuationPath`, but a context-window overflow reason
     /// never earns a continuation: resending the oversized input cannot succeed.
     let longWorkContinuationPathForReason (role: string) (failure: string) (reason: string) : string =
-        if ProviderRecoveryWorkflow.isContextOverflowReason reason then ""
-        else longWorkContinuationPath role failure
+        if ProviderRecoveryWorkflow.isContextOverflowReason reason then
+            ""
+        else
+            longWorkContinuationPath role failure

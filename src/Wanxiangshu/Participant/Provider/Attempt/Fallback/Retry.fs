@@ -33,7 +33,10 @@ module Retry =
     let verdictUnlessContinuing (alreadyAdmitted: bool) (stopWait: string) : RetryVerdict option =
         match stopWait with
         | "Stopped" ->
-            if alreadyAdmitted then Some RetryVerdict.Superseded else None
+            if alreadyAdmitted then
+                Some RetryVerdict.Superseded
+            else
+                None
         | "Denied" -> Some RetryVerdict.WaitDenied
         | _ -> Some RetryVerdict.ReceiptUnknown
 

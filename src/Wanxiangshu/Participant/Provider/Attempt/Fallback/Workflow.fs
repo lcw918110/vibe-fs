@@ -99,7 +99,7 @@ module ProviderRecoveryWorkflow =
         : Task<LongWorkAfterStop> =
         task {
             let! hostStopped =
-                providerAttemptStopFence?WaitForStop(
+                providerAttemptStopFence?WaitForStop (
                     SessionId.value turn.SessionId,
                     ProviderRunIdentity.value turn.ProviderRun,
                     30000
@@ -154,8 +154,7 @@ module ProviderRecoveryWorkflow =
                 | LongWorkAfterStop.Continued -> ()
                 | LongWorkAfterStop.ReceiptUnknown ->
                     notifyFailure eventPort turn (reason + "; stop receipt did not arrive")
-                | LongWorkAfterStop.WaitDenied ->
-                    notifyFailure eventPort turn (reason + "; stop wait was denied")
+                | LongWorkAfterStop.WaitDenied -> notifyFailure eventPort turn (reason + "; stop wait was denied")
                 | LongWorkAfterStop.NotSent error ->
                     notifyFailure eventPort turn (reason + "; long-work continuation not sent: " + error)
         }
