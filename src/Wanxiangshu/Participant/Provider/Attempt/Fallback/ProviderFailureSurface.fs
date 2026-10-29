@@ -827,8 +827,10 @@ module ProviderFailureSurface =
     /// overflow, exhausted credits / spending limit) never earns a continuation:
     /// resending cannot succeed.
     let longWorkContinuationPathForReason (role: string) (failure: string) (reason: string) : string =
-        if ProviderRecoveryWorkflow.isHardStopReason reason then ""
-        else longWorkContinuationPath role failure
+        if ProviderRecoveryWorkflow.isHardStopReason reason then
+            ""
+        else
+            longWorkContinuationPath role failure
 
     /// Whether confirmed-failure recovery stops the turn outright: no retry, no
     /// continuation, no missing-report nudge.
