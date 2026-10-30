@@ -8,6 +8,11 @@ export function alive(pid) {
   try { process.kill(pid, 0); return true }
   catch (error) {
     if (error.code === 'ESRCH') return false
+    // A service that wrote its owner record inside a container leaves the
+    // container's PID behind. On the host that number can belong to another
+    // user's process, and POSIX then answers EPERM instead of ESRCH. The
+    // record is stale either way; the caller's identity check decides.
+    if (error.code === 'EPERM') return false
     throw error
   }
 }
