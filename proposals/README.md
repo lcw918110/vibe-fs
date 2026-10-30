@@ -9,6 +9,7 @@
 
 | 提案 / 规范 | 状态与性质 | 核心内容 |
 |---|---|---|
+| [三个新边缘模块的拆分计划](新边缘模块拆分计划-2026-10-31.md) | 待实施（2026-10-31） | 通用 TOML、有界异步映射、响应文本形状；逐项拆出并接回主体，含文件、接口、定向测试与候选交付步骤。 |
 | [todowrite：命名程序与 program/runtime clean-break](todowrite-program-runtime-clean-break-2026-10-24.md) | 现行实施契约（2026-10-24；**估计字段已删**） | `name/program/intent` + `scope` 注解；统一请求期限；call／park／unpark。 |
 | [Scope 进度自评、专席 Advisor 与双重压缩](Scope进度自评-专席Advisor-双重压缩-2026-10-25.md) | **历史**（估计路径已退役） | 曾用 `remainingScopeTurnsEstimate` 驱 Stall／Advisor；现行 Scope 走 retention 注解。 |
 | [跨 Scope 回问：向过去的自己澄清](跨Scope回问-2026-10-24.md) | **历史／部分落地**（工具签名已迁） | askPreviousScope 仍在；入口改为 `scope.kind=resetScope`，勿按旧 resetScope 工具稿施工。 |
