@@ -39,7 +39,7 @@
 系统正在依照《纠偏令》向清晰的三层分工演进：
 1. **本仓产品面（wanxiangshu）**：承载提示词、工具资源与顶层组装，逐步减负，最终不保留程序状态。
 2. **万象通（wanxiangtong）**：负责抹平宿主（OpenCode 等）怪癖与翻译适配（先作为外层子目录规划，当前部分适配代码仍在宿主仓源码中，标为【程序待改】）。
-3. **万象理（wanxiangli）**：中立内核（Git submodule），遵循 Smalltalk / Actor 模型与 A-B-C 组合原则，状态自治，不认识具体宿主。
+3. **万象理（wanxiangli）**：主程序的配套库与中立内核，遵循 Smalltalk / Actor 模型与 A-B-C 组合原则，状态自治，不认识具体宿主。
 
 ---
 
@@ -56,7 +56,9 @@ import "wanxiangshu"
 → dist/OpenCode/Plugin/Plugin.js
 ```
 
-`package.json` 的 `main` / `exports["."]` 指向同一路径。构建产物中，本仓自身将 `dist/` 与 `resources/` 列入 files；依赖的独立 `wanxiangli` 以 bundled npm dependency 进入最终 tarball，不从宿主机器环境解析未定义源码。
+`package.json` 的 `main` / `exports["."]` 指向同一路径。构建产物中，本仓自身将 `dist/` 与 `resources/` 列入 files；配套库 `wanxiangli` 以 bundled npm dependency 进入最终 tarball，不从宿主机器环境解析未定义源码。
+
+两仓作为同一产品协同演进。`wanxiangli` 是一个 npm 包，`wanxiangli/work`、`wanxiangli/resources` 等是包内模块的公开入口，共用包版本。库契约更新时，主程序一并安排适配、必要的数据迁移和相关验证。项目约定见 [AGENTS.md](AGENTS.md#项目关系与演进)。
 
 ### 系统要求
 
@@ -66,13 +68,15 @@ import "wanxiangshu"
 
 `packageManager` = `npm@11.12.1`。安装依赖使用 `npm ci`（已提交 `package-lock.json`）。
 
-`wanxiangli/` 是正式 Git submodule，跟踪其 `main`；npm 依赖为 `file:wanxiangli`。开发初始化需执行：
+2026-10-30 用户确定两仓采用 `vibe-fs/` 与 `wanxiangli/` 并列目录。**程序待改：** 版本取得和构建接线尚未切换，以下仍是当前实现的步骤；仅把依赖改成 `file:../wanxiangli` 不能完成版本固定与分发调整。
+
+当前主线中，`wanxiangli/` 是 Git submodule，跟踪其 `main`，由 gitlink 固定提交；npm 依赖为 `file:wanxiangli`。开发初始化需执行：
 ```bash
 git submodule update --init -- wanxiangli
 npm ci
 ```
 
-更新子模块依赖执行 `npm run deps:update`（只允许 fast-forward 到 `origin/main`）。任何 `.tgz` 都只能是临时构建产物，永远不得提交进入 Git。
+更新子模块依赖执行 `npm run deps:update`（只允许 fast-forward 到 `origin/main`），一并审阅和提交 gitlink 与锁文件。切换并列目录时同步更新上述步骤、版本固定与分发方式；普通构建和运行不得自行联网切换源码。任何 `.tgz` 都只能是临时构建产物，永远不得提交进入 Git。
 
 ### 本机状态目录
 
