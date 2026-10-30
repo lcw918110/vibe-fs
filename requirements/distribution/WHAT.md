@@ -44,9 +44,13 @@ verify:release 覆盖构建、真实 npm pack、解包和消费者验证。校�
 
 解析归档流时校验成员结构、完整性及 npm pack 结果的结构与包名。成员须为包根内安全相对路径，拒绝绝对路径、`..`、符号链接等非普通文件及开发/测试/源码/内部脚本/构建元数据；`node_modules/**` 只有 package.json 显式声明的 bundle、且字节与安装的受控依赖完全一致时才允许。异常立即拒绝。
 
-## [011] 独立生命周期依赖的可复现交付
+## [011] 配套库候选的可复现交付
 
-`wanxiangshu` 经 `file:wanxiangli` 协议依赖 Git submodule 提供的源码，构建、测试与 pack 使用该源码版本；仓库内不跟踪任何 `wanxiangli` 归档（`scripts/wanxiangli-source.mjs check` 机械拒绝跟踪的 `.tgz`，`.gitignore` 声明 `*.tgz`）。源码 checkout 须初始化 submodule，`npm ci` 把 `node_modules/wanxiangli` 安装为指向源码目录的链接，package-lock 记录 `resolved: "wanxiangli"` 的 link 条目而非归档 integrity。最终 `wanxiangshu` tarball 把同一版本作为 bundled dependency 实体化进归档、自包含交付。删除消费者顶层另装的 `wanxiangli` 后，安装产物仍可真实加载 lifecycle。
+当前实现中，`wanxiangshu` 经 `file:wanxiangli` 协议依赖 Git submodule 提供的源码，构建、测试与 pack 使用该源码版本；仓库内不跟踪任何 `wanxiangli` 归档（`scripts/wanxiangli-source.mjs check` 机械拒绝跟踪的 `.tgz`，`.gitignore` 声明 `*.tgz`）。源码 checkout 须初始化 submodule，`npm ci` 把 `node_modules/wanxiangli` 安装为指向源码目录的链接，package-lock 记录 `resolved: "wanxiangli"` 的 link 条目而非归档 integrity。最终 `wanxiangshu` tarball 把同一候选作为 bundled dependency 实体化进归档、自包含交付。删除消费者顶层另装的 `wanxiangli` 后，安装产物仍可真实加载 lifecycle。并列目录是已决定、尚待实施的目标；切换时须同步调整此处接线步骤与检查，不能把当前实现写成永久目录要求。
+
+本次承诺接入的库候选由工作包或 PR 明确给出，不能只从当前 manifest 反推目标。主体集成负责人须核对该候选与依赖声明、锁定输入、实际安装解析位置、测试消费内容和最终 bundle 一致。当前源码消费方式须核对目标 SHA、主体记录的 gitlink 与实际库 checkout，并核对候选构建产物与交付闭包的摘要；版本字符串相同不足以证明内容相同。库维护者提供可取得的候选，验证入口负责发现不一致。未接入主体只报告库侧完成。
+
+历史与兼容性用例可以固定其他版本，但须明确标明用途和范围，不能计入本次候选通过。不得用另一个版本的通过结果、源码回退或邻目录产物替代本次交付；依赖版本、锁、来源或打包方式改变，即影响本项及真实消费者检查。检查的现有覆盖与缺口见 [测试说明](tests/README.md#候选一致性与检查范围)，文字修订不表示机械检查已经实现。
 
 ## [010] 活跃注册一致
 
@@ -55,3 +59,5 @@ verify:release 覆盖构建、真实 npm pack、解包和消费者验证。校�
 ## [012] 语言完整性为发行检查，不进入每次读取
 
 运行时读取只校验所选语言的文件与占位符替换；所选语言缺失即报出指明该文件/语言的资源缺失错误，绝不换成另一语言。发行完整性——每个声明的语言文件都存在、双语占位符集合一致——由发行/构建检查承担：`scripts/checks/language-parity-gate.mjs` 对 `resources/provider` 扫描，分发验收（`tests/012.test.mjs`）对所交付资源树进行完整性核验；缺项或占位符不一致必须指名具体文件或资源对，不得以笼统“资源不健康”替代。
+
+读取失败、发行检查失败和启动失败是不同范围。若产品承诺启动前发现全部必需资源缺失，必需路径与语种由各语义 owner 提供，启动组合层执行检查，宿主启动测试覆盖缺失时的实际行为；不能把资源库创建成功或局部检查通过当作启动保证。目录扫描看不到未提供的必需目录，当前 012 还会跳过不存在的资源树；这些检查单独不足以证明该启动承诺，完整必需资源输入及启动接线未核实前不得宣称完成。
