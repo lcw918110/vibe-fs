@@ -59,4 +59,4 @@ TESTS_MJS_FILES='requirements/structured-workflow/tests/010.test.mjs,requirement
 - 主体：最初四文件运行（当时新增映射用例仍在 007）21 项通过、0 项执行失败、4 个既有 TODO，runner 返回 1。TODO 是三项原文逐字节呈现断言（GAP-084）和工作目录来源（GAP-083），本次未改这些行为。新增两项映射用例移至独立 010 后，runner 单独运行该文件 2/2 通过；其余已通过用例未重复运行。整组验收仍不能称为全绿。
 - 实际主体包：`WANXIANGLI_EXPECTED_SHA=f92dfe0ad9b42c11a81574315eef921f811b4b8a node scripts/verify-package.mjs` 通过。归档含 1,458 个成员，隔离消费者从实际包内裸导入 bundled `wanxiangli/bounded-map`；SHA-256 为 `a077b2df30eeff104cd5a0be40b266d06c7e4809b303b8159b35ff18df2429d0`。
 
-提交保存在本地，尚未推送。第三项响应文本形状识别暂不施工；上述既有 TODO 不因本次拆分或包检查通过而关闭。
+提交保存在本地，尚未推送。后续第三项的结果见 [response-text 模块说明](response-text模块说明.md)；上述既有 TODO 不因本次拆分或包检查通过而关闭。
