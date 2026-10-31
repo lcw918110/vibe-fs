@@ -679,9 +679,11 @@ export async function runExternalConsumer({
   }
 
   // 探针位于实际主体包内，裸导入只能使用随包交付的库。
-  fs.writeFileSync(path.join(targetPkgDir, '.verify-bounded-map.mjs'), [
+  fs.writeFileSync(path.join(targetPkgDir, '.verify-library-entries.mjs'), [
     "import { mapBounded } from 'wanxiangli/bounded-map'",
+    "import { classify } from 'wanxiangli/response-text'",
     'export const values = await mapBounded(1, async value => value + 1, [1, 2])',
+    "export const shapes = [null, 'before <tool_call> after', 'plain answer'].map(classify)",
   ].join('\n'))
 
   // 3. Create consumer/ directory outside with separate package.json
@@ -751,12 +753,13 @@ export async function runExternalConsumer({
     const document = text.withData(text.Data_rootStructuredValue(text.Data_ofJs({ source: 'bundled' })), text.instruction('probe'));
     assert.equal(text.render(document), '# probe\\n\\nsource = "bundled"\\n');
 
-    const boundedProbe = path.join(pkgRoot, '.verify-bounded-map.mjs');
+    const entryProbe = path.join(pkgRoot, '.verify-library-entries.mjs');
     try {
-      const boundedMap = await import(pathToFileURL(boundedProbe).href);
-      assert.deepEqual(boundedMap.values, [2, 3]);
+      const entries = await import(pathToFileURL(entryProbe).href);
+      assert.deepEqual(entries.values, [2, 3]);
+      assert.deepEqual(entries.shapes, ['Empty', 'ToolMarkup', 'Text']);
     } finally {
-      fs.unlinkSync(boundedProbe);
+      fs.unlinkSync(entryProbe);
     }
 
     assert.ok(fs.readFileSync(enLaw, 'utf8').trim().length > 0, 'en common law is empty');
