@@ -683,6 +683,14 @@ export async function runExternalConsumer({
     "import { mapBounded } from 'wanxiangli/bounded-map'",
     "import { classify } from 'wanxiangli/response-text'",
     "import { encode, validationError } from 'wanxiangli/returned-material'",
+    "import { KeyedSerial } from 'wanxiangli/keyed-serial'",
+    'const serial = new KeyedSerial()',
+    'const order = []',
+    "const first = serial.run('key', async () => { order.push('first'); throw new Error('expected') })",
+    "const second = serial.run('key', async () => { order.push('second'); return 2 })",
+    'await first.catch(() => {})',
+    'export const serialResult = await second',
+    'export const serialOrder = order',
     "export const material = encode(['report'], ['raw material'])",
     'export const materialError = validationError(material)',
     'export const values = await mapBounded(1, async value => value + 1, [1, 2])',
@@ -763,6 +771,8 @@ export async function runExternalConsumer({
       assert.deepEqual(entries.shapes, ['Empty', 'ToolMarkup', 'Text']);
       assert.equal(entries.material, '{"body":["report"],"carry":["raw material"]}');
       assert.equal(entries.materialError, null);
+      assert.deepEqual(entries.serialOrder, ['first', 'second']);
+      assert.equal(entries.serialResult, 2);
       const material = await import(pathToFileURL(path.join(pkgRoot, 'dist/Foundation/ReturnedMaterial.js')).href);
       assert.equal(material.renderBody(entries.material), '# report\\n');
     } finally {

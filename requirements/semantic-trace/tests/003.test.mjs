@@ -42,13 +42,20 @@ test('WHAT[semantic-trace-003] concurrent same-session captures serialize before
 
     assert.equal(first.ok, true, first.ok ? '' : first.error)
     assert.equal(second.ok, true, second.ok ? '' : second.error)
+    assert.deepEqual(first.receipt.currentHead, second.receipt.previousHead)
     const parts = trace.orderedSemanticParts(trace.snapshot(handle, SESSION))
     assert.equal(parts.length, 2)
     assert.deepEqual(parts.map((part) => part.cursor.sequence), [1, 2])
-    assert.deepEqual(parts.map((part) => part.provenance).sort(), [
+    assert.deepEqual(parts.map((part) => part.provenance), [
       'g:0/msg:concurrent-a/host-part:concurrent-a-part',
       'g:0/msg:concurrent-b/host-part:concurrent-b-part',
     ])
+    const expectedTexts = ['first concurrent semantic part', 'second concurrent semantic part']
+    for (let index = 0; index < parts.length; index += 1) {
+      const payload = await journal.JournalSurface_readPayload(handle, parts[index].textRef)
+      assert.equal(payload.ok, true, payload.ok ? '' : payload.error)
+      assert.equal(payload.content, expectedTexts[index])
+    }
   })
 })
 

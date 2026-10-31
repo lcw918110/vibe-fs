@@ -899,54 +899,19 @@ module XTraceCapture =
             | ex -> return Error(XTraceCaptureError.StorageFailed ex.Message)
         }
 
-    let private captureTailGate = obj ()
-    // DSL-MUTABLE: subscription — one physical XTrace append tail per reusable Host session.
-    let private captureTails = Dictionary<string, Task>()
+    type private Serial =
+        abstract run<'T> : string * Func<Task<'T>> -> Task<'T>
 
-    let private awaitCaptureTail (tail: Task) =
-        task {
-            try
-                do! tail
-            with _ ->
-                ()
-        }
+    [<Fable.Core.Import("KeyedSerial", "wanxiangli/keyed-serial")>]
+    let private serialClass: obj = Fable.Core.Util.jsNative
 
-    let private releaseCaptureTail key (completion: TaskCompletionSource<unit>) (completionTask: Task) =
-        AsyncSupport.trySetResult completion () |> ignore
+    [<Fable.Core.Emit("new $0()")>]
+    let private createSerial (_cls: obj) : Serial = Fable.Core.Util.jsNative
 
-        lock captureTailGate (fun () ->
-            match captureTails.TryGetValue key with
-            | true, current when obj.ReferenceEquals(current, completionTask) -> captureTails.Remove key |> ignore
-            | _ -> ())
+    let private captures = createSerial serialClass
 
     let private serializeCapture (sessionId: SessionId) (capture: unit -> Task<'T>) : Task<'T> =
-        task {
-            let key = SessionId.value sessionId
-
-            let completion =
-                TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-
-            let completionTask = completion.Task :> Task
-
-            let prior =
-                lock captureTailGate (fun () ->
-                    let current =
-                        match captureTails.TryGetValue key with
-                        | true, tail -> Some tail
-                        | false, _ -> None
-
-                    captureTails[key] <- completionTask
-                    current)
-
-            match prior with
-            | Some tail -> do! awaitCaptureTail tail
-            | None -> ()
-
-            try
-                return! capture ()
-            finally
-                releaseCaptureTail key completion completionTask
-        }
+        captures.run(SessionId.value sessionId, Func<Task<'T>>(capture))
 
     let private captureUnitWithReceipt
         (journal: AgentJournal option)
