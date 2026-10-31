@@ -259,7 +259,7 @@ export function deriveExpectedClosure({ root = REPO_ROOT } = {}) {
       const listing = execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
         'pack', '--dry-run', '--ignore-scripts', '--json',
         '--cache', path.join(os.tmpdir(), 'wanxiangshu-pack-cache'),
-      ], { cwd: dependencyRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      ], { cwd: dependencyRoot, env: npmEnvironment(), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
       const files = parsePackResult(listing, dependencyPackage.name).files
       if (!Array.isArray(files)) throw createVerificationError('bundled-dependency-files-missing', name, 'npm did not return dependency files')
       for (const file of files) {
@@ -582,6 +582,12 @@ export function parsePackResult(jsonOutput, expectedName = 'wanxiangshu') {
 /**
  * Spawns a command using argv array, returns promise with stdout, stderr, code.
  */
+function npmEnvironment() {
+  const env = { ...process.env }
+  delete env.npm_config_allow_scripts
+  return env
+}
+
 function spawnProcess(cmd, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
@@ -935,7 +941,7 @@ export async function verifyPackage({
     packResult = await spawnProcess(
       'npm',
       ['pack', '--json', '--ignore-scripts', '--pack-destination', resolvedRunDir],
-      { cwd: staging },
+      { cwd: staging, env: npmEnvironment() },
     )
   } catch (err) {
     throw createVerificationError(
