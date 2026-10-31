@@ -22,17 +22,8 @@ type ProcessEventLog =
           // vanished target re-enumerates the series on the next append.
           mutable CurrentFile: string }
 
-type StoreFileGate internal (releaseFn: obj) =
-    // DSL-MUTABLE: resource — physical one-shot release latch; not domain state.
-    let mutable released = false
-
-    member _.Release() =
-        task {
-            if not released then
-                released <- true
-                let release: unit -> Task<unit> = unbox releaseFn
-                do! release ()
-        }
+type StoreFileGate internal (lease: obj) =
+    member _.Release() : Task<unit> = lease?release ()
 
 [<RequireQualifiedAccess>]
 module ProcessEventLog =
@@ -53,78 +44,8 @@ module ProcessEventLog =
     [<Import("default", "node:path")>]
     let private nodePath: obj = jsNative
 
-    [<Emit("""
-    (function(nodeFs, nodePath) {
-        function isProcessAlive(pid) {
-            if (typeof pid !== 'number' || pid <= 0 || isNaN(pid)) return false;
-            try {
-                process.kill(pid, 0);
-                return true;
-            } catch (e) {
-                return e.code === 'EPERM';
-            }
-        }
-
-        return Object.assign({}, nodeFs, {
-            mkdir: function(dirPath, cb) {
-                try {
-                    nodeFs.mkdirSync(dirPath);
-                    try {
-                        nodeFs.writeFileSync(nodePath.join(dirPath, 'owner.json'), JSON.stringify({ pid: process.pid, time: Date.now() }));
-                    } catch (_) {}
-                    if (typeof cb === 'function') cb(null);
-                } catch (err) {
-                    if (typeof cb === 'function') cb(err);
-                }
-            },
-            rmdir: function(dirPath, cb) {
-                try {
-                    nodeFs.rmSync(dirPath, { recursive: true, force: true });
-                    if (typeof cb === 'function') cb(null);
-                } catch (err) {
-                    if (typeof cb === 'function') cb(err);
-                }
-            },
-            rmdirSync: function(dirPath) {
-                nodeFs.rmSync(dirPath, { recursive: true, force: true });
-            },
-            stat: function(dirPath, cb) {
-                try {
-                    var stat = nodeFs.statSync(dirPath);
-                    try {
-                        var ownerFile = nodePath.join(dirPath, 'owner.json');
-                        if (nodeFs.existsSync(ownerFile)) {
-                            var content = nodeFs.readFileSync(ownerFile, 'utf8');
-                            var data = JSON.parse(content);
-                            if (data && data.pid && !isProcessAlive(data.pid)) {
-                                stat.mtime = new Date(0);
-                                stat.mtimeMs = 0;
-                            }
-                        }
-                    } catch (_) {}
-                    if (typeof cb === 'function') cb(null, stat);
-                } catch (err) {
-                    if (typeof cb === 'function') cb(err);
-                }
-            }
-        });
-    })($0, $1)
-    """)>]
-    let private buildProcessAwareFs (nodeFs: obj) (nodePath: obj) : obj = jsNative
-
-    let processAwareFs: obj = buildProcessAwareFs nodeFs nodePath
-
-    [<Import("default", "proper-lockfile")>]
-    let private lockfile: obj = jsNative
-
-    [<Emit("$0($1, $2)")>]
-    let private lockAsync (fn: obj) (path: string) (options: obj) : Task<obj> = jsNative
-
-    [<Emit("($0 != null && $0.code === 'ELOCKED')")>]
-    let private isLockContention (cause: exn) : bool = jsNative
-
-    [<Import("setTimeout", "node:timers/promises")>]
-    let private waitForLockRetry (milliseconds: int) : Task<unit> = jsNative
+    [<Import("acquire", "wanxiangli/file-lock")>]
+    let private acquireLease (path: string) (wait: obj) : Task<obj> = jsNative
 
     [<Import("join", "node:path")>]
     let private join2 (a: string) (b: string) : string = jsNative
@@ -263,53 +184,24 @@ module ProcessEventLog =
     let isWriterActiveAt (nowMs: float) (lastActivityMs: float) : bool =
         unbox<bool> (retention?isRetained (nowMs, lastActivityMs))
 
-    let private tryAcquireLock (target: string) (options: obj) waitStep : Task<obj option> =
-        task {
-            try
-                let! release = lockAsync lockfile target options
-                return Some release
-            with cause when isLockContention cause ->
-                let delay = min 150.0 (Math.Round(30.0 * Math.Pow(1.1, float waitStep))) |> int
-                do! waitForLockRetry delay
-                return None
-        }
-
     /// Typed physical diagnosis: the store lock stayed contended past the
     /// acquisition budget. It carries no history meaning.
     exception StoreLockAcquireTimeout of attempts: int * waitedMs: float
 
-    /// Total wall-clock budget for one physical lock acquisition. Each retry
-    /// delay is already bounded; this bounds the whole wait so a stuck peer
-    /// surfaces as a typed timeout instead of an unbounded block.
-    let private storeLockAcquireBudgetMs = 30000.0
+    type private AcquireTimeout =
+        abstract attempts: int
+        abstract waitedMs: float
+
+    [<Import("isAcquireTimeout", "wanxiangli/file-lock")>]
+    let private isAcquireTimeout (cause: exn) : bool = jsNative
 
     let private acquireAvailableLock (target: string) : Task<obj> =
         task {
-            let options =
-                createObj
-                    [ "fs" ==> processAwareFs
-                      "realpath" ==> false
-                      "stale" ==> 5000
-                      "update" ==> 1500
-                      "retries" ==> 0 ]
-
-            // DSL-MUTABLE: resource — this acquisition's physical release capability.
-            let mutable acquired: obj option = None
-            // DSL-MUTABLE: algorithm-scratch — index in the original ten-delay retry cycle.
-            let mutable waitStep = 0
-            // DSL-MUTABLE: algorithm-scratch — bounded acquisition attempt count.
-            let mutable attempts = 0
-            let started = currentTimeMs ()
-
-            while acquired.IsNone && currentTimeMs () - started < storeLockAcquireBudgetMs do
-                let! release = tryAcquireLock target options waitStep
-                acquired <- release
-                waitStep <- (waitStep + 1) % 10
-                attempts <- attempts + 1
-
-            match acquired with
-            | Some release -> return release
-            | None -> return raise (StoreLockAcquireTimeout(attempts, currentTimeMs () - started))
+            try
+                return! acquireLease target (createObj [ "kind" ==> "Budget"; "budgetMs" ==> 30000.0 ])
+            with cause when isAcquireTimeout cause ->
+                let timeout = unbox<AcquireTimeout> cause
+                return raise (StoreLockAcquireTimeout(timeout.attempts, timeout.waitedMs))
         }
 
     /// Cross-process physical serialization shared by local runtime writers.
@@ -319,8 +211,8 @@ module ProcessEventLog =
         task {
             let target = wanxiangDirectory commonDir
             ensureDirectory target
-            let! release = acquireAvailableLock target
-            return new StoreFileGate(release)
+            let! lease = acquireAvailableLock target
+            return new StoreFileGate(lease)
         }
 
     /// Resource CE for the physical cross-process gate. Completion of the

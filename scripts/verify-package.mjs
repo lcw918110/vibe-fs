@@ -1,7 +1,10 @@
 // scripts/verify-package.mjs
 // distribution-007 real pack+extract+consume proof.
 //
-// Performs real `npm pack --json --ignore-scripts --pack-destination <runDir>`,
+// Performs real `npm pack --json --ignore-scripts --pack-destination <runDir>`
+// from a temporary staging directory containing only the selected byte closure.
+// This materializes bundled file: dependencies; raw npm pack in the development
+// checkout is not the delivery entry point.
 // streams members via `tar`, strictly validates normalized archive paths,
 // compares complete closure (manifest outputs dist + git tracked resources + root files)
 // and content digests, extracts into an isolated temporary directory,
@@ -21,6 +24,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import * as tar from 'tar'
 import { checkCandidateDependency } from './wanxiangli-source.mjs'
 
@@ -240,6 +244,41 @@ export function deriveExpectedClosure({ root = REPO_ROOT } = {}) {
   const packageJson = JSON.parse(fs.readFileSync(path.join(resolvedRoot, 'package.json'), 'utf8'))
   const bundled = packageJson.bundleDependencies ?? packageJson.bundledDependencies ?? []
 
+  // 运行依赖跟随实际解析的安装内容，归档中嵌入所属 bundle，不能借主体顶层副本。
+  const addRuntimeDependencies = (ownerRoot, ownerMember, ancestors = []) => {
+    const owner = JSON.parse(fs.readFileSync(path.join(ownerRoot, 'package.json'), 'utf8'))
+    const require = createRequire(path.join(ownerRoot, 'package.json'))
+    for (const name of Object.keys(owner.dependencies ?? {})) {
+      const packagePath = require.resolve(`${name}/package.json`)
+      const dependencyRoot = fs.realpathSync(path.dirname(packagePath))
+      if (ancestors.includes(dependencyRoot)) {
+        throw createVerificationError('bundled-dependency-cycle', name, 'Cannot materialize a cyclic bundled dependency tree')
+      }
+      const dependencyPackage = JSON.parse(fs.readFileSync(packagePath, 'utf8'))
+      const memberRoot = path.posix.join(ownerMember, 'node_modules', name)
+      const listing = execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
+        'pack', '--dry-run', '--ignore-scripts', '--json',
+        '--cache', path.join(os.tmpdir(), 'wanxiangshu-pack-cache'),
+      ], { cwd: dependencyRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      const files = parsePackResult(listing, dependencyPackage.name).files
+      if (!Array.isArray(files)) throw createVerificationError('bundled-dependency-files-missing', name, 'npm did not return dependency files')
+      for (const file of files) {
+        checkPathTraversal(file.path)
+        const source = path.join(dependencyRoot, file.path)
+        if (!fs.lstatSync(source).isFile()) {
+          throw createVerificationError('bundled-dependency-non-regular', source, 'Dependency pack input is not a regular file')
+        }
+        const bytes = fs.readFileSync(source)
+        expected.set(path.posix.join(memberRoot, file.path), {
+          sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+          size: bytes.length,
+          fullSourcePath: source,
+        })
+      }
+      addRuntimeDependencies(dependencyRoot, memberRoot, [...ancestors, dependencyRoot])
+    }
+  }
+
   for (const dependency of bundled) {
     const dependencyRoot = path.join(resolvedRoot, 'node_modules', dependency)
     if (!fs.existsSync(dependencyRoot)) {
@@ -320,6 +359,7 @@ export function deriveExpectedClosure({ root = REPO_ROOT } = {}) {
     } else {
       walkBundledDir(dependencyRealRoot)
     }
+    addRuntimeDependencies(dependencyRealRoot, path.posix.join('node_modules', dependency), [dependencyRealRoot])
   }
 
   return expected
@@ -684,6 +724,22 @@ export async function runExternalConsumer({
     "import { classify } from 'wanxiangli/response-text'",
     "import { encode, validationError } from 'wanxiangli/returned-material'",
     "import { KeyedSerial } from 'wanxiangli/keyed-serial'",
+    "import { acquire } from 'wanxiangli/file-lock'",
+    "import { createRequire } from 'node:module'",
+    "import fs from 'node:fs'",
+    "import os from 'node:os'",
+    "import path from 'node:path'",
+    "export const lockDependency = createRequire(import.meta.resolve('wanxiangli/file-lock')).resolve('proper-lockfile')",
+    "const lockRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wx-packed-file-lock-'))",
+    "const lockPath = path.join(lockRoot, 'probe')",
+    'export let fileLockHeld = false',
+    'export let fileLockReleased = false',
+    'try {',
+    "  const lease = await acquire(lockPath, { kind: 'Retry', retries: 0, minTimeoutMs: 1, maxTimeoutMs: 1, factor: 1 })",
+    "  fileLockHeld = fs.existsSync(lockPath + '.lock')",
+    '  await lease.release()',
+    "  fileLockReleased = !fs.existsSync(lockPath + '.lock')",
+    '} finally { fs.rmSync(lockRoot, { recursive: true, force: true }) }',
     'const serial = new KeyedSerial()',
     'const order = []',
     "const first = serial.run('key', async () => { order.push('first'); throw new Error('expected') })",
@@ -773,6 +829,9 @@ export async function runExternalConsumer({
       assert.equal(entries.materialError, null);
       assert.deepEqual(entries.serialOrder, ['first', 'second']);
       assert.equal(entries.serialResult, 2);
+      assert.equal(entries.fileLockHeld, true);
+      assert.equal(entries.fileLockReleased, true);
+      assert.ok(entries.lockDependency.startsWith(fs.realpathSync(path.dirname(lifecycleDependency)) + path.sep), 'file-lock must resolve its shipped runtime dependency');
       const material = await import(pathToFileURL(path.join(pkgRoot, 'dist/Foundation/ReturnedMaterial.js')).href);
       assert.equal(material.renderBody(entries.material), '# report\\n');
     } finally {
@@ -864,13 +923,19 @@ export async function verifyPackage({
   // Derive expected closure before pack
   const expectedClosure = deriveExpectedClosure({ root: resolvedRoot })
 
-  // Phase 2: npm pack --json --ignore-scripts --pack-destination <runDir>
+  // file: 链接的依赖会被 npm 放到链接源路径；仅在临时打包目录物化选定闭包。
+  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'wx-package-stage-'))
   let packResult
   try {
+    for (const [member, meta] of expectedClosure) {
+      const target = path.join(staging, member)
+      fs.mkdirSync(path.dirname(target), { recursive: true })
+      fs.copyFileSync(meta.fullSourcePath, target)
+    }
     packResult = await spawnProcess(
       'npm',
       ['pack', '--json', '--ignore-scripts', '--pack-destination', resolvedRunDir],
-      { cwd: resolvedRoot },
+      { cwd: staging },
     )
   } catch (err) {
     throw createVerificationError(
@@ -878,6 +943,8 @@ export async function verifyPackage({
       'npm',
       `npm pack failed to spawn: ${err.message}`,
     )
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true })
   }
 
   if (packResult.code !== 0) {

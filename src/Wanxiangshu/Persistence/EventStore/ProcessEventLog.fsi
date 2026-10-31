@@ -26,7 +26,6 @@ module ProcessEventLog =
           FileNames: string list
           LastActivityMs: float }
 
-    val processAwareFs: obj
     val acquireStoreLock: commonDir: string -> Task<StoreFileGate>
     val withStoreLock<'T> : commonDir: string -> work: (unit -> Task<'T>) -> Task<'T>
     val create: commonDir: string -> writerId: string -> ProcessEventLog

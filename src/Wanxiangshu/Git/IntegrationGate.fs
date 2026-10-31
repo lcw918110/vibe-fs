@@ -6,9 +6,11 @@ open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Host
-open Wanxiangshu.Persistence.EventStore
 
 module private IntegrationGateDisposal =
+    [<Emit("$0.release()")>]
+    let release (lease: obj) : Task<unit> = jsNative
+
 #if FABLE_COMPILER
     [<Emit("$0")>]
     let asValueTask (operation: Task) : ValueTask = jsNative
@@ -17,17 +19,8 @@ module private IntegrationGateDisposal =
 #endif
 
 /// Cross-process publish serialization represented as one disposable resource.
-type IntegrationGate(releaseFn: obj) =
-    // DSL-MUTABLE: resource — one-shot release latch for cross-process publish gate
-    let mutable released = false
-
-    member _.Release() =
-        task {
-            if not released then
-                released <- true
-                let release: unit -> Task<unit> = unbox releaseFn
-                do! release ()
-        }
+type IntegrationGate(lease: obj) =
+    member _.Release() = IntegrationGateDisposal.release lease
 
     interface IAsyncDisposable with
         member this.DisposeAsync() =
@@ -35,11 +28,8 @@ type IntegrationGate(releaseFn: obj) =
 
 module IntegrationGate =
 
-    [<Import("default", "proper-lockfile")>]
-    let private lockfile: obj = jsNative
-
-    [<Emit("$0($1, $2)")>]
-    let private lockAsync (fn: obj) (path: string) (options: obj) : Task<obj> = jsNative
+    [<Import("acquire", "wanxiangli/file-lock")>]
+    let private acquireLease (path: string) (wait: obj) : Task<obj> = jsNative
 
     let lockPath (repoPath: string) (branch: string) =
         let key = HostDigest.sha256Hex (repoPath + "\u0000" + branch)
@@ -48,23 +38,17 @@ module IntegrationGate =
     let acquire (path: string) : Task<IntegrationGate> =
         task {
             try
-                let! release =
-                    lockAsync
-                        lockfile
+                let! lease =
+                    acquireLease
                         path
                         (createObj
-                            [ "fs", box ProcessEventLog.processAwareFs
-                              "realpath", box false
-                              "stale", box 5000
-                              "update", box 1500
-                              "retries",
-                              createObj
-                                  [ "retries", box 50
-                                    "minTimeout", box 50
-                                    "maxTimeout", box 250
-                                    "factor", box 1.1 ] ])
+                            [ "kind" ==> "Retry"
+                              "retries" ==> 50
+                              "minTimeoutMs" ==> 50
+                              "maxTimeoutMs" ==> 250
+                              "factor" ==> 1.1 ])
 
-                return IntegrationGate release
+                return IntegrationGate lease
             with ex ->
                 return
                     raise (InvalidOperationException(sprintf "publish lock acquire failed for %s: %s" path ex.Message))
