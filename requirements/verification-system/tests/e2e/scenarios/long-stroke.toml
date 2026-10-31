@@ -367,6 +367,22 @@ tools = ["todowrite-for-orchestrator", "horizon", "join"]
   [[turn.step]]
   respond = { type = "tool-call", tool = "todowrite-for-orchestrator", prefixText = "The commissioned road has returned integrated; closing the delivery now.", args = { name = "deliver-long-stroke-nudged", intent = "等待交付结算，保留长行程发布结果。", program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
 
+  # A join that returns at once (the road is already integrated) re-arms the
+  # idle repair, so the same reminder can arrive again on a later step. Each
+  # rung below repeats the one answer that closes it; the tail is optional
+  # because how many times the repair re-arms depends on host scheduling.
+  [[turn.step]]
+  optional = true
+  respond = { type = "tool-call", tool = "join", args = {} }
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "tool-call", tool = "join", args = {} }
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "tool-call", tool = "join", args = {} }
+
   [[turn.step]]
   optional = true
   respond = { type = "tool-call", tool = "join", args = {} }
