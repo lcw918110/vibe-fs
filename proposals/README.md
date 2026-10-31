@@ -9,8 +9,8 @@
 
 | 提案 / 规范 | 状态与性质 | 核心内容 |
 |---|---|---|
-| [三个新边缘模块的拆分计划](新边缘模块拆分计划-2026-10-31.md) | 第一项边界已修订（2026-10-31） | 当前只做完整文本表示；有界异步映射、响应文本形状暂不施工。含跨仓交付步骤。 |
-| [llm-text 模块说明](llm-text模块说明.md) | 设计已调整，程序待完成（2026-10-31） | 文档分区、结构化值编码和文本生成归同一模块；明确公开能力、剩余边界与规模比较。 |
+| [三个新边缘模块的拆分计划](新边缘模块拆分计划-2026-10-31.md) | 第一项已实现并验证（2026-10-31） | 完整文本表示已接回；有界异步映射、响应文本形状暂不施工。含跨仓交付步骤。 |
+| [llm-text 模块说明](llm-text模块说明.md) | 已接回并完成相关验证（2026-10-31） | 文档分区、结构化值编码和文本生成归同一模块；记录候选、验证范围与剩余 TODO。 |
 | [todowrite：命名程序与 program/runtime clean-break](todowrite-program-runtime-clean-break-2026-10-24.md) | 现行实施契约（2026-10-24；**估计字段已删**） | `name/program/intent` + `scope` 注解；统一请求期限；call／park／unpark。 |
 | [Scope 进度自评、专席 Advisor 与双重压缩](Scope进度自评-专席Advisor-双重压缩-2026-10-25.md) | **历史**（估计路径已退役） | 曾用 `remainingScopeTurnsEstimate` 驱 Stall／Advisor；现行 Scope 走 retention 注解。 |
 | [跨 Scope 回问：向过去的自己澄清](跨Scope回问-2026-10-24.md) | **历史／部分落地**（工具签名已迁） | askPreviousScope 仍在；入口改为 `scope.kind=resetScope`，勿按旧 resetScope 工具稿施工。 |

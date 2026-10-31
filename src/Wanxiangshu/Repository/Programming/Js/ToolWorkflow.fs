@@ -793,13 +793,30 @@ module JsToolWorkflow =
 
 module JsToolsResult =
 
+    let private fileEffects rewritten created removed moved =
+        let strings values =
+            values |> List.map (fun value -> box value) |> List.toArray |> box
+
+        let fields =
+            [ if rewritten <> [] then "rewritten", strings rewritten
+              if created <> [] then "created", strings created
+              if removed <> [] then "removed", strings removed
+              if moved <> [] then
+                  "moved", strings (moved |> List.map (fun (fromPath, toPath) -> fromPath + " -> " + toPath)) ]
+
+        if List.isEmpty fields then []
+        else
+            Fable.Core.JsInterop.createObj [ "fs", Fable.Core.JsInterop.createObj fields ]
+            |> LlmFacing.Data.ofJs
+            |> LlmFacing.Data.rootStructuredValue
+
     let render (outcome: JsToolWorkflow.JsToolOutcome) : string =
         match outcome with
         | JsToolWorkflow.JsToolOutcome.Succeeded(value, rewritten, created, removed, moved) ->
             LlmFacing.instruction "ok"
             |> LlmFacing.withData (
                 LlmFacing.Data.structuredValue (LlmFacing.Data.ofJs value)
-                @ LlmFacing.Data.fileEffects rewritten created removed moved
+                @ fileEffects rewritten created removed moved
             )
             |> LlmFacing.render
         | JsToolWorkflow.JsToolOutcome.Failed(failure, rewritten, created, removed, moved) ->
@@ -812,7 +829,7 @@ module JsToolsResult =
                 then
                     []
                 else
-                    LlmFacing.Data.fileEffects rewritten created removed moved
+                    fileEffects rewritten created removed moved
 
             LlmFacing.instruction "failed"
             |> LlmFacing.withData (

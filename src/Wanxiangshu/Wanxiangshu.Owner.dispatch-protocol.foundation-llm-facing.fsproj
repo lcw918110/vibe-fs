@@ -7,13 +7,9 @@
     <WanxiangshuCompileShard>llm-facing</WanxiangshuCompileShard>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Foundation/SyntheticToml.fsi"/>
-    <Compile Include="Foundation/SyntheticToml.fs"/>
     <Compile Include="Foundation/LlmFacing.fsi"/>
     <Compile Include="Foundation/LlmFacing.fs"/>
     <Compile Include="Foundation/ReturnedMaterial.fsi"/>
     <Compile Include="Foundation/ReturnedMaterial.fs"/>
-    <Compile Include="Foundation/SyntheticTomlSurface.fsi"/>
-    <Compile Include="Foundation/SyntheticTomlSurface.fs"/>
   </ItemGroup>
 </Project>

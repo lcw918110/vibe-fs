@@ -22,6 +22,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as tar from 'tar'
+import { checkCandidateDependency } from './wanxiangli-source.mjs'
 
 import {
   assertBuildFresh,
@@ -723,6 +724,7 @@ export async function runExternalConsumer({
     // Read a runtime resource via package export or package structure
     import fs from 'node:fs';
     import path from 'node:path';
+    import { pathToFileURL } from 'node:url';
 
     // Locate wanxiangshu in node_modules
     const pkgRoot = path.resolve('node_modules/wanxiangshu');
@@ -737,6 +739,11 @@ export async function runExternalConsumer({
     assert.ok(fs.existsSync(roleEn), 'resources/provider/role/manager/en.md missing in consumed package');
     assert.ok(fs.existsSync(lifecycleDependency), 'bundled wanxiangli dependency missing in consumed package');
     assert.equal(JSON.parse(fs.readFileSync(lifecycleDependency, 'utf8')).version, ${JSON.stringify(lifecycleVersion)});
+
+    // 从实际主体适配加载公开库入口，不能借消费者顶层的另一份库。
+    const text = await import(pathToFileURL(path.join(pkgRoot, 'dist/Foundation/LlmFacing.js')).href);
+    const document = text.withData(text.Data_rootStructuredValue(text.Data_ofJs({ source: 'bundled' })), text.instruction('probe'));
+    assert.equal(text.render(document), '# probe\\n\\nsource = "bundled"\\n');
 
     assert.ok(fs.readFileSync(enLaw, 'utf8').trim().length > 0, 'en common law is empty');
     assert.ok(fs.readFileSync(zhLaw, 'utf8').trim().length > 0, 'zh common law is empty');
@@ -813,6 +820,8 @@ export async function verifyPackage({
   const resolvedRoot = path.resolve(root)
   const resolvedRunDir = path.resolve(runDir)
   fs.mkdirSync(resolvedRunDir, { recursive: true })
+
+  const candidate = checkCandidateDependency(resolvedRoot)
 
   // Phase 1: assertBuildFresh before pack
   const initialFresh = assertBuildFresh({ root: resolvedRoot })
@@ -902,6 +911,10 @@ export async function verifyPackage({
 
   // Phase 5: Recheck build generation and freshness
   const finalFresh = assertBuildFresh({ root: resolvedRoot })
+  const finalCandidate = checkCandidateDependency(resolvedRoot)
+  if (finalCandidate.sha !== candidate.sha) {
+    throw createVerificationError('candidate-changed', resolvedRoot, 'wanxiangli candidate changed during package verification')
+  }
   if (finalFresh.generation !== initialFresh.generation) {
     throw createVerificationError(
       'generation-changed',
@@ -929,6 +942,7 @@ export async function verifyPackage({
     totalBytes: validation.totalBytes,
     issues: validation.issues,
     generation,
+    libraryCandidate: candidate.sha,
   }
 }
 

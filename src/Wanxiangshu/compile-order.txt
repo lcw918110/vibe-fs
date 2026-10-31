@@ -224,14 +224,10 @@ Execution/Fission/Facts.fsi
 Execution/Fission/Facts.fs
 Change/Facts.fsi
 Change/Facts.fs
-Foundation/SyntheticToml.fsi
-Foundation/SyntheticToml.fs
 Foundation/LlmFacing.fsi
 Foundation/LlmFacing.fs
 Foundation/ReturnedMaterial.fsi
 Foundation/ReturnedMaterial.fs
-Foundation/SyntheticTomlSurface.fsi
-Foundation/SyntheticTomlSurface.fs
 Host/Facts.fsi
 Host/Facts.fs
 Participant/Provider/Attempt/RetryPolicy.fsi

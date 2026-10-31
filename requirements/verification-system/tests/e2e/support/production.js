@@ -33,13 +33,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as ForkModule from '../../../../../dist/Execution/Delegation/Fork/Surface.js';
-import * as SyntheticModule from '../../../../../dist/Foundation/SyntheticTomlSurface.js';
+import { LlmText } from 'wanxiangli/llm-text';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../..', import.meta.url));
+const llmText = new LlmText();
 
 const asInstructionDocument = (body) => {
-  const normalized = String(body).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
-  return normalized.split('\n').map((line) => (line === '' ? '#' : `# ${line}`)).join('\n') + '\n';
+  return llmText.renderInstruction(String(body).trimEnd());
 };
 
 const readProviderDocument = (semanticPath) =>
@@ -49,15 +49,13 @@ const readProviderDocument = (semanticPath) =>
 
 const forkInstructions = ForkModule.instructions('en');
 
-// ── SyntheticToml: the canonical writer ──────────────────────────────────────
+// ── llm-text：结构化文档，不暴露已渲染的字段片段 ─────────────────────────────
 
-export const renderString = (text) => SyntheticModule.renderString(text);
-export const comment = (text) => SyntheticModule.comment(text);
-export const field = (name, renderedValue) => SyntheticModule.field(name, renderedValue);
-export const tableArrayEntry = (name, fields) => SyntheticModule.tableArrayEntry(name, fields);
-export const byteCount = (text) => SyntheticModule.byteCount(text);
-
-export const syntheticDocument = (instructions, body) => SyntheticModule.renderDocument(instructions, body);
+export const comment = (text) => llmText.renderInstruction(text).replace(/\n$/, '');
+export const stringField = (name, value) => llmText.stringField(name, value);
+export const byteCount = (text) => llmText.byteCount(text);
+export const syntheticDocument = (instructions, body) =>
+  llmText.render(llmText.withData(body, llmText.instructions(instructions)));
 
 // ── ForkChildPayload: the forked child's first prompt ─────────────────────────
 

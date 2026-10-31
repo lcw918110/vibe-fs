@@ -412,14 +412,6 @@ export const SURFACE_MANIFEST = [
     kind: 'pure',
   },
   {
-    module: 'Foundation/SyntheticTomlSurface.js',
-    owner: 'provider-projection',
-    laws: ['PROVIDER-PROJECTION-008', 'PROVIDER-PROJECTION-010', 'PROVIDER-PROJECTION-012'],
-    source: 'src/Wanxiangshu/Foundation/SyntheticTomlSurface.fs',
-    representation: 'json',
-    kind: 'pure',
-  },
-  {
     module: 'Host/Contract/ToolResultBound.js',
     owner: 'host-boundary',
     laws: ['HOST-BOUNDARY-015'],

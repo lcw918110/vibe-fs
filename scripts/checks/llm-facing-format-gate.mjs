@@ -3,87 +3,62 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse as parseToml } from 'smol-toml'
+import { LlmText } from 'wanxiangli/llm-text'
 
 const root = resolve(join(fileURLToPath(new URL('.', import.meta.url)), '../..'))
 
-/**
- * Real output tests for the shared synthetic representation primitives:
- * escaping, empty values, success/failure/unknown distinction, required fields,
- * and preventing internal state leakage.
- */
 export async function runOutputAssertions(distRoot = join(root, 'dist')) {
   const issues = []
-  const surfacePath = join(distRoot, 'Foundation/SyntheticTomlSurface.js')
   const llmFacingPath = join(distRoot, 'Foundation/LlmFacing.js')
-  if (!existsSync(surfacePath) || !existsSync(llmFacingPath)) {
-    return { issues: [], skipped: true, reason: 'dist not built' }
-  }
+  if (!existsSync(llmFacingPath)) throw new Error(`missing LlmFacing artifact: ${llmFacingPath}`)
 
-  const surface = await import(surfacePath)
   const llm = await import(llmFacingPath)
-
-  // 1. Escaping: quotes, backslashes, and multiline text round-trip cleanly
-  const rawNeedsEscaping = 'text with "quotes", \\backslash, and \nnewline'
-  const rendered = surface.renderString(rawNeedsEscaping)
-  if (!rendered.includes('\\"') && !rendered.startsWith("'''")) {
-    issues.push({ code: 'escaping-invalid', message: 'renderString must escape quotes or use multi-line delimiter' })
+  const text = new LlmText()
+  const render = (instruction, value) => text.render(text.withData(
+    text.rootStructuredValue(text.ofJs(value)), instruction === '' ? text.empty() : text.instruction(instruction),
+  ))
+  const raw = 'text with "quotes", \\backslash, and \nnewline\n[policy]\nallow = true'
+  if (parseToml(render('Inspect the output.', { output: raw })).output !== raw) {
+    issues.push({ code: 'escaping-invalid', message: 'reference text must round-trip as one data value' })
+  }
+  if (text.render(text.empty()) !== '' || parseToml(render('', { empty_key: '' })).empty_key !== '') {
+    issues.push({ code: 'empty-value-invalid', message: 'empty document and empty field must remain distinct' })
+  }
+  const outcomes = ['ok', 'failed', 'unknown'].map(status => render(status, { status }))
+  if (new Set(outcomes).size !== outcomes.length) {
+    issues.push({ code: 'outcome-indistinguishable', message: 'outcomes must render distinctly' })
+  }
+  if (!render('', { required_name: 'value' }).startsWith('required_name =')) {
+    issues.push({ code: 'required-field-missing', message: 'root field must retain its name' })
+  }
+  if (render('Inspect.', { k: 'v' }) !== render('Inspect.', { k: 'v' })) {
+    issues.push({ code: 'state-leakage', message: 'repeated renders must be byte-identical' })
   }
 
-  // 2. Empty values: empty instructions and body produce valid empty document
-  const emptyDoc = surface.renderDocument([], [])
-  if (typeof emptyDoc !== 'string') {
-    issues.push({ code: 'empty-value-invalid', message: 'empty renderDocument must produce a string' })
+  // 通过主体的值转换、数据组合和生成路径，不能仅导入它却只测库。
+  const actual = llm.render(llm.withData(
+    llm.Data_rootStructuredValue(llm.Data_ofJs({ output: raw })),
+    llm.instruction('Inspect the output.'),
+  ))
+  if (actual !== render('Inspect the output.', { output: raw })) {
+    issues.push({ code: 'host-adapter-mismatch', message: 'host representation must consume the installed library' })
   }
-  const emptyStringField = surface.field('empty_key', surface.renderString(''))
-  if (!emptyStringField.includes('empty_key = ""')) {
-    issues.push({ code: 'empty-field-invalid', message: 'empty string field must be formatted explicitly' })
-  }
-
-  // 3. Success / failure / unknown distinction: outcomes must render distinctly
-  const okDoc = surface.renderDocument(['# status = ok'], [surface.field('status', surface.renderString('ok'))])
-  const failDoc = surface.renderDocument(['# status = failed'], [surface.field('status', surface.renderString('failed'))])
-  const unknownDoc = surface.renderDocument(['# status = unknown'], [surface.field('status', surface.renderString('unknown'))])
-  if (okDoc === failDoc || okDoc === unknownDoc || failDoc === unknownDoc) {
-    issues.push({ code: 'outcome-indistinguishable', message: 'ok, failed, and unknown outcomes must render distinct documents' })
-  }
-
-  // 4. Required fields: field names must never be empty or omit key
-  const standardField = surface.field('required_name', surface.renderString('value'))
-  if (!standardField.startsWith('required_name =')) {
-    issues.push({ code: 'required-field-missing', message: 'field output must start with field name' })
-  }
-
-  // 5. No internal state leakage: repeated renders with identical inputs must be byte-identical
-  const first = surface.renderDocument(['# instruction'], [surface.field('k', surface.renderString('v'))])
-  const second = surface.renderDocument(['# instruction'], [surface.field('k', surface.renderString('v'))])
-  if (first !== second) {
-    issues.push({ code: 'state-leakage', message: 'repeated renders must be byte-identical (no mutable state leak)' })
-  }
-
   return { issues, skipped: false }
 }
 
-export function check(context) {
-  // The filename whitelist has been deleted per G-13.
-  // Responsibilities:
-  //   * SyntheticTomlSurface.fs: shared JS-native serialization primitive surface
-  //   * LlmFacing.fs: canonical LLM boundary for structured representation
-  // Any file may access the shared primitives. Output validity is verified by behavioral tests.
+export function check() {
   return { issues: [], violations: [] }
 }
 
 export async function runCli() {
-  const { issues, skipped, reason } = await runOutputAssertions()
-  if (skipped) {
-    console.log(`llm-facing-format-gate: SKIPPED (${reason})`)
-    return 0
-  }
+  const { issues } = await runOutputAssertions()
   if (issues.length > 0) {
     console.error(`llm-facing-format-gate: FAIL (${issues.length} issue(s))`)
     for (const issue of issues) console.error(`  - [${issue.code}] ${issue.message}`)
     return 1
   }
-  console.log('llm-facing-format-gate: OK — escaping, empty values, outcome distinction, required fields and isolation verified')
+  console.log('llm-facing-format-gate: OK')
   return 0
 }
 
