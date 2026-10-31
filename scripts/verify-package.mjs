@@ -682,6 +682,9 @@ export async function runExternalConsumer({
   fs.writeFileSync(path.join(targetPkgDir, '.verify-library-entries.mjs'), [
     "import { mapBounded } from 'wanxiangli/bounded-map'",
     "import { classify } from 'wanxiangli/response-text'",
+    "import { encode, validationError } from 'wanxiangli/returned-material'",
+    "export const material = encode(['report'], ['raw material'])",
+    'export const materialError = validationError(material)',
     'export const values = await mapBounded(1, async value => value + 1, [1, 2])',
     "export const shapes = [null, 'before <tool_call> after', 'plain answer'].map(classify)",
   ].join('\n'))
@@ -758,6 +761,10 @@ export async function runExternalConsumer({
       const entries = await import(pathToFileURL(entryProbe).href);
       assert.deepEqual(entries.values, [2, 3]);
       assert.deepEqual(entries.shapes, ['Empty', 'ToolMarkup', 'Text']);
+      assert.equal(entries.material, '{"body":["report"],"carry":["raw material"]}');
+      assert.equal(entries.materialError, null);
+      const material = await import(pathToFileURL(path.join(pkgRoot, 'dist/Foundation/ReturnedMaterial.js')).href);
+      assert.equal(material.renderBody(entries.material), '# report\\n');
     } finally {
       fs.unlinkSync(entryProbe);
     }

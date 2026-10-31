@@ -49,6 +49,23 @@ module JoinSurface =
         let runId = text value
         if String.IsNullOrWhiteSpace runId then None else Some runId
 
+    [<Emit("Array.isArray($0)")>]
+    let private isArray (value: obj) : bool = jsNative
+
+    let private returnedTexts (entries: obj) =
+        if not (isArray entries) then
+            invalidArg "entries" "returned must be an array of text entries"
+
+        (unbox<obj array> entries)
+        |> Array.map (fun entry ->
+            if emitJsExpr entry "$0 === null || typeof $0 !== 'object'" then
+                invalidArg "entries" "each returned entry must have a text string"
+            let text: obj = entry?text
+            if jsTypeof text <> "string" then
+                invalidArg "entries" "each returned entry must have a text string"
+            unbox<string> text)
+        |> Array.toList
+
     let private agentItem (value: obj) : JoinItem option =
         let agentId = text (value?agentId)
         let agentName = text (value?agentName)
@@ -79,7 +96,7 @@ module JoinSurface =
                 if isNull (value?returned) then
                     []
                 else
-                    ReturnedMaterial.carry (ReturnedMaterial.ofEntries value?returned)
+                    returnedTexts value?returned
 
             Some(
                 AgentItem(
