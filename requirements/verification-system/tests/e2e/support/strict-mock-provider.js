@@ -441,6 +441,9 @@ export class StrictMockProvider {
     const responseEntry = neverEnds
       ? { ...entry, respond: { ...entry.respond, neverEnd: true } }
       : entry;
+    // The scope annotation is per Session: two lanes answering in the same run
+    // must each open their own Scope lifetime.
+    this._state.retention.sessionId = String(context?.sessionId ?? '');
     return respond(this._state, res, responseEntry, parsed);
   }
 

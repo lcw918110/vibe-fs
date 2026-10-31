@@ -127,10 +127,10 @@ must = [
   "manager-loop.1",
   "manager-loop.2",
   "continue.0",
-  "engineer.0",
   "engineer.1",
   "engineer.2",
-  "engineer-resolve.0",
+  "engineer.3",
+  "engineer-resolve.1",
   # orch.2 = join harvest text after Published (orch-unhappy Stroke 6). EXEC-016
   "orch.2",
 ]
@@ -143,7 +143,7 @@ flow = [
   # orch.2 provider acceptance freezes the SSE baseline, then Stroke 6 waits for
   # the root session idle strictly after that baseline.
   { armIdle = { id = "orch.2" } },
-  { armIdle = { id = "engineer.2" } },
+  { armIdle = { id = "engineer.3" } },
   { armIdle = { id = "manager-interrupt.0" } },
 
   # Stale-head AFTER manager worktree exists (orch-unhappy / restart-conflict canary note).
@@ -170,7 +170,7 @@ flow = [
   # The held child request proves the forked run is active before the idle join
   # attempt. Without this causal barrier, join may correctly report NothingToJoin
   # while the fork tool is still starting the child provider request.
-  { wait = "engineer.0", timeoutMs = 60000 },
+  { wait = "engineer.1", timeoutMs = 60000 },
   { wait = "manager-loop.2", timeoutMs = 60000 },
   { wait = "continue.0", attempts = 2, timeoutMs = 60000 },
   { waitFact = { name = "FailureRecorded", eq = 2 }, timeoutMs = 60000 },
@@ -180,8 +180,8 @@ flow = [
   { custom = "awaitManagerJoinRunning" },
   { prompt = { agent = "manager", text = "Interrupt the active join.", releaseHeldChildAfterAccepted = true }, session = "child", timeoutMs = 60000 },
   { wait = "manager-interrupt.0", timeoutMs = 60000 },
-  { wait = "engineer.2", timeoutMs = 60000 },
-  { awaitIdle = { after = "engineer.2" }, timeoutMs = 60000 },
+  { wait = "engineer.3", timeoutMs = 60000 },
+  { awaitIdle = { after = "engineer.3" }, timeoutMs = 60000 },
   { awaitIdle = { after = "manager-interrupt.0" }, timeoutMs = 60000 },
     # The live child-completion fact is `HandleWorkCompleted` (observed once per delivered
   # child in the run); the legacy `HandleCompleted` case is not written any more.
@@ -194,9 +194,9 @@ flow = [
   { waitFact = { name = "IncumbencyRetired", gte = 4 }, timeoutMs = 60000 },
   { waitFact = { name = "CandidateReady", eq = 1 }, timeoutMs = 60000 },
   { waitFact = { name = "ConflictDetected", gte = 1 }, timeoutMs = 60000 },
-  { wait = "engineer-resolve.0", timeoutMs = 60000 },
   { wait = "engineer-resolve.1", timeoutMs = 60000 },
-  { awaitIdle = { after = "engineer-resolve.1" }, timeoutMs = 60000 },
+  { wait = "engineer-resolve.2", timeoutMs = 60000 },
+  { awaitIdle = { after = "engineer-resolve.2" }, timeoutMs = 60000 },
   { waitFact = { name = "RebasedCandidateReady", gte = 1 }, timeoutMs = 90000 },
   { waitFact = { name = "Published", eq = 1 }, timeoutMs = 90000 },
 
@@ -207,7 +207,7 @@ flow = [
   { wait = "orch.2", timeoutMs = 60000 },
   { awaitIdle = { after = "orch.2" }, timeoutMs = 60000 },
   { custom = "oracleLongStroke" },
-  { assertDeliveries = { id = "engineer.1", eq = 1 } },
+  { assertDeliveries = { id = "engineer.2", eq = 1 } },
   # Production Manager tool surface, observed on the wire the Host actually sent.
   { custom = "assertManagerToolSurfaceOnWire" },
 
@@ -260,6 +260,60 @@ user = "Ship publish_proof.txt to the target branch through the long stroke."
   [[turn.step]]
   respond = { type = "title", text = "Long Stroke" }
 
+# The Host asks the delegator for a squat, tool-free answer to the recipient's
+# clarifying questions before it delivers them. The answer is prose only; the
+# recipient never waits on it (negotiation completes on acceptance).
+#
+# The turn text is the recipient's own questions, so each declaring party needs
+# its own prefix. All three answers are interchangeable; they are declared apart
+# only because a prefix must name the text it matches.
+[[turn]]
+id = "negotiation-answer-manager"
+internal = true
+kind = "negotiation-answer"
+optional = true
+user = "Which proof artifact settles this delivery"
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "text", text = "publish_proof.txt at the workspace root, containing exactly `Published by long-stroke canary`. The candidate branch must be created at the pre-conflict commit." }
+
+[[turn]]
+id = "negotiation-answer-engineer"
+internal = true
+kind = "negotiation-answer"
+optional = true
+user = "Must publish_proof.txt hold exactly"
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "text", text = "Yes: exactly `Published by long-stroke canary`, written in the Manager worktree." }
+
+[[turn]]
+id = "negotiation-answer-resolver"
+internal = true
+kind = "negotiation-answer"
+optional = true
+user = "Should the conflicted file keep the target's surrounding content"
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "text", text = "Keep the target's surrounding content and replace only the conflicted hunk with the required line." }
+
+# The Host's own context summarizer, reached only when a run outgrows its window.
+# It must never be needed by a healthy Long Stroke; declared so the failure names
+# the real cause (runaway context) instead of "no declared turn".
+[[turn]]
+id = "compaction"
+internal = true
+kind = "compaction"
+optional = true
+user = "You are a context summarization agent."
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "text", text = "Summary: the long stroke canary is progressing through its declared turns." }
+
 [[turn]]
 id = "orch"
 lane = "orchestrator"
@@ -267,7 +321,7 @@ user = "Ship publish_proof.txt to the target branch through the long stroke."
 tools = ["todowrite-for-orchestrator", "join"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "commission-long-stroke", intent = "等待委任回执，保留长行程工作树与路线。", remainingScopeTurnsEstimate = 19, program = "class Js extends JsProgram { async run() { return await this.commission({\"calling\":\"lead\",\"name\":\"Long Stroke Road\",\"charge\":\"Run the long stroke: ship publish_proof.txt — join-wake, provider fallback, accept the assessment obligation then retire so publish can proceed.\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "commission-long-stroke", intent = "等待委任回执，保留长行程工作树与路线。", program = "class Js extends JsProgram { async run() { return await this.commission({\"calling\":\"lead\",\"name\":\"Long Stroke Road\",\"charge\":\"Run the long stroke: ship publish_proof.txt — join-wake, provider fallback, accept the assessment obligation then retire so publish can proceed.\"}, []); } }" } }
 
   [[turn.step]]
   respond = { type = "tool-call", tool = "join" }
@@ -280,7 +334,7 @@ tools = ["todowrite-for-orchestrator", "join"]
   # then ends the turn with an explicit deliver(reportMapping) so the handoff is settled.
   [[turn.step]]
   optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "deliver-long-stroke", intent = "等待交付结算，保留长行程发布结果。", remainingScopeTurnsEstimate = 18, program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "deliver-long-stroke", intent = "等待交付结算，保留长行程发布结果。", program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
 
 # EXEC-016 / INTERACTION-AUTHORITY-014: conditional protocol declaration only.
 # Ordinary Orchestrator completion receives JoinGuard exactly when a join obligation
@@ -300,29 +354,18 @@ tools = ["todowrite-for-orchestrator", "horizon", "join"]
 
 # A natural stop while the commissioned road is still open is not permission to
 # stop. The idle repair for every role other than Manager, Engineer and DevOps
-# is `work/plan-continue`. The orchestrator keeps waiting for the road it already
-# commissioned; it does not open a second commission.
+# is `work/orchestrator-continue`: the Orchestrator answers it by closing the
+# responsibility it still holds — the road has already returned integrated, so
+# the delivery is settled here instead of waiting on a road that no longer exists.
 [[turn]]
 id = "orch-plan-continue"
 internal = true
 optional = true
-user = "The planning goal is still open."
+user = "The whole request is not complete, and its roads have not been durably closed. Your last turn stopped naturally; a natural end of a reply does not end that responsibility, even when it contains a progress report."
 tools = ["todowrite-for-orchestrator", "horizon", "join"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "join", args = {} }
-
-  [[turn.step]]
-  optional = true
-  respond = { type = "tool-call", tool = "join", args = {} }
-
-  [[turn.step]]
-  optional = true
-  respond = { type = "tool-call", tool = "join", args = {} }
-
-  [[turn.step]]
-  optional = true
-  respond = { type = "tool-call", tool = "join", args = {} }
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", prefixText = "The commissioned road has returned integrated; closing the delivery now.", args = { name = "deliver-long-stroke-nudged", intent = "等待交付结算，保留长行程发布结果。", program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
 
   [[turn.step]]
   optional = true
@@ -367,27 +410,34 @@ user = "# The account is not yet ready to entrust."
 id = "manager-loop"
 lane = "manager"
 user = ["# ", "Run the long stroke: ship publish_proof.txt — join-wake, provider fallback, accept the assessment obligation then retire so publish can proceed."]
-tools = ["todowrite-for-manager", "join", "horizon", "review"]
+tools = ["todowrite-for-manager", "join", "horizon", "review", "negotiate"]
 
+  # A Manager incarnation opens in negotiation: the Host refuses `resetScope` until
+  # the first `negotiate(questions)` is accepted, and re-issues that reminder every
+  # turn until it is. Acceptance is immediate and does not wait for an answer.
   [[turn.step]]
   runtimeStep = 0
-  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "The workspace needs implementation work before it can publish: completeness is not yet full because publish_proof.txt has not been established in the current delivery.", args = { name = "manager-review-gap", intent = "等待首轮评审回执，保留当前评审任期。", remainingScopeTurnsEstimate = 17, program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":\"close the remaining gap\"}]); } }" } }
+  respond = { type = "tool-call", tool = "negotiate", args = { questions = "Which proof artifact settles this delivery: publish_proof.txt at the workspace root, and the exact target-branch content that must match? Is the pre-conflict commit the right base for the candidate?" } }
 
   [[turn.step]]
   runtimeStep = 1
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-writer", intent = "等待派工回执，保留发布证明写入任务。", remainingScopeTurnsEstimate = 16, program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Writer\",\"charge\":\"Write publish_proof.txt.\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "The workspace needs implementation work before it can publish: completeness is not yet full because publish_proof.txt has not been established in the current delivery.", args = { name = "manager-review-gap", intent = "等待首轮评审回执，保留当前评审任期。", program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":\"close the remaining gap\"}]); } }" } }
 
   [[turn.step]]
   runtimeStep = 2
-  respond = { type = "tool-call", tool = "join", args = {} }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-writer", intent = "等待派工回执，保留发布证明写入任务。", program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Writer\",\"charge\":\"Write publish_proof.txt.\"}, []); } }" } }
 
   [[turn.step]]
   runtimeStep = 3
-  optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "manager-review-clear", intent = "等待次轮评审回执，保留已解决结论。", remainingScopeTurnsEstimate = 15, program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":null}]); } }" } }
+  respond = { type = "tool-call", tool = "join", args = {} }
 
   [[turn.step]]
   runtimeStep = 4
+  optional = true
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "manager-review-clear", intent = "等待次轮评审回执，保留已解决结论。", program = "class Js extends JsProgram { async run() { return await this.review([{\"key\":\"target-gap\",\"value\":null}]); } }" } }
+
+  [[turn.step]]
+  runtimeStep = 5
   optional = true
   respond = { type = "tool-call", tool = "review", args = { findings = [] } }
 
@@ -407,7 +457,7 @@ tools = ["todowrite-for-manager", "join", "horizon", "review"]
   [[turn.step]]
   runtimeStep = 0
   optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "Independent audit of this tenure snapshot finds every required quality dimension complete and supported by the current workspace evidence.", args = { name = "reopened-review-pass", intent = "等待继任评审回执，保留当前审计结论。", remainingScopeTurnsEstimate = 14, program = "class Js extends JsProgram { async run() { return await this.review([]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", prefixText = "Independent audit of this tenure snapshot finds every required quality dimension complete and supported by the current workspace evidence.", args = { name = "reopened-review-pass", intent = "等待继任评审回执，保留当前审计结论。", program = "class Js extends JsProgram { async run() { return await this.review([]); } }" } }
 
   [[turn.step]]
   runtimeStep = 1
@@ -570,7 +620,7 @@ forbiddenTools = ["todowrite-for-orchestrator"]
 
   [[turn.step]]
   runtimeStep = 4
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-finisher", intent = "等待派工回执，保留收尾工程师工作。", remainingScopeTurnsEstimate = 13, program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Finisher\",\"charge\":\"Ensure publish_proof.txt contains exactly: Published by long-stroke canary\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "fork-proof-finisher", intent = "等待派工回执，保留收尾工程师工作。", program = "class Js extends JsProgram { async run() { return await this.fork({\"calling\":\"engineer\",\"name\":\"Proof Finisher\",\"charge\":\"Ensure publish_proof.txt contains exactly: Published by long-stroke canary\"}, []); } }" } }
 
   [[turn.step]]
   runtimeStep = 5
@@ -578,7 +628,7 @@ forbiddenTools = ["todowrite-for-orchestrator"]
 
   [[turn.step]]
   runtimeStep = 6
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "resume-proof-finisher", intent = "等待接力回执，保留复用子会话工作。", remainingScopeTurnsEstimate = 12, program = "class Js extends JsProgram { async run() { return await this.resume({\"name\":\"Proof Finisher\",\"charge\":\"Verify the reused subagent received this second charge and publish_proof.txt is exact.\"}, []); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "resume-proof-finisher", intent = "等待接力回执，保留复用子会话工作。", program = "class Js extends JsProgram { async run() { return await this.resume({\"name\":\"Proof Finisher\",\"charge\":\"Verify the reused subagent received this second charge and publish_proof.txt is exact.\"}, []); } }" } }
 
   [[turn.step]]
   runtimeStep = 7
@@ -1028,15 +1078,21 @@ tools = ["todowrite-for-manager", "join", "assume", "review"]
 id = "engineer"
 lane = "engineer"
 user = "# Write publish_proof.txt."
-tools = ["todowrite-for-engineer"]
+tools = ["todowrite-for-engineer", "negotiate"]
+
+  # A forked child is a delegated session: production refuses its first
+  # scope.kind=resetScope until negotiate(questions) has been accepted, so the
+  # charge is clarified before any work is annotated.
+  [[turn.step]]
+  respond = { type = "tool-call", tool = "negotiate", args = { questions = "Must publish_proof.txt hold exactly `Published by long-stroke canary`, and is the Manager worktree the only place to write it?" } }
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "write-publish-proof", intent = "等待文件写入结果，保留已写入证明。", remainingScopeTurnsEstimate = 11, program = "class Js extends JsProgram { async run() { await this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "write-publish-proof", intent = "等待文件写入结果，保留已写入证明。", program = "class Js extends JsProgram { async run() { await this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
 
   # Read probe on the programming surface: ordinary Engineer mainline.
   # Unique path makes message.part.updated correlation unambiguous in the real Host SSE stream.
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "read-probe", intent = "等待读取探针结果，保留文件版本记录。", remainingScopeTurnsEstimate = 10, program = "class Js extends JsProgram { async run() { return await this.cat('read_probe.txt'); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "read-probe", intent = "等待读取探针结果，保留文件版本记录。", program = "class Js extends JsProgram { async run() { return await this.cat('read_probe.txt'); } }" } }
 
   [[turn.step]]
   # A subagent settles only through an explicit `this.deliver(reportMapping)` (repository-programming-054/059):
@@ -1044,7 +1100,7 @@ tools = ["todowrite-for-engineer"]
   # `reportMapping` pointing at the work material. A plain
   # `return` leaves the delivery cell empty, so the child is not settled as
   # completed and the join stays open.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "publish_proof.txt is written and verified; delivering the completed proof to the owner.", args = { name = "deliver-publish-proof", intent = "等待交付结算，保留子工作完成事实。", remainingScopeTurnsEstimate = 9, program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "publish_proof.txt is written and verified; delivering the completed proof to the owner.", args = { name = "deliver-publish-proof", intent = "等待交付结算，保留子工作完成事实。", program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
 
   # The delivery tool result asks the provider once more; the child closes its turn here.
   [[turn.step]]
@@ -1055,23 +1111,30 @@ tools = ["todowrite-for-engineer"]
 id = "engineer-resolve"
 internal = true
 user = "# Resolve the conflicted publish_proof.txt so it contains exactly: Published by long-stroke canary"
-tools = ["todowrite-for-engineer"]
+tools = ["todowrite-for-engineer", "negotiate"]
+
+  # Same delegation gate as the first Engineer: a forked child negotiates before
+  # its scope annotation can be a resetScope.
+  [[turn.step]]
+  respond = { type = "tool-call", tool = "negotiate", args = { questions = "Should the conflicted file keep the target's surrounding content and only replace the conflicted hunk with the exact required line?" } }
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "resolve-publish-proof", intent = "等待冲突文件写入完成，保留修复内容。", remainingScopeTurnsEstimate = 8, program = "class Js extends JsProgram { async run() { this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "resolve-publish-proof", intent = "等待冲突文件写入完成，保留修复内容。", program = "class Js extends JsProgram { async run() { this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
 
   [[turn.step]]
   # Same reportMapping rule for the repair child: state the outcome as prose, then
   # settle with an explicit `this.deliver(reportMapping)`.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "The conflict is resolved; publish_proof.txt now contains exactly the required text, and the repaired file is delivered.", args = { name = "deliver-resolved-proof", intent = "等待冲突修复交付结算，保留完成事实。", remainingScopeTurnsEstimate = 7, program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "The conflict is resolved; publish_proof.txt now contains exactly the required text, and the repaired file is delivered.", args = { name = "deliver-resolved-proof", intent = "等待冲突修复交付结算，保留完成事实。", program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
 
   [[turn.step]]
   respond = { type = "text", text = "Conflict file resolved." }
 
-# First Wanxiangshu-owned provider failure.
+# First Wanxiangshu-owned provider failure. It must land on the join rung: the fork
+# must be delivered, or no child work ever exists and the whole stroke collapses
+# (the ladder's negotiate rung shifts every later step by one).
 [[fault]]
 turn = "manager-loop"
-step = 2
+step = 3
 delivery = "provider-error"
 status = 400
 retryable = false
@@ -1090,6 +1153,8 @@ attempts = [1]
 
 # The successor retains the triggering review call. The matcher counts that
 # assistant message before the successor's own first response.
+# The successor tenure carries two empty reviews: the first advances the
+# milestone (`advanceFrom`), the second completes the work (`cleanup`).
 [[turn]]
 id = "successor-tenure"
 internal = true
@@ -1112,18 +1177,18 @@ tools = ["review"]
   optional = true
   respond = { type = "text", text = "Successor tenure closed." }
 
-# Before the first charged round the Host asks for a remaining-turn estimate.
+# Before the first charged round the Host asks for a retention budget.
 [[turn]]
 id = "scope-estimate"
 internal = true
 optional = true
-user = "The current Scope has no estimate of remaining billable rounds yet."
+user = "This Scope has no retention budget yet. On the next tool call, set scope.kind=resetScope with newScopeGoal and newScopeRetentionBudget (see common law «Scope»), then continue substantive work."
 tools = ["todowrite-for-manager"]
 
   [[turn.step]]
   runtimeStep = 0
   optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "scope-estimate", intent = "提交剩余回合估计，继续当前工作。", remainingScopeTurnsEstimate = 3, program = "class Js extends JsProgram { async run() { } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-manager", args = { name = "scope-estimate", intent = "提交剩余额度估计，继续当前工作。", program = "class Js extends JsProgram { async run() { } }" } }
 
   [[turn.step]]
   runtimeStep = 1

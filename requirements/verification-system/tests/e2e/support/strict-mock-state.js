@@ -19,6 +19,12 @@ export function createState() {
     fatal: null,
     sealedBySession: new Map(),
     stopped: false,
+    /**
+     * Which sessions already paid their first `resetScope`. The mock plays the
+     * model, and a model cannot open a second Scope lifetime it never saw end;
+     * keying it per session is what keeps two lanes' annotations independent.
+     */
+    retention: { sessionId: '', opened: new Set() },
   };
 }
 
@@ -31,4 +37,6 @@ export function resetState(state) {
   state.stopped = false;
   state.fatal = null;
   state.sealedBySession.clear();
+  state.retention.sessionId = '';
+  state.retention.opened.clear();
 }

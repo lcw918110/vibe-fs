@@ -29,7 +29,9 @@ test('WHAT[js-semantic-surface-002] raw Host canaries do not exempt neighboring 
   const check = () => spawnSync(process.execPath, ['--input-type=module', '-e',
     `const { run } = await import(${JSON.stringify(gate)}); process.exitCode = run()`],
   { cwd: root, encoding: 'utf8' })
-  const rawImport = importSource('OpenCode/Plugin/PluginTransforms.js')
+  // PluginTransforms 已注册进 SURFACE_MANIFEST（合法入口），不能当深导入素材；
+  // 选一个未注册的 dist 模块，语义仍是「裸 Host 引用越界」。
+  const rawImport = importSource('Host/Ports/Vocabulary.js')
   write('requirements/delegation/tests/037.test.mjs', rawImport)
   write('requirements/work/tests/host/008.test.mjs', rawImport)
   write('requirements/managed-session-lifecycle/tests/029.test.mjs', rawImport)

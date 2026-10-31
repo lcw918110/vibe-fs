@@ -14,6 +14,7 @@
 import { assertEq, assertTrue } from './lib.mjs';
 import { boundaryFor, sealDecision, validateBoundary } from '../../e2e/support/cold-boundary.js';
 import { wireOf } from '../../e2e/support/provider-wire.js';
+import { INITIAL_RETENTION_STEER } from '../../e2e/support/runtime-key.js';
 
 const SYSTEM = { role: 'system', content: 'You are a coder.' };
 const hostSystem = (model) => ({
@@ -102,7 +103,7 @@ export const coldBoundaryCases = [
   {
     name: '首次预算提醒只退休精确的请求尾部提醒及相邻 user 占位',
     fn: () => {
-      const reminder = user('[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]');
+      const reminder = user(INITIAL_RETENTION_STEER);
       const previous = body('test-model', [SYSTEM, user('Round 1'), assistant('.'), reminder]);
       const next = body('test-model', [SYSTEM, user('Round 1'), assistant('working'), reminder]);
       assertEq(decide(previous, next).held, true);
@@ -492,7 +493,7 @@ export const coldBoundaryCases = [
       assertEq(decide(MANAGER_RETIRED, rewrittenUser, null, true).resealed, 'successor-strip');
       // work-008: the successor hides every pre-barrier message and re-opens with its own
       // tenure's traffic under the same plan and system prompt.
-      const reminder = user('[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]');
+      const reminder = user(INITIAL_RETENTION_STEER);
       const tenureRetired = body('test-model', [SYSTEM, ...MANAGER_TRAFFIC, reminder]);
       const cleanSuccessor = body('test-model', [SYSTEM, user('继任「执行」'), assistant('...'), reminder]);
       assertEq(decide(tenureRetired, cleanSuccessor, null, true).resealed, 'successor-strip');

@@ -41,6 +41,7 @@ import {
   source as pairProgrammingThoughtSource,
 } from '../../../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js';
 import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { sanitizeMessage } from '../../../../../dist/OpenCode/Host/HostMessageProjection.js';
 
 /**
@@ -126,19 +127,38 @@ const insertedReplayPairLength = (messages, index) => {
 };
 
 const scopeReminderTexts = new Set([
-  '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]',
-  '[系统：估计第一个细粒度任务状态闭环所需的 turnBudget。先调用 resetScope 初始化该闭环，再执行其他工作。]',
-  '[System: Before any resetScope initialization, call negotiate(questions: string) NOW. Ask the delegator all questions needed to clarify this assignment. Group related questions into the single plural questions argument. Once the call is accepted, negotiation is complete and the timeline continues: do not wait for any answer, and call resetScope promptly. If the delegator’s answer is obtained, it may arrive later as a user steer; it never blocks the timeline. You may negotiate again at any time; later calls never delay resetScope.]',
-  '[系统：先调用 negotiate(questions: string) 向委托者澄清本次任务。把需要确认的多个具体问题集中写入 questions 参数；调用一经受理即视为协商完成，时序继续，不必也不要等待答复；之后即可调用 resetScope 初始化 scope。若取得委托者答复，可能随后作为 steer 补到，不阻塞时序。后续可以继续提问，不影响正常的 resetScope。]',
+  // `wanxiangli/src/pair-hint/PairHint.fs` — initialize / negotiate /
+  // askPreviousScope / weak retention reminders. Kept verbatim; the pair-hint
+  // module is the only writer of these rows.
+  '[System: Estimate the retentionBudget for the first task block (how many keepLast it is expected to take; size-neutral, estimated as it is, main path when unsure). Initialize that closed-loop with a tool call whose scope.kind=resetScope (newScopeGoal + newScopeRetentionBudget) before other work. See common law «Scope».]',
+  '[系统：估计第一个任务状态闭环所需的 retentionBudget（完成它预计还要几次 keepLast；对大小中立，按实估计，拿不准按主路径估）。用带 scope.kind=resetScope 的工具调用初始化该闭环（newScopeGoal + newScopeRetentionBudget），再执行其他工作。见共同法 «Scope»。]',
+  '[System: Call negotiate(questions: string) NOW to clarify this assignment (you may carry scope.kind=resetScope on the same turn; once negotiate is accepted, that reset takes effect immediately). Group related questions into questions. Acceptance completes negotiation; do not wait for an answer. See common law «Scope».]',
+  '[系统：先调用 negotiate(questions: string) 向委托者澄清本次任务（可同拍在 scope 里带 resetScope；negotiate 受理后 reset 立即生效）。把需要确认的多个具体问题集中写入 questions；调用一经受理即协商完成，时序继续，不必等待答复。见共同法 «Scope»。]',
   '[System: You have received the handoff from the previous scope. You must now call askPreviousScope(questions) first to clarify specific questions with the previous scope based on the handoff and current objective. The call acknowledges sending immediately; continue your work without waiting. Answers will arrive later as a user steer.]',
   '[系统：你已经收到前一 Scope 的交接。现在必须先调用 askPreviousScope(questions)，由你根据交接及当前目标，自行向前一 Scope 确认需要澄清的具体问题。调用受理后不必等待答复，可继续工作；回答随后作为 steer 到达。]',
-  'The current Scope has no estimate of remaining billable rounds yet. Submit remainingScopeTurnsEstimate in this todowrite.',
-  '当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中提交 remainingScopeTurnsEstimate。',
-  'The current Scope has no estimate of remaining billable rounds yet. Submit remainingScopeTurnsEstimate in this todowrite as a nonnegative number; fractions are fine. Each charged round should lower it by at least 0.1 from the previous charged round. Report what you actually expect, not a number tuned to the rule.',
-  '当前 Scope 尚无剩余计费回合估计。在本次 todowrite 中把 remainingScopeTurnsEstimate 报成非负实数，允许小数。每个计费回合的估计应比上一个计费回合至少下降 0.1。报你真实预期，不为迎合规则而调数字。',
-  'You reported that the current Scope needs 0 more billable rounds. Call resetScope now, with the handoff text of the previous Scope and the objective of the new Scope.',
-  '你已报告当前 Scope 尚需 0 个计费回合。现在调用 resetScope，提交上一 Scope 的交接文本和新 Scope 的目标。',
+  "[System: This scope's retention is exhausted (0 remaining). Continue work already in progress; do not interrupt or abandon it for this reminder. After closing the current state loop, the next non-exempt tool must use scope.kind=resetScope. See common law «Scope».]",
+  '[系统：当前 scope 的 retention 已用尽（剩余 0）。继续完成正在进行的工作，不得因本提醒中断、暂停或放弃；当前状态闭环完成后，下一次非豁免工具必须 scope.kind=resetScope。见共同法 «Scope»。]',
 ]);
+
+// The production Host composes its scope steers from `resources/provider/host/scope-steer/`,
+// so the wire text changes whenever those resources are reworded (the estimate→retention
+// rewording already broke exact matching once). Reading the live resource files here keeps
+// one source of truth: a future rewording cannot silently turn steer rows back into
+// "real user turns" for the step cursor. Missing files are skipped, not fatal — the
+// literals above still cover legacy hosts.
+const scopeSteerResourceDir = new URL(
+  '../../../../../resources/provider/host/scope-steer/',
+  import.meta.url,
+);
+if (existsSync(scopeSteerResourceDir)) {
+  for (const steerName of ['missing-estimate', 'reset-due']) {
+    for (const language of ['en.md', 'zh-CN.md']) {
+      try {
+        scopeReminderTexts.add(readFileSync(new URL(`${steerName}/${language}`, scopeSteerResourceDir), 'utf8').trim());
+      } catch {}
+    }
+  }
+}
 
 // The contract anchor prefix (`[ANCHOR: N]\u0000\uFEFF`, stripped by `turnOf`) rides in
 // front of a scope reminder on the same user row, and the pair-guidance writer appends
@@ -170,6 +190,39 @@ const reminderCandidates = (content) => {
 
 export const isScopeReminderText = (text) =>
   reminderCandidates(text).some((candidate) => scopeReminderTexts.has(candidate));
+
+/**
+ * The answer to `negotiate` and the answer to `askPreviousScope`.
+ *
+ * Both arrive as a user steer on the session that asked, in their own user turn: the
+ * Host appends the row after the ask tool result, so a scenario declares it like any
+ * other turn. It carries the same `# ` heading marker a declared prompt carries, so
+ * the marker is stripped before the prefix is compared. Exported because a scenario
+ * needs the same text it declares.
+ *
+ * Verbatim from `wanxiangli/src/pair-hint/PairHint.fs` (`prepare`,
+ * `preparePreviousScopeReply`); the pair-hint module is the only writer of these rows.
+ */
+export const DELEGATION_ANSWER_PREFIXES = [
+  'Delegator answered negotiate(questions):',
+  '委托者已回答 negotiate(questions)：',
+  'Previous Scope answered askPreviousScope(questions):',
+  '前一 Scope 的答复：',
+];
+
+const withoutHeadingMarker = (text) => text.replace(/^(?:# )+/, '');
+
+export const isDelegationAnswerSteer = (text) =>
+  reminderCandidates(text).some((candidate) =>
+    DELEGATION_ANSWER_PREFIXES.some((prefix) => withoutHeadingMarker(candidate).startsWith(prefix)),
+  );
+
+/**
+ * The initial retention steer, verbatim, for callers that have to build a wire
+ * carrying one. Kept here so a rewording touches one file, not every fixture.
+ */
+export const INITIAL_RETENTION_STEER =
+  '[System: Estimate the retentionBudget for the first task block (how many keepLast it is expected to take; size-neutral, estimated as it is, main path when unsure). Initialize that closed-loop with a tool call whose scope.kind=resetScope (newScopeGoal + newScopeRetentionBudget) before other work. See common law «Scope».]';
 
 // ── lane ────────────────────────────────────────────────────────────────────
 
@@ -252,6 +305,18 @@ export function sessionIdOf(context) {
  */
 const TITLE_MARKER = 'Generate a title for this conversation:';
 
+/**
+ * The Host's negotiation snapshot dialogue: a temporary, tool-free turn that only
+ * asks the delegator to answer the recipient's clarifying questions in prose.
+ */
+export const SNAPSHOT_DIALOGUE_MARKER = 'This is a temporary snapshot dialogue, not a work turn.';
+
+const snapshotDialogue = (body) => {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  return messages.some((message) =>
+    typeof message?.content === 'string' && message.content.includes(SNAPSHOT_DIALOGUE_MARKER));
+};
+
 /** How far in to look. The marker is a preamble; a real turn cannot push it back. */
 const TITLE_PREAMBLE_LIMIT = 4;
 
@@ -272,7 +337,12 @@ export function kindOf(body) {
   for (const message of messages.slice(0, TITLE_PREAMBLE_LIMIT)) {
     const content = message?.content;
     if (typeof content === 'string' && content.startsWith(TITLE_MARKER)) return 'title';
+    if (typeof content === 'string' && content.startsWith('You are a context summarization agent.')) return 'compaction';
   }
+  // The Host asks for a squat, answer-only negotiation snapshot from the delegator
+  // before it delivers the recipient's questions. It is its own request kind: the
+  // delegator is forbidden from calling tools there, so no chat ladder can answer it.
+  if (snapshotDialogue(body)) return 'negotiation-answer';
   return 'chat';
 }
 
@@ -330,6 +400,11 @@ const lastUserIndex = (messages) => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (!isUser(messages[index])) continue;
     if (isScopeReminderText(messages[index].content)) continue;
+    // A delegation answer is a steer injected into the session that asked, not a new
+    // user turn: `PairHint.fs` returns it as `steer`, and the asker keeps walking the
+    // turn it was already in. Treating it as the turn would zero the step cursor and
+    // strand every remaining rung of that ladder under an undeclared key.
+    if (isDelegationAnswerSteer(messages[index].content)) continue;
     return index;
   }
   return -1;

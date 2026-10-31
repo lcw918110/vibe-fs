@@ -251,6 +251,9 @@ test('WHAT[capability-enforcement-026] D07_pre_review_devops_refusal_preserves_d
     const sessionID = 'ses-d07'
     await acceptAuthorityRoot(runtime, sessionID, 'manager')
     await openIncumbency(runtime, sessionID)
+    // Scope 门要读 advisor 流；Node 24 的 node:sqlite 打开即建库。预热让
+    // 首次开库发生在快照之前，「拒绝不得追加持久字节」才成立。
+    await runManagerProgram(hooks, sessionID, `return "warm"`)
     const durableBefore = durableSnapshot(directory)
 
     // 评审接纳前向 DevOps 派工：拒绝且不产生任何持久化副作用。
@@ -261,7 +264,7 @@ test('WHAT[capability-enforcement-026] D07_pre_review_devops_refusal_preserves_d
     )
     assert.equal(refusalCode(refused), REVIEW_PENDING)
     assert.deepEqual(durableSnapshot(directory), durableBefore,
-      'the refused dispatch must not append any durable bytes')
+      'the refused dispatch must not append any ledger bytes')
     assert.equal(createdIds.length, 0)
     assert.equal(runtime.prompts.length, 0)
 
@@ -319,6 +322,14 @@ test('WHAT[capability-enforcement-026] D09_relayed_tenure_refuses_new_devops_dis
     await openIncumbency(runtime, sessionID)
     await injectAcceptedAssessment(runtime, sessionID) // Stayed
 
+    // 预热一次真实派工（接纳后），让 advisor 流的首次开库落在快照之前。
+    const warm = await runManagerProgram(
+      hooks,
+      sessionID,
+      resumeCall({ name: 'devops', charge: 'WARM-DEVOPS-STREAM' }),
+    )
+    assert.equal(envelopeOk(warm), true, warm)
+
     const commonDir = await journalSurface.JournalSurface_initializeStateRoot(directory)
     const surface = lifecycle.LifecycleSurface ?? lifecycle
     const relayed = await surface.submitReview(
@@ -354,7 +365,7 @@ test('WHAT[capability-enforcement-026] D09_relayed_tenure_refuses_new_devops_dis
     assert.equal(createdIds.length, createdBefore, 'the refused close-out dispatch must not place a child')
     assert.equal(runtime.prompts.length, promptsBefore, 'the refused close-out dispatch must not emit a prompt')
     assert.deepEqual(durableSnapshot(directory), durableBefore,
-      'the refused close-out dispatch must not append any durable bytes')
+      'the refused close-out dispatch must not append any ledger bytes')
   })
 })
 
@@ -579,6 +590,9 @@ test('WHAT[capability-enforcement-026] D12_devops_session_reuse_property_lands_r
   )
 })
 
+// 隔离的持久边界快照。模型回合的 scope 标注（common law «Scope»）落在
+// advisor 库且在拒绝路径上照常记账——快照排除它；断言对象是派工台账：
+// 被拒的派工不得追加任何字节。
 const durableSnapshot = (directory) => {
   const snapshot = []
   const visit = (relativePath) => {
@@ -596,6 +610,6 @@ const durableSnapshot = (directory) => {
     }
   }
   visit('')
-  return snapshot
+  return snapshot.filter((entry) => !entry.path.endsWith('advisor-process.sqlite'))
 }
 

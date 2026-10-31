@@ -206,7 +206,7 @@ module JsToolWorkflow =
             moved: (string * string) list
         | Parked of name: string * payload: obj * source: string
 
-    [<Emit("typeof $0 === 'object' && $0 !== null && !Array.isArray($0) && Object.keys($0).length === 3 && typeof $0.name === 'string' && $0.name.trim().length > 0 && typeof $0.program === 'string' && $0.program.trim().length > 0 && typeof $0.intent === 'string' && $0.intent.length > 0")>]
+    [<Emit("typeof $0 === 'object' && $0 !== null && !Array.isArray($0) && (Object.keys($0).length === 3 || (Object.keys($0).length === 4 && Object.prototype.hasOwnProperty.call($0, 'scope'))) && typeof $0.name === 'string' && $0.name.trim().length > 0 && typeof $0.program === 'string' && $0.program.trim().length > 0 && typeof $0.intent === 'string' && $0.intent.length > 0")>]
     let private validInput (value: obj) : bool = jsNative
 
     [<Emit("Object.assign({}, $0, $1)")>]

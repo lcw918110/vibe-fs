@@ -100,10 +100,12 @@ test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two e
   assert.deepEqual(
     result.scenario.faults.filter((fault) => fault.kind === 'provider-error' && fault.status === 400)
       .map((fault) => fault.entryId),
-    ['manager-loop.2', 'continue.0'],
+    // The failure lands on the join rung: the fork must be delivered or no child work
+    // exists at all. The negotiate rung shifts the join one step past its old position.
+    ['manager-loop.3', 'continue.0'],
   );
 
-  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'review'];
+  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'review', 'negotiate'];
   // The Manager provider surface carries independent assume + todowrite-for-manager.
   const managerTools = [
     'assume',

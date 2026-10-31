@@ -28,7 +28,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { compileScenario } from './e2e/support/scenario-schema.js'
-import { resolveEntry } from './e2e/support/runtime-key.js'
+import { resolveEntry, INITIAL_RETENTION_STEER } from './e2e/support/runtime-key.js'
 import { fileURLToPath } from 'node:url'
 import './e2e/support/env-pin.mjs'
 import { runCanary } from './e2e/support/scenario-driver.mjs'
@@ -110,10 +110,12 @@ test('WHAT[verification-system-014] the compiled Long Stroke scenario preserves 
   const ordinary = byId.get('manager-loop.2')
   assert.deepEqual({ optional: ordinary?.optional, lane: ordinary?.lane, step: ordinary?.step },
     { optional: false, lane: 'manager', step: 2 })
+  // The fault lands on the join rung: the fork must be delivered or no child work
+  // exists at all. The negotiate rung shifts the join one step past its old position.
   assert.deepEqual(result.scenario.faults.filter((fault) => fault.kind === 'provider-error' && fault.status === 400)
-    .map((fault) => fault.entryId), ['manager-loop.2', 'continue.0'])
+    .map((fault) => fault.entryId), ['manager-loop.3', 'continue.0'])
 
-  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'review']
+  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'review', 'negotiate']
   const managerTools = ['todowrite-for-manager', 'join', 'horizon', 'assume', 'review']
   const request = (turn, step, tools) => ({
     messages: [{ role: 'user', content: turn },
@@ -171,8 +173,8 @@ test('WHAT[verification-system-014] 继任任期的权威检查识别真实锚�
   const sessionID = 'ses_anchor_authority'
   const original = { role: 'user', content: '[ANCHOR: 1]\u0000\uFEFF原始用户委托' }
   assertManagerLoopAuthorityPreserved({ provider: { requests: [
-    { sessionID, messages: [original, { role: 'user', content: '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]' }] },
-    { sessionID, messages: [original, { role: 'user', content: '[ANCHOR: 2]\u0000\uFEFF# You are the 2 Manager taking over this mission.' }, { role: 'user', content: '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]' }] },
+    { sessionID, messages: [original, { role: 'user', content: INITIAL_RETENTION_STEER }] },
+    { sessionID, messages: [original, { role: 'user', content: '[ANCHOR: 2]\u0000\uFEFF# You are the 2 Manager taking over this mission.' }, { role: 'user', content: INITIAL_RETENTION_STEER }] },
   ] } }, sessionID)
 })
 
@@ -193,7 +195,7 @@ const preFlowCanaries = async (scenario) => {
   })
   assert.ok(humanrootPrompt.ok, `humanroot-manager prompt failed: ${JSON.stringify(humanrootPrompt.data)}`)
 
-  for (const id of ['humanroot-loop.0', 'humanroot-loop.1', 'successor-tenure.1']) {
+  for (const id of ['humanroot-loop.0', 'humanroot-loop.1', 'successor-tenure.0']) {
     await scenario.provider.waitForExpectationAttempt(id, 1, WAIT_FACT_WINDOW_MS)
   }
   await assertHumanRootManagerLoop(scenario, humanrootSessionId)

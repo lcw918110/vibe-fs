@@ -355,12 +355,15 @@ export async function holdChildC1UntilLabor(scenario) {
 
   let held = 0;
   for (const entry of runtime.scenario.entries) {
-    if (entry.id === 'engineer.0' || entry.id === 'child-c1.0') {
+    // The held request must be the one that does the work: a forked child now opens
+    // with `negotiate`, so `engineer.0` alone would hold the clarification instead of
+    // the labor the join is waiting for. Name the labor rung explicitly.
+    if (entry.id === 'engineer.1' || entry.id === 'child-c1.0') {
       entry.respond = { ...entry.respond, waitUntil: childHold };
       held += 1;
     }
   }
-  assert.ok(held >= 1, 'long-stroke: holdChildC1UntilLabor needs engineer.0 (or legacy child-c1.0)');
+  assert.ok(held >= 1, 'long-stroke: holdChildC1UntilLabor needs engineer.1 (or legacy child-c1.0)');
 
   scenario.releaseHeldChild = () => {
     releaseChild?.();
@@ -416,13 +419,13 @@ export async function bindManagerLoopSequence(scenario) {
   assert.ok(runtime?.scenario?.entries, 'long-stroke: strict scenario entries required for loop tenure bind');
 
   const loopAudit = runtime.scenario.entries.find(
-    (entry) => entry.turnId === 'manager-loop' && entry.step === 0,
-  );
-  const loopAction = runtime.scenario.entries.find(
     (entry) => entry.turnId === 'manager-loop' && entry.step === 1,
   );
-  const loopJoin = runtime.scenario.entries.find(
+  const loopAction = runtime.scenario.entries.find(
     (entry) => entry.turnId === 'manager-loop' && entry.step === 2,
+  );
+  const loopJoin = runtime.scenario.entries.find(
+    (entry) => entry.turnId === 'manager-loop' && entry.step === 3,
   );
   assert.ok(loopAudit, 'long-stroke: manager-loop audit entry is required');
   assert.ok(loopAction, 'long-stroke: manager-loop action entry is required');
@@ -445,11 +448,6 @@ export async function bindManagerLoopSequence(scenario) {
     return [];
   };
   let programNameCounter = 0;
-  let scopeEstimate = 6;
-  const nextEstimate = () => {
-    scopeEstimate = Math.max(0, scopeEstimate - 0.25);
-    return scopeEstimate;
-  };
   const reviewCall = (prefixText, grade) => ({
     type: 'tool-call',
     tool: 'todowrite-for-manager',
@@ -457,7 +455,6 @@ export async function bindManagerLoopSequence(scenario) {
     args: {
       name: `review-${grade.toLowerCase()}-${++programNameCounter}`,
       intent: '等待评审打分回执，保留当前评审任期事实。',
-      remainingScopeTurnsEstimate: nextEstimate(),
       program: `class Js extends JsProgram { async run() { return await this.review(${JSON.stringify(scores(grade))}); } }`,
     },
   });
@@ -468,7 +465,6 @@ export async function bindManagerLoopSequence(scenario) {
     args: {
       name: `fork-conflict-resolver-${++programNameCounter}`,
       intent: '等待派工回执，保留冲突修复子任务。',
-      remainingScopeTurnsEstimate: nextEstimate(),
       program: `class Js extends JsProgram { async run() { return await this.fork(${JSON.stringify(payload)}, []); } }`,
     },
   });
@@ -498,7 +494,11 @@ export async function bindManagerLoopSequence(scenario) {
   const originalConsume = (body, selection, context) => consume.call(runtime, body, selection, context);
   runtime.consume = (body, selection, context) => {
     const { entry, attempt } = selection ?? {};
-    if (entry?.id === 'manager-loop.0') {
+    // The ladder's positions are read from its own declarations, not from numbers in
+    // this hook: an incarnation that first has to `negotiate` shifts every later step,
+    // and a hard-coded id would then rewrite the wrong rung (an audit turned into a
+    // fork) and no review would ever be recorded.
+    if (entry?.id === loopAudit.id) {
       latestManagerAuditAttempt = Math.max(latestManagerAuditAttempt, attempt);
       if (attempt > 1) entry.respond = attempt === 3 ? repairAudit() : candidatePerfect();
     } else if (entry?.turnId === 'manager-reopened-loop' && (entry.step === 0 || entry.id === 'manager-reopened-loop.0')) {
@@ -511,7 +511,7 @@ export async function bindManagerLoopSequence(scenario) {
           ? reviewCall('The rebased workspace still needs verification before publication.', 'REVISE')
           : candidatePerfect();
       }
-    } else if (entry?.id === 'manager-loop.1') {
+    } else if (entry?.id === loopAction.id) {
       entry.respond = latestManagerAuditAttempt === 1
         ? initialLoopAction
         : latestManagerAuditAttempt === 3
@@ -538,7 +538,7 @@ export async function bindManagerLoopSequence(scenario) {
         : workCompleted(scenario, context)
           ? closingProse()
           : continuedReview ? clearReview() : retire();
-    } else if (entry?.id === 'manager-loop.2' || entry?.id === 'manager-reopened-loop.2') {
+    } else if (entry?.id === loopJoin.id) {
       // The family is shared by both owner lanes, and only the Manager lane forks work to
       // join. The HumanRoot successor opens nothing, so its second cursor is the closing
       // deliver of work-006's two-stage shape (review, confirmation, close = three
@@ -557,7 +557,7 @@ export async function bindManagerLoopSequence(scenario) {
               : retire();
     } else if (
       (entry?.turnId === 'manager-loop' || entry?.turnId === 'manager-reopened-loop')
-      && entry.step === 3
+      && entry.step === 4
     ) {
       // A low audit leaves target-gap on the ledger. Delivery against that ledger is only
       // observed, so every tenure clears it before the closing deliver.
@@ -1018,8 +1018,9 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
   await awaitNamedFact(workDir, waitFactShape('IncumbencyRetired', { eq: HUMANROOT_CANARY_DELTAS.retirements }), scope);
 
   // First tenure: one review with findings relays. The successor opens with the
-  // lifecycle's own prompt, reviews an empty ledger twice (advance, then close).
-  for (const [id, count] of [['humanroot-loop.0', 1], ['humanroot-loop.1', 2], ['successor-tenure.1', 1]]) {
+  // lifecycle's own prompt, then reviews an empty ledger twice — `advanceFrom`
+  // advances the milestone, `cleanup` completes the work.
+  for (const [id, count] of [['humanroot-loop.0', 1], ['humanroot-loop.1', 2], ['successor-tenure.0', 1]]) {
     assert.equal(scenario.provider.matchCount(id, sessionId), count, `${label}: ${id} delivery count`);
   }
 
@@ -1031,8 +1032,11 @@ export async function assertHumanRootManagerLoop(scenario, sessionId, label = 'h
     `${label}: successor keeps the system/tools plan`);
   assert.ok(messageTextsByRole(successor, 'user').some((text) => text.includes(HUMANROOT_MANAGER_LOOP_CANARY_PROMPT)),
     `${label}: successor must retain the original user input`);
-  assert.equal(assistantToolCallIds([successor], 'review').length, 2,
-    `${label}: successor must retain the handoff review and its own review`);
+  // The successor opens at `awaitReview` (Program.fs `successor`): its first request
+  // carries the handoff review alone — its own review is the answer to that request.
+  // Retaining exactly one review here is the proof the handoff reached the successor.
+  assert.equal(assistantToolCallIds([successor], 'review').length, 1,
+    `${label}: successor must open with the handoff review in context`);
 
   const retirements = factPayloads(workDir, 'IncumbencyRetired', { sessionId });
   assert.deepEqual(retirements.map((summary) => summary?.outcome), ['Relayed', 'Completed'],
