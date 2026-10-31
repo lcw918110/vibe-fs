@@ -678,6 +678,12 @@ export async function runExternalConsumer({
     fs.rmSync(topLevelWanxiangli, { recursive: true, force: true })
   }
 
+  // 探针位于实际主体包内，裸导入只能使用随包交付的库。
+  fs.writeFileSync(path.join(targetPkgDir, '.verify-bounded-map.mjs'), [
+    "import { mapBounded } from 'wanxiangli/bounded-map'",
+    'export const values = await mapBounded(1, async value => value + 1, [1, 2])',
+  ].join('\n'))
+
   // 3. Create consumer/ directory outside with separate package.json
   const consumerDir = path.join(scratchDir, 'consumer')
   fs.mkdirSync(consumerDir, { recursive: true })
@@ -744,6 +750,14 @@ export async function runExternalConsumer({
     const text = await import(pathToFileURL(path.join(pkgRoot, 'dist/Foundation/LlmFacing.js')).href);
     const document = text.withData(text.Data_rootStructuredValue(text.Data_ofJs({ source: 'bundled' })), text.instruction('probe'));
     assert.equal(text.render(document), '# probe\\n\\nsource = "bundled"\\n');
+
+    const boundedProbe = path.join(pkgRoot, '.verify-bounded-map.mjs');
+    try {
+      const boundedMap = await import(pathToFileURL(boundedProbe).href);
+      assert.deepEqual(boundedMap.values, [2, 3]);
+    } finally {
+      fs.unlinkSync(boundedProbe);
+    }
 
     assert.ok(fs.readFileSync(enLaw, 'utf8').trim().length > 0, 'en common law is empty');
     assert.ok(fs.readFileSync(zhLaw, 'utf8').trim().length > 0, 'zh common law is empty');

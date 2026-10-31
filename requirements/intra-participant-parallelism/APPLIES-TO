@@ -4,8 +4,7 @@
 /src/Wanxiangshu/Foundation/FsToolkitFableCompat.fs
 /src/Wanxiangshu/Foundation/Roles.fs
 /src/Wanxiangshu/Foundation/AsyncSupport.fs
-/src/Wanxiangshu/Foundation/Parallel.fs
-/src/Wanxiangshu/Foundation/ParallelSurface.fs
+/src/Wanxiangshu/Foundation/Defer.fs
 /src/Wanxiangshu/Foundation/TaskResult.fs
 /src/Wanxiangshu/Participant/Persona/ManagedCatalog.fs
 /src/Wanxiangshu/OpenCode/Host/FissionHostSurface.*

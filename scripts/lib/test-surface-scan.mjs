@@ -1455,14 +1455,6 @@ export const SURFACE_MANIFEST = [
     kind: 'resource',
   },
   {
-    module: 'Foundation/ParallelSurface.js',
-    owner: 'structured-workflow',
-    laws: ['STRUCTURED-WORKFLOW-010'],
-    source: 'src/Wanxiangshu/Foundation/ParallelSurface.fs',
-    representation: 'opaque-capability',
-    kind: 'pure',
-  },
-  {
     module: 'Foundation/FsToolkitFableCompat.js',
     owner: 'structured-workflow',
     laws: ['STRUCTURED-WORKFLOW-019'],

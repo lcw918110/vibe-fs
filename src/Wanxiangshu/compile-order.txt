@@ -148,10 +148,8 @@ Sphinx/V2/Hosts/Mcp/Tool.fs
 Resources/PackageMetadata.fs
 Repository/Investigation/Semble/Mcp.fsi
 Repository/Investigation/Semble/Mcp.fs
-Foundation/Parallel.fsi
-Foundation/Parallel.fs
-Foundation/ParallelSurface.fsi
-Foundation/ParallelSurface.fs
+Foundation/Defer.fsi
+Foundation/Defer.fs
 Foundation/AsyncSupport.fsi
 Foundation/AsyncSupport.fs
 Foundation/FatalProcess.fsi
