@@ -1,5 +1,7 @@
 namespace Wanxiangshu.Context.Trace
 
+open System
+open System.Threading.Tasks
 open Wanxiangshu.Participant.Provider.Projection.ProviderProjection
 
 type XTraceItem =
@@ -10,57 +12,38 @@ type XTraceItem =
 
 [<RequireQualifiedAccess>]
 module internal WanxiangliTrace =
+    type History =
+        abstract appendOpening: opening: obj -> obj
+        abstract appendPart: part: obj * prepareMetadata: Func<obj> -> obj
+        abstract appendTerminal: terminal: obj -> obj
+        abstract entries: unit -> obj array
+        abstract terminals: unit -> obj array
+        abstract opening: unit -> obj
+        abstract latestTerminal: unit -> obj
+        abstract terminalFor: providerRun: string -> obj
+        abstract headSequence: unit -> int64
+        abstract head: unit -> int64
+        abstract latestSequence: unit -> obj
+        abstract rangeFrom: start: int64 -> obj
+        abstract slice: range: obj -> obj array
+        abstract interval: range: obj -> obj
+        abstract afterCoverage: sequence: int64 -> obj
+        abstract cutAt: sequence: int64 -> obj
+        abstract headCut: unit -> obj
+        abstract records: unit -> string array
+        abstract read: entries: obj array * readBody: Func<string, Task<obj>> -> Task<obj>
+        abstract materialize: range: obj * readBody: Func<string, Task<obj>> -> Task<obj>
 
-    type ProjectionBridge =
-        { TraceId: string
-          Records: string list
-          OpeningCutCursor: int
-          PartCuts: (int64 * int) list
-          RecordCount: int }
-
-    val emptyBridge: traceId: string -> ProjectionBridge
-
-    /// Oldest-first record lines. `ProjectionBridge.Records` is stored
-    /// newest-first (O(1) prepend on append); this restores chronological order
-    /// for the trace constructor and the `traceRecords` surface.
-    val recordsOldestFirst: bridge: ProjectionBridge -> string list
-
-    val appendOpeningToBridge:
-        assignment: string ->
-        requirements: string list ->
-        hasExistingEntries: bool ->
-        rebuildWithOpening: (ProjectionBridge -> ProjectionBridge) ->
-        bridge: ProjectionBridge ->
-            ProjectionBridge
-
-    val appendPartDescriptorToBridge:
-        cursorSequence: int64 ->
-        role: string ->
-        provenance: string ->
-        kind: string ->
-        toolName: string option ->
-        textRef: string ->
-        textDigest: string ->
-        bridge: ProjectionBridge ->
-            ProjectionBridge
-
-    val appendTerminalDescriptorToBridge:
-        providerRun: string ->
-        textRef: string ->
-        textDigest: string ->
-        frontierSequence: int64 ->
-        bridge: ProjectionBridge ->
-            ProjectionBridge
-
-    val headCutOfBridge: bridge: ProjectionBridge -> XTraceCut
-    val cutAtSequenceOfBridge: sequence: int64 -> bridge: ProjectionBridge -> XTraceCut
-    val intervalOfRangeOnBridge: range: XTraceRange -> bridge: ProjectionBridge -> XTraceCut * XTraceCut
-    val intervalAfterCoverageOnBridge: coverage: RecordCoverage -> bridge: ProjectionBridge -> XTraceCut * XTraceCut
-    val verifyAndReadIntervalOnBridge: range: XTraceRange -> bridge: ProjectionBridge -> obj array
+    val createHistory: traceId: string -> History
+    val rangeObject: range: XTraceRange -> obj
+    val rangeFromNative: range: obj -> XTraceRange
+    val cutFromNative: cut: obj -> XTraceCut
+    val intervalFromNative: interval: obj -> XTraceCut * XTraceCut
+    val semanticToNative: SemanticPart -> obj
+    val semanticFromNative: part: obj -> SemanticPart
+    val itemFromNative: provenanceOf: (obj -> string) -> item: obj -> XTraceItem
     val materializeItemsInRange: range: XTraceRange -> items: XTraceItem list -> XTraceItem list
-
-    val inspectItemsBridge:
-        traceId: string -> openingText: string option -> range: XTraceRange -> items: XTraceItem list -> obj
+    val inspectItemsBridge: traceId: string -> openingText: string option -> range: XTraceRange -> items: XTraceItem list -> obj
 
 [<RequireQualifiedAccess>]
 module XTrace =

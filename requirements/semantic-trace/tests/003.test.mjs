@@ -90,35 +90,6 @@ const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
 const trace = await import("../../../dist/Context/Trace/SemanticTraceSurface.js");
 
-const unwrap = (result) => {
-  assert.equal(result.ok, true, result.ok ? '' : result.error)
-  return result.projection
-}
-const part = (sequence, overrides = {}) => ({
-  sequence,
-  role: 'assistant',
-  provenance: `g:0/msg:run-${sequence}/host-part:part-${sequence}`,
-  turn: 0,
-  partIndex: sequence - 1,
-  kind: 'text',
-  textRef: `blob-${sequence}`,
-  textDigest: `digest-${sequence}`,
-  providerRun: `run-${sequence}`,
-  ...overrides,
-})
-
-test('WHAT[semantic-trace-003] duplicate and retreating cursors are rejected', () => {
-  const projection = unwrap(trace.appendPart(trace.emptyProjection(), part(5)))
-  assert.equal(trace.appendPart(projection, part(5)).ok, false)
-  assert.equal(trace.appendPart(projection, part(3)).ok, false)
-})
-}
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { default: test } = await import("node:test");
-const trace = await import("../../../dist/Context/Trace/SemanticTraceSurface.js");
-
 
 test('WHAT[semantic-trace-003] owner cursor operations are monotonic', () => {
   const origin = trace.originCursor

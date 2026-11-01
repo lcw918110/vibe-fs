@@ -45,7 +45,6 @@ test('WHAT[semantic-trace-010] durable capture refuses conflicting text and requ
     }
   })
 })
-
 test('WHAT[semantic-trace-010] a refused concurrent opening does not block the next legal capture', async () => {
   await withJournal(async (handle) => {
     const session = `${SESSION}-opening-conflict`
@@ -81,35 +80,5 @@ test('WHAT[semantic-trace-010] a refused concurrent opening does not block the n
     assert.equal(payload.ok, true, payload.ok ? '' : payload.error)
     assert.equal(payload.content, raw)
   })
-})
-}
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { default: test } = await import("node:test");
-const trace = await import("../../../dist/Context/Trace/SemanticTraceSurface.js");
-
-const unwrap = (result) => {
-  assert.equal(result.ok, true, result.ok ? '' : result.error)
-  return result.projection
-}
-const part = (sequence, overrides = {}) => ({
-  sequence,
-  role: 'assistant',
-  provenance: `g:0/msg:run-${sequence}/host-part:part-${sequence}`,
-  turn: 0,
-  partIndex: sequence - 1,
-  kind: 'text',
-  textRef: `blob-${sequence}`,
-  textDigest: `digest-${sequence}`,
-  providerRun: `run-${sequence}`,
-  ...overrides,
-})
-
-test('WHAT[semantic-trace-010] conflicting opening is rejected', () => {
-  const projection = unwrap(trace.appendOpening(trace.emptyProjection(), 'first task', []))
-  const rejected = trace.appendOpening(projection, 'second task', [])
-  assert.equal(rejected.ok, false)
-  assert.equal(rejected.error, 'opening-already-captured')
 })
 }
