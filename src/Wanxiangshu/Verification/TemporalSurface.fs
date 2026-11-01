@@ -812,6 +812,30 @@ module TemporalSurface =
 
     /// Plugin owner proof: disposal closes Host-work admission and awaits
     /// reconcile plus already-admitted foreground/background work before returning.
+    let createPluginWorkScope (release: unit -> Task) : obj =
+        let scope = new PluginRuntimeScope(None, (fun _ -> false), None)
+
+        scope.AttachToolRuntime
+            { new ISessionRuntimeOwner with
+                member _.CancelSessionChildren _ = AsyncSupport.completedTask ()
+                member _.DisposeSession _ = AsyncSupport.completedTask ()
+                member _.DisposeExecutorRuntime _ = AsyncSupport.completedTask ()
+                member _.DisposeAsync() = release ()
+                member _.HasLivePty _ = false
+                member _.RetirementBlockersFor _ = []
+                member _.Dispose() = () }
+
+        box scope
+
+    let runPluginWork (value: obj) (work: unit -> Task) : Task =
+        (unbox<PluginRuntimeScope> value).RunOwnedWork work
+
+    let backgroundPluginWork (value: obj) (work: unit -> Task) : Task =
+        (unbox<PluginRuntimeScope> value).RunBackgroundTracked work
+
+    let disposePluginWorkScope (value: obj) : Task =
+        (unbox<PluginRuntimeScope> value).DisposeAsync()
+
     let pluginScopeStopDrainScenario () : Task<obj> =
         task {
             let reconcileEntered =

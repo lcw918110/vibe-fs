@@ -2,6 +2,8 @@ namespace Wanxiangshu.OpenCode
 
 open System
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Execution.Session.Recovery.SessionRecovery
@@ -11,6 +13,20 @@ open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Persistence.Journal
+
+type private PluginCallbackTasks =
+    abstract run: Func<Task> -> Task
+    abstract background: Func<Task> -> Task
+    abstract close: unit -> Task<obj>
+
+module private PluginCallbackTasks =
+    [<Import("TaskScope", "wanxiangli/task-scope")>]
+    let private constructor: obj = jsNative
+
+    [<Emit("new $0()")>]
+    let private construct (_constructor: obj) : PluginCallbackTasks = jsNative
+
+    let create () = construct constructor
 
 /// Explicit lifetime root for one plugin instance. Collections here are either
 /// physical resources, display caches, or bounded per-call deduplication.
@@ -36,21 +52,13 @@ type PluginRuntimeScope
     // DSL-MUTABLE: resource — shared terminal bus port handle
     let mutable sharedTerminalPort: ISessionTerminalSource option = None
     let disposeGate = obj ()
-    let ownedWorkGate = obj ()
+    let ownedWork = PluginCallbackTasks.create ()
     // DSL-MUTABLE: resource — scope dispose latch
     let mutable disposed = false
     // DSL-MUTABLE: resource — one shutdown Task owns the Journal/store release sequence.
     let mutable disposeTask: Task option = None
     // DSL-MUTABLE: resource — scheduler shutdown hook owned by this scope.
     let mutable reconcileShutdown: (unit -> Task) option = None
-    // DSL-MUTABLE: resource — Host-work admission latch shared by foreground hooks and detached work.
-    let mutable acceptingOwnedWork = true
-    // DSL-MUTABLE: resource — in-flight Host-work count.
-    let mutable ownedWorkCount = 0
-    // DSL-MUTABLE: single-flight — shared waiter for Host-work drain.
-    let mutable ownedWorkDrainWaiter: TaskCompletionSource<unit> option = None
-    // DSL-MUTABLE: resource — first detached Host-work failure for shutdown propagation.
-    let mutable backgroundFailure: exn option = None
     let durabilityActivationGate = obj ()
     // DSL-MUTABLE: resource — one-shot callbacks that may force deferred durable Current.
     let mutable durabilityActivators: (unit -> unit) list = []
@@ -290,91 +298,22 @@ type PluginRuntimeScope
 
     member _.TrackReconcileShutdown(stopAndDrain: unit -> Task) = reconcileShutdown <- Some stopAndDrain
 
-    member private _.AdmitOwnedWork() : bool =
-        lock ownedWorkGate (fun () ->
-            if not acceptingOwnedWork then
-                false
-            else
-                ownedWorkCount <- ownedWorkCount + 1
-                true)
-
-    member private _.RecordBackgroundFailure(failure: exn) =
-        lock ownedWorkGate (fun () -> backgroundFailure <- Option.orElse backgroundFailure (Some failure))
-
-    member private _.FinishOwnedWork() =
-        lock ownedWorkGate (fun () ->
-            ownedWorkCount <- ownedWorkCount - 1
-
-            if not acceptingOwnedWork && ownedWorkCount = 0 then
-                ownedWorkDrainWaiter
-                |> Option.iter (fun waiter -> AsyncSupport.trySetResult waiter () |> ignore))
-
-    member private _.CaptureBackgroundFailure(start: unit -> Task) : Task<exn option> =
-        task {
-            try
-                do! start ()
-                return None
-            with ex ->
-                return Some ex
-        }
-
-    member private this.ObserveBackgroundWork(start: unit -> Task) : Task =
-        task {
-            let! failure = this.CaptureBackgroundFailure start
-            failure |> Option.iter this.RecordBackgroundFailure
-            this.FinishOwnedWork()
-        }
-        :> Task
-
     /// RunBackground variant that returns the observed task so a durability
     /// activator can register it for admission awaiting.
-    member this.RunBackgroundTracked(start: unit -> Task) : Task =
-        if this.AdmitOwnedWork() then
-            this.ObserveBackgroundWork start
-        else
-            Task.FromResult(()) :> Task
+    member _.RunBackgroundTracked(start: unit -> Task) : Task =
+        ownedWork.background (Func<Task>(start))
 
     member this.RunBackground(start: unit -> Task) : unit =
         this.RunBackgroundTracked start |> ignore
 
-    member private this.RunAdmittedOwnedWork(start: unit -> Task) : Task =
+    member _.RunOwnedWork(start: unit -> Task) : Task =
+        ownedWork.run (Func<Task>(start))
+
+    member private _.StopOwnedWorkAndDrain() : Task<exn option> =
+        let waiting = ownedWork.close ()
         task {
-            try
-                do! start ()
-            finally
-                this.FinishOwnedWork()
-        }
-        :> Task
-
-    member this.RunOwnedWork(start: unit -> Task) : Task =
-        if this.AdmitOwnedWork() then
-            this.RunAdmittedOwnedWork start
-        else
-            Task.FromResult(()) :> Task
-
-    member private _.OwnedWorkDrainTask() : Task =
-        match ownedWorkDrainWaiter with
-        | Some waiter -> waiter.Task :> Task
-        | None ->
-            let waiter =
-                TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-
-            ownedWorkDrainWaiter <- Some waiter
-            waiter.Task :> Task
-
-    member private this.StopOwnedWorkAndDrain() : Task<exn option> =
-        let waiting =
-            lock ownedWorkGate (fun () ->
-                acceptingOwnedWork <- false
-
-                if ownedWorkCount = 0 then
-                    Task.FromResult(()) :> Task
-                else
-                    this.OwnedWorkDrainTask())
-
-        task {
-            do! waiting
-            return lock ownedWorkGate (fun () -> backgroundFailure)
+            let! result = waiting
+            return if unbox<bool> result?ok then None else Some(unbox<exn> result?error)
         }
 
     member _.AttachSharedTerminal(key: string option, port: ISessionTerminalSource option) =
