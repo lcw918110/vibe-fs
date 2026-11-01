@@ -490,6 +490,58 @@ test('WHAT[knowledge-reuse-006] js_bookkeeper_program_failure_rolls_back_staged_
     bookkeeper.resetRuntime()
   }
 })
+test('WHAT[knowledge-reuse-006] js_bookkeeper_invalid_return_array_does_not_commit_staged_changes', async () => {
+  const tx = 'tx-js-bookkeeper-invalid-return'
+  const session = 'bk-js-bookkeeper-invalid-return'
+  bookkeeper.beginTransaction(tx, 'Q', 'A')
+  bookkeeper.bindSession(session, tx, 'owner-1')
+
+  try {
+    const result = await run(session, `class Js extends JsProgram {
+      async run() {
+        this.setQuestion("Q1");
+        this.setAnswer("A1");
+        return [null];
+      }
+    }`)
+    assert.match(String(result), /run\(\) return value is not JSON-compatible/)
+    assert.deepEqual(current(tx), ['Q', 'A'])
+    assert.equal(bookkeeper.take(tx).ok, false, 'an invalid return must not mark the transaction touched')
+  } finally {
+    bookkeeper.abort(tx)
+    bookkeeper.resetRuntime()
+  }
+})
+test('WHAT[knowledge-reuse-006] js_bookkeeper_caught_setter_errors_can_return_and_commit_successful_changes', async () => {
+  for (const [label, changes] of [
+    ['type', 'try { this.setQuestion(7); } catch { recovered = true; } this.setQuestion("Q1");'],
+    ['duplicate', 'this.setQuestion("Q1"); try { this.setQuestion("Q2"); } catch { recovered = true; }'],
+  ]) {
+    const tx = 'tx-js-bookkeeper-caught-' + label
+    const session = 'bk-js-bookkeeper-caught-' + label
+    bookkeeper.beginTransaction(tx, 'Q', 'A')
+    bookkeeper.bindSession(session, tx, 'owner-1')
+
+    try {
+      const result = await run(session, `class Js extends JsProgram {
+        async run() {
+          let recovered = false;
+          ${changes}
+          this.setAnswer("A1");
+          return { recovered, question: this.question().text(), answer: this.answer().text() };
+        }
+      }`)
+      assert.match(String(result), /recovered = true/)
+      assert.match(String(result), /question = "Q"/)
+      assert.match(String(result), /answer = "A"/)
+      assert.deepEqual(current(tx), ['Q1', 'A1'])
+      assert.deepEqual(bookkeeper.take(tx), { ok: true, value: ['Q1', 'A1'] })
+    } finally {
+      bookkeeper.abort(tx)
+      bookkeeper.resetRuntime()
+    }
+  }
+})
 test('WHAT[knowledge-reuse-006] js_bookkeeper_unbound_session_cannot_change_a_case', async () => {
   const result = await run(
     'no-such-session',

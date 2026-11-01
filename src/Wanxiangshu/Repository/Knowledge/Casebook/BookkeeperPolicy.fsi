@@ -3,14 +3,8 @@ namespace Wanxiangshu.Repository.Knowledge.Casebook
 open Wanxiangshu.Foundation
 open Wanxiangshu.Participant.Provider
 
-/// HNI-09: the product decisions behind the `todowrite-for-bookkeeper` tool.
-///
-/// The tool is one JavaScript program that atomically reshapes the staged
-/// question/answer Case. Everything the provider is allowed to see and do
-/// lives here: the prose vocabulary, the DSL the program extends, the
-/// write-once rule of the two setters, and how a settled call is rendered.
-/// The OpenCode binding (`JsBookkeeperTool`) keeps only the sandbox call and
-/// the host tool shape, and asks this module for the decisions.
+/// Product prose, SDK description and result presentation for Bookkeeper.
+/// The casebook library owns edit state and runtime behavior.
 [<RequireQualifiedAccess>]
 module BookkeeperPolicy =
 
@@ -50,17 +44,6 @@ module BookkeeperPolicy =
         [<Literal>]
         val SetAnswerString: string = "tool/js-bookkeeper/set-answer-string"
 
-    /// One invocation's ephemeral staged mutation buffer; it is committed
-    /// atomically only after the program succeeds.
-    type StagedMutation =
-        { mutable Question: string option
-          mutable Answer: string option
-          mutable QuestionWasSet: bool
-          mutable AnswerWasSet: bool }
-
-    /// The empty staged buffer of one invocation.
-    val newStaged: unit -> StagedMutation
-
     /// The language a call's prose is rendered in. The live global preference
     /// is the only authority (HOST-026), so a call reads it when it runs.
     val callLanguage: unit -> ProviderLanguage
@@ -72,14 +55,6 @@ module BookkeeperPolicy =
 
     /// The prose of one semantic path.
     val prose: lang: ProviderLanguage -> path: string -> string
-
-    /// The API the program sees. The two setters are write-once: a program
-    /// that sets the question twice is refused by name, not silently
-    /// overwritten, because the staged Case is one atomic rewrite.
-    val createApi: lang: ProviderLanguage -> question: string -> answer: string -> staged: StagedMutation -> obj
-
-    /// The DSL the program extends at runtime.
-    val runtimeBaseClass: string
 
     /// The DSL as the provider reads it: the members a program may call.
     val publicBaseClass: string

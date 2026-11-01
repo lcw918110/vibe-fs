@@ -15,9 +15,8 @@ open Wanxiangshu.Repository.Programming.Js
 /// Bookkeeper provider verb: one JavaScript program atomically reshapes the
 /// staged question/answer Case. The sandbox has no filesystem capability.
 ///
-/// The product decisions (prose, DSL, write-once rule, rendering) live in
-/// `BookkeeperPolicy`; this binding keeps the sandbox call and the host tool
-/// shape.
+/// The library owns each edit. This binding supplies product prose, runs the
+/// program and commits the edit after accepting its returned value.
 module JsBookkeeperTool =
 
     [<Import("bookkeeperStaging", "wanxiangli/casebook")>]
@@ -25,13 +24,22 @@ module JsBookkeeperTool =
 
     let private prose language path = BookkeeperPolicy.prose language path
 
-    /// Resolve the staged transaction and the program source; every refusal is
-    /// rendered at this boundary, so the sandbox only ever sees a proven call.
+    let private describeEditFailure language key =
+        let path =
+            match key with
+            | "set-question-once" -> BookkeeperPolicy.Path.SetQuestionOnce
+            | "set-question-string" -> BookkeeperPolicy.Path.SetQuestionString
+            | "set-answer-once" -> BookkeeperPolicy.Path.SetAnswerOnce
+            | "set-answer-string" -> BookkeeperPolicy.Path.SetAnswerString
+            | other -> invalidOp ("Unknown casebook edit failure: " + other)
+
+        prose language path
+
     let private stageRequest
         (language: ProviderLanguage)
         (args: HostToolArguments)
         (sessionId: SessionId)
-        : Result<string * string * string * string, string> =
+        : Result<string * obj, string> =
         result {
             let! txId =
                 BookkeeperRuntime.tryTxId (SessionId.value sessionId)
@@ -41,16 +49,14 @@ module JsBookkeeperTool =
                 args.OptionalText "program"
                 |> Result.requireSome (prose language BookkeeperPolicy.Path.ProgramRequired)
 
-            let! question, answer = unbox<Result<string * string, string>> (staging?snapshot (txId))
-            return txId, program, question, answer
+            let! edit = unbox<Result<obj, string>> (staging?edit (txId, describeEditFailure language))
+            return program, edit
         }
 
-    /// Parse and commit the sandbox's returned JSON. The parse and the staged
-    /// apply are two sequential Result steps, not a decision ladder.
+    /// Validate the returned JSON before committing the edit.
     let private finishBookkeeper
         (language: ProviderLanguage)
-        (txId: string)
-        (staged: BookkeeperPolicy.StagedMutation)
+        (edit: obj)
         (json: string)
         : string =
         result {
@@ -59,7 +65,7 @@ module JsBookkeeperTool =
                 |> Result.mapError (fun failure -> BookkeeperPolicy.failed language (JsFailure.reason failure))
 
             do!
-                unbox<Result<unit, string>> (staging?apply (txId, staged.Question, staged.Answer))
+                unbox<Result<unit, string>> (edit?commit ())
                 |> Result.mapError (fun err -> BookkeeperPolicy.failed language err)
 
             return BookkeeperPolicy.succeeded language value
@@ -68,16 +74,15 @@ module JsBookkeeperTool =
             | Ok result -> result
             | Error rendered -> rendered
 
-    let private runBookkeeperProgram language sessionId name intent callId txId program question answer : Task<string> =
+    let private runBookkeeperProgram language sessionId name intent callId program (edit: obj) : Task<string> =
         task {
-            let staged = BookkeeperPolicy.newStaged ()
-            let api = BookkeeperPolicy.createApi language question answer staged
+            let api: obj = edit?api
 
             let settle (receipt: obj) : Task<obj> =
                 task {
                     if string receipt?state = "completed" then
                         let rendered =
-                            finishBookkeeper language txId staged (JS.JSON.stringify receipt?value)
+                            finishBookkeeper language edit (JS.JSON.stringify receipt?value)
 
                         return emitJsExpr (receipt, rendered) "Object.assign({}, $0, {value:$1})"
                     else
@@ -90,7 +95,7 @@ module JsBookkeeperTool =
                       "program" ==> program
                       "intent" ==> intent
                       "callId" ==> callId
-                      "baseClass" ==> BookkeeperPolicy.runtimeBaseClass
+                      "baseClass" ==> edit?runtimeBaseClass
                       "api" ==> api
                       "capabilities" ==> [||]
                       "root" ==> "."
@@ -115,17 +120,15 @@ module JsBookkeeperTool =
     let private executeStaged language (args: HostToolArguments) sessionId callId =
         match stageRequest language args sessionId with
         | Error err -> Task.FromResult(BookkeeperPolicy.failed language err)
-        | Ok(txId, program, question, answer) ->
+        | Ok(program, edit) ->
             runBookkeeperProgram
                 language
                 (SessionId.value sessionId)
                 (args.Text "name")
                 (args.Text "intent")
                 callId
-                txId
                 program
-                question
-                answer
+                edit
 
     let private executeCore (args: HostToolArguments) (sessionId: SessionId) callId =
         let language = BookkeeperPolicy.callLanguage ()
