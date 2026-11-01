@@ -10,6 +10,7 @@ open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Host.Ports
+open Wanxiangshu.Interaction.Dispatch
 
 module SessionSnapshotPort =
 
@@ -228,7 +229,7 @@ module SessionSnapshotPort =
         if isNull source || isNull source?metadata then
             None
         else
-            readString source?metadata?(PromptMetadataField.PromptKeyField)
+            readString source?metadata?(PromptMetadataCodec.PromptKeyField)
 
     let private promptKeyFromPart (part: obj) =
         if isNull part then None else promptKeyFromMetadata part

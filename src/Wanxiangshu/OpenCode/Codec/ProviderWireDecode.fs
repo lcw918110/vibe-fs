@@ -7,6 +7,7 @@ open Wanxiangshu.Participant.Provider.Projection.ProviderProjection
 open Wanxiangshu.Host
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
+open Wanxiangshu.Interaction.Dispatch
 
 /// Host raw object → `ProviderWireProjection` (provider-projection-003).
 ///
@@ -192,7 +193,7 @@ module ProviderWireDecode =
         [ fromMetadata info; fromMetadata rawObj; fromParts () ] |> List.tryPick id
 
     let promptKeyOfMessage (rawObj: obj) : PromptKey option =
-        metadataStringOfMessage PromptMetadataField.PromptKeyField rawObj
+        metadataStringOfMessage PromptMetadataCodec.PromptKeyField rawObj
         |> Option.map PromptKey.create
 
     /// Typed Host continuation origin carried out-of-band from provider semantic
@@ -200,7 +201,7 @@ module ProviderWireDecode =
     /// ProviderRetryAttempt transport rows out of durable X); it never enters the
     /// semantic/wire projection itself (COMPANION-012).
     let promptOriginOfMessage (rawObj: obj) : string option =
-        metadataStringOfMessage PromptMetadataField.OriginField rawObj
+        metadataStringOfMessage PromptMetadataCodec.OriginField rawObj
 
     /// Extract the single, unambiguous session id from a transform output's
     /// `messages` array. Used by hooks that need to identify the managed session

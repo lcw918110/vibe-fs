@@ -20,8 +20,6 @@ Host/Digest.fsi
 Host/Digest.fs
 Foundation/Identity.fsi
 Foundation/Identity.fs
-Foundation/PromptMetadataField.fsi
-Foundation/PromptMetadataField.fs
 Foundation/Quiescence.fsi
 Foundation/Quiescence.fs
 Mission/Work/Contract.fsi
@@ -296,8 +294,6 @@ Host/Contract/ToolResultBound.fsi
 Host/Contract/ToolResultBound.fs
 Execution/Tool/ToolResultText.fsi
 Execution/Tool/ToolResultText.fs
-Execution/Tool/ToolArgs.fsi
-Execution/Tool/ToolArgs.fs
 Host/ToolContext.fsi
 Host/ToolContext.fs
 Host/Contract/CompactionPolicySurface.fsi

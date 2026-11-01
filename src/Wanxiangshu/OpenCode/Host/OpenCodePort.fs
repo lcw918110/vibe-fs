@@ -11,6 +11,7 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Outcome
+open Wanxiangshu.Interaction.Dispatch
 
 module OpenCodePortAdapter =
 
@@ -165,7 +166,7 @@ module OpenCodePortAdapter =
                     let deliveryFields =
                         match opts.Metadata with
                         | Some metadata when
-                            emitJsExpr metadata "$0?.wanxiangshu_origin === 'BusyAgentNudge'"
+                            emitJsExpr (metadata, PromptMetadataCodec.OriginField) "$0?.[$1] === 'BusyAgentNudge'"
                             -> [ "delivery", box "steer" ]
                         | _ -> []
 

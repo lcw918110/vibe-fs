@@ -517,7 +517,7 @@ test('WHAT[durable-events-022] append results have one pure compile owner withou
       [project.projectPath], `${source} must have exactly one Compile owner`)
   }
   assert.deepEqual(productionSources(plan), [
-    'Foundation/Identity.fs', 'Foundation/PromptMetadataField.fs', 'Foundation/Quiescence.fs',
+    'Foundation/Identity.fs', 'Foundation/Quiescence.fs',
     'Persistence/EventStore/Model.fs', 'Persistence/EventStore/StoreTypes.fs',
   ])
   const port = requireShard('eventstore-port-contract')

@@ -875,7 +875,7 @@ module ForkToolSurface =
             recorded.Options.Metadata
             |> Option.defaultWith (fun () -> invalidOp "Actual managed Host prompt has no correlation metadata")
 
-        let value: obj = metadata?(PromptMetadataField.PromptKeyField)
+        let value: obj = metadata?(PromptMetadataCodec.PromptKeyField)
         let isString: bool = emitJsExpr value "typeof $0 === 'string'"
 
         if not isString || String.IsNullOrWhiteSpace(unbox<string> value) then
