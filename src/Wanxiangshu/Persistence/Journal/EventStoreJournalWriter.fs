@@ -173,60 +173,132 @@ module private JournalWriterDisposal =
     let asValueTask (operation: Task) = ValueTask(operation)
 #endif
 
-/// Journal writer backed by the local process EventStore.
-/// It never enumerates history and never folds facts itself. CanonicalIntegrator
-/// owns both boot replay and live integration; this type only assigns journal
-/// envelope identity/sequence and appends one universal EventEnvelope.
+module private JournalWriterValues =
+    [<Import("JournalWriter", "wanxiangli/journal-session")>]
+    let private writerClass: obj = jsNative
+
+    [<Emit("new $0($1)")>]
+    let private construct (_class: obj) (_options: obj) : obj = jsNative
+
+    let create options = construct writerClass options
+
+    [<Emit("$0.append($1)")>]
+    let append (_writer: obj) (_request: obj) : Task<obj> = jsNative
+
+    let cut (value: SemanticCut) =
+        createObj
+            [ "rule" ==> value.Rule
+              "failedEventId" ==> EventId.value value.FailedEventId
+              "reason" ==> value.Reason
+              "cutEventId" ==> EventId.value value.CutEventId
+              "original" ==> value ]
+
+    let errorToNative (error: AppendError) =
+        let kind, fields =
+            match error with
+            | AppendError.StorageInvalid _ -> "StorageInvalid", []
+            | AppendError.AppendNotAttempted _ -> "AppendNotAttempted", []
+            | AppendError.CommitUnknown _ -> "CommitUnknown", []
+            | AppendError.NoNewWriteReleaseFailed _ -> "NoNewWriteReleaseFailed", []
+            | AppendError.AppendFailed reason -> "AppendFailed", [ "reason" ==> reason ]
+            | AppendError.SemanticCut value -> "SemanticCut", [ "cut" ==> cut value ]
+        createObj ([ "kind" ==> kind; "original" ==> error ] @ fields)
+
+    let errorFromNative (value: obj) : AppendError =
+        let original: obj = value?original
+        if not (isNull original) then unbox original
+        elif unbox<string> value?kind = "SemanticCut" then
+            AppendError.SemanticCut(unbox<SemanticCut> value?cut?original)
+        else invalidOp "A journal storage failure must retain its original value"
+
+    let receipt (value: AppendReceipt) =
+        createObj [ "cuts" ==> (value.Cuts |> List.map cut |> List.toArray) ]
+
+    let unavailable (value: obj) : JournalUnavailable =
+        match unbox<string> value?kind with
+        | "WriterDisposed" -> WriterDisposed
+        | "WriterClosing" -> WriterClosing
+        | "WriterRefused" -> WriterRefused(unbox<string> value?reason)
+        | "WriterPoisoned" ->
+            WriterPoisoned
+                { FailedEventId = EventId.create (unbox<string> value?failedEventId)
+                  Error = errorFromNative value?error }
+        | kind -> invalidOp ("Unknown journal writer availability: " + kind)
+
+    let outcome (value: obj) : CommitResult<Envelope> =
+        let eventId = EventId.create (unbox<string> value?eventId)
+        match unbox<string> value?kind with
+        | "Committed" -> Committed(unbox<Envelope> value?envelope)
+        | "Rejected" -> Rejected(eventId, unbox<string> value?reason)
+        | "NotAttempted" -> NotAttempted(eventId, unavailable value?unavailable)
+        | "CommitUnknown" ->
+            match errorFromNative value?error with
+            | AppendError.CommitUnknown evidence -> CommitUnknown(eventId, StoreAppendUnknown evidence)
+            | _ -> invalidOp "A journal unknown result must retain its storage uncertainty"
+        | "NoNewWriteReleaseFailed" ->
+            match errorFromNative value?error with
+            | AppendError.NoNewWriteReleaseFailed evidence -> CommitResult.NoNewWriteReleaseFailed(eventId, evidence)
+            | _ -> invalidOp "A journal release result must retain its storage failure"
+        | kind -> invalidOp ("Unknown journal writer result: " + kind)
+
+    let onSettlement (notice: obj) =
+        match unbox<string> notice?kind with
+        | "initialization-cut" ->
+            FatalProcess.trip "runtime-started-semantic-cut" ("RuntimeStarted semantic cut: " + unbox<string> notice?cut?reason)
+        | "initialization-error" ->
+            match errorFromNative notice?error with
+            | AppendError.CommitUnknown evidence when not (List.isEmpty evidence.Prepared.Cuts) ->
+                FatalProcess.trip
+                    "runtime-started-semantic-cut"
+                    (sprintf
+                        "semantic cut append settled unknown at %A: %s"
+                        evidence.Primary.Phase
+                        evidence.Primary.Cause.Message)
+            | _ -> ()
+        | kind -> invalidOp ("Unknown journal initialization settlement: " + kind)
+
+/// 保留事实、父依赖与 Blob 适配，写入寿命由库持有。
 [<Sealed>]
 type EventStoreJournalWriter private (runtimeId: RuntimeId, init: Envelope, blobWriter: IBlobWriter, store: IEventStore)
     =
-    let gate = obj ()
-    // DSL-MUTABLE: resource — RuntimeStarted is lazy; load alone writes nothing.
-    let mutable runtimeStartedCommitted = false
-    // DSL-MUTABLE: resource — business facts start at LocalSeq 2 after lazy RuntimeStarted.
-    let mutable currentSeq = 2L
-    // DSL-MUTABLE: resource — poison latch: first append failure short-circuits
-    // subsequent appends as Result error. None = healthy; set once, never cleared.
-    let mutable firstFailure: JournalAppendPoison option = None
-    // DSL-MUTABLE: resource — terminal close latch: drain completed, writer disposed.
-    let mutable closed = false
-    // DSL-MUTABLE: resource — serialized process writer operations.
-    let mutable serial = Task.FromResult(())
-    // DSL-MUTABLE: resource — one close Task drains the accepted append prefix.
-    let mutable closeTask: Task option = None
+    let writer =
+        JournalWriterValues.create
+            (createObj
+                [ "initialization" ==>
+                      createObj [ "eventId" ==> EventId.value init.EventId; "envelope" ==> init ]
+                  "newEventId" ==> Func<string>(fun () -> Guid.NewGuid().ToString("N"))
+                  "now" ==> Func<obj>(fun () -> box DateTimeOffset.UtcNow)
+                  "makeEnvelope" ==>
+                      Func<obj, obj>(fun input ->
+                          let stream, providerRun, fact = unbox<StreamId * ProviderRunIdentity option * Fact> input?request
+                          box
+                              { RuntimeId = runtimeId
+                                LocalSeq = LocalSeq.create (unbox<int64> input?sequence)
+                                ObservedAt = unbox<DateTimeOffset> input?observedAt
+                                EventId = EventId.create (unbox<string> input?eventId)
+                                Stream = stream
+                                ProviderRun = providerRun
+                                Fact = fact })
+                  "commitEnvelope" ==>
+                      Func<obj, Task<obj>>(fun envelope ->
+                          task {
+                              match! EventStoreJournalWriter.commitEnvelope store (unbox<Envelope> envelope) with
+                              | Ok receipt ->
+                                  return createObj [ "ok" ==> true; "value" ==> JournalWriterValues.receipt receipt ]
+                              | Error error ->
+                                  return createObj [ "ok" ==> false; "error" ==> JournalWriterValues.errorToNative error ]
+                          })
+                  "onSettlement" ==> Action<obj>(JournalWriterValues.onSettlement) ])
 
     member _.RuntimeId = runtimeId
     member _.BlobWriter = blobWriter
-    member _.LocalSeq = lock gate (fun () -> currentSeq)
+    member _.LocalSeq: int64 = writer?localSeq ()
 
-    member _.LastCommittedLocalSeq =
-        lock gate (fun () -> if runtimeStartedCommitted then currentSeq - 1L else 0L)
+    member _.LastCommittedLocalSeq: int64 = writer?lastCommittedLocalSeq ()
 
-    member _.IsPoisoned = lock gate (fun () -> firstFailure.IsSome)
+    member _.IsPoisoned: bool = writer?isPoisoned ()
 
     member _.TryCurrent(key: string) = store.TryCurrent key
-
-    member private _.Poison(eventId: EventId, error: AppendError) =
-        lock gate (fun () ->
-            if firstFailure.IsNone && not closed then
-                firstFailure <-
-                    Some
-                        { FailedEventId = eventId
-                          Error = error })
-
-    member private _.PriorPoison(eventId: EventId) : CommitResult<Envelope> option =
-        lock gate (fun () -> firstFailure |> Option.map (fun f -> NotAttempted(eventId, WriterPoisoned f)))
-
-    static member private tripUnknownCuts(error: AppendError) =
-        match error with
-        | AppendError.CommitUnknown evidence when not (List.isEmpty evidence.Prepared.Cuts) ->
-            FatalProcess.trip
-                "runtime-started-semantic-cut"
-                (sprintf
-                    "semantic cut append settled unknown at %A: %s"
-                    evidence.Primary.Phase
-                    evidence.Primary.Cause.Message)
-        | _ -> ()
 
     static member private commitEnvelope
         (store: IEventStore)
@@ -309,174 +381,21 @@ type EventStoreJournalWriter private (runtimeId: RuntimeId, init: Envelope, blob
             return Ok(writer :> IJournalWriter, init, Fold.empty)
         }
 
-    member private this.CommitRuntimeStartedLocked() : Task<Result<unit, AppendError>> =
-        task {
-            match! EventStoreJournalWriter.commitEnvelope store init with
-            | Ok receipt when AppendReceipt.cutFor init.EventId receipt |> Option.isSome ->
-                let cut = AppendReceipt.cutFor init.EventId receipt |> Option.get
-                let reason = "RuntimeStarted semantic cut: " + cut.Reason
-                FatalProcess.trip "runtime-started-semantic-cut" reason
-                return Error(AppendError.SemanticCut cut)
-            | Ok _ ->
-                runtimeStartedCommitted <- true
-                return Ok()
-            | Error error ->
-                this.Poison(init.EventId, error)
-                EventStoreJournalWriter.tripUnknownCuts error
-                return Error error
-        }
-
-    member private this.EnsureRuntimeStartedLocked() : Task<Result<unit, AppendError>> =
-        if runtimeStartedCommitted then
-            Task.FromResult(Ok())
-        else
-            this.CommitRuntimeStartedLocked()
-
-    static member private businessCommitResult (eventId: EventId) (envelope: Envelope) (receipt: AppendReceipt) =
-        match AppendReceipt.cutFor envelope.EventId receipt with
-        | Some cut -> Rejected(eventId, cut.Reason)
-        | None -> Committed envelope
-
-    static member private businessAppendFailure (eventId: EventId) (error: AppendError) =
-        match error with
-        | AppendError.CommitUnknown evidence -> CommitUnknown(eventId, StoreAppendUnknown evidence)
-        | AppendError.NoNewWriteReleaseFailed evidence -> CommitResult.NoNewWriteReleaseFailed(eventId, evidence)
-        | AppendError.SemanticCut cut -> Rejected(eventId, cut.Reason)
-        | AppendError.AppendFailed reason ->
-            // Pure pre-write refusal (a business rule or the append freshness
-            // guard refused this exact fact before any byte was written). The
-            // writer stays healthy so a caller can re-read and decide again.
-            NotAttempted(eventId, WriterRefused reason)
-        | AppendError.StorageInvalid _
-        | AppendError.AppendNotAttempted _ ->
-            NotAttempted(
-                eventId,
-                WriterPoisoned
-                    { FailedEventId = eventId
-                      Error = error }
-            )
-
-    member private this.CommitBusinessEnvelopeLocked
-        (eventId: EventId, envelope: Envelope)
-        : Task<CommitResult<Envelope>> =
-        task {
-            match! EventStoreJournalWriter.commitEnvelope store envelope with
-            | Ok receipt ->
-                currentSeq <- currentSeq + 1L
-                return EventStoreJournalWriter.businessCommitResult eventId envelope receipt
-            | Error error ->
-                match error with
-                | AppendError.AppendFailed _ ->
-                    // Known-not-attempted pre-write refusal. No bytes changed,
-                    // so latching poison would turn one competing admission
-                    // into a dead writer for the whole process.
-                    ()
-                | _ -> this.Poison(eventId, error)
-
-                return EventStoreJournalWriter.businessAppendFailure eventId error
-        }
-
-    member private this.AppendHealthyLocked
-        (eventId: EventId)
+    member _.Append
         (stream: StreamId)
         (providerRun: ProviderRunIdentity option)
         (fact: Fact)
         : Task<CommitResult<Envelope>> =
+        let running = JournalWriterValues.append writer (box (stream, providerRun, fact))
         task {
-            match! this.EnsureRuntimeStartedLocked() with
-            | Error error ->
-                return
-                    NotAttempted(
-                        eventId,
-                        WriterPoisoned
-                            { FailedEventId = init.EventId
-                              Error = error }
-                    )
-            | Ok() ->
-                let envelope: Envelope =
-                    { RuntimeId = runtimeId
-                      LocalSeq = LocalSeq.create currentSeq
-                      ObservedAt = DateTimeOffset.UtcNow
-                      EventId = eventId
-                      Stream = stream
-                      ProviderRun = providerRun
-                      Fact = fact }
-
-                return! this.CommitBusinessEnvelopeLocked(eventId, envelope)
+            let! value = running
+            return JournalWriterValues.outcome value
         }
 
-    member private this.RunAcceptedAppend
-        (previous: Task)
-        (eventId: EventId)
-        (stream: StreamId)
-        (providerRun: ProviderRunIdentity option)
-        (fact: Fact)
-        : Task<CommitResult<Envelope>> =
-        task {
-            do! previous
+    member _.Release() : unit = writer?release ()
 
-            // Admission happened while the writer was Open. A later Release may
-            // close admission, but it must drain this accepted prefix. Only a
-            // physical failure from an earlier accepted append can invalidate it.
-            match this.PriorPoison eventId with
-            | Some unavailable -> return unavailable
-            | None -> return! this.AppendHealthyLocked eventId stream providerRun fact
-        }
-
-    member this.Append
-        (stream: StreamId)
-        (providerRun: ProviderRunIdentity option)
-        (fact: Fact)
-        : Task<CommitResult<Envelope>> =
-        let eventId = EventId.create (Guid.NewGuid().ToString("N"))
-
-        lock gate (fun () ->
-            if closed then
-                Task.FromResult(NotAttempted(eventId, WriterDisposed))
-            elif closeTask.IsSome then
-                Task.FromResult(NotAttempted(eventId, WriterClosing))
-            elif firstFailure.IsSome then
-                Task.FromResult(NotAttempted(eventId, WriterPoisoned firstFailure.Value))
-            else
-                let previous = serial
-                let running = this.RunAcceptedAppend previous eventId stream providerRun fact
-
-                serial <-
-                    task {
-                        let! _ = running
-                        return ()
-                    }
-
-                running)
-
-    member private _.FinishClose() = lock gate (fun () -> closed <- true)
-
-    member private this.DrainAcceptedPrefix(acceptedPrefix: Task) : Task =
-        task {
-            try
-                do! acceptedPrefix
-            finally
-                this.FinishClose()
-        }
-        :> Task
-
-    member private this.StartCloseLocked() : Task =
-        if closed || closeTask.IsSome then
-            // Already closed or closing: nothing new to admit.
-            Task.FromResult(()) :> Task
-        else
-            // Open or Poisoned: begin drain of the accepted append prefix.
-            let running = this.DrainAcceptedPrefix serial
-            closeTask <- Some running
-            running
-
-    member private this.BeginRelease() : Task =
-        lock gate (fun () -> closeTask |> Option.defaultWith this.StartCloseLocked)
-
-    member this.Release() = this.BeginRelease() |> ignore
-
-    member this.ReleaseAsync() =
-        JournalWriterDisposal.asValueTask (this.BeginRelease())
+    member _.ReleaseAsync() =
+        JournalWriterDisposal.asValueTask (writer?releaseAsync ())
 
     interface IJournalWriter with
         member this.RuntimeId = this.RuntimeId
