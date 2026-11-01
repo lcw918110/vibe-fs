@@ -7,7 +7,6 @@
     <WanxiangshuOwnerLocalityKind>contract</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-taskresult.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.session-ontology.execution-session-ownership.fsproj"/>
     <Compile Include="Execution/Session/SyncDelegateRole.fsi"/>
     <Compile Include="Execution/Session/SyncDelegateRole.fs"/>
