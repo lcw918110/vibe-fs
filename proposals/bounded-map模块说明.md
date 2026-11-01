@@ -1,6 +1,6 @@
 # bounded-map：有界异步映射
 
-2026-10-31。拆分计划第二项已接回：库负责每次映射的并发许可、等待队列和结果关联，主体通过公开入口调用。运行结果及组合验收中的既有 TODO 见文末。
+2026-10-31 实施，2026-11-01 修正使用范围：库负责每次映射的并发许可、等待队列和结果关联，WarmStart 实现通过公开入口调用，旧实现已退出。当前尚未找到 WarmStart 的产品调用入口，不能把实现替换称为用户流程已经使用。运行结果及组合检查中的既有 TODO 见文末。
 
 ## 职责与调用
 
@@ -29,9 +29,9 @@ export function mapBounded<T, U>(
 
 ## 主体如何使用
 
-真实接回点是 `Repository/Investigation/WarmStart/Runtime.fs`。主体继续选择角色、关键词、工作目录、搜索能力及 `MaxKeywords`，并保留单条搜索失败视为空结果的已有策略。映射器只负责调度这些已选定的工作，回调返回该关键词对应的搜索结果。
+实现替换点是 `Repository/Investigation/WarmStart/Runtime.fs`。本轮追查只找到 WarmStartSurface 的外部调用，没有在 `src/` 与 `wanxiangtong/` 找到 `prepare`、`appendToBaseDocument` 的产品调用方；需先确认功能是否仍需要，不能为补齐接线说法而擅自启用。具体复核见[后续计划第 12.1 节](下一阶段边缘职责拆分计划-2026-10-31.md#121-已经成立的范围以及一处结论修正)。主体继续选择角色、关键词、工作目录、搜索能力及 `MaxKeywords`，并保留单条搜索失败视为空结果的已有策略。映射器只负责调度这些已选定的工作，回调返回该关键词对应的搜索结果。
 
-旧生产调用使用 `CancellationToken.None`，新调用省略 signal；F# 边界把输入 list 转为数组、返回数组转回 list。不会在主体再保留一份队列或许可算法。
+原 WarmStart 调用使用 `CancellationToken.None`，新调用省略 signal；F# 边界把输入 list 转为数组、返回数组转回 list。不会在主体再保留一份队列或许可算法。
 
 `Foundation/Parallel.fs` 原先还放着 `Defer.defer`。它负责 Promise 微任务延迟，仍由 ChatExecutionJournal 与 Acceptance 使用，因此留在主体的 `Foundation/Defer.fs/.fsi`。保留原编译归属，删除旧 Parallel 实现与仅供测试的 Token Surface，不为微任务延迟另开一个库。
 
