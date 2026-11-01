@@ -83,7 +83,7 @@ module CasebookCapture =
           Refresh: bool
           TargetState: string }
 
-    [<Import("CasebookMaintenanceLaw", "wanxiangli/casebook-maintenance")>]
+    [<Import("FileDiff", "wanxiangli/file-baseline")>]
     let private maintenanceLawClass: obj = jsNative
 
     [<Emit("new $0()")>]
