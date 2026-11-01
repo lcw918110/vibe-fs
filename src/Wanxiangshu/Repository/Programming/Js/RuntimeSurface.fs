@@ -6,27 +6,17 @@ open System.Threading.Tasks
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 
-/// JS runtime owner boundary for bindings and sandbox execution. The mutable
-/// as-is write ledger (persisted at each edit/write call) and sandbox failure
-/// union remain opaque; observations cross as plain result objects.
+/// 通过实际文件能力和程序入口驱动受控调用。
 [<RequireQualifiedAccess>]
 module JsRuntimeSurface =
     [<Import("activeTurnBridge", "wanxiangli/program")>]
     let private activeTurnBridge: obj = jsNative
 
 
-    type private JsBindingsHandle
-        (api: obj, staging: ResizeArray<JsStagedMutation>, reads: ResizeArray<JsExplicitFileRead>) =
-
+    type private JsBindingsHandle(api: obj) =
         member _.Api = api
-        member _.Staging = staging
-        member _.Reads = reads
 
     let createApi (root: string) : obj =
-        // DSL-MUTABLE: resource — JS mutation staging buffer handed off in handle
-        let staging = ResizeArray<JsStagedMutation>()
-        let reads = ResizeArray<JsExplicitFileRead>()
-
         let allCapabilities =
             set
                 [ JsCapability.Read
@@ -44,23 +34,19 @@ module JsRuntimeSurface =
                   JsCapability.Horizon
                   JsCapability.Park ]
 
-        let api =
-            JsToolsBindings.createApi allCapabilities root staging reads (JsAsIsLedger None) None None
+        let invocation = JsToolsBindings.createInvocation root (JsAsIsLedger None) None (fun _ -> None)
+        let api = JsToolsBindings.createApi allCapabilities root invocation?files None None
 
-        box (JsBindingsHandle(api, staging, reads))
+        box (JsBindingsHandle api)
 
     let createApiFor (root: string) (permissionLabels: string array) : obj =
-        // DSL-MUTABLE: resource — JS mutation staging buffer handed off in handle
-        let staging = ResizeArray<JsStagedMutation>()
-        let reads = ResizeArray<JsExplicitFileRead>()
-
         let capabilities =
             permissionLabels |> Array.choose JsCapability.ofLabel |> Set.ofArray
 
-        let api =
-            JsToolsBindings.createApi capabilities root staging reads (JsAsIsLedger None) None None
+        let invocation = JsToolsBindings.createInvocation root (JsAsIsLedger None) None (fun _ -> None)
+        let api = JsToolsBindings.createApi capabilities root invocation?files None None
 
-        box (JsBindingsHandle(api, staging, reads))
+        box (JsBindingsHandle api)
 
     let api (handle: obj) : obj = (unbox<JsBindingsHandle> handle).Api
 
@@ -170,24 +156,6 @@ module JsRuntimeSurface =
         | None -> null
 
     let clearDeliveredValue (sessionId: string) : unit = JsDeliveredValues.clear sessionId
-
-    let stagedCount (handle: obj) : int =
-        (unbox<JsBindingsHandle> handle).Staging.Count
-
-    let stagedKinds (handle: obj) : string array =
-        (unbox<JsBindingsHandle> handle).Staging
-        |> Seq.map (function
-            | JsStagedMutation.Rewrite _ -> "Rewrite"
-            | JsStagedMutation.Create _ -> "Create"
-            | JsStagedMutation.Remove _ -> "Remove"
-            | JsStagedMutation.Move _ -> "Move")
-        |> Seq.toArray
-
-    let readPaths (handle: obj) : string array =
-        (unbox<JsBindingsHandle> handle).Reads
-        |> Seq.map _.Path
-        |> Seq.distinct
-        |> Seq.toArray
 
     let private failureResult failure =
         box

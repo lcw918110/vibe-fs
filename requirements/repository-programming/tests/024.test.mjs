@@ -17,10 +17,7 @@ import { generate } from '../../../dist/Repository/Programming/Js/GeneratorSurfa
 import {
   api as runtimeApi,
   createApi as createRuntimeApi,
-  readPaths as runtimeReadPaths,
   run as runRuntime,
-  stagedCount,
-  stagedKinds,
 } from '../../../dist/Repository/Programming/Js/RuntimeSurface.js'
 
 import { closeAll } from '../../../dist/Repository/Programming/Js/Programs.js'
@@ -133,7 +130,7 @@ test('WHAT[repository-programming-024] JS_EDIT_rejects_invalid_path_unknown_fiel
       1 << 20,
     )
     assert.equal(writeOutcome.ok, true)
-    assert.equal(stagedCount(handle), 1)
+    assert.equal(readFileSync(outsideFile, 'utf8'), 'beta')
   } finally {
     try { rmSync(outsideFile, { force: true }) } catch {}
     cleanup()

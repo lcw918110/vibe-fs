@@ -1,10 +1,9 @@
 namespace Wanxiangshu.Repository.Programming.Js
 
+open System
 open System.Threading.Tasks
-open System.Text
 open Fable.Core
 open Fable.Core.JsInterop
-open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation.Identity
 
 type JsDelegationHost =
@@ -13,16 +12,10 @@ type JsDelegationHost =
       Horizon: unit -> Task<obj>
       Review: obj -> obj -> Task<obj> }
 
-/// JS-010/JS-016: the api object injected into the sandbox — the only
-/// authority a model program sees. Every member returns a JSON-compatible
-/// object; failures carry `{ ok: false, code, reason }` with stable codes
-/// (JS-019). Mutations write as-is: each edit/write is atomically persisted
-/// through runtime/FileSession at call time; the staging buffer records what was
-/// actually written, so a later failure keeps earlier writes on disk (JS-012).
 module JsToolsBindings =
 
-    [<Import("FileSession", "wanxiangli/runtime")>]
-    let private fileSession: obj -> obj = jsNative
+    [<Import("ProgramInvocation", "wanxiangli/program")>]
+    let private invocationClass: obj = jsNative
 
     [<Import("RuntimeTools", "wanxiangli/runtime")>]
     let private runtimeTools: string -> obj = jsNative
@@ -41,25 +34,48 @@ module JsToolsBindings =
         | "move" -> JsStagedMutation.Move(string value?path, string value?destination)
         | _ -> invalidArg "mutation" "unknown physical file effect"
 
-    let private files
-        root
-        (staging: ResizeArray<JsStagedMutation>)
-        (reads: ResizeArray<JsExplicitFileRead>)
-        (ledger: JsAsIsLedger)
-        =
-        fileSession (
+    let private failureValue (failure: JsFailure option) : obj =
+        match failure with
+        | None -> null
+        | Some failure ->
             createObj
-                [ "root" ==> root
-                  "before"
-                  ==> fun (value: obj) -> box (ledger.Prepared(root, mutationOf value))
-                  "after"
-                  ==> fun (value: obj) (token: obj) ->
-                      let mutation = mutationOf value
-                      staging.Add mutation
-                      ledger.Committed(unbox<JsTransactionId option> token)
-                  "read"
-                  ==> fun (path: string) (text: string) -> reads.Add { Path = path; ResultBytes = text } ]
-        )
+                [ "code" ==> JsFailure.code failure
+                  "reason" ==> JsFailure.reason failure
+                  "failure" ==> failure ]
+
+    let createInvocation
+        (root: string)
+        (ledger: JsAsIsLedger)
+        (observe: (obj -> Task<unit>) option)
+        (checkReturn: obj -> JsFailure option)
+        : obj =
+        let ledgerApi =
+            createObj
+                [ "prepared"
+                  ==> Func<obj, obj>(fun request -> box (ledger.Prepared(root, mutationOf request?mutation)))
+                  "committed"
+                  ==> Action<obj>(fun token -> ledger.Committed(unbox<JsTransactionId option> token))
+                  "settle"
+                  ==> Func<Task<obj>>(fun () ->
+                      task {
+                          let! settled = ledger.Settle()
+
+                          return
+                              match settled with
+                              | Ok() -> null
+                              | Error failure -> failureValue (Some failure)
+                      }) ]
+
+        let options =
+            createObj
+                [ yield "root" ==> root
+                  yield "ledger" ==> ledgerApi
+                  yield "checkReturn" ==> Func<obj, obj>(fun request -> checkReturn request |> failureValue)
+                  match observe with
+                  | Some observe -> yield "observe" ==> Func<obj, Task<unit>>(observe)
+                  | None -> () ]
+
+        emitJsExpr (invocationClass, options) "new $0($1)"
 
     [<Emit("Promise.reject(Object.assign(new Error($1), { code: $0, reason: $1 }))")>]
     let private rejectedJsFailure (code: string) (reason: string) : obj = jsNative
@@ -125,13 +141,10 @@ module JsToolsBindings =
     let createApi
         (capabilities: Set<JsCapability>)
         (root: string)
-        (staging: ResizeArray<JsStagedMutation>)
-        (explicitReads: ResizeArray<JsExplicitFileRead>)
-        (ledger: JsAsIsLedger)
+        (file: obj)
         (delegationHost: JsDelegationHost option)
         (askInvoke: (string -> Task<Result<unit, string>>) option)
         : obj =
-        let file = files root staging explicitReads ledger
         let physical = runtimeTools root
         let directory = JsCapability.memberNamesFor capabilities ""
         let present memberName = Array.contains memberName directory

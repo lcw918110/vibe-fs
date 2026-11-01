@@ -122,9 +122,9 @@ test('WHAT[repository-programming-043] the member registry holds the delegation 
   )
 })
 
-test('WHAT[repository-programming-043] rm and mv use the public runtime file owner under the canonical capability gates', () => {
+test('WHAT[repository-programming-043] rm and mv project the invocation file capability under the canonical capability gates', () => {
   const bindings=read(join(SOURCE_ROOT,'Repository/Programming/Js/ToolsBindings.fs'))
-  assert.match(bindings, /Import\("FileSession", "wanxiangli\/runtime"\)/)
+  assert.match(bindings, /\(file: obj\)/)
   assert.match(bindings, /let directory = JsCapability\.memberNamesFor capabilities ""/)
   assert.match(bindings, /if present "rm" then\s+"rm" ==> file\?rm/)
   assert.match(bindings, /if present "mv" then\s+"mv" ==> file\?mv/)

@@ -9,7 +9,7 @@ const { default: test } = await import("node:test");
 const { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
-const { createApi, api: apiOf, stagedCount, stagedKinds, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
+const { createApi, api: apiOf, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
 const { generate } = await import("../../../dist/Repository/Programming/Js/GeneratorSurface.js");
 
 const sandbox = () => {
@@ -27,7 +27,7 @@ test('WHAT[repository-programming-010] JS008_012_bindings_rewrite_requires_exist
     assert.equal(apiOf(binding).cat('a.txt').ok, true)
     const result = apiOf(binding).write('a.txt', 'new text')
     assert.equal(result.ok, true)
-    assert.deepEqual(stagedKinds(binding), ['Rewrite'])
+    assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), 'new text')
     writeFileSync(join(dir, 'a.txt'), 'concurrent change', 'utf8')
     const stale = apiOf(binding).write('a.txt', 'stale overwrite')
     assert.equal(stale.ok, false)
@@ -42,8 +42,7 @@ test('WHAT[repository-programming-010] JS009_012_bindings_write_stages_create', 
     const binding = createApi(dir)
     const result = apiOf(binding).write('new.txt', 'fresh')
     assert.equal(result.ok, true)
-    assert.equal(stagedCount(binding), 1)
-    assert.deepEqual(stagedKinds(binding), ['Create'])
+    assert.equal(readFileSync(join(dir, 'new.txt'), 'utf8'), 'fresh')
   } finally {
     cleanup()
   }
@@ -56,8 +55,6 @@ test('WHAT[repository-programming-010] JS009_bindings_write_overwrites_an_existi
     const result = apiOf(binding).write('existing.txt', 'tool')
     assert.equal(result.ok, true)
     assert.equal(readFileSync(join(dir, 'existing.txt'), 'utf8'), 'tool')
-    assert.equal(stagedCount(binding), 1)
-    assert.deepEqual(stagedKinds(binding), ['Rewrite'])
   } finally {
     cleanup()
   }
