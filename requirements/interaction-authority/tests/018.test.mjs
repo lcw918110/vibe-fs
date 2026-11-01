@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -8,6 +8,7 @@ import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js
 import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.js'
 import * as lifeClassification from '../../../dist/Interaction/Authority/LifeClassification.js'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
+import * as runtimePath from '../../../dist/Persistence/Journal/RuntimePath.js'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import { withJournal, withSharedJournal, acceptOwner, rootSelection as durableRootSelection } from './support/authority.mjs'
 
@@ -201,7 +202,7 @@ const completeManagerReviews = (directory, session) => {
 const expectClosureRefused = async (directory, session, retirementId) => {
   let refused = null
   try {
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirementId)
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, retirementId)
   } catch (error) {
     refused = error
   }
@@ -233,14 +234,14 @@ test('WHAT[interaction-authority-018] a repeated closure of an already closed ru
     const session = 'narrow-idempotent'
     const original = await acceptOwner(handle, session)
     const retirementId = completeManagerReviews(workspace, session)
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(workspace, session, retirementId)
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(workspace), session, retirementId)
 
     const closed = journal.JournalSurface_snapshot(handle).sessionProjections[session].promptAuthority
     assert.equal(closed.activeLogicalRun, null, 'the completed retirement closure cleared the active run')
     assert.equal(closed.lastAuthorityProfile.logicalRun, original.logicalRun)
 
     const before = eventJournalBytes(workspace)
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(workspace, session, retirementId)
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(workspace), session, retirementId)
     assert.equal(eventJournalBytes(workspace), before, 'an already closed run must not append a second closure')
     const after = journal.JournalSurface_snapshot(handle).sessionProjections[session].promptAuthority
     assert.equal(after.activeLogicalRun, null)
@@ -290,7 +291,7 @@ test('WHAT[interaction-authority-018] a refused closure append keeps the active 
 const closedManagerLife = async (handle, directory, session) => {
   const owner = await acceptOwner(handle, session)
   const retirementId = completeManagerReviews(directory, session)
-  await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirementId)
+  await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, retirementId)
   return owner
 }
 
@@ -415,6 +416,41 @@ const terminalSource = (kind, session, logicalRun, authorityRoot, outcome, extra
 const authorityOf = (handle, session) =>
   journal.JournalSurface_snapshot(handle).sessionProjections[session].promptAuthority
 
+test('WHAT[interaction-authority-018] an already resolved state root reuses the shared journal outside Git', async () => {
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), 'wxs-authority-non-git-')))
+  let handle
+  try {
+    assert.equal(existsSync(join(workspace, '.git')), false)
+    assert.throws(() => execFileSync('git', ['-C', workspace, 'rev-parse', '--is-inside-work-tree'], { stdio: 'pipe' }))
+    const acquired = await journal.JournalSurface_acquireSharedForWorkspace(workspace, process.pid, '2026-11-01T00:00:00Z')
+    assert.equal(acquired.ok, true, JSON.stringify(acquired.error))
+    handle = acquired.journal
+    const stateRoot = await runtimePath.stateRoot(workspace)
+    assert.equal(stateRoot, join(workspace, '.Herdchestra'))
+    const session = 'non-git-state-root'
+    const accepted = await dispatch.acceptHumanRootSelection(handle, session, 'root-non-git', durableRootSelection('engineer'))
+    assert.equal(accepted.ok, true, JSON.stringify(accepted.error))
+    const appended = await journal.JournalSurface_appendAgent(handle, { kind: 'Session', session }, null,
+      terminalSource('HumanRootManagedRun', session, accepted.profile.logicalRun, accepted.profile.authorityRoot, 'completed'))
+    assert.equal(appended.ok, true, JSON.stringify(appended.error))
+    const events = join(stateRoot, 'wanxiangshu', 'events')
+    const writersBefore = readdirSync(events).filter(name => name.endsWith('.ndjson')).sort()
+    assert.equal(writersBefore.length, 1)
+
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(stateRoot, session, 'retirement-non-git')
+
+    const closed = authorityOf(handle, session)
+    assert.equal(closed.activeLogicalRun, null)
+    assert.equal(closed.closedRuns.length, 1)
+    assert.equal(closed.closedRuns[0].logicalRun, accepted.profile.logicalRun)
+    assert.deepEqual(readdirSync(events).filter(name => name.endsWith('.ndjson')).sort(), writersBefore)
+    assert.equal(existsSync(join(stateRoot, '.Herdchestra')), false, 'an existing state root must not gain a nested state root')
+  } finally {
+    if (handle !== undefined) journal.JournalSurface_dispose(handle)
+    rmSync(workspace, { recursive: true, force: true })
+  }
+})
+
 test('WHAT[interaction-authority-018] GAP-123 an accepted root records its expected closure kind and a durable source terminal becomes the exact closure witness', async () => {
   await withSharedJournal('managed-closure', async (handle, reopen, directory) => {
     const session = 'managed-closure'
@@ -454,7 +490,7 @@ test('WHAT[interaction-authority-018] GAP-123 an accepted root records its expec
 
     // The closure writer cites the durable source and writes exactly one
     // closure for this run.
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, 'retirement-managed')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, 'retirement-managed')
 
     const closed = authorityOf(handle, session)
     assert.equal(closed.activeLogicalRun, null, 'the durable closure releases the active run')
@@ -479,7 +515,7 @@ test('WHAT[interaction-authority-018] GAP-123 a closure without a durable source
     assert.equal(accepted.ok, true, JSON.stringify(accepted.error))
 
     // No durable source terminal exists, so no closure may be written.
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, 'retirement-no-source')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, 'retirement-no-source')
 
     const active = authorityOf(handle, session)
     assert.notEqual(active.activeLogicalRun, null, 'a closure without a durable source releases nothing')
@@ -513,14 +549,14 @@ test('WHAT[interaction-authority-018] GAP-123 a repeated closure append is idemp
     )
     assert.equal(appended.ok, true, JSON.stringify(appended.error))
 
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, 'retirement-conflict-1')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, 'retirement-conflict-1')
     const closed = authorityOf(handle, session)
     assert.equal(closed.activeLogicalRun, null)
     assert.equal(closed.closedRuns.length, 1)
 
     // The same closure again is a no-op, even across a restart.
     const cold = await reopen()
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, 'retirement-conflict')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, 'retirement-conflict')
     const afterRepeat = authorityOf(cold, session)
     assert.equal(afterRepeat.closedRuns.length, 1, 'a repeated closure appends no second closure')
     assert.equal(afterRepeat.activeLogicalRun, null)

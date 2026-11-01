@@ -9,6 +9,7 @@ import * as dispatcher from '../../../dist/Interaction/Dispatch/Dispatcher.js'
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.js'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
+import * as runtimePath from '../../../dist/Persistence/Journal/RuntimePath.js'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import * as identity from '../../../dist/Foundation/Identity.js'
 import * as adapter from '../../../dist/Composition/Durable/PromptJournalAdapter.js'
@@ -114,7 +115,7 @@ const closeOwner = async (handle, session, directory) => {
   assert.equal(view.Delivered, true)
   const retirement = Array.from(view.Retirements ?? []).at(-1)
   assert.equal(retirement.Outcome, 'Completed')
-  await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirement.RetirementId)
+  await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, retirement.RetirementId)
   assert.equal(dispatch.projectionObservation(handle, session).activeLogicalRun, null)
 }
 

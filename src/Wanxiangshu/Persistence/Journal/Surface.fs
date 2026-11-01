@@ -456,7 +456,8 @@ module JournalSurface =
     /// repeats the one already recorded is a no-op, so repeated transforms
     /// stay idempotent; a closure that conflicts with the recorded one is
     /// refused, so it can never release the identity binding.
-    let appendAuthorityLogicalRunClosed (commonDir: string) (sessionId: string) (retirementId: string) : Task<unit> =
+    /// stateRoot 已由调用方解析；这里仅访问已打开的共享日志，不重新解释 workspace。
+    let appendAuthorityLogicalRunClosed (stateRoot: string) (sessionId: string) (retirementId: string) : Task<unit> =
         task {
             let session = SessionId.create sessionId
 
@@ -469,13 +470,7 @@ module JournalSurface =
                 : Task<Result<AgentJournal, FoldRejection>> =
                 failwith "authority closure refused: no shared journal runtime for this common dir"
 
-            let! runtimeDir =
-                task {
-                    try
-                        return! RuntimePath.forWorkspace commonDir
-                    with _ ->
-                        return RuntimePath.forStateRoot commonDir
-                }
+            let runtimeDir = RuntimePath.forStateRoot stateRoot
 
             let! acquired =
                 SharedAgentJournal.acquire runtimeDir 0 (DateTimeOffset.Parse "1970-01-01T00:00:00Z") refuseMissingEntry

@@ -1,4 +1,5 @@
 import test from 'node:test'
+import * as runtimePath from '../../../dist/Persistence/Journal/RuntimePath.js'
 
 process.env.WANXIANGSHU_NO_FATAL_EXIT = '1'
 
@@ -303,7 +304,7 @@ test('WHAT[managed-session-lifecycle-020] a fresh identity is refused until the 
     assert.notEqual(stillActive.activeLogicalRun, null, "the source terminal alone closes nothing");
     assert.equal(stillActive.closedRuns.length, 0);
 
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, "retirement-fresh");
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, "retirement-fresh");
 
     const closed = authorityOf(handle, session);
     assert.equal(closed.activeLogicalRun, null, "the durable exact closure releases the prior run");

@@ -9,6 +9,7 @@ const { default: test } = await import("node:test");
 const authority = await import("../../../dist/Interaction/Authority/RuntimeSurface.js");
 const dispatch = await import("../../../dist/Interaction/Dispatch/DispatchSurface.js");
 const journal = await import("../../../dist/Persistence/Journal/Surface.js");
+const runtimePath = await import("../../../dist/Persistence/Journal/RuntimePath.js");
 const lifecycle = await import("../../../dist/Mission/Lifecycle/Surface.js");
 const { withSharedJournal } = await import("./support/authority.mjs");
 
@@ -87,7 +88,7 @@ const completeManagerLife = async (handle, session, directory) => {
   assert.equal(view.ActiveId ?? null, null);
   const retirement = Array.from(view.Retirements ?? []).at(-1);
   assert.equal(retirement.Outcome, 'Completed');
-  await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirement.RetirementId);
+  await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, retirement.RetirementId);
   assert.equal(dispatch.projectionObservation(handle, session).activeLogicalRun, null);
 };
 
