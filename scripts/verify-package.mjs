@@ -727,7 +727,7 @@ export async function runExternalConsumer({
   // 探针位于实际主体包内，裸导入只能使用随包交付的库。
   fs.writeFileSync(path.join(targetPkgDir, '.verify-library-entries.mjs'), [
     "import { mapBounded } from 'wanxiangli/bounded-map'",
-    "import { classify } from 'wanxiangli/response-text'",
+    "import { isValid } from './dist/Participant/Provider/Attempt/TerminalValidity.js'",
     "import { encode, validationError } from 'wanxiangli/returned-material'",
     "import { KeyedSerial } from 'wanxiangli/keyed-serial'",
     "import { acquire } from 'wanxiangli/file-lock'",
@@ -737,7 +737,7 @@ export async function runExternalConsumer({
     "import { TaskScope } from 'wanxiangli/task-scope'",
     "import { GitPublication } from 'wanxiangli/git-publication'",
     "import { FileBaseline } from 'wanxiangli/file-baseline'",
-    "import { SegmentedWriter } from 'wanxiangli/segmented-writer'",
+    "import { SegmentedWriter } from 'wanxiangli/segments'",
     "import { createHash } from 'node:crypto'",
     "import { execFile } from 'node:child_process'",
     "import assert from 'node:assert/strict'",
@@ -938,7 +938,7 @@ export async function runExternalConsumer({
     "export const material = encode(['report'], ['raw material'])",
     'export const materialError = validationError(material)',
     'export const values = await mapBounded(1, async value => value + 1, [1, 2])',
-    "export const shapes = [null, 'before <tool_call> after', 'plain answer'].map(classify)",
+    "export const validTerminals = [null, 'before <tool_call> after', 'plain answer'].map(isValid)",
   ].join('\n'))
 
   // 3. Create consumer/ directory outside with separate package.json
@@ -1012,7 +1012,7 @@ export async function runExternalConsumer({
     try {
       const entries = await import(pathToFileURL(entryProbe).href);
       assert.deepEqual(entries.values, [2, 3]);
-      assert.deepEqual(entries.shapes, ['Empty', 'ToolMarkup', 'Text']);
+      assert.deepEqual(entries.validTerminals, [false, false, true]);
       assert.equal(entries.material, '{"body":["report"],"carry":["raw material"]}');
       assert.equal(entries.materialError, null);
       assert.deepEqual(entries.serialOrder, ['first', 'second']);

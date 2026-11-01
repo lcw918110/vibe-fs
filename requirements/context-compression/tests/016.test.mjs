@@ -26,7 +26,7 @@ const expectedStop = rejection => rejection === null
   ? { kind: 'TurnCompleted', reason: null }
   : { kind: 'TurnNeedsContinuation', reason: `assistant stop with ${descriptions[rejection]}` }
 
-test('WHAT[context-compression-004] response-text extraction preserves host shape results and legacy diagnostics', () => {
+test('terminal text checks preserve shape results and legacy diagnostics', () => {
   for (const { text, rejection } of samples) {
     assert.deepEqual(compression.terminalValidityCheck(text), rejection === null
       ? { ok: true }
@@ -41,11 +41,45 @@ test('WHAT[context-compression-004] response-text extraction preserves host shap
   }
 })
 
-test('WHAT[context-compression-004] response-text extraction preserves actual stopped-turn classification for every shape', () => {
+test('terminal text checks preserve actual stopped-turn classification for every shape', () => {
   for (const { text, rejection } of samples) {
     const parts = textParts(text)
     assert.deepEqual(turns.classifyOutcome(true, 'stop', null, parts), expectedStop(rejection), JSON.stringify(text))
     assert.equal(turns.formalContentUnusable(parts), rejection !== null, JSON.stringify(text))
+  }
+})
+
+test('terminal whitespace retains the JavaScript character set', () => {
+  for (const text of [null, '', ' ', '\t\r\n', '\v\f', '\u00a0', '\u1680', '\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a', '\u2028\u2029', '\u202f', '\u205f', '\u3000', '\ufeff']) {
+    assert.deepEqual(compression.terminalValidityCheck(text), { ok: false, error: 'Empty' }, JSON.stringify(text))
+  }
+  for (const text of ['\u0000', '\u0085', '\u180e', '\u200b', '\u001c\u001d\u001e\u001f', ' \u200b ']) {
+    assert.deepEqual(compression.terminalValidityCheck(text), { ok: true }, JSON.stringify(text))
+  }
+})
+
+test('terminal tool tags retain partial matches, case and Unicode word boundaries', () => {
+  for (const tag of ['tool_call', 'use_tool', 'call', 'function_call', 'invoke']) {
+    for (const text of [`<${tag}>value</${tag}>`, `<${tag.toUpperCase()}>`, `</${tag}>`, `<${tag}`, `<${tag} name="tool"`, `< ${tag} />`, `</ ${tag} >`, `<${tag}\nattribute="value">`, `ordinary prose <${tag}> ordinary prose`, `中文 <${tag} 结尾`]) {
+      assert.deepEqual(compression.terminalValidityCheck(text), { ok: false, error: 'XmlOnly' }, text)
+    }
+  }
+  for (const text of ['<call_x>', '<calls>', '<call1>', '<tool_calling>', '<function_calls>', '<invoked>', '<callK>', '&lt;call&gt;', 'function_call without brackets']) {
+    assert.equal(compression.terminalValidityIsValid(text), true, text)
+  }
+  for (const text of ['<call-x>', '<callé>', '<call\u0301>', '<call🙂>', '<CALL-x>', '<invoke:tool>', '<uſe_tool>']) {
+    assert.deepEqual(compression.terminalValidityCheck(text), { ok: false, error: 'XmlOnly' }, text)
+  }
+})
+
+test('terminal checks do not retain a regex cursor across calls', () => {
+  for (let count = 0; count < 20; count++) {
+    for (const text of ['<call>', '<call>', 'prefix <invoke']) {
+      assert.deepEqual(compression.terminalValidityCheck(text), { ok: false, error: 'XmlOnly' })
+    }
+    assert.equal(compression.terminalValidityIsValid('ordinary'), true)
+    assert.deepEqual(compression.terminalValidityCheck('  '), { ok: false, error: 'Empty' })
+    assert.equal(compression.terminalValidityIsValid('List<string>'), true)
   }
 })
 

@@ -293,7 +293,7 @@ module ProcessEventLog =
         else
             unbox<int> parsed?ordinal
 
-    [<Import("SegmentedWriter", "wanxiangli/segmented-writer")>]
+    [<Import("SegmentedWriter", "wanxiangli/segments")>]
     let private writerClass: obj = jsNative
 
     [<Emit("new $0($1)")>]

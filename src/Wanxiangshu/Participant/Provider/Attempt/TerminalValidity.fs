@@ -1,18 +1,15 @@
 namespace Wanxiangshu.Participant.Provider.Attempt
 
-open Fable.Core
+open System
+open System.Text.RegularExpressions
 
-/// 保留主体的结果类型与诊断；词法观察由 response-text 提供。
 [<RequireQualifiedAccess>]
 module TerminalValidity =
-    [<StringEnum; RequireQualifiedAccess>]
-    type private TextShape =
-        | [<CompiledName("Empty")>] Empty
-        | [<CompiledName("ToolMarkup")>] ToolMarkup
-        | [<CompiledName("Text")>] Text
-
-    [<Import("classify", "wanxiangli/response-text")>]
-    let private classify (text: string) : TextShape = jsNative
+    let private toolMarkup =
+        Regex(
+            "<(?:/?\\s*(?:tool_call|use_tool|call|function_call|invoke)\\b[^>]*>?)|</(?:tool_call|use_tool|call|function_call|invoke)\\s*>",
+            RegexOptions.Compiled ||| RegexOptions.IgnoreCase
+        )
 
     [<RequireQualifiedAccess>]
     type Rejection =
@@ -25,10 +22,9 @@ module TerminalValidity =
         | Rejection.XmlOnly -> "XML-only terminal"
 
     let check (text: string) : Result<unit, Rejection> =
-        match classify text with
-        | TextShape.Empty -> Error Rejection.Empty
-        | TextShape.ToolMarkup -> Error Rejection.XmlOnly
-        | TextShape.Text -> Ok()
+        if String.IsNullOrWhiteSpace text then Error Rejection.Empty
+        elif toolMarkup.IsMatch text then Error Rejection.XmlOnly
+        else Ok()
 
     let isValid (text: string) : bool =
         check text |> Result.isOk
