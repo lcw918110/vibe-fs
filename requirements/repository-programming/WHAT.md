@@ -208,7 +208,7 @@ rm/mv 与 edit/write 同属 as-is 逐笔落盘路径：程序在 rm/mv 已落盘
 
 ## [043] rm/mv 双语资源与四层接线契约
 
-rm/mv 的成员文案是 zh-CN.md/en.md 成对双语资源（`tool/js-program/rm`、`tool/js-program/mv`），两语言陈述同一契约要素——签名、POSIX 语义、as-is 即时生效、EXDEV 拒绝且不留两侧并存中间态——且不携带未替换占位符。四层接线保持同构：JsFragmentRegistry 的 rm/mv fragment（含 `js.rm`/`js.mv` RuntimeBindingKey）、ToolsBindings 的成员绑定、Description 的资源路径与 capability 条件规则块、ToolHost 的双语装载。底层文件系统效果与稳定失败映射归 MutationFs 原语（removePath/movePath），不在成员绑定内二次定义。
+rm/mv 的成员文案是 zh-CN.md/en.md 成对双语资源（`tool/js-program/rm`、`tool/js-program/mv`），两语言陈述同一契约要素——签名、POSIX 语义、as-is 即时生效、EXDEV 拒绝且不留两侧并存中间态——且不携带未替换占位符。四层接线保持同构：JsFragmentRegistry 的 rm/mv fragment（含 `js.rm`/`js.mv` RuntimeBindingKey）、ToolsBindings 的成员绑定、Description 的资源路径与 capability 条件规则块、ToolHost 的双语装载。底层文件系统效果与稳定失败映射归 `wanxiangli/runtime` 的 FileSession，不在成员绑定内二次定义。
 
 ## [044] rm/mv 失败码的 reason 稳定与成对上报
 

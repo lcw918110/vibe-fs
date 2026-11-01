@@ -15,7 +15,7 @@ const read = (path) => readFileSync(path, 'utf8')
 // 生效、EXDEV 拒绝且不留两侧并存中间态——且不携带未替换占位符。四层接线
 // 保持同构：JsFragmentRegistry 的 rm/mv fragment（含 MemberName）→ ToolsBindings 的成员绑定 → Description 的资源路径
 // 与 capability 条件规则块 → ToolHost 的双语装载。底层文件系统效果与稳定
-// 失败映射归 MutationFs 原语（removePath/movePath），不在成员绑定内二次
+// 失败映射归 wanxiangli/runtime 的 FileSession，不在成员绑定内二次
 // 定义。本文件为纯静态断言（读源码与资源文本），不 import dist 产物。
 
 const resourcePath = (name) => ({

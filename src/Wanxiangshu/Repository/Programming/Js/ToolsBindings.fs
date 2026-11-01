@@ -17,7 +17,7 @@ type JsDelegationHost =
 /// authority a model program sees. Every member returns a JSON-compatible
 /// object; failures carry `{ ok: false, code, reason }` with stable codes
 /// (JS-019). Mutations write as-is: each edit/write is atomically persisted
-/// through MutationFs at call time; the staging buffer records what was
+/// through runtime/FileSession at call time; the staging buffer records what was
 /// actually written, so a later failure keeps earlier writes on disk (JS-012).
 module JsToolsBindings =
 
