@@ -20,14 +20,13 @@ module RetentionSurface =
 
             let! outcome =
                 ProcessEventLog.withStoreLock stateRoot (fun () ->
-                    ProcessEventLog.withSegmentCap capBytes (fun () ->
-                        ProcessEventLog.writerPhysicalMetadata stateRoot
-                        |> List.fold
-                            (fun result writer ->
-                                result
-                                |> Result.bind (fun () ->
-                                    ProcessEventLog.convergeWriterFiles stateRoot writer.WriterId))
-                            (Ok()))
+                    ProcessEventLog.writerPhysicalMetadata stateRoot
+                    |> List.fold
+                        (fun result writer ->
+                            result
+                            |> Result.bind (fun () ->
+                                ProcessEventLog.convergeWriterFiles stateRoot writer.WriterId capBytes))
+                        (Ok())
                     |> Task.FromResult)
 
             return

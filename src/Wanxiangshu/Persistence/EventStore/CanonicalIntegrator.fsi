@@ -1,15 +1,10 @@
 namespace Wanxiangshu.Persistence.EventStore
 
-/// The canonical durable-event integrator. It exposes only factory creation
-/// over an explicit rule program; all builder state and internal rule slots
-/// remain private to the durable-convergence owner. Every domain rule
-/// (Sphinx, JsTransaction, Casebook) lives in its owning module and
-/// is injected through `createWithRules` in registration order.
+/// 组装领域规则；Current 与结构 heads 由库内 Integrator 持有。
 [<RequireQualifiedAccess>]
 module CanonicalIntegrator =
-    /// Journal-only spine: the structural frontier plus the journal fold.
+    /// 所有实际 store 共用 Journal 规则。
     val baseRules: IntegrationRule list
 
-    /// Explicit construction seam. `rules` is the complete history program
-    /// in registration order and must contain the Structural and Journal rules.
+    /// rules 保留注册次序，并包含 Journal 规则。
     val createWithRules: rules: IntegrationRule list -> isEventTypeKnown: (string -> bool) -> ICanonicalIntegrator

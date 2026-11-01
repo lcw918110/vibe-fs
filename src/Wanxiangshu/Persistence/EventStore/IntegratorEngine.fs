@@ -3,587 +3,101 @@ namespace Wanxiangshu.Persistence.EventStore
 open System
 open Fable.Core
 open Fable.Core.JsInterop
-open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation.Identity
-
-/// Structural frontier oracle. It sees every durable event but owns no business
-/// meaning; DomainConflict is simply `heads.Count > 1` in this Integrator slot.
-[<RequireQualifiedAccess>]
-module StructuralIntegration =
-    let rule: IntegrationRule =
-        { Name = "Structural"
-          Initial = box StructuralProjection.empty
-          Accepts = fun _ -> true
-          FaultScope = fun _ -> "global"
-          Integrate =
-            fun current envelope ->
-                StructuralProjection.apply (unbox<StructuralProjection> current) envelope
-                |> box
-                |> Ok
-          PlanCut = fun _ _ _ _ -> Error "Structural integration cannot be cut"
-          ApplyCut = fun current _ -> Ok current }
 
 [<RequireQualifiedAccess>]
 module IntegratorEngine =
+    [<Import("LocalIntegrator", "wanxiangli/local-eventstore")>]
+    let private integratorClass: obj = jsNative
 
-    let private structuralRule = StructuralIntegration.rule
+    [<Emit("new $0($1)")>]
+    let private construct (_class: obj) (_options: obj) : obj = jsNative
 
-    let private requireStructuralRule (program: IntegrationRule list) =
-        if program |> List.exists (fun rule -> rule.Name = structuralRule.Name) |> not then
-            invalidArg "rules" (sprintf "IntegratorEngine program is missing required rule '%s'" structuralRule.Name)
+    let private nativeResult convert = function
+        | Ok value -> createObj [ "ok" ==> true; "value" ==> convert value ]
+        | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
 
-    /// CUT-19-b: the (rule, FaultScope) quarantine ledger, the skip-while-
-    /// quarantined decision, the ProjectionCutTail payload codec and when a cut
-    /// takes effect have one owner, wanxiangli/quarantine. This engine keeps the
-    /// rules themselves, Current, the one full-replay budget and PrepareLive.
-    [<Import("RuleQuarantine", "wanxiangli/quarantine")>]
-    let private quarantineClass: obj = jsNative
+    let private unitResult (outcome: obj) =
+        if unbox<bool> outcome?ok then Ok()
+        else Error(unbox<string> outcome?error)
 
-    [<Emit("new $0()")>]
-    let private constructQuarantine (cls: obj) : obj = jsNative
+    let private ruleValue (rule: IntegrationRule) =
+        createObj
+            [ "name" ==> rule.Name
+              "initial" ==> rule.Initial
+              "accepts" ==> Func<obj, bool>(CanonicalEventCodec.ofLibraryEvent >> rule.Accepts)
+              "faultScope" ==> Func<obj, string>(CanonicalEventCodec.ofLibraryEvent >> rule.FaultScope)
+              "integrate" ==>
+                  Func<obj, obj, obj>(fun current event ->
+                      rule.Integrate current (CanonicalEventCodec.ofLibraryEvent event)
+                      |> nativeResult id)
+              "planCut" ==>
+                  Func<obj, obj, string, bool, obj>(fun current event reason afterFullReplay ->
+                      rule.PlanCut current (CanonicalEventCodec.ofLibraryEvent event) reason afterFullReplay
+                      |> nativeResult (fun plan -> createObj [ "resetJson" ==> plan.ResetJson ]))
+              "applyCut" ==>
+                  Func<obj, string, obj>(fun current resetJson ->
+                      rule.ApplyCut current resetJson |> nativeResult id) ]
 
-    let private quarantine: obj = constructQuarantine quarantineClass
+    let private cutValue (value: obj) : SemanticCut =
+        { Rule = unbox<string> value?rule
+          FailedEventId = EventId.create (unbox<string> value?failedEventId)
+          Reason = unbox<string> value?reason
+          CutEventId = EventId.create (unbox<string> value?cutEventId) }
 
-    type private RuleFaultKey = { Rule: string; Scope: string }
-
-    type private RuleFault =
-        { FailedEventId: EventId
-          Reason: string }
-
-    /// Opaque persistent ledger owned by wanxiangli/quarantine.
-    type private FaultLedger = obj
-
-    let private emptyLedger () : FaultLedger = quarantine?empty ()
-
-    let private isQuarantined (ledger: FaultLedger) (key: RuleFaultKey) : bool =
-        unbox<bool> (quarantine?isQuarantined (ledger, key.Rule, key.Scope))
-
-    let private tryFault (ledger: FaultLedger) (key: RuleFaultKey) : RuleFault option =
-        let fault: obj = quarantine?fault (ledger, key.Rule, key.Scope)
-
-        if isNull fault then
-            None
-        else
-            Some
-                { FailedEventId = EventId.create (unbox<string> fault?failedEventId)
-                  Reason = unbox<string> fault?reason }
-
-    let private recordFault (ledger: FaultLedger) (key: RuleFaultKey) (fault: RuleFault) : FaultLedger =
-        quarantine?quarantine (ledger, key.Rule, key.Scope, EventId.value fault.FailedEventId, fault.Reason)
-
-    let private releaseFault (ledger: FaultLedger) (key: RuleFaultKey) : FaultLedger =
-        quarantine?release (ledger, key.Rule, key.Scope)
-
-    /// PayloadIndex (durable-events-012) maps inline payload content addresses to
-    /// their bytes, folded from every accepted envelope. It is part of the same
-    /// replay that derives Current, never a second pass over durable history.
-    type private IntegratorState =
-        { Currents: Map<string, obj>
-          Events: Map<string, EventEnvelope>
-          PayloadIndex: Map<PayloadRef, byte[]>
-          Faults: FaultLedger }
-
-    type private IntegrationStep =
-        { State: IntegratorState
-          FailedRules: (RuleFaultKey * string) list }
-
-    type private BusinessRuleDecision =
-        | RuleSkipped
-        | RuleAdvanced of obj
-        | RuleFailed of string
-
-    type private CutPayload =
-        { Rule: string
-          FailedEventId: EventId
-          Reason: string
-          ResetJson: string }
-
-    let private initialState (program: IntegrationRule list) =
-        { Currents = program |> List.map (fun rule -> rule.Name, rule.Initial) |> Map.ofList
-          Events = Map.empty
-          PayloadIndex = Map.empty
-          Faults = emptyLedger () }
-
-    let private eventKey (eventId: EventId) = EventId.value eventId
-
-    let private businessOf (program: IntegrationRule list) =
-        program |> List.filter (fun rule -> rule.Name <> structuralRule.Name)
-
-    let private matchingBusinessRules (program: IntegrationRule list) (envelope: EventEnvelope) =
-        businessOf program |> List.filter (fun rule -> rule.Accepts envelope)
-
-    let private tryRule (program: IntegrationRule list) name =
-        businessOf program |> List.tryFind (fun rule -> rule.Name = name)
-
-    let private faultKey (rule: IntegrationRule) (envelope: EventEnvelope) =
-        { Rule = rule.Name
-          Scope = rule.FaultScope envelope }
-
-    let private encodeCutPayload (payload: CutPayload) : obj =
-        quarantine?encodeCut (
-            createObj
-                [ "rule" ==> payload.Rule
-                  "failedEventId" ==> EventId.value payload.FailedEventId
-                  "reason" ==> payload.Reason
-                  "resetJson" ==> payload.ResetJson ]
-        )
-
-    let private tryDecodeCutPayload (envelope: EventEnvelope) =
-        let cut: obj = quarantine?decodeCut (envelope.EventType, envelope.Payload)
-
-        if isNull cut then
-            None
-        else
-            Some
-                { Rule = unbox<string> cut?rule
-                  FailedEventId = EventId.create (unbox<string> cut?failedEventId)
-                  Reason = unbox<string> cut?reason
-                  ResetJson = unbox<string> cut?resetJson }
-
-    let private structuralStep (state: IntegratorState) (normalized: EventEnvelope) =
-        let current =
-            state.Currents
-            |> Map.tryFind structuralRule.Name
-            |> Option.defaultValue structuralRule.Initial
-
-        match structuralRule.Integrate current normalized with
-        | Ok next ->
-            { state with
-                Currents = Map.add structuralRule.Name next state.Currents }
-        | Error _ -> state
-
-    let private applyCutForRule
-        (state: IntegratorState)
-        (payload: CutPayload)
-        (rule: IntegrationRule)
-        (key: RuleFaultKey)
-        =
-        let current =
-            state.Currents |> Map.tryFind rule.Name |> Option.defaultValue rule.Initial
-
-        match rule.ApplyCut current payload.ResetJson with
-        | Error _ -> state
-        | Ok reset ->
-            { state with
-                Currents = Map.add rule.Name reset state.Currents
-                Faults = releaseFault state.Faults key }
-
-    let private applyCut (program: IntegrationRule list) (state: IntegratorState) (payload: CutPayload) =
-        let named = tryRule program payload.Rule
-        let failedEvent = Map.tryFind (eventKey payload.FailedEventId) state.Events
-
-        let failedScope =
-            match named, failedEvent with
-            | Some rule, Some failed -> box (rule.FaultScope failed)
-            | _ -> null
-
-        match named, failedEvent with
-        | Some rule, Some failed when unbox<bool> (quarantine?cutVerdict (named.IsSome, failedScope)) ->
-            applyCutForRule state payload rule (faultKey rule failed)
-        | _ -> state
-
-    let private evaluateBusinessRule (state: IntegratorState) (normalized: EventEnvelope) (rule: IntegrationRule) =
-        let prior =
-            state.Currents |> Map.tryFind rule.Name |> Option.defaultValue rule.Initial
-
-        match rule.Integrate prior normalized with
-        | Ok next -> RuleAdvanced next
-        | Error reason -> RuleFailed reason
-
-    let private decideBusinessRule (state: IntegratorState) (normalized: EventEnvelope) (rule: IntegrationRule) =
-        if isQuarantined state.Faults (faultKey rule normalized) then
-            RuleSkipped
-        else
-            evaluateBusinessRule state normalized rule
-
-    let private applyBusinessDecision
-        (normalized: EventEnvelope)
-        (rule: IntegrationRule)
-        ((state: IntegratorState), (failures: (RuleFaultKey * string) list))
-        (decision: BusinessRuleDecision)
-        =
-        match decision with
-        | RuleSkipped -> state, failures
-        | RuleAdvanced next ->
-            { state with
-                Currents = Map.add rule.Name next state.Currents },
-            failures
-        | RuleFailed reason ->
-            let key = faultKey rule normalized
-
-            let fault =
-                { FailedEventId = normalized.EventId
-                  Reason = reason }
-
-            { state with
-                Faults = recordFault state.Faults key fault },
-            (key, reason) :: failures
-
-    let private applyBusinessRule
-        (normalized: EventEnvelope)
-        ((state: IntegratorState), (failures: (RuleFaultKey * string) list))
-        (rule: IntegrationRule)
-        =
-        decideBusinessRule state normalized rule
-        |> applyBusinessDecision normalized rule (state, failures)
-
-    let private integrateBusiness (program: IntegrationRule list) (state: IntegratorState) (normalized: EventEnvelope) =
-        let next, failures =
-            matchingBusinessRules program normalized
-            |> List.fold (applyBusinessRule normalized) (state, [])
-
-        { State = next
-          FailedRules = List.rev failures }
-
-    let private semanticStep (program: IntegrationRule list) state normalized =
-        match tryDecodeCutPayload normalized with
-        | Some payload ->
-            { State = applyCut program state payload
-              FailedRules = [] }
-        | None -> integrateBusiness program state normalized
-
-    let private addIntegratedEvent key normalized (semantic: IntegrationStep) =
-        let payloadIndex =
-            normalized.Payloads
-            |> Map.fold (fun acc payloadRef bytes -> Map.add payloadRef bytes acc) semantic.State.PayloadIndex
-
-        { semantic with
-            State =
-                { semantic.State with
-                    Events = Map.add key normalized semantic.State.Events
-                    PayloadIndex = payloadIndex } }
-
-    let private integrateNew
-        (program: IntegrationRule list)
-        allowExternalParents
-        (state: IntegratorState)
-        (normalized: EventEnvelope)
-        key
-        =
-        let missingParent =
-            normalized.Parents
-            |> List.tryFind (fun parent -> not (Map.containsKey (eventKey parent) state.Events))
-
-        match missingParent with
-        | Some parent when not allowExternalParents ->
-            Error(sprintf "missing parent during integration: %s" (EventId.value parent))
-        | None ->
-            semanticStep program (structuralStep state normalized) normalized
-            |> addIntegratedEvent key normalized
-            |> Ok
-        | Some _ ->
-            // Retained replay may begin after this event's causal predecessor
-            // aged out as a whole writer. EventKWayMerge.mergeRetained already
-            // proved the parent is absent from the entire retained set; only
-            // this boot/reload mode may treat that boundary as satisfied.
-            semanticStep program (structuralStep state normalized) normalized
-            |> addIntegratedEvent key normalized
-            |> Ok
-
-    /// The only single-event integration primitive. Replay preserves timeline
-    /// order exactly: a semantic failure leaves last-good Current in place and
-    /// marks that rule faulted; a later durable ProjectionCutTail applies the
-    /// rule-owned reset patch and clears the fault.
-    let private integrateOne
-        (program: IntegrationRule list)
-        allowExternalParents
-        (state: IntegratorState)
-        (envelope: EventEnvelope)
-        : Result<IntegrationStep, string> =
-        let normalized = EventEnvelope.normalize envelope
-        let key = eventKey normalized.EventId
-
-        match Map.tryFind key state.Events with
-        | Some existing ->
-            CanonicalEventCodec.checkIdentity existing normalized
-            |> Result.mapError (sprintf "identity collision: %A")
-            |> Result.map (fun () -> { State = state; FailedRules = [] })
-        | None -> integrateNew program allowExternalParents state normalized key
-
-    /// Boot history ordering is delegated to the one structural k-way primitive.
-    /// Business semantic failures never abort replay; they cut only that rule's
-    /// tail until an in-order ProjectionCutTail reset fact is encountered.
-    let private replay
-        (program: IntegrationRule list)
-        (streams: (string * EventEnvelope list) list)
-        : Result<IntegratorState, string> =
-        EventKWayMerge.mergeRetained streams
-        |> Result.mapError (sprintf "writer-stream replay invalid: %A")
-        |> Result.bind (fun ordered ->
-            // DSL-MUTABLE: algorithm-scratch — stack depth must not scale with history length.
-            let mutable state = initialState program
-            let mutable remaining = ordered
-            // DSL-MUTABLE: algorithm-scratch — first integrateOne failure cuts this replay
-            let mutable failure: string option = None
-
-            let advance () =
-                match integrateOne program true state (List.head remaining) with
-                | Ok step ->
-                    state <- step.State
-                    remaining <- List.tail remaining
-                | Error reason -> failure <- Some reason
-
-            while not (List.isEmpty remaining) && failure.IsNone do
-                advance ()
-
-            match failure with
-            | Some reason -> Error reason
-            | None -> Ok state)
-
-    let private fullReplayGate = obj ()
-    // DSL-MUTABLE: resource — one process-wide emergency full-history replay budget.
-    let mutable private fullReplayUsed = false
-
-    let private trySpendFullReplayBudget () =
-        lock fullReplayGate (fun () ->
-            if fullReplayUsed then
-                false
-            else
-                fullReplayUsed <- true
-                true)
-
-    /// durable-events-012/027: a retained replay set must name only known
-    /// event types and every stored line must be self-contained. The rule is
-    /// wanxiangli/events `checkClosure` (CUT-19); this keeps only the replay
-    /// messages whose shape 027 pins. Parent closure is not checked here: the
-    /// retained window may name aged-out parents (EventKWayMerge.mergeRetained).
-    let private validateLocalHistory (isEventTypeKnown: string -> bool) (_commonDir: string) streams =
-        CanonicalEventCodec.checkStoredClosure isEventTypeKnown (streams |> List.collect snd)
-        |> Result.mapError (function
-            | StoredLineFault.UnknownEventType eventType ->
-                sprintf "unknown durable event type during replay: %s" eventType
-            | StoredLineFault.MissingPayload payloadRef ->
-                sprintf "missing durable inline payload during replay: %s" (PayloadRef.value payloadRef)
-            | StoredLineFault.PayloadDigestMismatch payloadRef ->
-                sprintf "durable inline payload digest mismatch during replay: %s" (PayloadRef.value payloadRef)
-            | StoredLineFault.UnreferencedPayload payloadRef ->
-                sprintf "unreferenced durable inline payload during replay: %s" (PayloadRef.value payloadRef))
+    let private preparedValue (value: obj) : PreparedIntegration =
+        { DurableEvents =
+            unbox<obj array> value?durableEvents
+            |> Array.map CanonicalEventCodec.ofLibraryEvent
+            |> Array.toList
+          Cuts = unbox<obj array> value?cuts |> Array.map cutValue |> Array.toList
+          Commit = fun () -> value?commit () }
 
     let create (rules: IntegrationRule list) (isEventTypeKnown: string -> bool) : ICanonicalIntegrator =
-        requireStructuralRule rules
-        let program = rules
-        let gate = obj ()
-        // DSL-MUTABLE: resource — the sole process Current owned by this Integrator.
-        let mutable state = initialState program
-        // DSL-MUTABLE: resource — last loaded local EventStore for the one allowed
-        // process-wide full replay fallback when a business rule cannot infer a cut.
-        let mutable loadedCommonDir: string option = None
-
-        let currentForRule (rule: IntegrationRule) (currentState: IntegratorState) =
-            currentState.Currents
-            |> Map.tryFind rule.Name
-            |> Option.defaultValue rule.Initial
-
-        let validateCutPlan (rule: IntegrationRule) current (plan: SemanticCutPlan) =
-            rule.ApplyCut current plan.ResetJson |> Result.map (fun _ -> plan)
-
-        let inferCutPlan (rule: IntegrationRule) current (failed: EventEnvelope) (fault: RuleFault) afterFullReplay =
-            rule.PlanCut current failed fault.Reason afterFullReplay
-            |> Result.bind (validateCutPlan rule current)
-
-        let retryCutPlanAfterFullReplay (rule: IntegrationRule) (failed: EventEnvelope) (fault: RuleFault) firstReason =
-            match loadedCommonDir with
-            | Some commonDir when trySpendFullReplayBudget () ->
-                result {
-                    let! streams =
-                        ProcessEventLog.readStreams commonDir
-                        |> Result.mapError (sprintf "cut-tail full replay read failed: %A")
-
-                    do! validateLocalHistory isEventTypeKnown commonDir streams
-                    let! replayed = replay program streams
-                    let replayCurrent = currentForRule rule replayed
-
-                    return!
-                        inferCutPlan rule replayCurrent failed fault true
-                        |> Result.mapError (fun secondReason ->
-                            sprintf
-                                "cut-tail inference failed before and after the one full replay: %s; %s"
-                                firstReason
-                                secondReason)
-                }
-            | _ ->
-                Error(
-                    "cut-tail inference failed and full replay budget is unavailable: "
-                    + firstReason
-                )
-
-        let chooseCutPlan firstAttempt retry =
-            match firstAttempt with
-            | Ok plan -> Ok plan
-            | Error firstReason -> retry firstReason
-
-        let planCut (currentState: IntegratorState) (rule: IntegrationRule) (fault: RuleFault) =
-            result {
-                let! failed =
-                    currentState.Events
-                    |> Map.tryFind (eventKey fault.FailedEventId)
-                    |> Option.map Ok
-                    |> Option.defaultValue (Error("cut-tail lost failed event: " + EventId.value fault.FailedEventId))
-
-                let liveCurrent = currentForRule rule currentState
-
-                return!
-                    chooseCutPlan
-                        (inferCutPlan rule liveCurrent failed fault false)
-                        (retryCutPlanAfterFullReplay rule failed fault)
-            }
-
-        let cutEnvelope
-            (currentState: IntegratorState)
-            (rule: IntegrationRule)
-            (fault: RuleFault)
-            (plan: SemanticCutPlan)
-            =
-            let streamId = ProjectionCutTailEvent.streamId rule.Name
-
-            let existingHeads =
-                match Map.tryFind structuralRule.Name currentState.Currents with
-                | None -> []
-                | Some current -> StructuralProjection.heads streamId (unbox<StructuralProjection> current)
-
-            let payload =
-                { Rule = rule.Name
-                  FailedEventId = fault.FailedEventId
-                  Reason = fault.Reason
-                  ResetJson = plan.ResetJson }
-
-            { EventId = EventId.create (Guid.NewGuid().ToString("N"))
-              StreamId = streamId
-              EventType = ProjectionCutTailEvent.EventType
-              Parents = fault.FailedEventId :: existingHeads
-              Payload = encodeCutPayload payload
-              PayloadRefs = []
-              Payloads = Map.empty }
-            |> EventEnvelope.normalize
-
-        let ensureRuleReset (currentState: IntegratorState) (rule: IntegrationRule) (key: RuleFaultKey) =
-            result {
-                match tryFault currentState.Faults key with
-                | None -> return currentState, [], []
-                | Some fault ->
-                    let! plan = planCut currentState rule fault
-                    let cut = cutEnvelope currentState rule fault plan
-                    let! integrated = integrateOne program false currentState cut
-
-                    let receipt =
-                        { Rule = rule.Name
-                          FailedEventId = fault.FailedEventId
-                          Reason = fault.Reason
-                          CutEventId = cut.EventId }
-
-                    return integrated.State, [ cut ], [ receipt ]
-            }
-
-        let ensureMatchingResets (currentState: IntegratorState) (envelope: EventEnvelope) =
-            let rec loop state cuts receipts remaining =
-                result {
-                    match remaining with
-                    | [] -> return state, cuts, receipts
-                    | rule :: tail ->
-                        let key = faultKey rule envelope
-                        let! next, addedCuts, addedReceipts = ensureRuleReset state rule key
-                        return! loop next (cuts @ addedCuts) (receipts @ addedReceipts) tail
-                }
-
-            loop currentState [] [] (matchingBusinessRules program envelope)
-
-        let closeFailure (state, addedEvents, addedCuts) ((key: RuleFaultKey), _) =
-            match tryRule program key.Rule with
-            | None -> Ok(state, addedEvents, addedCuts)
-            | Some rule ->
-                result {
-                    let! next, eventCuts, receipts = ensureRuleReset state rule key
-                    return next, addedEvents @ eventCuts, addedCuts @ receipts
-                }
-
-        let closeFailures state failures =
-            failures
-            |> List.fold
-                (fun aggregate failure -> aggregate |> Result.bind (fun current -> closeFailure current failure))
-                (Ok(state, [], []))
-
-        let prepareLive (startState: IntegratorState) (events: EventEnvelope list) =
-            let rec loop current durable cuts remaining =
-                result {
-                    match remaining with
-                    | [] -> return current, durable, cuts
-                    | raw :: tail ->
-                        let normalized = EventEnvelope.normalize raw
-                        let! before, resetEvents, resetCuts = ensureMatchingResets current normalized
-                        let! step = integrateOne program false before normalized
-                        let! after, postCutEvents, postCuts = closeFailures step.State step.FailedRules
-
-                        return!
-                            loop
-                                after
-                                (durable @ resetEvents @ [ normalized ] @ postCutEvents)
-                                (cuts @ resetCuts @ postCuts)
-                                tail
-                }
-
-            loop startState [] [] events
+        let integrator =
+            construct integratorClass
+                (createObj
+                    [ "rules" ==> (rules |> List.map ruleValue |> List.toArray)
+                      "isKnownEventType" ==> Func<string, bool>(isEventTypeKnown)
+                      "formatStorageError" ==>
+                          Func<obj, string>(CanonicalEventCodec.invalidOfLibraryError >> sprintf "%A") ])
 
         { new ICanonicalIntegrator with
-            member _.ReloadLocal(commonDir) =
-                lock gate (fun () ->
-                    result {
-                        let! streams =
-                            ProcessEventLog.readStreams commonDir
-                            |> Result.mapError (sprintf "local event history read failed: %A")
+            member _.ReloadLocal commonDir =
+                integrator?reload (Func<string>(fun () -> ProcessEventLog.eventsDirectory commonDir))
+                |> unitResult
 
-                        do! validateLocalHistory isEventTypeKnown commonDir streams
-                        let! replayed = replay program streams
-                        state <- replayed
-                        loadedCommonDir <- Some commonDir
-                        return ()
-                    })
+            member _.PrepareLive events =
+                let outcome: obj =
+                    integrator?prepare (events |> List.map CanonicalEventCodec.toLibraryEvent |> List.toArray)
+                if unbox<bool> outcome?ok then Ok(preparedValue outcome?value)
+                else Error(unbox<string> outcome?error)
 
-            member _.PrepareLive(events) =
-                lock gate (fun () ->
-                    result {
-                        let! preparedState, durableEvents, cuts = prepareLive state events
-                        // Optimistic concurrency: capture the current state reference.
-                        // A ReloadLocal or another commit creates a new IntegratorState
-                        // heap object, invalidating this prepare via reference inequality.
-                        let expectedState = state
+            member _.IsEventTypeKnown eventType = integrator?isKnownEventType eventType
+            member _.TryCurrent key =
+                let value: obj = integrator?current key
+                if isNull value then None else Some value
 
-                        return
-                            { DurableEvents = durableEvents
-                              Cuts = cuts
-                              Commit =
-                                fun () ->
-                                    lock gate (fun () ->
-                                        if not (obj.ReferenceEquals(state, expectedState)) then
-                                            failwith
-                                                "CanonicalIntegrator Current changed between prepare and durable append"
+            member _.TryEvent eventId =
+                let value: obj = integrator?event (EventId.value eventId)
+                if isNull value then None else Some(CanonicalEventCodec.ofLibraryEvent value)
 
-                                        state <- preparedState) }
-                    })
+            member _.TryPayload payloadRef =
+                let value: obj = integrator?payload (PayloadRef.value payloadRef)
+                if isNull value then None else Some(unbox<byte[]> value)
 
-            member _.IsEventTypeKnown(eventType) = isEventTypeKnown eventType
+            member _.TryHeads streamId =
+                integrator?heads (EventStreamId.value streamId)
+                |> unbox<string array>
+                |> Array.map EventId.create
+                |> Array.toList
 
-            member _.TryCurrent(key) =
-                lock gate (fun () -> Map.tryFind key state.Currents)
-
-            member _.TryEvent(eventId) =
-                lock gate (fun () -> Map.tryFind (eventKey eventId) state.Events)
-
-            member _.TryPayload(payloadRef) =
-                lock gate (fun () -> Map.tryFind payloadRef state.PayloadIndex)
-
-            member _.TryHeads(streamId) =
-                lock gate (fun () ->
-                    match Map.tryFind structuralRule.Name state.Currents with
-                    | None -> []
-                    | Some current -> StructuralProjection.heads streamId (unbox<StructuralProjection> current))
-
-            member this.TryHead(streamId) =
-                match this.TryHeads streamId with
-                | [ head ] -> Some head
-                | _ -> None
+            member _.TryHead streamId =
+                let value: obj = integrator?head (EventStreamId.value streamId)
+                if isNull value then None else Some(EventId.create (unbox<string> value))
 
             member _.AllHeads() =
-                lock gate (fun () ->
-                    match Map.tryFind structuralRule.Name state.Currents with
-                    | None -> []
-                    | Some current -> StructuralProjection.allHeads (unbox<StructuralProjection> current)) }
+                integrator?allHeads ()
+                |> unbox<string array>
+                |> Array.map EventId.create
+                |> Array.toList }

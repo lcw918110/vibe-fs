@@ -13,15 +13,6 @@ type IntegrationRule =
       PlanCut: obj -> EventEnvelope -> string -> bool -> Result<SemanticCutPlan, string>
       ApplyCut: obj -> string -> Result<obj, string> }
 
-type StructuralProjection = { Heads: Map<string, Set<EventId>> }
-
-[<RequireQualifiedAccess>]
-module StructuralProjection =
-    val empty: StructuralProjection
-    val heads: EventStreamId -> StructuralProjection -> EventId list
-    val allHeads: StructuralProjection -> EventId list
-    val apply: StructuralProjection -> EventEnvelope -> StructuralProjection
-
 type PreparedIntegration =
     { DurableEvents: EventEnvelope list
       Cuts: SemanticCut list

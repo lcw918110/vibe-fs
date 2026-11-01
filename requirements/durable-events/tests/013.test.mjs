@@ -113,15 +113,6 @@ test('WHAT[durable-events-013] restart_replays_prior_writer_files_then_fresh_run
     journal.JournalSurface_dispose(restarted.journal)
   })
 })
-test('WHAT[durable-events-013] boot_and_live_use_one_CanonicalIntegrator_program', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const integrator = await readFile(new URL('../../../src/Wanxiangshu/Persistence/EventStore/IntegratorEngine.fs', import.meta.url), 'utf8')
-  const writer = await readFile(new URL('../../../src/Wanxiangshu/Persistence/Journal/EventStoreJournalWriter.fs', import.meta.url), 'utf8')
-  assert.match(integrator, /EventKWayMerge\.merge/)
-  assert.match(integrator, /integrateOne/)
-  assert.match(integrator, /prepareLive/)
-  assert.doesNotMatch(writer, /readStreams|loadEvent|Fold\.apply|OpenSnapshot/)
-})
 }
 
 {
@@ -252,104 +243,5 @@ test('WHAT[durable-events-013] EXEC_cancelled_revision_subscription_unregisters_
     assert.equal(await revisions.awaitCancelled(from, handle), true)
     assert.equal(revisionOf(handle), from, 'cancellation is not a durable fact')
   })
-})
-}
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { readFileSync } = await import("node:fs");
-const { default: test } = await import("node:test");
-const { CANONICAL_EVENT_READER_OWNER_PATHS, DUAL_WRITE_ALLOWLIST, GIT_BYPASS_ALLOWLIST, NON_STORE_SCHEMA_VERSION_SITES, PHYSICAL_HISTORY_OBSERVER_PATHS, SCANNER_IDS, collectProductionEntries, scanCanonicalSharedProgram, scanDualWrite, scanFeatureHistoryLoop, scanFeatureRef, scanFiles, scanGitBypass, scanPrivateDurableSubstrate, scanSchemaVersionInStoreContext, scanText } = await import("../../../scripts/checks/unified-store-gate.mjs");
-
-const readFixture = (name) =>
-  readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')
-
-test('WHAT[durable-events-013] canonical shape requires one-envelope rule and shared boot live program', () => {
-  const kernelFile = 'src/Wanxiangshu/Persistence/EventStore/IntegrationKernel.fs'
-  const canonicalFile = 'src/Wanxiangshu/Persistence/EventStore/IntegratorEngine.fs'
-  const kernel = [
-    'type IntegrationRule =',
-    '    { Name: string',
-    '      Integrate: obj -> EventEnvelope -> Result<obj, string> }',
-    'type PreparedIntegration = { Commit: unit -> unit }',
-  ].join('\n')
-  const goodCanonical = [
-    'let private integrateOne state envelope = Ok state',
-    'let private replay streams =',
-    '    integrateOne empty (List.head streams)',
-    'let private fullReplayGate = obj ()',
-    'let prepareLive state events =',
-    '    integrateOne state (List.head events)',
-    '{ new ICanonicalIntegrator with',
-    '    member _.ReloadLocal(commonDir) = replay streams',
-    '    member _.PrepareLive(events) = prepareLive state events',
-    '    member _.IsEventTypeKnown(eventType) = true',
-    '    member _.TryCurrent(key) = None }',
-  ].join('\n')
-
-  assert.deepEqual(
-    scanCanonicalSharedProgram([
-      { file: kernelFile, text: kernel },
-      { file: canonicalFile, text: goodCanonical },
-    ]),
-    [],
-  )
-
-  const collectionRule = kernel.replace(
-    'Integrate: obj -> EventEnvelope -> Result<obj, string>',
-    'Integrate: obj -> EventEnvelope list -> Result<obj, string>',
-  )
-  const collectionHits = scanCanonicalSharedProgram([
-    { file: kernelFile, text: collectionRule },
-    { file: canonicalFile, text: goodCanonical },
-  ])
-  assert.deepEqual(
-    collectionHits.map(({ file, line, token }) => ({ file, line, token })),
-    [{ file: kernelFile, line: 1, token: 'IntegrationRule.Integrate(EventEnvelope)' }],
-  )
-
-  const missingSharedCalls = goodCanonical
-    .replace('integrateOne empty (List.head streams)', 'Ok empty')
-    .replace('integrateOne state (List.head events)', 'Ok state')
-  const hits = scanCanonicalSharedProgram([
-    { file: kernelFile, text: kernel },
-    { file: canonicalFile, text: missingSharedCalls },
-  ])
-  assert.deepEqual(
-    hits.map(({ file, line, token }) => ({ file, line, token })),
-    [
-      { file: canonicalFile, line: 2, token: 'replay->integrateOne' },
-      { file: canonicalFile, line: 5, token: 'PrepareLive->integrateOne' },
-    ],
-  )
-
-  const bypassCanonical = goodCanonical
-    .replace('integrateOne empty (List.head streams)', 'alternateReplay empty streams\n    let _ = integrateOne')
-    .replace('integrateOne state (List.head events)', 'alternateLive state events\n    let _ = integrateOne')
-    .replace('member _.ReloadLocal(commonDir) = replay streams', 'member _.ReloadLocal(commonDir) = alternateReplay empty streams')
-    .replace('member _.PrepareLive(events) = prepareLive state events', 'member _.PrepareLive(events) = alternateLive state events')
-  const bypassHits = scanCanonicalSharedProgram([
-    { file: kernelFile, text: kernel },
-    { file: canonicalFile, text: bypassCanonical },
-  ])
-  assert.deepEqual(
-    bypassHits.map(({ token }) => token),
-    [
-      'ReloadLocal->replay',
-      'replay->integrateOne',
-      'PrepareLive->integrateOne',
-      'PrepareLive->integrateOne',
-    ],
-    'alternate reducers and unused integrateOne references must not satisfy any call-graph edge',
-  )
-})
-test('WHAT[durable-events-013] production CanonicalIntegrator has the shared one-envelope program shape', () => {
-  const entries = collectProductionEntries()
-  const violations = scanCanonicalSharedProgram(entries)
-  assert.deepEqual(
-    violations,
-    [],
-    violations.map((v) => `[${v.id}] ${v.file}:${v.line} ${v.token} ${v.label}`).join('\n'),
-  )
 })
 }
