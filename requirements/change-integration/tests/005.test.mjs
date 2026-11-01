@@ -401,7 +401,7 @@ integrationTest('WHAT[change-integration-005] CHGINT_worktree_create_argv_is_acc
   }
 })
 
-integrationTest('WHAT[change-integration-005] CHGINT_worktree_create_survives_installed_wanxiang_reference_transaction_hook', async () => {
+integrationTest('WHAT[change-integration-005] CHGINT_worktree_create_with_a_reference_transaction_hook_present', async () => {
   const root = mkdtempSync(join(tmpdir(), 'wxs-worktree-hooked-'))
   const repo = join(root, 'repo')
   const child = join(root, 'manager-job-hooked')
