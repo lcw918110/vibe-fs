@@ -160,6 +160,7 @@ const scriptedBookkeeperPort = () => {
   const createCalls = []
   const prompts = []
   const programCalls = []
+  const abortCalls = []
   const terminals = new Set()
   let seq = 0
   const port = {
@@ -172,7 +173,11 @@ const scriptedBookkeeperPort = () => {
       createCalls.push({ child, physicalParentId })
       return bookkeeper.acceptedSession(child)
     },
-    AbortSession: async () => bookkeeper.aborted(),
+    AbortSession: async childId => {
+      const child = bookkeeper.sessionValue(childId)
+      abortCalls.push({ child, tx: bookkeeper.txIdFor(child), subscriptions: terminals.size })
+      return bookkeeper.aborted()
+    },
     SubscribeTerminal: (_childId, callback) => {
       terminals.add(callback)
       return { Dispose: () => terminals.delete(callback) }
@@ -192,7 +197,7 @@ const scriptedBookkeeperPort = () => {
       return bookkeeper.acceptedPrompt()
     },
   }
-  return { port, createCalls, prompts, programCalls }
+  return { port, createCalls, prompts, programCalls, abortCalls }
 }
 const installBookkeeperRuntime = (port, ownerSessionIds) => {
   const installed = bookkeeper.setRuntime(
@@ -211,7 +216,7 @@ const record = (sessionId, q, a, observations) => ({ sessionId, q, a, observatio
 test('WHAT[knowledge-reuse-006] CASE006_create_child_once_per_refresh_via_js_bookkeeper', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'wxs-bk-session-refresh-'))
   const handle = eventStore.create(dir, 'bookkeeper-session-refresh')
-  const { port, createCalls, programCalls, prompts } = scriptedBookkeeperPort()
+  const { port, createCalls, programCalls, prompts, abortCalls } = scriptedBookkeeperPort()
   try {
     writeFileSync(join(dir, 'a.txt'), 'hello', 'utf8')
     assert.equal((await archiveWithBaseline(handle, dir, record('s-session-refresh', 'Q keep', 'A keep', [fileRead('a.txt', casebook.contentHash('hello'))]))).ok, true)
@@ -224,6 +229,8 @@ test('WHAT[knowledge-reuse-006] CASE006_create_child_once_per_refresh_via_js_boo
     assert.equal(createCalls[0].physicalParentId, undefined)
     assert.equal(programCalls.length >= 1, true)
     assert.equal(prompts.some((text) => String(text).includes('CaseRefresh')), true)
+    assert.deepEqual(abortCalls, [{ child: createCalls[0].child, tx: programCalls[0], subscriptions: 0 }])
+    assert.equal(bookkeeper.txIdFor(createCalls[0].child), '', 'the completed child is unbound after AbortSession')
     const fetched = await casebook.fetchCase(handle, 10, 's-session-refresh')
     assert.equal(fetched.value.q, CANONICAL_Q)
     assert.equal(fetched.value.a, CANONICAL_A)
