@@ -265,15 +265,18 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
     /// The completed work has no active tenure, and reopening it is refused
     /// everywhere else. This is the one place that continuation is owed.
     let continueConflict commonDir sessionId requestId stopEffectId =
-        match stopEffectId with
-        | Some effectId ->
-            DurableWorkHost.execute
-                commonDir
-                sessionId
-                ("observed-stop:" + effectId)
-                (DurableWorkHost.command "Confirm" [ "effectId", box effectId; "outcome", box "Observed" ])
-            |> ignore
-        | None -> ()
+        let confirmNote =
+            match stopEffectId with
+            | Some effectId ->
+                let receipt =
+                    DurableWorkHost.execute
+                        commonDir
+                        sessionId
+                        ("observed-stop:" + effectId)
+                        (DurableWorkHost.command "Confirm" [ "effectId", box effectId; "outcome", box "Observed" ])
+
+                sprintf "confirm=%s/%s" receipt.Status receipt.Reason
+            | None -> "confirm=no-stop-effect"
 
         let receipt =
             DurableWorkHost.execute
@@ -291,7 +294,7 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
             || receipt.Status = "Observed"
             ->
             Ok(IncumbencyId.create activeId)
-        | _ -> Error(sprintf "Conflict continuation failed: %s %s" receipt.Status receipt.Reason)
+        | _ -> Error(sprintf "Conflict continuation failed: %s (%s) %s" receipt.Status confirmNote receipt.Reason)
 
     /// The continuation the road owes after its last committed retirement.
     ///
