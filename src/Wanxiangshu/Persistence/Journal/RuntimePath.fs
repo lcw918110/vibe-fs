@@ -1,168 +1,38 @@
 namespace Wanxiangshu.Persistence.Journal
 
 open System.Threading.Tasks
-open System
 open Fable.Core
-open Fable.Core.JsInterop
-open Wanxiangshu.Git
 
+/// 产品布局由宿主提供；工作区定位、状态目录检查和初始化归库。
 module RuntimePath =
-
-    [<Import("resolve", "node:path")>]
-    let private resolvePath (path: string) : string = jsNative
-
-    [<Import("realpathSync", "node:fs")>]
-    let private realpathSync (path: string) : string = jsNative
-
     [<Import("join", "node:path")>]
     let private joinPath (left: string) (right: string) : string = jsNative
 
-    [<Import("lstatSync", "node:fs")>]
-    let private lstat (path: string) (options: obj) : obj = jsNative
+    [<Import("primaryDirectory", "wanxiangli/workspace-state")>]
+    let private primaryDirectory (workspace: string) : Task<string> = jsNative
 
-    [<Import("existsSync", "node:fs")>]
-    let private pathExists (path: string) : bool = jsNative
+    [<Import("primaryDirectorySync", "wanxiangli/workspace-state")>]
+    let private primaryDirectorySync (workspace: string) : string = jsNative
 
-    [<Import("dirname", "node:path")>]
-    let private directoryOf (path: string) : string = jsNative
+    [<Import("checkStateDirectory", "wanxiangli/workspace-state")>]
+    let private checkStateDirectory (stateRoot: string) : string = jsNative
 
-    [<Import("mkdirSync", "node:fs")>]
-    let private mkdir (path: string) (options: obj) : unit = jsNative
+    [<Import("initializeStateDirectory", "wanxiangli/workspace-state")>]
+    let private initializeStateDirectory (stateRoot: string) : string = jsNative
 
-    [<Import("writeFileSync", "node:fs")>]
-    let private writeFile (path: string) (content: string) (options: obj) : unit = jsNative
+    let private runtimeDirectory root = joinPath (joinPath root "wanxiangshu") "runtimes"
+    let private stateDirectory primary = joinPath primary ".Herdchestra" |> checkStateDirectory
 
-    [<Import("readFileSync", "node:fs")>]
-    let private readFile (path: string) (encoding: string) : string = jsNative
-
-    [<Emit("$0 != null && $0.code === 'EEXIST'")>]
-    let private alreadyExists (error: exn) : bool = jsNative
-
-    let private runtimeDirectory root =
-        joinPath (joinPath root "wanxiangshu") "runtimes"
-
-    let private canonicalPath path =
-        try
-            realpathSync path
-        with _ ->
-            resolvePath path
-
-    let private outsideGit (path: string) =
-        let segments = path.Split([| '/'; '\\' |], StringSplitOptions.RemoveEmptyEntries)
-
-        if
-            segments
-            |> Array.exists (fun part -> part.Equals(".git", StringComparison.OrdinalIgnoreCase))
-        then
-            invalidArg "workspace" "Runtime persistence cannot be placed inside .git"
-
-        path
-
-    type private IRuntimePathStore =
-        abstract getOrCompute: workspace: string * compute: (string -> obj) -> obj
-
-    [<Import("runtimePathStore", "wanxiangli/git-porcelain")>]
-    let private runtimePathStore: IRuntimePathStore = jsNative
-
-    let private parsePrimaryWorktree (listingZ: string) =
-        match GitPorcelain.primaryWorktree listingZ with
-        | Ok path -> path |> canonicalPath |> outsideGit
-        | Error "bare" -> invalidArg "workspace" "Runtime persistence requires a working tree, not a bare repository"
-        | Error _ -> invalidOp "Git did not identify the primary working tree"
-
-    [<Import("accessSync", "node:fs")>]
-    let private accessPath (path: string) (mode: int) : unit = jsNative
-
-    [<Emit("0")>]
-    let private fileVisible: int = jsNative
-
-    let private canRead (path: string) =
-        try
-            accessPath path fileVisible
-            true
-        with _ ->
-            false
-
-    let rec private existingGitAnchor (boundary: string) (current: string) =
-        let parent = directoryOf current
-
-        if pathExists (joinPath current ".git") && canRead current then
-            current
-        elif current <> boundary && parent <> current && pathExists parent then
-            existingGitAnchor boundary parent
-        else
-            current
-
-    let private primaryWorktree (workspace: string) : Task<string> =
-        task {
-            let anchor =
-                if pathExists workspace then
-                    workspace
-                else
-                    existingGitAnchor (directoryOf workspace) workspace
-
-            let! listing =
-                task {
-                    try
-                        let! text = GitSubject.execIn anchor [| "worktree"; "list"; "--porcelain"; "-z" |]
-                        return Some text
-                    with _ ->
-                        return None
-                }
-
-            match listing with
-            | None -> return anchor
-            | Some text -> return parsePrimaryWorktree text
-        }
-
-    /// Git 只提供只读拓扑：主工作树和 linked worktree 共用主工作树下的状态。
-    /// 没有 Git 仓库时使用给定目录；不回退到 .git、XDG 或旧日志。
     let stateRoot (workspace: string) : Task<string> =
         task {
-            if String.IsNullOrWhiteSpace workspace then
-                invalidArg "workspace" "A workspace directory is required"
-
-            let key = workspace |> resolvePath |> outsideGit
-
-            let primaryTask =
-                unbox<Task<string>> (runtimePathStore.getOrCompute (key, fun (k: string) -> box (primaryWorktree k)))
-
-            let! primary = primaryTask
-
-            let target = joinPath primary ".Herdchestra"
-            let existing = lstat target (createObj [ "throwIfNoEntry" ==> false ])
-
-            if
-                not (isNull existing)
-                && (unbox<bool> (existing?isSymbolicLink ())
-                    || not (unbox<bool> (existing?isDirectory ())))
-            then
-                invalidArg "workspace" ".Herdchestra must be a real directory, not a link or file"
-
-            return target
+            let! primary = primaryDirectory workspace
+            return stateDirectory primary
         }
 
-    /// 仅写入者初始化时创建自身忽略规则，不修改项目的 .git/info/exclude。
     let initializeStateRoot (workspace: string) : Task<string> =
         task {
             let! target = stateRoot workspace
-            mkdir target (createObj [ "recursive" ==> true ])
-            let ignore = joinPath target ".gitignore"
-
-            try
-                writeFile ignore "*\n" (createObj [ "flag" ==> "wx"; "encoding" ==> "utf8" ])
-            with error when alreadyExists error ->
-                let entry = lstat ignore (createObj [ "throwIfNoEntry" ==> false ])
-
-                if
-                    isNull entry
-                    || unbox<bool> (entry?isSymbolicLink ())
-                    || not (unbox<bool> (entry?isFile ()))
-                    || (readFile ignore "utf8").Trim() <> "*"
-                then
-                    invalidOp ".Herdchestra/.gitignore must be a regular file excluding all runtime data"
-
-            return target
+            return initializeStateDirectory target
         }
 
     let forWorkspace (workspace: string) : Task<string> =
@@ -171,31 +41,5 @@ module RuntimePath =
             return runtimeDirectory target
         }
 
-    /// 同步解析只给没有异步边界的读取使用。已有目录走主工作树；缺失目录只在父目录内找仓库。
-    let stateRootSync (workspace: string) =
-        if String.IsNullOrWhiteSpace workspace then
-            invalidArg "workspace" "A workspace directory is required"
-
-        let key =
-            if pathExists workspace then
-                workspace |> canonicalPath |> outsideGit
-            else
-                workspace |> resolvePath |> outsideGit
-
-        let anchor =
-            if pathExists key then
-                key
-            else
-                existingGitAnchor (directoryOf key) key
-
-        let primary =
-            try
-                GitSubject.execInSync anchor [| "worktree"; "list"; "--porcelain"; "-z" |]
-                |> parsePrimaryWorktree
-            with _ ->
-                anchor
-
-        joinPath primary ".Herdchestra"
-
-    let forStateRoot (stateDirectory: string) =
-        stateDirectory |> canonicalPath |> outsideGit |> runtimeDirectory
+    let stateRootSync (workspace: string) = primaryDirectorySync workspace |> stateDirectory
+    let forStateRoot (stateRoot: string) = checkStateDirectory stateRoot |> runtimeDirectory
