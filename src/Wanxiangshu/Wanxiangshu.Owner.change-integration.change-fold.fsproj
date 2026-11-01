@@ -16,6 +16,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-journal-promptfactcodec.fsproj"/>
     <Compile Include="Change/Fold.fsi"/>
     <Compile Include="Change/Fold.fs"/>
+    <Compile Include="Git/Worktrees.fs"/>
     <Compile Include="Change/Types.fsi"/>
     <Compile Include="Change/Types.fs"/>
     <Compile Include="Change/Orchestrator/OrchestratorPort.fsi"/>

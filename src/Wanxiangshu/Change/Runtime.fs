@@ -141,7 +141,9 @@ type Orchestrator
 
             let path = defaultArg worktreePath (defaultWorktreePath jobId)
             // PERSIST-009: effect identity is deterministic before git runs.
-            let identity = WorktreeCommands.identityOf jobId
+            let identity =
+                GitPorcelain.managerBranchOf (ManagerJobId.value jobId)
+                |> WorktreeIdentity.create
 
             let requestFact =
                 OrchestratorFact.WorktreeCreateRequested
@@ -172,7 +174,7 @@ type Orchestrator
                     |> TaskResultCE.ofTask
                 | Some(WorktreeEffectStatus.Requested request) ->
                     task {
-                        let! physical = git.ListWorktrees()
+                        let! physical = git.Worktrees.List()
 
                         return
                             WorktreeReconciliationObservation.RequestedAmbiguity(
@@ -212,11 +214,11 @@ type Orchestrator
                     // The isolated worktree is created from the frozen target
                     // ref: it sees that ref's committed content, and the main
                     // worktree's unrelated drafts stay where they are.
-                    WorktreeResource.Create(git, jobId, path, targetRef)
+                    git.Worktrees.Create(identity, path, targetRef)
                     |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to create worktree")
                 | WorktreeReconciliationDecision.AdoptThenRecordCreated
                 | WorktreeReconciliationDecision.AdoptCreated ->
-                    Ok(WorktreeResource.Adopt(git, identity, path)) |> Task.FromResult
+                    Ok(git.Worktrees.Adopt(identity, path)) |> Task.FromResult
                 | WorktreeReconciliationDecision.Reject failure ->
                     Error(integration "Worktree reconciliation rejected" (reconciliationFailure failure))
                     |> Task.FromResult
@@ -333,8 +335,7 @@ type Orchestrator
     /// ORCH-007: resume a persisted job. The worktree is adopted by its durable
     /// identity, never recreated, and the Manager is the one the fact names.
     member _.RecoverManagerJob(record: ManagerJobProjection) =
-        let worktree =
-            WorktreeResource.Adopt(git, record.WorktreeIdentity, record.WorktreePath)
+        let worktree = git.Worktrees.Adopt(record.WorktreeIdentity, record.WorktreePath)
 
         startPublication
             { JobId = record.ManagerJobId

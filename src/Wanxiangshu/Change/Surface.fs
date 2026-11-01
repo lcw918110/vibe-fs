@@ -1160,8 +1160,21 @@ module ChangeSurface =
                         Ok value
 
             let git: GitPort =
-                { IsDirty = fun _ -> Task.FromResult(Ok [])
-                  CreateWorktree = fun _ _ _ -> Task.FromResult(Ok worktreeIdentity)
+                { Worktrees =
+                    GitWorktrees.CreateWithRunner(
+                        "/repo",
+                        fun command ->
+                            task {
+                                let args = unbox<string array> command?args
+                                let removeFails =
+                                    scenario.CleanupFails && args.Length >= 2
+                                    && args[0] = "worktree" && args[1] = "remove"
+                                return box {| code = (if removeFails then 1 else 0)
+                                              stdout = ""
+                                              stderr = (if removeFails then "disk detached" else "") |}
+                            }
+                    )
+                  IsDirty = fun _ -> Task.FromResult(Ok [])
                   FreezeTargetBranch = fun () -> Task.FromResult(Ok targetRef)
                   Rebase =
                     fun _ _ ->
@@ -1204,16 +1217,7 @@ module ChangeSurface =
                             Task.FromResult(Error "scenario conflict queue exhausted")
                         else
                             Task.FromResult(Ok(conflictReads.Dequeue()))
-                  RemoveWorktree =
-                    fun _ ->
-                        if scenario.CleanupFails then
-                            Task.FromResult(Error "disk detached")
-                        else
-                            Task.FromResult(Ok())
                   HasRebaseHead = fun _ -> Task.FromResult false
-                  ListWorktrees = fun () -> Task.FromResult(Ok [])
-                  ListManagerBranches = fun () -> Task.FromResult(Ok [])
-                  DeleteBranch = fun _ -> Task.FromResult(Ok())
                   ReadHead =
                     fun _ ->
                         let value =
@@ -1235,7 +1239,7 @@ module ChangeSurface =
                         targetHead.Value <- value
                         Task.FromResult(Ok(CommitHash.create value)) }
 
-            let worktree = WorktreeResource.Adopt(git, worktreeIdentity, worktreePath)
+            let worktree = git.Worktrees.Adopt(worktreeIdentity, worktreePath)
 
             let job =
                 { JobId = jobId
@@ -1630,32 +1634,32 @@ module ChangeSurface =
     let gitCreateWorktree (git: obj) (job: string) (path: string) (sourceRef: string) : Task<obj> =
         task {
             let! result =
-                (git :?> GitHandle).Port.CreateWorktree
-                    (ManagerJobId.create job)
-                    (WorktreePath.create path)
-                    (TargetRef.create sourceRef)
+                (git :?> GitHandle).Port.Worktrees.Create(
+                    GitPorcelain.managerBranchOf job |> WorktreeIdentity.create,
+                    WorktreePath.create path,
+                    TargetRef.create sourceRef)
 
-            return resultObject result (fun value -> box (WorktreeIdentity.value value))
+            return resultObject result (fun value -> box (WorktreeIdentity.value value.Identity))
         }
 
     let gitRemoveWorktree (git: obj) (path: string) : Task<obj> =
         task {
-            let! result = (git :?> GitHandle).Port.RemoveWorktree(WorktreePath.create path)
+            let! result = (git :?> GitHandle).Port.Worktrees.Remove(WorktreePath.create path)
             return resultObject result (fun _ -> null)
         }
 
     let gitDeleteBranch (git: obj) (identity: string) : Task<obj> =
         task {
-            let! result = (git :?> GitHandle).Port.DeleteBranch(WorktreeIdentity.create identity)
+            let! result = (git :?> GitHandle).Port.Worktrees.DeleteBranch(WorktreeIdentity.create identity)
             return resultObject result (fun _ -> null)
         }
 
     let worktreeIdentityOf (job: string) : string =
-        WorktreeIdentity.value (WorktreeCommands.identityOf (ManagerJobId.create job))
+        GitPorcelain.managerBranchOf job
 
     let gitListWorktrees (git: obj) : Task<obj> =
         task {
-            let! result = (git :?> GitHandle).Port.ListWorktrees()
+            let! result = (git :?> GitHandle).Port.Worktrees.List()
 
             return
                 resultObject result (fun values ->
@@ -1673,16 +1677,15 @@ module ChangeSurface =
 
     let gitListManagerBranches (git: obj) : Task<obj> =
         task {
-            let! result = (git :?> GitHandle).Port.ListManagerBranches()
+            let! result = (git :?> GitHandle).Port.Worktrees.ListBranches("manager/*")
             return resultObject result (fun values -> values |> List.map WorktreeIdentity.value |> List.toArray |> box)
         }
 
     let worktreeCreate (git: obj) (job: string) (path: string) (sourceRef: string) : Task<obj> =
         task {
             let! result =
-                WorktreeResource.Create(
-                    (git :?> GitHandle).Port,
-                    ManagerJobId.create job,
+                (git :?> GitHandle).Port.Worktrees.Create(
+                    GitPorcelain.managerBranchOf job |> WorktreeIdentity.create,
                     WorktreePath.create path,
                     TargetRef.create sourceRef
                 )
@@ -1692,7 +1695,7 @@ module ChangeSurface =
 
     let worktreeAdopt (git: obj) (identity: string) (path: string) : obj =
         WorktreeHandle(
-            WorktreeResource.Adopt((git :?> GitHandle).Port, WorktreeIdentity.create identity, WorktreePath.create path)
+            (git :?> GitHandle).Port.Worktrees.Adopt(WorktreeIdentity.create identity, WorktreePath.create path)
         )
         :> obj
 

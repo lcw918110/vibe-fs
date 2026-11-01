@@ -1,5 +1,6 @@
 import test from 'node:test'
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
+import { GitWorktrees } from 'wanxiangli/git-worktrees'
 
 {
 const { default: assert } = await import("node:assert/strict");
@@ -144,7 +145,7 @@ const { join } = await import("node:path");
 const change = await import('../../../dist/Change/Surface.js');
 const hostSurface = await import('../../../dist/Change/Host/Surface.js');
 const journal = await import('../../../dist/Persistence/Journal/Surface.js');
-const { fakeGitPort, fakeSessions } = await import('../../verification-system/tests/support/orchestrator-host-harness.mjs');
+const { fakeGitPort, fakeSessions, liveOrchestrator } = await import('../../verification-system/tests/support/orchestrator-host-harness.mjs');
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 
@@ -215,7 +216,15 @@ const withAdmissionFixture = async (status, body) => {
       gitPort: {
         ...fakeGitPort(),
         IsDirty: path => change.gitIsDirty(adapter, path),
-        CreateWorktree: (jobId, path, sourceRef) => change.gitCreateWorktree(adapter, jobId, path, sourceRef),
+        Worktrees: new GitWorktrees(fx.repo, async ({ args, cwd }) => {
+          if ((args[0] === 'worktree' && args[1] === 'list') || (args[0] === 'branch' && args[1] === '--list')) {
+            return { code: 0, stdout: '', stderr: '' }
+          }
+          commands.push({ fileName: 'git', args, workingDirectory: cwd })
+          assert.equal(args[0], 'worktree')
+          assert.equal(args[1], 'add')
+          return { code: 1, stdout: '', stderr: 'controlled stop before worktree creation' }
+        }),
       },
       repoPath: fx.repo,
       targetBranch: 'main',
@@ -246,6 +255,38 @@ const withAdmissionFixture = async (status, body) => {
     }
   }
 }
+
+test('WHAT[change-integration-002] the replaced worktree instance owns actual Host creation and failed-session cleanup', async () => {
+  const calls = []
+  const replacement = new GitWorktrees('/replacement-repository', async command => {
+    calls.push(command)
+    return { code: 0, stdout: '', stderr: '' }
+  })
+  const fx = await liveOrchestrator({
+    journal: false,
+    gitPort: { ...fakeGitPort(), Worktrees: replacement },
+    sessionBehaviour: { createError: 'controlled manager creation refusal' },
+  })
+  try {
+    const result = await hostSurface.forkManagerJob(fx.host, 'replacement-worktree-job', 'manager', 'Inspect the change.')
+    assert.equal(result.ok, false)
+    const adds = calls.filter(({ args }) => args[0] === 'worktree' && args[1] === 'add')
+    const removes = calls.filter(({ args }) => args[0] === 'worktree' && args[1] === 'remove')
+    const deletes = calls.filter(({ args }) => args[0] === 'branch' && args[1] === '-D')
+    assert.equal(adds.length, 1, 'the supplied worktree instance must perform creation')
+    assert.equal(removes.length, 1, 'failed Manager creation must clean up through the supplied instance')
+    assert.equal(deletes.length, 1)
+    assert.equal(adds[0].cwd, '/replacement-repository')
+    assert.equal(removes[0].cwd, undefined, 'removal keeps the original command cwd contract')
+    assert.equal(deletes[0].cwd, '/replacement-repository')
+    assert.ok(removes[0].args.includes(adds[0].args[2]), 'cleanup removes the worktree that was created')
+    assert.ok(deletes[0].args.includes('manager/replacement-worktree-job'))
+    assert.ok(calls.indexOf(adds[0]) < calls.indexOf(removes[0]))
+    assert.ok(calls.indexOf(removes[0]) < calls.indexOf(deletes[0]))
+  } finally {
+    await fx.cleanup()
+  }
+})
 
 integrationTest('WHAT[change-integration-002] failed Git cleanliness blocks a new Host job before its worktree request or Manager creation', async () => {
   await withAdmissionFixture([128, '', 'cannot inspect target'], async (fx) => {

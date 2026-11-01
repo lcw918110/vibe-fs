@@ -13,7 +13,7 @@ open Wanxiangshu.Git
 module OrchestratorSweep =
     let private removeOne git path (cont: Task<Result<unit, string>>) =
         task {
-            match! git.RemoveWorktree path with
+            match! git.Worktrees.Remove path with
             | Ok() -> return! cont
             | Error error ->
                 return Error(sprintf "stale worktree cleanup failed for %s: %s" (WorktreePath.value path) error)
@@ -31,7 +31,7 @@ module OrchestratorSweep =
 
     let private deleteOne git identity (cont: Task<Result<unit, string>>) =
         task {
-            match! git.DeleteBranch identity with
+            match! git.Worktrees.DeleteBranch identity with
             | Ok() -> return! cont
             | Error error ->
                 return
@@ -55,7 +55,7 @@ module OrchestratorSweep =
 
     let private afterRemoveWorktrees (git: GitPort) (owned: string list) : Task<Result<unit, string>> =
         task {
-            match! git.ListManagerBranches() with
+            match! git.Worktrees.ListBranches("manager/*") with
             | Error error -> return Error(sprintf "cannot list manager branches for cleanup: %s" error)
             | Ok branches ->
                 let stale =
@@ -94,7 +94,7 @@ module OrchestratorSweep =
         task {
             let owned = ownedIdentities activeJobs
 
-            match! git.ListWorktrees() with
+            match! git.Worktrees.List() with
             | Error error -> return Error(sprintf "cannot list worktrees for cleanup: %s" error)
             | Ok entries -> return! removeStaleWorktrees git owned entries
         }

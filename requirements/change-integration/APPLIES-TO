@@ -7,5 +7,4 @@
 /src/Wanxiangshu/Git/Operations.fsi
 /src/Wanxiangshu/Git/Subject.fs
 /src/Wanxiangshu/Git/Subject.fsi
-/src/Wanxiangshu/Git/WorktreeResource.fs
-/src/Wanxiangshu/Git/WorktreeResource.fsi
+/src/Wanxiangshu/Git/Worktrees.fs

@@ -33,6 +33,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
+import { GitWorktrees } from 'wanxiangli/git-worktrees'
 import * as change from '../../../dist/Change/Surface.js'
 import * as changeHost from '../../../dist/Change/Host/Surface.js'
 import * as eventStore from '../../../dist/Persistence/EventStore/Surface.js'
@@ -191,16 +192,12 @@ const effectLedgerOf = (facts) => {
 // 真实的编排面：它在 journal 上写下效果的请求意图与物理确认 —— 效果账因此真的
 // 有一笔「已确认」。
 const gitPortStub = () => ({
+  Worktrees: new GitWorktrees('/effect-accounting-repository', async () => ({ code: 0, stdout: '', stderr: '' })),
   IsDirty: async () => ({ ok: true, value: [] }),
   FreezeTargetBranch: async () => ({ ok: true, value: 'refs/heads/main' }),
-  ListManagerBranches: async () => ({ ok: true, value: [] }),
-  DeleteBranch: async () => ({ ok: true }),
   HasRebaseHead: async () => false,
   ReadHead: async () => ({ ok: true, value: 'head' }),
   GetTargetHead: async () => ({ ok: true, value: 'target-head' }),
-  CreateWorktree: async () => ({ ok: true, value: WORKTREE }),
-  ListWorktrees: async () => ({ ok: true, value: [] }),
-  RemoveWorktree: async () => ({ ok: true }),
 })
 
 const sessionPortStub = () => ({

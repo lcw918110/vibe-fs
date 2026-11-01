@@ -2,6 +2,7 @@ namespace Wanxiangshu.Git
 
 open System
 open System.Threading.Tasks
+open Fable.Core.JsInterop
 open Wanxiangshu.Change
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -273,12 +274,54 @@ module GitOperations =
             return if code = 0 then Ok() else Error(failure stdout stderr)
         }
 
-    let private rebaseInProgress (runner: Command -> Task<int * string * string>) dir =
-        WorktreeCommands.rebaseInProgress runner dir
+    let rebaseInProgress (runner: Command -> Task<int * string * string>) dir =
+        task {
+            let! mergeCode, mergePath, _ = runner (command dir [ "rev-parse"; "--git-path"; "rebase-merge" ])
+            let! applyCode, applyPath, _ = runner (command dir [ "rev-parse"; "--git-path"; "rebase-apply" ])
+
+            return
+                GitPorcelain.rebaseStatePaths (mergeCode, mergePath) (applyCode, applyPath)
+                |> List.exists System.IO.Directory.Exists
+        }
+
+    let private worktrees repoPath (runner: Command -> Task<int * string * string>) =
+        GitWorktrees.CreateWithRunner(
+            repoPath,
+            fun request ->
+                task {
+                    let cwd: string = request?cwd
+                    let args: string array = request?args
+
+                    let! code, stdout, stderr =
+                        runner
+                            { FileName = GitSubject.Executable
+                              Arguments = Array.toList args
+                              WorkingDirectory = Option.ofObj cwd
+                              Environment = None
+                              Stdin = None
+                              PtyOptions = None }
+
+                    return
+                        box
+                            {| code = code
+                               stdout = stdout
+                               stderr = stderr |}
+                }
+        )
 
     let createWithRepo repoPath (runner: Command -> Task<int * string * string>) : GitPort =
-        { IsDirty = WorktreeCommands.isDirty runner
-          CreateWorktree = fun jobId path sourceRef -> WorktreeCommands.create runner repoPath jobId path sourceRef
+        { IsDirty =
+            fun path ->
+                task {
+                    let! code, stdout, stderr = runner (command (WorktreePath.value path) [ "status"; "--porcelain" ])
+
+                    return
+                        if code = 0 then
+                            Ok(blockingPaths stdout)
+                        else
+                            Error(failure stdout stderr)
+                }
+          Worktrees = worktrees repoPath runner
 
           // ORCH-008: freeze by symbolic-ref. A detached HEAD has no branch to
           // publish to, so this fails closed instead of resolving HEAD to a commit
@@ -322,7 +365,6 @@ module GitOperations =
                 }
 
           FfMerge = ffMerge runner repoPath
-          RemoveWorktree = WorktreeCommands.remove runner
 
           HasRebaseHead =
             fun worktree ->
@@ -331,9 +373,6 @@ module GitOperations =
                     return! rebaseInProgress runner dir
                 }
 
-          ListWorktrees = WorktreeCommands.list runner repoPath
-          ListManagerBranches = WorktreeCommands.listBranches runner repoPath
-          DeleteBranch = WorktreeCommands.deleteBranch runner repoPath
           ReadHead = fun path -> revParse runner (WorktreePath.value path) "HEAD" "HEAD is empty"
 
           GetTargetHead =

@@ -645,6 +645,7 @@ Process/PtyBackend.fsi
 Process/PtyBackend.fs
 Process/PtyApi.fsi
 Process/PtyApi.fs
+Git/Worktrees.fs
 Change/Types.fsi
 Change/Types.fs
 Change/Orchestrator/OrchestratorJournalAdapter.fsi
@@ -682,8 +683,6 @@ Resources/PromptSurface.fsi
 Resources/PromptSurface.fs
 Git/IntegrationGate.fsi
 Git/IntegrationGate.fs
-Git/WorktreeResource.fsi
-Git/WorktreeResource.fs
 Change/Job.fsi
 Change/Job.fs
 Change/Program.fsi

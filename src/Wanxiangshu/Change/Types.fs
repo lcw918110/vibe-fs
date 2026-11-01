@@ -4,6 +4,7 @@ open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Foundation.Identity
+open Wanxiangshu.Git
 open Wanxiangshu.Mission.Work
 open Wanxiangshu.Persistence.Journal
 
@@ -36,14 +37,7 @@ type GitPort =
         /// exact paths that block.
         IsDirty: WorktreePath -> Task<Result<string list, string>>
 
-        /// Creates the worktree from `sourceRef` and returns its stable identity
-        /// (ORCH-006).
-        ///
-        /// Recovery locates a worktree by identity; the path is diagnostic and may
-        /// move. The start point is named because it is the source the isolated
-        /// worktree sees: the committed content of that ref, never another
-        /// worktree's uncommitted changes.
-        CreateWorktree: ManagerJobId -> WorktreePath -> TargetRef -> Task<Result<WorktreeIdentity, string>>
+        Worktrees: GitWorktrees
 
         /// ORCH-008: freeze the target branch by `symbolic-ref` at fork time.
         ///
@@ -68,11 +62,7 @@ type GitPort =
         FfMerge: WorktreePath -> TargetRef -> CommitHash -> CommitHash -> Task<Result<CommitHash, string>>
 
         ConflictedFiles: WorktreePath -> Task<Result<string list, string>>
-        RemoveWorktree: WorktreePath -> Task<Result<unit, string>>
         HasRebaseHead: WorktreePath -> Task<bool>
-        ListWorktrees: unit -> Task<Result<(WorktreePath * WorktreeIdentity option) list, string>>
-        ListManagerBranches: unit -> Task<Result<WorktreeIdentity list, string>>
-        DeleteBranch: WorktreeIdentity -> Task<Result<unit, string>>
         ReadHead: WorktreePath -> Task<Result<CommitHash, string>>
         GetTargetHead: TargetRef -> Task<Result<CommitHash, string>>
     }

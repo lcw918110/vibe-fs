@@ -86,11 +86,6 @@ module OrchestratorHostSurface =
 
     let private sessionValue (value: obj) = SessionId.create (stringOf value)
     let private targetValue (value: obj) = TargetRef.create (stringOf value)
-    let private worktreePathValue (value: obj) = WorktreePath.create (stringOf value)
-
-    let private worktreeIdentityValue (value: obj) =
-        WorktreeIdentity.create (stringOf value)
-
     let private commitValue (value: obj) = CommitHash.create (stringOf value)
 
     let private roleOf (value: obj) : Role option =
@@ -223,31 +218,13 @@ module OrchestratorHostSurface =
     let private sessionPort (raw: obj) : ISessionHostPort =
         PlainSessionPort(raw) :> ISessionHostPort
 
-    let private worktreePair (value: obj) =
-        let identity =
-            field value "identity" |> optionalString |> Option.map WorktreeIdentity.create
-
-        worktreePathValue (field value "path"), identity
-
     let private gitPort (raw: obj) : GitPort =
-        { IsDirty =
+        { Worktrees = Wanxiangshu.Git.GitWorktrees.FromNative(field raw "Worktrees")
+          IsDirty =
             fun path ->
                 task {
                     let! value = invokeRawTask raw "IsDirty" [| box (WorktreePath.value path) |]
                     return plainResult value (fun item -> arrayOf item |> Array.toList |> List.map stringOf)
-                }
-          CreateWorktree =
-            fun job path sourceRef ->
-                task {
-                    let! value =
-                        invokeRawTask
-                            raw
-                            "CreateWorktree"
-                            [| box (ManagerJobId.value job)
-                               box (WorktreePath.value path)
-                               box (TargetRef.value sourceRef) |]
-
-                    return plainResult value worktreeIdentityValue
                 }
           FreezeTargetBranch =
             fun () ->
@@ -283,37 +260,11 @@ module OrchestratorHostSurface =
                     let! value = invokeRawTask raw "ConflictedFiles" [| box (WorktreePath.value path) |]
                     return plainResult value (fun item -> arrayOf item |> Array.toList |> List.map stringOf)
                 }
-          RemoveWorktree =
-            fun path ->
-                task {
-                    let! value = invokeRawTask raw "RemoveWorktree" [| box (WorktreePath.value path) |]
-                    return plainUnitResult value
-                }
           HasRebaseHead =
             fun path ->
                 task {
                     let! value = invokeRawTask raw "HasRebaseHead" [| box (WorktreePath.value path) |]
                     return boolOf value
-                }
-          ListWorktrees =
-            fun () ->
-                task {
-                    let! value = invokeRawTask raw "ListWorktrees" [||]
-                    return plainResult value (fun item -> arrayOf item |> Array.toList |> List.map worktreePair)
-                }
-          ListManagerBranches =
-            fun () ->
-                task {
-                    let! value = invokeRawTask raw "ListManagerBranches" [||]
-
-                    return
-                        plainResult value (fun item -> arrayOf item |> Array.toList |> List.map worktreeIdentityValue)
-                }
-          DeleteBranch =
-            fun identity ->
-                task {
-                    let! value = invokeRawTask raw "DeleteBranch" [| box (WorktreeIdentity.value identity) |]
-                    return plainUnitResult value
                 }
           ReadHead =
             fun path ->

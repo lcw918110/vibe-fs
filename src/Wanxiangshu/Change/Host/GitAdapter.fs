@@ -52,9 +52,9 @@ module OrchestratorGit =
           PtyOptions = None }
 
     /// True when an in-progress rebase is present (rebase-merge / rebase-apply,
-    /// never a stale REBASE_HEAD; ORCH-003). One reader: WorktreeCommands.
+    /// never a stale REBASE_HEAD; ORCH-003).
     let hasRebaseHead (runner: Command -> Task<int * string * string>) (worktree: string) : Task<bool> =
-        WorktreeCommands.rebaseInProgress runner worktree
+        GitOperations.rebaseInProgress runner worktree
 
     /// After a manager terminal: stage everything, then either continue an
     /// in-flight rebase or create the candidate commit.
