@@ -418,7 +418,7 @@ module ModelRoutingSurface =
         function
         | ExecutionAdmissionAcquisition.Queued node ->
             task {
-                let! completed = node.Completion.Task
+                let! completed = ModelRouting.awaitQueuedAdmission node
                 return! awaitAdmission completed
             }
         | acquisition -> Task.FromResult acquisition
@@ -686,7 +686,7 @@ module ModelRoutingSurface =
         if hasOpaqueLease queuedAdmissionNodes queueToken then
             task {
                 let node = queuedNodeValue queuedAdmissionNodes queueToken
-                let! completed = node.Completion.Task
+                let! completed = ModelRouting.awaitQueuedAdmission node
                 let! terminal = awaitAdmission completed
                 return acquireAdmissionObject terminal
             }

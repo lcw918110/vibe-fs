@@ -693,12 +693,6 @@ OpenCode/Codec/OpencodeTypes.fsi
 OpenCode/Codec/OpencodeTypes.fs
 Execution/Routing/ModelCapacity/Model.fsi
 Execution/Routing/ModelCapacity/Model.fs
-Execution/Routing/ModelCapacity/Queue.fsi
-Execution/Routing/ModelCapacity/Queue.fs
-Execution/Routing/ModelCapacity/Borrowing.fsi
-Execution/Routing/ModelCapacity/Borrowing.fs
-Execution/Routing/ModelCapacity/Surface.fsi
-Execution/Routing/ModelCapacity/Surface.fs
 Execution/Routing/ModelRouting.fsi
 Execution/Routing/ModelRouting.fs
 OpenCode/Host/ManagedAgentConfig.fsi

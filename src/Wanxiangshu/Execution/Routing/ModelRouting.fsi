@@ -18,6 +18,8 @@ module ModelRouting =
     val internal failureOfExecutionAdmissionAcquisition: ExecutionAdmissionAcquisition -> ExecutionFailure option
     val internal seedBoundDevOpsModel: sessionId: SessionId -> value: string -> unit
     val internal capacityOwnership: lease: ExecutionAdmissionLease -> CapacityOwnership
+    val internal executionAdmissionIdentity: lease: ExecutionAdmissionLease -> ExecutionAdmissionExactIdentity
+    val internal awaitQueuedAdmission: node: ExecutionAdmissionQueueNode -> Task<ExecutionAdmissionAcquisition>
 
     val invokeScheduler:
         scheduler: obj ->
@@ -118,6 +120,7 @@ module ModelRouting =
             sessionId: string * physicalUserMessageId: string -> CapacityTransitionOutcome
 
         member CapacitySnapshot: unit -> CapacityInvariantEvidence
+        member internal HoldsPhysical: sessionId: string * physicalUserMessageId: string -> bool
 
         member EnterProviderStep:
             sessionId: string * physicalUserMessageId: string * visibleProviderRuns: Set<string> * ?requestKey: string ->

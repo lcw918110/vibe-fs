@@ -903,7 +903,7 @@ module HostSignalBootstrap =
                     ModelRouting.tryReadExecution key
                     |> Option.defaultWith (fun () -> invalidOp "managed admission has no exact committed lease")
 
-                if lease.Identity.Target <> hostTarget output then
+                if (ModelRouting.executionAdmissionIdentity lease).Target <> hostTarget output then
                     invalidOp "OpenCode model does not match the committed execution lease"
 
             let completeAdmission intent output result =

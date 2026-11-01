@@ -313,7 +313,7 @@ module internal ChatAdmissionTransaction =
             AdmissionAcquisitionOutcome.LeaseAcquired lease |> Ok |> Task.FromResult
         | ExecutionAdmissionAcquisition.Queued node ->
             task {
-                let! completed = node.Completion.Task
+                let! completed = ModelRouting.awaitQueuedAdmission node
                 return! acquisitionOutcome observe ports witness completed
             }
         | outcome -> stoppedAdmissionSettlement witness outcome |> settleAdmission observe ports
@@ -538,7 +538,7 @@ module internal ChatAdmissionTransaction =
                 with error ->
                     Error error
           Commit = ModelRouting.commitExecutionAdmission
-          ReleaseBeforeProvider = fun lease -> ModelRouting.releaseExecutionAdmissionBeforeProvider lease lease.Identity
+          ReleaseBeforeProvider = fun lease -> ModelRouting.releaseExecutionAdmissionBeforeProvider lease (ModelRouting.executionAdmissionIdentity lease)
           SettlePreProvider = PreProviderSettlement.settle journal
           ReadExact =
             fun key ->
