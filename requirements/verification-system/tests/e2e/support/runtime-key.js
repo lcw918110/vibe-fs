@@ -218,6 +218,36 @@ export const isDelegationAnswerSteer = (text) =>
   );
 
 /**
+ * The Host's own post-compaction continuation.
+ *
+ * After an automatic compaction the Host writes the continuation row straight into
+ * storage — "Continue if you have next steps, or stop and ask for clarification if
+ * you are unsure how to proceed." — and never runs `chat.message` for it
+ * (`ProviderWireCapture.isHostCompactionContinuation`, managed-chat-execution-017).
+ * Production treats it as the continuation of the execution it compacted, not as a
+ * new authority: the compacted step is superseded and the run keeps its identity.
+ *
+ * The wire no longer carries the compacted turn — only the summary and this row — so
+ * the step cursor cannot be recovered from message counts, and reading the row as an
+ * ordinary user turn would put a key under a text no scenario can declare. It is its
+ * own request kind instead (`compaction-continue`), which a scenario declares once
+ * with the ladder the model walks after it wakes up.
+ *
+ * The text is OpenCode's, not this repository's — no owner surface exports it, so the
+ * prefix is measured (017 records the row verbatim). Only the leading sentence is
+ * matched: the tail is the Host's advice to the model and may be reworded, while a
+ * rewrite of the leading sentence makes this miss, which shows up as a
+ * no-declared-turn naming this exact row rather than as a silently wrong answer.
+ */
+const hostCompactionContinuationPrefix =
+  'Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.';
+
+const isHostCompactionContinuation = (text) =>
+  reminderCandidates(text).some((candidate) =>
+    withoutHeadingMarker(candidate).startsWith(hostCompactionContinuationPrefix),
+  );
+
+/**
  * The initial retention steer, verbatim, for callers that have to build a wire
  * carrying one. Kept here so a rewording touches one file, not every fixture.
  */
@@ -339,6 +369,9 @@ export function kindOf(body) {
     if (typeof content === 'string' && content.startsWith(TITLE_MARKER)) return 'title';
     if (typeof content === 'string' && content.startsWith('You are a context summarization agent.')) return 'compaction';
   }
+  // The Host's own row after an automatic compaction: the conversation it continues is
+  // no longer on the wire, so this is its own kind rather than a rung of a chat ladder.
+  if (compactionContinuationRequest(messages)) return 'compaction-continue';
   // The Host asks for a squat, answer-only negotiation snapshot from the delegator
   // before it delivers the recipient's questions. It is its own request kind: the
   // delegator is forbidden from calling tools there, so no chat ladder can answer it.
@@ -408,6 +441,20 @@ const lastUserIndex = (messages) => {
     return index;
   }
   return -1;
+};
+
+/**
+ * Whether this request is the one the Host sends right after an automatic compaction.
+ *
+ * Its last user row is the Host's own continuation (see `isHostCompactionContinuation`),
+ * and everything before it is the summary that replaced the compacted turn. The row is
+ * still the turn — a scenario declares what the model does when it wakes up — but it is
+ * its own request kind, because no chat ladder can reach it: the compacted rungs are
+ * gone from the wire.
+ */
+const compactionContinuationRequest = (messages) => {
+  const index = lastUserIndex(messages);
+  return index >= 0 && isHostCompactionContinuation(messages[index].content);
 };
 
 /**

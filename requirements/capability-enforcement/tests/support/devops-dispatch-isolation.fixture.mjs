@@ -58,7 +58,7 @@ const refusalCode = (result) => envelopeString(result, 'code')
 const outcomeOf = (result) => envelopeString(result, 'outcome')
 
 // 隔离的持久边界快照。模型回合的 scope 标注（common law «Scope»）落在
-// advisor 库且在拒绝路径上照常记账——快照排除它；断言对象是派工台账：
+// retention 库且在拒绝路径上照常记账——快照排除它；断言对象是派工台账：
 // 被拒的派工不得追加任何字节。
 const durableSnapshot = (target) => {
   const snapshot = []
@@ -77,7 +77,7 @@ const durableSnapshot = (target) => {
     }
   }
   visit('')
-  return snapshot.filter((entry) => !entry.path.endsWith('advisor-process.sqlite'))
+  return snapshot.filter((entry) => !entry.path.endsWith('scope-retention.sqlite'))
 }
 
 const prepareWorkspace = () => {
@@ -93,7 +93,7 @@ if (phase === 'produce') {
         await acceptAuthorityRoot(runtime, ISOLATED_SESSION, 'manager')
         await openIncumbency(runtime, ISOLATED_SESSION)
 
-        // Scope 门要读 advisor 流；Node 24 的 node:sqlite 打开即建库。预热让
+        // Scope 门要读 retention 流；Node 24 的 node:sqlite 打开即建库。预热让
         // 首次开库发生在快照之前，「拒绝不得追加持久字节」才成立。
         await runManagerProgram(
           incarnation.hooks,

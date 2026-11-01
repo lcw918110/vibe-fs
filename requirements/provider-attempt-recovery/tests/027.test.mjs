@@ -6,9 +6,6 @@ import test from 'node:test'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as routing from '../../../dist/OpenCode/Host/ModelRoutingSurface.js'
-import * as Observation from '../../../dist/Composition/Turn/Observation.js'
-import * as identity from '../../../dist/Foundation/Identity.js'
-import * as roles from '../../../dist/Foundation/Roles.js'
 import * as owner from '../../../dist/Participant/Provider/Attempt/Fallback/ProviderFailureSurface.js'
 import { providerAttemptStopFence } from 'wanxiangli/failure'
 
@@ -49,7 +46,6 @@ test('WHAT[provider-attempt-recovery-027] a late failure of a durably closed run
     providerAttemptStopFence.SignalStop('ses-027-closed', 'run-027-closed')
 
     const EventsSurface = await import('../../../dist/OpenCode/Host/EventsSurface.js')
-    const Workflow = await import('../../../dist/Participant/Provider/Attempt/Fallback/Workflow.js')
 
     const eventPort = EventsSurface.create()
     const terminals = []
@@ -57,18 +53,17 @@ test('WHAT[provider-attempt-recovery-027] a late failure of a durably closed run
     const prompts = []
     const sessionPort = observableSessionPort(prompts)
 
-    const turn = new Observation.ReconciledTurn(
-      identity.SessionIdModule_create('ses-027-closed'),
-      identity.PhysicalUserMessageIdModule_create('msg-027-physical'),
-      identity.AuthorityRootUserMessageIdModule_create('msg-027-root'),
-      identity.ProviderRunIdentityModule_create('run-027-closed'),
-      roles.Role.Manager,
-      null, [] , null, null, null, null, null,
-    )
-
-    await Workflow.continueAfterConfirmedFailure(
-      sessionPort, null, eventPort, journal.JournalHandle__get_Journal(created.journal), turn,
-      { tag: 6 },
+    await owner.continueAfterConfirmedFailure(
+      sessionPort,
+      null,
+      eventPort,
+      created.journal,
+      'ses-027-closed',
+      'msg-027-physical',
+      'msg-027-root',
+      'run-027-closed',
+      'Manager',
+      'ProviderTransient',
       'late provider error',
       'probe continuation prompt',
     )
@@ -118,25 +113,23 @@ test('WHAT[provider-attempt-recovery-027] a late failure of a run closed before 
     providerAttemptStopFence.SignalStop('ses-027-chain', 'run-027-chain')
 
     const EventsSurface = await import('../../../dist/OpenCode/Host/EventsSurface.js')
-    const Workflow = await import('../../../dist/Participant/Provider/Attempt/Fallback/Workflow.js')
     const eventPort = EventsSurface.create()
     const terminals = []
     EventsSurface.subscribe(eventPort, (sessionId, outcome) => terminals.push({ sessionId, outcome }))
     const prompts = []
     const sessionPort = observableSessionPort(prompts)
 
-    const turn = new Observation.ReconciledTurn(
-      identity.SessionIdModule_create('ses-027-chain'),
-      identity.PhysicalUserMessageIdModule_create('msg-027-chain-physical'),
-      identity.AuthorityRootUserMessageIdModule_create('msg-027-chain-root'),
-      identity.ProviderRunIdentityModule_create('run-027-chain'),
-      roles.Role.Manager,
-      null, [], null, null, null, null, null,
-    )
-
-    await Workflow.continueAfterConfirmedFailure(
-      sessionPort, null, eventPort, journal.JournalHandle__get_Journal(created.journal), turn,
-      { tag: 6 },
+    await owner.continueAfterConfirmedFailure(
+      sessionPort,
+      null,
+      eventPort,
+      created.journal,
+      'ses-027-chain',
+      'msg-027-chain-physical',
+      'msg-027-chain-root',
+      'run-027-chain',
+      'Manager',
+      'ProviderTransient',
       'late provider error',
       'probe continuation prompt',
     )
@@ -167,25 +160,23 @@ test('WHAT[provider-attempt-recovery-027] without the closure fact the same late
     // real. The fence waiter is confirmed registered before the revoke, so
     // the wait is denied deterministically, without the 30s timeout.
     const EventsSurface = await import('../../../dist/OpenCode/Host/EventsSurface.js')
-    const Workflow = await import('../../../dist/Participant/Provider/Attempt/Fallback/Workflow.js')
     const eventPort = EventsSurface.create()
     const terminals = []
     EventsSurface.subscribe(eventPort, (sessionId, outcome) => terminals.push({ sessionId, outcome }))
     const prompts = []
     const sessionPort = observableSessionPort(prompts)
 
-    const turn = new Observation.ReconciledTurn(
-      identity.SessionIdModule_create('ses-027-open'),
-      identity.PhysicalUserMessageIdModule_create('msg-027-open-physical'),
-      identity.AuthorityRootUserMessageIdModule_create('msg-027-open-root'),
-      identity.ProviderRunIdentityModule_create('run-027-open'),
-      roles.Role.Manager,
-      null, [], null, null, null, null, null,
-    )
-
-    const running = Workflow.continueAfterConfirmedFailure(
-      sessionPort, null, eventPort, journal.JournalHandle__get_Journal(created.journal), turn,
-      { tag: 6 },
+    const running = owner.continueAfterConfirmedFailure(
+      sessionPort,
+      null,
+      eventPort,
+      created.journal,
+      'ses-027-open',
+      'msg-027-open-physical',
+      'msg-027-open-root',
+      'run-027-open',
+      'Manager',
+      'ProviderTransient',
       'late provider error',
       'probe continuation prompt',
     )
@@ -216,28 +207,26 @@ test('WHAT[provider-attempt-recovery-027] a run closed while the retry waits on 
     if (!recorded || recorded.ok !== true || recorded.outcome !== 'RetryAuthorized') throw new Error('recordConfirmedFailure did not durably establish the confirmed failure record: ' + JSON.stringify(recorded))
 
     const EventsSurface = await import('../../../dist/OpenCode/Host/EventsSurface.js')
-    const Workflow = await import('../../../dist/Participant/Provider/Attempt/Fallback/Workflow.js')
     const eventPort = EventsSurface.create()
     const terminals = []
     EventsSurface.subscribe(eventPort, (sessionId, outcome) => terminals.push({ sessionId, outcome }))
     const prompts = []
     const sessionPort = observableSessionPort(prompts)
 
-    const turn = new Observation.ReconciledTurn(
-      identity.SessionIdModule_create('ses-027-during'),
-      identity.PhysicalUserMessageIdModule_create('msg-027-during-physical'),
-      identity.AuthorityRootUserMessageIdModule_create('msg-027-during-root'),
-      identity.ProviderRunIdentityModule_create('run-027-during'),
-      roles.Role.Manager,
-      null, [], null, null, null, null, null,
-    )
-
     // The closure lands while the recovery's stop wait is pending: the
     // waiter is confirmed registered first, then the run closes and the
     // fence is signaled. The stopped branch must stay silent.
-    const running = Workflow.continueAfterConfirmedFailure(
-      sessionPort, null, eventPort, journal.JournalHandle__get_Journal(created.journal), turn,
-      { tag: 6 },
+    const running = owner.continueAfterConfirmedFailure(
+      sessionPort,
+      null,
+      eventPort,
+      created.journal,
+      'ses-027-during',
+      'msg-027-during-physical',
+      'msg-027-during-root',
+      'run-027-during',
+      'Manager',
+      'ProviderTransient',
       'late provider error',
       'probe continuation prompt',
     )

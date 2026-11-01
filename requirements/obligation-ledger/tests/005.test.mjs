@@ -127,7 +127,11 @@ integrationTest('WHAT[obligation-ledger-005] durable append failure is never rep
         },
       )
       assert.equal(blockedAppend.ok, false, 'blocked durable append must not report committed')
-      assert.match(String(blockedAppend.error), /WriteUnknown/i, 'blocked append reports WriteUnknown outcome')
+      // The history read fails in Preparation, before any byte is written, so the
+      // outcome is a known non-attempt that poisons the writer — not an unknown
+      // physical result. Lying "unknown" here would understate what is known.
+      assert.match(String(blockedAppend.error), /WriterUnavailable/i, 'blocked append reports a non-attempt outcome')
+      assert.match(String(blockedAppend.error), /WriterPoisoned/i, 'the blocked writer is poisoned')
     })
 
     const afterPoison = await journalSurface.JournalSurface_appendAgent(

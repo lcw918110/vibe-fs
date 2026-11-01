@@ -637,6 +637,7 @@ module HostForkRunLifecycle =
             | Ok() -> return agentOutcome
             | Error error ->
                 logError "FORK-PERSIST" (sprintf "run %s completion append failed: %s" run.AgentId error)
+
                 return
                     AgentCompletion.failed
                         run.AgentId

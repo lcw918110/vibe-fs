@@ -151,8 +151,7 @@ type SessionRecoveryHost
             Task.FromResult(ProviderPhysicalObservation.ProviderTerminal(started, disposition))
         | ChatExecutionRecoveryLifecycleEvent.SessionDeleted _ ->
             Task.FromResult(ProviderPhysicalObservation.ProviderAbsent state.key)
-        | _ when state.terminalDisposition.IsSome ->
-            Task.FromResult(ProviderPhysicalObservation.ReceiptMissing)
+        | _ when state.terminalDisposition.IsSome -> Task.FromResult(ProviderPhysicalObservation.ReceiptMissing)
         | _ -> providerFromTranscript messagesFor state
 
     let lifecycleCancellation (event: ChatExecutionRecoveryLifecycleEvent) =
@@ -548,8 +547,7 @@ type SessionRecoveryHost
                 |> List.filter (fun state -> state.key.SessionId = sessionId)
 
             for state in states do
-                do!
-                    recoverState messagesFor ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded state
+                do! recoverState messagesFor ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded state
 
             pulseDrain sessionId
         }

@@ -251,7 +251,7 @@ test('WHAT[capability-enforcement-026] D07_pre_review_devops_refusal_preserves_d
     const sessionID = 'ses-d07'
     await acceptAuthorityRoot(runtime, sessionID, 'manager')
     await openIncumbency(runtime, sessionID)
-    // Scope 门要读 advisor 流；Node 24 的 node:sqlite 打开即建库。预热让
+    // Scope 门要读 retention 流；Node 24 的 node:sqlite 打开即建库。预热让
     // 首次开库发生在快照之前，「拒绝不得追加持久字节」才成立。
     await runManagerProgram(hooks, sessionID, `return "warm"`)
     const durableBefore = durableSnapshot(directory)
@@ -322,7 +322,7 @@ test('WHAT[capability-enforcement-026] D09_relayed_tenure_refuses_new_devops_dis
     await openIncumbency(runtime, sessionID)
     await injectAcceptedAssessment(runtime, sessionID) // Stayed
 
-    // 预热一次真实派工（接纳后），让 advisor 流的首次开库落在快照之前。
+    // 预热一次真实派工（接纳后），让 retention 流的首次开库落在快照之前。
     const warm = await runManagerProgram(
       hooks,
       sessionID,
@@ -591,7 +591,7 @@ test('WHAT[capability-enforcement-026] D12_devops_session_reuse_property_lands_r
 })
 
 // 隔离的持久边界快照。模型回合的 scope 标注（common law «Scope»）落在
-// advisor 库且在拒绝路径上照常记账——快照排除它；断言对象是派工台账：
+// retention 库且在拒绝路径上照常记账——快照排除它；断言对象是派工台账：
 // 被拒的派工不得追加任何字节。
 const durableSnapshot = (directory) => {
   const snapshot = []
@@ -610,6 +610,6 @@ const durableSnapshot = (directory) => {
     }
   }
   visit('')
-  return snapshot.filter((entry) => !entry.path.endsWith('advisor-process.sqlite'))
+  return snapshot.filter((entry) => !entry.path.endsWith('scope-retention.sqlite'))
 }
 

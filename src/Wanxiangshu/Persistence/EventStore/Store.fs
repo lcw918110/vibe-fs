@@ -489,6 +489,7 @@ module EventStore =
                             | AppendWork.Unknown _ -> freshness.Unsettled()
 
                             work)
+
                 let! released = releaseAppendGate acquired
 
                 return settleReleased requested work released

@@ -85,10 +85,7 @@ module ProviderRecoveryWorkflow =
             PromptAuthorityProjectionQueries.lastAuthorityProfile turn.SessionId agentProjections
             |> Option.exists (fun profile ->
                 profile.AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
-                && (PromptAuthorityProjectionQueries.closedRun
-                        turn.SessionId
-                        profile.LogicalRunId
-                        agentProjections
+                && (PromptAuthorityProjectionQueries.closedRun turn.SessionId profile.LogicalRunId agentProjections
                     |> Option.isSome))
         | _ -> false
 

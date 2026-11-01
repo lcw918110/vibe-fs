@@ -1341,7 +1341,7 @@ test('WHAT[delegation-negotiation-037] thrown temporary provider admission/capac
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
       assert.equal(prompted.length,1,'transport capacity rejection cannot be confused with an incomplete assistant response')
       assert.ok(prompted[0].startsWith('What should the worker investigate next?'))
-      assert.match(prompted[0],/严禁调用任何工具|strictly forbidden/)
+      assert.match(prompted[0],/禁止调用任何工具|Calling any tool is forbidden/)
       assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('DENIED.')),false)
     } finally {
       session.delete=originalDelete
@@ -1386,7 +1386,7 @@ test('WHAT[delegation-negotiation-038] a normally completed empty SDK reply term
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
       assert.equal(prompted.length,1,'a completed empty answer is an explicit host failure, not grounds for a fictional follow-up')
       assert.ok(prompted[0].startsWith('What should the worker investigate next?'))
-      assert.match(prompted[0],/严禁调用任何工具|strictly forbidden/)
+      assert.match(prompted[0],/禁止调用任何工具|Calling any tool is forbidden/)
       assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('DENIED.')),false)
     } finally {
       session.delete=originalDelete

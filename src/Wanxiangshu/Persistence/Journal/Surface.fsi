@@ -36,3 +36,10 @@ module JournalSurface =
     val readPayload: handle: JournalHandle -> reference: string -> Task<obj>
     val snapshot: handle: JournalHandle -> obj
     val hasSession: handle: JournalHandle -> sessionId: string -> bool
+    /// crash-reconciliation-023: register one restart-recovery body. The first
+    /// `runOrAwaitRecovery` caller starts it; every caller awaits the same work.
+    val enqueueRecovery: handle: JournalHandle -> start: (unit -> Task) -> unit
+    /// crash-reconciliation-023: run the registered recovery once and await its
+    /// completion for every caller. A faulting recovery reaches every awaiter and
+    /// is cleared, so a later caller starts a fresh one instead of re-observing it.
+    val runOrAwaitRecovery: handle: JournalHandle -> Task

@@ -199,6 +199,9 @@ module ProcessEventLog =
     [<Emit("$0.size")>]
     let private statSize (stat: obj) : int = jsNative
 
+    [<Emit("$0.isDirectory()")>]
+    let private statIsDirectory (stat: obj) : bool = jsNative
+
     [<Emit("$0.dev")>]
     let private statDev (stat: obj) : float = jsNative
 
@@ -597,8 +600,15 @@ module ProcessEventLog =
         CanonicalEventCodec.tryDecodeUtf8Text bytes
         |> Result.bind (decodeWriterText label)
 
+    /// A writer path that cannot be read as bytes (for example a directory that
+    /// replaced a writer file) is a storage fault, not a process escape. It must
+    /// reach the caller as a Result so Current keeps its last committed value
+    /// instead of being replaced by an empty replay.
     let private decodeFile (path: string) : Result<EventEnvelope list, StorageInvalid> =
-        decodeWriterBytes path (readBytesFileSync path)
+        try
+            decodeWriterBytes path (readBytesFileSync path)
+        with error ->
+            Error(StorageInvalid.NonCanonical(sprintf "%s: unreadable writer bytes: %s" path error.Message))
 
     type private WriterDecodeCacheEntry =
         { Dev: float
@@ -902,7 +912,10 @@ module ProcessEventLog =
     let private writerFileGroups (commonDir: string) : WriterFileGroup list =
         let directory = eventsDirectory commonDir
 
-        if not (existsSync directory) then
+        // A path that exists but is not a directory keeps no writer files. The
+        // append boundary refuses that shape itself (EEXIST) before any write;
+        // a freshness scan must not turn it into a scan fault.
+        if not (existsSync directory) || not (statSync directory |> statIsDirectory) then
             []
         else
             unbox<obj array> (segmentLaw?groupWriterFiles (readdirSync directory))
@@ -920,6 +933,37 @@ module ProcessEventLog =
             { WriterId = group.WriterId
               FileNames = group.FileNames
               LastActivityMs = writerActivityOf paths })
+
+    /// durable-events-006/013/017: cheap physical freshness witness for the
+    /// append boundary. It names every retained writer file and its canonical
+    /// file identity (dev/ino/mode/size/mtime/ctime) without reading a byte of
+    /// historical content. Every append and retention rewrite takes the
+    /// cross-process store lock, so an unchanged witness proves this process's
+    /// Current already contains every committed line; a changed witness only
+    /// forces a reload and never authorizes skipping one. This is a physical
+    /// hint, not durable or domain state and not a second authority.
+    let physicalInventory (commonDir: string) : string =
+        try
+            writerFileGroups commonDir
+            |> List.sortBy (fun group -> group.WriterId)
+            |> List.map (fun group ->
+                let files =
+                    group.FileNames
+                    |> List.sort
+                    |> List.map (fun name ->
+                        let path = join2 (eventsDirectory commonDir) name
+
+                        if existsSync path then
+                            name + "=" + statIdentity (statSync path)
+                        else
+                            name + "=missing")
+                    |> String.concat ","
+
+                group.WriterId + "[" + files + "]")
+            |> String.concat ";"
+        with _ ->
+            // An unreadable inventory must never look like a stable one.
+            "inventory-unavailable"
 
     let private setWriterActivity path activityMs =
         let seconds = activityMs / 1000.0

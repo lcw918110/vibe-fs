@@ -142,7 +142,6 @@ integrationTest('WHAT[crash-reconciliation-023] the first admission never queues
 
 test('WHAT[crash-reconciliation-023] a faulting journal recovery propagates to its awaiters and a later caller retries it', async () => {
   const journalSurface = await import('../../../dist/Persistence/Journal/Surface.js')
-  const agentJournal = await import('../../../dist/Persistence/Journal/AgentJournal.js')
   const directory = mkdtempSync(join(tmpdir(), 'wxs-journal-recovery-fault-'))
   let opened
   try {
@@ -154,19 +153,19 @@ test('WHAT[crash-reconciliation-023] a faulting journal recovery propagates to i
       new Date().toISOString(),
     )
     assert.equal(opened.ok, true, JSON.stringify(opened.error))
-    const journal = journalSurface.JournalHandle__get_Journal(opened.journal)
+    const handle = opened.journal
 
     let calls = 0
     let fail = true
-    agentJournal.AgentJournal__EnqueueRecovery_Z1C042147(journal, async () => {
+    journalSurface.JournalSurface_enqueueRecovery(handle, async () => {
       calls += 1
       if (fail) throw new Error('load settlement failed')
     })
 
     // Concurrent callers share the one run, and every awaiter sees the real
     // failure — never a silent success.
-    const first = agentJournal.AgentJournal__RunOrAwaitRecovery(journal)
-    const second = agentJournal.AgentJournal__RunOrAwaitRecovery(journal)
+    const first = journalSurface.JournalSurface_runOrAwaitRecovery(handle)
+    const second = journalSurface.JournalSurface_runOrAwaitRecovery(handle)
     await assert.rejects(() => first, /load settlement failed/)
     await assert.rejects(() => second, /load settlement failed/)
     assert.equal(calls, 1)
@@ -174,9 +173,9 @@ test('WHAT[crash-reconciliation-023] a faulting journal recovery propagates to i
     // The faulted run is cleared: a later caller starts a fresh recovery, and
     // the idempotent settlement repairs exactly what the fault left unsettled.
     fail = false
-    await agentJournal.AgentJournal__RunOrAwaitRecovery(journal)
+    await journalSurface.JournalSurface_runOrAwaitRecovery(handle)
     assert.equal(calls, 2)
-    await agentJournal.AgentJournal__RunOrAwaitRecovery(journal)
+    await journalSurface.JournalSurface_runOrAwaitRecovery(handle)
     assert.equal(calls, 2, 'single-flight still holds after a retried recovery')
 
   } finally {

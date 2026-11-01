@@ -303,16 +303,47 @@ user = "Should the conflicted file keep the target's surrounding content"
 # The Host's own context summarizer, reached only when a run outgrows its window.
 # It must never be needed by a healthy Long Stroke; declared so the failure names
 # the real cause (runaway context) instead of "no declared turn".
+#
+# Measured shape: the Host names the compaction request after the honored
+# `[User]`/`[Assistant …]` render of the conversation, so the row the runtime key
+# sees does not start with the summarizer's system brief — it starts with the
+# rendered transcript. The declaration is the stable marker the render carries, and
+# the step count is undeclared beyond the first row because a summarizer answers
+# once.
 [[turn]]
 id = "compaction"
 internal = true
 kind = "compaction"
 optional = true
-user = "You are a context summarization agent."
+user = "Here is the conversation so far:"
 
   [[turn.step]]
   optional = true
   respond = { type = "text", text = "Summary: the long stroke canary is progressing through its declared turns." }
+
+# The Host's own row after that summarizer ran: it writes the continuation straight
+# into storage (`ProviderWireCapture.isHostCompactionContinuation`,
+# managed-chat-execution-017), so the compacted turn is no longer on the wire and no
+# chat ladder can reach it. It is its own request kind. What the model does when it
+# wakes up is the same work it was doing: see the present, then move the road.
+[[turn]]
+id = "compaction-continue"
+internal = true
+kind = "compaction-continue"
+optional = true
+user = "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
+tools = ["todowrite-for-orchestrator", "horizon", "join"]
+
+  [[turn.step]]
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "see-the-horizon", intent = "压缩后重新查看全部路线，收集已归来的视图。", program = "class Js extends JsProgram { async run() { return await this.horizon(); } }" } }
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "tool-call", tool = "join", args = {} }
+
+  [[turn.step]]
+  optional = true
+  respond = { type = "text", text = "The commissioned road has returned integrated and its delivery is settled; nothing remains for this Orchestrator to move." }
 
 [[turn]]
 id = "orch"
@@ -330,11 +361,13 @@ tools = ["todowrite-for-orchestrator", "join"]
   [[turn.step]]
   respond = { type = "text", text = "Long stroke publish completed after conflict resume." }
 
-  # reportMapping delivery: the Orchestrator states the outcome as assistant prose,
-  # then ends the turn with an explicit deliver(reportMapping) so the handoff is settled.
+  # A further step keeps the Orchestrator surface live: it sees the present with
+  # `horizon`. There is no lifecycle `deliver` member to close with — `780d1dea6`
+  # retired it from the JS base class — and the harvest prose above already closes
+  # the road when it has returned integrated.
   [[turn.step]]
   optional = true
-  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "deliver-long-stroke", intent = "等待交付结算，保留长行程发布结果。", program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", args = { name = "see-the-horizon", intent = "查看全部路线，收集已归来的视图。", program = "class Js extends JsProgram { async run() { return await this.horizon(); } }" } }
 
 # EXEC-016 / INTERACTION-AUTHORITY-014: conditional protocol declaration only.
 # Ordinary Orchestrator completion receives JoinGuard exactly when a join obligation
@@ -352,11 +385,12 @@ tools = ["todowrite-for-orchestrator", "horizon", "join"]
   [[turn.step]]
   respond = { type = "text", text = "Arrived consequences received; continue the orchestration." }
 
-# A natural stop while the commissioned road is still open is not permission to
-# stop. The idle repair for every role other than Manager, Engineer and DevOps
-# is `work/orchestrator-continue`: the Orchestrator answers it by closing the
-# responsibility it still holds — the road has already returned integrated, so
-# the delivery is settled here instead of waiting on a road that no longer exists.
+  # A natural stop while the commissioned road is still open is not permission to
+  # stop. The idle repair for every role other than Manager, Engineer and DevOps
+  # is `work/orchestrator-continue`: the Orchestrator answers it by moving the work
+  # again — see the present with `horizon`, then wait on the road that has not
+  # returned. There is no lifecycle `deliver` member to close with, and the harvest
+  # prose above closes the turn when the road is already settled.
 [[turn]]
 id = "orch-plan-continue"
 internal = true
@@ -365,7 +399,7 @@ user = "The whole request is not complete, and its roads have not been durably c
 tools = ["todowrite-for-orchestrator", "horizon", "join"]
 
   [[turn.step]]
-  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", prefixText = "The commissioned road has returned integrated; closing the delivery now.", args = { name = "deliver-long-stroke-nudged", intent = "等待交付结算，保留长行程发布结果。", program = "class Js extends JsProgram { async run() { await this.deliver([\"Long stroke publish completed after conflict resume.\"]); } }" } }
+  respond = { type = "tool-call", tool = "todowrite-for-orchestrator", prefixText = "The commissioned road has returned integrated; the remaining work is to see the present and settle the road.", args = { name = "see-the-horizon", intent = "查看全部路线，收集已归来的视图。", program = "class Js extends JsProgram { async run() { return await this.horizon(); } }" } }
 
   # A join that returns at once (the road is already integrated) re-arms the
   # idle repair, so the same reminder can arrive again on a later step. Each
@@ -390,6 +424,14 @@ tools = ["todowrite-for-orchestrator", "horizon", "join"]
   [[turn.step]]
   optional = true
   respond = { type = "tool-call", tool = "join", args = {} }
+
+  # The ladder must end on prose, not on a tool call: a turn whose last step is a
+  # tool call leaves the reply unfinished and the idle repair re-arms. The retired
+  # `this.deliver` used to end the turn; nothing replaces that side effect, so the
+  # closing step states the settled outcome and stops.
+  [[turn.step]]
+  optional = true
+  respond = { type = "text", text = "The commissioned road has returned integrated and its delivery is settled; nothing remains for this Orchestrator to move." }
 
 # AgentOwnerRoot Manager (opening is "#" + orch fork prompt). Fork + join; join
 # stays blocked while holdChild keeps engineer incomplete for user_message wake.
@@ -1111,17 +1153,11 @@ tools = ["todowrite-for-engineer", "negotiate"]
   respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "read-probe", intent = "等待读取探针结果，保留文件版本记录。", program = "class Js extends JsProgram { async run() { return await this.cat('read_probe.txt'); } }" } }
 
   [[turn.step]]
-  # A subagent settles only through an explicit `this.deliver(reportMapping)` (repository-programming-054/059):
-  # the program states its outcome as assistant prose first, then delivers a
-  # `reportMapping` pointing at the work material. A plain
-  # `return` leaves the delivery cell empty, so the child is not settled as
-  # completed and the join stays open.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "publish_proof.txt is written and verified; delivering the completed proof to the owner.", args = { name = "deliver-publish-proof", intent = "等待交付结算，保留子工作完成事实。", program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
-
-  # The delivery tool result asks the provider once more; the child closes its turn here.
-  [[turn.step]]
-  optional = true
-  respond = { type = "text", text = "Engineer delivered." }
+  # An Engineer settles by natural stop: a completed turn of this role IS the
+  # handback, and its full post-scope view returns to the owner as the `[[session]]`
+  # the parent's join receives. There is no `this.deliver` member in the base class
+  # (`780d1dea6`), so the child must close with prose + a final settled turn.
+  respond = { type = "text", text = "publish_proof.txt is written and verified; the completed proof is handed back." }
 
 [[turn]]
 id = "engineer-resolve"
@@ -1138,9 +1174,9 @@ tools = ["todowrite-for-engineer", "negotiate"]
   respond = { type = "tool-call", tool = "todowrite-for-engineer", args = { name = "resolve-publish-proof", intent = "等待冲突文件写入完成，保留修复内容。", program = "class Js extends JsProgram { async run() { this.write('publish_proof.txt', 'Published by long-stroke canary\\n'); return true; } }" } }
 
   [[turn.step]]
-  # Same reportMapping rule for the repair child: state the outcome as prose, then
-  # settle with an explicit `this.deliver(reportMapping)`.
-  respond = { type = "tool-call", tool = "todowrite-for-engineer", prefixText = "The conflict is resolved; publish_proof.txt now contains exactly the required text, and the repaired file is delivered.", args = { name = "deliver-resolved-proof", intent = "等待冲突修复交付结算，保留完成事实。", program = "class Js extends JsProgram { async run() { await this.deliver([]) } }" } }
+  # Same handback rule for the repair child: state the outcome as prose and stop
+  # naturally. The completed turn returns its full post-scope view to the owner.
+  respond = { type = "text", text = "The conflict is resolved; publish_proof.txt now contains exactly the required text, and the repaired file is handed back." }
 
   [[turn.step]]
   respond = { type = "text", text = "Conflict file resolved." }

@@ -825,8 +825,8 @@ export function compileScenario(source, { name = '<inline>' } = {}) {
     problems.push(...userTextProblems(turn, index));
     const steps = Array.isArray(turn.step) ? turn.step : [];
     if (steps.length === 0) problems.push(`turn[${index}] needs at least one step`);
-    if (turn.kind !== undefined && !['chat', 'title', 'negotiation-answer', 'compaction'].includes(turn.kind)) {
-      problems.push(`turn[${index}] kind '${turn.kind}' is not chat, title, negotiation-answer or compaction`);
+    if (turn.kind !== undefined && !['chat', 'title', 'negotiation-answer', 'compaction', 'compaction-continue'].includes(turn.kind)) {
+      problems.push(`turn[${index}] kind '${turn.kind}' is not chat, title, negotiation-answer, compaction or compaction-continue`);
     }
     if (turn.internal !== undefined && turn.internal !== true) {
       problems.push(`turn[${index}] internal must be true when present; omit it otherwise`);

@@ -700,3 +700,14 @@ module JournalSurface =
             (SessionId.create (str sessionId))
             (AgentJournal.snapshot handle.Journal).AgentProjections
         |> Option.isSome
+
+    /// crash-reconciliation-023: register one restart-recovery body without running
+    /// it. The first `runOrAwaitRecovery` caller starts it; every caller awaits the
+    /// same work, so a handoff cannot race the recovery it must observe.
+    let enqueueRecovery (handle: JournalHandle) (start: unit -> Task) : unit = handle.Journal.EnqueueRecovery start
+
+    /// crash-reconciliation-023: trigger the enqueued recovery once (first caller)
+    /// and await its completion (all callers). A faulting recovery reaches every
+    /// awaiter and is cleared, so a later caller runs its own instead of
+    /// re-observing the stale failure forever.
+    let runOrAwaitRecovery (handle: JournalHandle) : Task = handle.Journal.RunOrAwaitRecovery()

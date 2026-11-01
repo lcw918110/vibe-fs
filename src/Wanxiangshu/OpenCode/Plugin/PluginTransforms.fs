@@ -299,8 +299,7 @@ module PluginTransforms =
           SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
           SanitizeMessages: string option -> obj -> unit
           AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
-          StopAfterDelivery:
-              string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit> }
+          StopAfterDelivery: string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit> }
 
     type TransformBranchCapabilities = { RegisterOwned: string -> unit }
 
@@ -1359,8 +1358,7 @@ module PluginTransforms =
                         let replaced = SyncDelegateBatching.applyReplacedResults currentMessages
                         HostMessageProjection.replaceMessagesInPlace outObj replaced
                 }
-          SanitizeMessages =
-            fun _ outObj -> HostMessageProjection.sanitizeOutputMessages outObj
+          SanitizeMessages = fun _ outObj -> HostMessageProjection.sanitizeOutputMessages outObj
 
           // 条款 3：裁决只认真实交付事实——本次 attempt 存在一次已成立的
           // 交付，且登记时的物理输入仍是当前物理输入。view 声明、助手正文与

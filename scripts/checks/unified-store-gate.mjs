@@ -131,6 +131,12 @@ const DURABLE_SUBSTRATE_OWNER_PATHS = Object.freeze([
   // that opens and closes it. Registered as its exact physical owner; the
   // cutover to the canonical EventStore is consumer wiring, not this task.
   'src/Wanxiangshu/Mission/Lifecycle/DurableWorkHost.fs',
+  // Scope retention store (scope-retention.sqlite): the Scope lifecycle's own
+  // durable substrate. wanxiangli owns the retention rules and takes an
+  // injected journal; the Host is the only module that opens the physical
+  // connection, so it is registered as that store's exact physical owner.
+  'src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs',
+  'src/Wanxiangshu/Omp/Adapter.fs',
 ])
 const isDurableSubstrateOwnerPath = (file) =>
   DURABLE_SUBSTRATE_OWNER_PATHS.some((expected) => pathIs(file, expected))

@@ -2,6 +2,9 @@ namespace Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 open System
 open System.Threading.Tasks
+open Wanxiangshu.Composition.Turn
+open Wanxiangshu.Foundation
+open Wanxiangshu.Foundation.TerminalSignal
 open Wanxiangshu.Persistence.Journal
 
 [<RequireQualifiedAccess>]
@@ -65,3 +68,30 @@ module ProviderFailureSurface =
     /// session; a missing active profile comes back 'Terminal'.
     val continueSameProviderRecoveryVerdict:
         handle: JournalHandle -> session: string -> attemptRoot: string -> providerRun: string -> Task<string>
+
+    /// The turn a confirmed failure belongs to, decoded from domain names.
+    val turnForRecovery:
+        session: string ->
+        physicalMessage: string ->
+        authorityRoot: string ->
+        providerRun: string ->
+        role: string ->
+            ReconciledTurn
+
+    /// The whole confirmed-failure recovery for one turn, entered from JavaScript:
+    /// the host ports stay opaque objects, the turn and failure arrive as domain
+    /// names, and the durable journal is the only state.
+    val continueAfterConfirmedFailure:
+        sessionPort: obj ->
+        rootWorkspace: obj ->
+        eventPort: obj ->
+        handle: JournalHandle ->
+        session: string ->
+        physicalMessage: string ->
+        authorityRoot: string ->
+        providerRun: string ->
+        role: string ->
+        failure: string ->
+        reason: string ->
+        continuationPrompt: string ->
+            Task

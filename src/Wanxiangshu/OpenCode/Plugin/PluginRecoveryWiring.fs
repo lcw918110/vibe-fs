@@ -332,12 +332,12 @@ module PluginRecoveryWiring =
                             try
                                 do! scope.ReloadChatSession sessionId
                             with error ->
-                                if firstFailure.IsNone then firstFailure <- Some error
+                                if firstFailure.IsNone then
+                                    firstFailure <- Some error
 
                                 Wanxiangshu.Foundation.Diagnostic.emit
                                     "load-session-recovery-failed"
-                                    [ "session_id", SessionId.value sessionId
-                                      "reason", error.Message ]
+                                    [ "session_id", SessionId.value sessionId; "reason", error.Message ]
 
                         match firstFailure with
                         | Some error -> raise error

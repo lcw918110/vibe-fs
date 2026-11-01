@@ -110,6 +110,21 @@ export class ScenarioRuntime {
   }
 
   /**
+   * An automatic compaction makes the previous seal incomparable, for the same reason a
+   * restart does: the conversation the next request continues is the summary, not the
+   * transcript. The requests between the two (the summarizer call and the Host's own
+   * continuation row) are not chat turns, so the seal would otherwise stay anchored on a
+   * prefix the Host has already discarded.
+   *
+   * Only the seal is dropped. Deliveries, answers and fired boundaries survive: the
+   * compaction happened inside one process and one run, so nothing was replayed.
+   */
+  resealAfterCompaction(sessionId) {
+    this.seals.delete(sessionId);
+    this.sealTenures.delete(sessionId);
+  }
+
+  /**
    * Decide one chat request. Six outcomes, and every one is terminal for this request.
    *
    *   { unmatched }    nothing declared here — fail closed, never a default reply
@@ -164,7 +179,21 @@ export class ScenarioRuntime {
     if (selection.entry !== undefined) this.answered.add(selection.entry.id);
 
     const sessionId = sessionIdOf(context);
-    if (sessionId !== null && runtimeKeyOf(body, this.bindings, context).kind === 'chat') {
+    if (sessionId === null) return;
+
+    // An automatic compaction replaces the stored conversation with its summary
+    // (`ProviderWireCapture.isHostCompactionContinuation`, managed-chat-execution-017):
+    // the next request legitimately carries a different prefix, and comparing it against
+    // the pre-compaction wire would report an ARCH-004 break for something that is not
+    // one. That is the same situation `clearSeals` handles for a Host restart, and the
+    // scenario has already named the point by declaring a `compaction` turn — so the
+    // reset is taken from the declaration, not sniffed off the wire.
+    if (selection.entry?.kind === 'compaction') {
+      this.resealAfterCompaction(sessionId);
+      return;
+    }
+
+    if (runtimeKeyOf(body, this.bindings, context).kind === 'chat') {
       this.seals.set(sessionId, wireOf(body));
       const tenure = this.tenureBoundaryCount?.(sessionId);
       if (typeof tenure === 'number') this.sealTenures.set(sessionId, tenure);

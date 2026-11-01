@@ -338,7 +338,9 @@ module Adapter =
         System.Collections.Generic.Dictionary<string, string>()
 
     let private nudgedEmptyRuns = System.Collections.Generic.HashSet<string>()
-    let private lastEndedProgressRun = System.Collections.Generic.Dictionary<string, string * string>()
+
+    let private lastEndedProgressRun =
+        System.Collections.Generic.Dictionary<string, string * string>()
 
     let private pendingPreviousSteers =
         System.Collections.Generic.Dictionary<string, string * PrefixEpochId>()
@@ -1442,8 +1444,8 @@ module Adapter =
             let nextEpochKey = string (Set.count epoch.ReanchoredScopes + 1)
             let budget = max 0 retentionBudget
             Surface.resetScopeState sid budget
-            scopeProgress?reset(sid, nextEpochKey) |> ignore
-            scopeRetention?reset(sid, nextEpochKey) |> ignore
+            scopeProgress?reset (sid, nextEpochKey) |> ignore
+            scopeRetention?reset (sid, nextEpochKey) |> ignore
 
             if budget >= 1 then
                 scopeRetention?seed (sid, budget) |> ignore
@@ -1753,23 +1755,36 @@ module Adapter =
                                                   false
                                                   "scope.kind=resetScope refused: scope journal not bound yet"
                                       | Some commit ->
-                                          let goal =
-                                              if isNull receipt?goal then "" else stringOf receipt?goal
+                                          let goal = if isNull receipt?goal then "" else stringOf receipt?goal
 
                                           let oldV =
-                                              if isNull receipt?oldVerbatim then "" else stringOf receipt?oldVerbatim
+                                              if isNull receipt?oldVerbatim then
+                                                  ""
+                                              else
+                                                  stringOf receipt?oldVerbatim
 
                                           let budget =
-                                              if isNull receipt?remaining then 0
+                                              if isNull receipt?remaining then
+                                                  0
                                               else
-                                                  try unbox<int> receipt?remaining
-                                                  with _ -> 0
+                                                  try
+                                                      unbox<int> receipt?remaining
+                                                  with _ ->
+                                                      0
 
-                                          let! committed = commit sid callId goal (if String.IsNullOrWhiteSpace oldV then None else Some oldV) budget
+                                          let! committed =
+                                              commit
+                                                  sid
+                                                  callId
+                                                  goal
+                                                  (if String.IsNullOrWhiteSpace oldV then None else Some oldV)
+                                                  budget
 
                                           let refused =
-                                              try unbox<bool> (committed?details?refused)
-                                              with _ -> false
+                                              try
+                                                  unbox<bool> (committed?details?refused)
+                                              with _ ->
+                                                  false
 
                                           if refused then
                                               let text =
@@ -1782,8 +1797,7 @@ module Adapter =
                                               return ompPriorAnswer false text
                                           else
                                               return! ompPriorExecute journalOpt (stringOf callId) arguments ctx start
-                              | Ok _ ->
-                                  return! ompPriorExecute journalOpt (stringOf callId) arguments ctx start
+                              | Ok _ -> return! ompPriorExecute journalOpt (stringOf callId) arguments ctx start
                           }
                           |> unbox<obj>)
                   ) ]
@@ -3329,9 +3343,13 @@ module Adapter =
                 call1 loader (box (if runningOnBun () then "bun:sqlite" else "node:sqlite"))
 
             let connection =
-                if runningOnBun () then createNew sqlite?Database dbPath
-                else createNew sqlite?DatabaseSync dbPath
-            try createNew retentionJournalConstructor connection
+                if runningOnBun () then
+                    createNew sqlite?Database dbPath
+                else
+                    createNew sqlite?DatabaseSync dbPath
+
+            try
+                createNew retentionJournalConstructor connection
             with _ ->
                 connection?close () |> ignore
                 reraise ()
@@ -3346,8 +3364,10 @@ module Adapter =
 
         let bindRetention (sid: string) =
             if not (String.IsNullOrWhiteSpace sid) then
-                scopeRetention?bindSessionJournal(sid, Func<string, obj>(retentionJournal)) |> ignore
-                scopeRetention?ensureEpoch(sid, scopeEpoch sid) |> ignore
+                scopeRetention?bindSessionJournal (sid, Func<string, obj>(retentionJournal))
+                |> ignore
+
+                scopeRetention?ensureEpoch (sid, scopeEpoch sid) |> ignore
 
         let bindHeaderParent (sid: string) (ctx: obj) =
             let sm = sessionManagerOf ctx
@@ -3887,9 +3907,9 @@ module Adapter =
                 lastEndedProgressRun.Clear()
 
                 for sid in sessionContexts.Keys do
-                    scopeProgress?clear(sid) |> ignore
-                    scopeRetention?clear(sid) |> ignore
-                    scopeRetention?unbindSessionJournal(sid) |> ignore
+                    scopeProgress?clear (sid) |> ignore
+                    scopeRetention?clear (sid) |> ignore
+                    scopeRetention?unbindSessionJournal (sid) |> ignore
                     outboundViewStore?clearSession (sid) |> ignore
 
                 sessionContexts.Clear()
