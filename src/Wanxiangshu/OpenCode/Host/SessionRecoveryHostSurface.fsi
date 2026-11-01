@@ -11,9 +11,12 @@ module SessionRecoveryHostSurface =
           PortOutcome: string
           TerminalGate: TaskCompletionSource<unit>
           TerminalArrival: TaskCompletionSource<unit>
-          ResumeCalls: System.Collections.Generic.List<bool> }
+          ResumeCalls: System.Collections.Generic.List<bool>
+          TranscriptReads: System.Collections.Generic.List<string> }
 
     val bootRecoveryHost: directory: string -> portOutcome: string -> Task<RecoveryHostHandle>
+
+    val signalReload: handle: RecoveryHostHandle -> Task<string array>
 
     val resumeAccepted: handle: RecoveryHostHandle -> sessionId: string -> physicalUserMessageId: string -> Task<obj>
 
@@ -87,3 +90,9 @@ module SessionRecoveryHostSurface =
     /// runtime 的 SignalChatRecoverySession 所转发的同一
     /// SessionRecoveryHost.SignalSession，逐 key 结算该会话的全部执行。
     val signalSessionCancelled: handle: RecoveryHostHandle -> sessionId: string -> Task
+
+    /// managed-session-lifecycle-030: the production drain await (the cancel
+    /// path's `drainTermination` / delete chain's DrainChatRecovery), exposed
+    /// so a regression can observe drain convergence of a session-scoped
+    /// settlement.
+    val drainSession: handle: RecoveryHostHandle -> sessionId: string -> Task

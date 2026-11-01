@@ -19,7 +19,6 @@ async function outbound(sessionId, messages) {
     InjectPairGuideline: yes,
     SettleAndReplaceDeferredInspections: yes,
     SanitizeMessages: () => {},
-    IsPureChatSession: () => false,
     AdjudicateDelivery: async () => new DeliveryAdjudication(0, []),
     StopAfterDelivery: yes,
   }

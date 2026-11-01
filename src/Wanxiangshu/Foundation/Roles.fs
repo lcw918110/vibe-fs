@@ -16,9 +16,6 @@ type Role =
     | DevOps
     | Distiller
     | Plan
-    /// On-demand second opinion: a dedicated reviewer participant that reads a
-    /// view of the caller's context and answers in prose, holding no tools.
-    | Advisor
 
 /// Typed F# projection of the role vocabulary owned by `wanxiangli/identity`
 /// (CUT-07). Which labels are active, historical or internal is decided by the
@@ -48,7 +45,6 @@ module Roles =
         | Role.Engineer -> "engineer"
         | Role.DevOps -> "devops"
         | Role.Plan -> "plan"
-        | Role.Advisor -> "advisor"
         | Role.Coder -> "coder"
         | Role.Inspector -> "inspector"
         | Role.Browser -> "browser"
@@ -65,8 +61,7 @@ module Roles =
           Role.Inquiry
           Role.DevOps
           Role.Distiller
-          Role.Plan
-          Role.Advisor ]
+          Role.Plan ]
 
     let private ofLabel (label: string) : Role option =
         if isNull label then
@@ -86,14 +81,14 @@ module Roles =
 
     let tryParseHistoricalRole (value: string) : Role option = tryParseRole value
 
-    /// AGENT-008 / capability-enforcement-006: Distiller and Advisor are private runtimes, not
+    /// AGENT-008 / capability-enforcement-006: Distiller is a private runtime, not
     /// public fork / horizon vocabulary.
     let isInternal (role: Role) : bool =
         identity.isInternalRole (roleLabel role)
 
     /// Manager, Orchestrator and Plan own long work. A tool-free natural stop
     /// is never their end: while the work is open they are nudged on, and no
-    /// late answer may stop them. Engineer, DevOps and Advisor close in prose.
+    /// late answer may stop them. Engineer and DevOps close in prose.
     let isLongRunning (role: Role) : bool =
         match role with
         | Role.Manager

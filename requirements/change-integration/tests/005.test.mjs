@@ -497,14 +497,14 @@ test('WHAT[change-integration-005] a completed tenure refuses hand-off and reope
     assert.equal(held.ActiveId ?? null, null)
     assert.equal(Array.from(held.Retirements ?? []).length, retirements)
 
-    for (const kind of ['Advisor', 'Agent']) {
+    for (const kind of ['Agent']) {
       const ignored = surface.execute(stateRoot, 'ses-conflict-handoff', `ignore-${kind}`, {
         type: 'OperatorMessage', kind, messageId: `msg-${kind}`,
       })
       assert.equal(ignored.Status, 'Observed', ignored.Reason)
       assert.equal(ignored.Kind, 'Ignored')
     }
-    assert.equal(surface.inspected(stateRoot, 'ses-conflict-handoff').ActiveId ?? null, null, 'Advisor and Agent do not reopen')
+    assert.equal(surface.inspected(stateRoot, 'ses-conflict-handoff').ActiveId ?? null, null, 'Agent does not reopen')
     assert.equal(surface.inspected(stateRoot, 'ses-conflict-handoff').Delivered, true)
 
     const reopened = surface.execute(stateRoot, 'ses-conflict-handoff', 'operator-1', {

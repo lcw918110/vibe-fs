@@ -6,11 +6,6 @@ open Wanxiangshu.Persistence.Journal
 
 [<AbstractClass; Sealed; AttachMembers>]
 type ToolRuntimeScopeSurface =
-    static member createAdvisorSender: journal: JournalHandle * sessionPort: obj -> obj
-
-    static member sendBusyNudgeAwait:
-        journal: JournalHandle * sessionPort: obj * session: string * prose: string * observation: obj -> Task<obj>
-
     static member evaluateRetirementBlockers: journal: JournalHandle * scenario: obj -> Task<string array>
     static member verifyDevOpsReturnDrain: journal: JournalHandle * scenario: obj -> Task<obj>
     static member verifyOwnershipRetirementContract: scenario: obj -> Task<obj>

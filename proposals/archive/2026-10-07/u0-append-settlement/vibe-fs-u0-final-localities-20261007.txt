@@ -1,7 +1,0 @@
-durable-events.persistence-eventstore-model 3 6
-durable-events.eventstore-append-result-contract 4 8
-durable-events.persistence-eventstore-storetypes 6 12
-durable-events.journal-outcome-contract 9 18
-durable-events.eventstore-git-contract 5 10
-repository-programming.repository-programming-js-capability 31 62
-durable-events.runtime 586 1172

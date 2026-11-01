@@ -1,4 +1,0 @@
-[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Missing ProjectReference in /Users/yuanxi/Workwork/vibe-fs/src/Wanxiangshu/Wanxiangshu.Owner.repository-programming.repository-programming-js-capability.fsproj: "Wanxiangshu.Owner.durable-events.eventstore-port-contract.fsproj" (file not found: /Users/yuanxi/Workwork/vibe-fs/src/Wanxiangshu/Wanxiangshu.Owner.durable-events.eventstore-port-contract.fsproj)

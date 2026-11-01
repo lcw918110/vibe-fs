@@ -31,7 +31,7 @@ test('WHAT[context-compression-008] compaction advances the wire epoch without r
   assert.equal(Number(prefix.epochOf(state)), 1)
   assert.equal(scopeId(state), '0')
   assert.equal(progress.record(session, scopeId(state), 'r2', 't2', 3).ok, true)
-  assert.equal(progress.settle(session, scopeId(state), 'r2').advisor, false)
+  assert.equal(progress.settle(session, scopeId(state), 'r2').estimate, 3)
   const scope = prefix.applyScopeReanchor({ previousEpoch: 1, nextEpoch: 2, callId: 'real-reset' }, state)
   assert.equal(scope.ok, true)
   state = scope.value
@@ -42,5 +42,5 @@ test('WHAT[context-compression-008] compaction advances the wire epoch without r
   state = tenure.value
   assert.equal(scopeId(state), '1')
   assert.equal(progress.record(session, scopeId(state), 'r3', 't3', 2).ok, true)
-  assert.equal(progress.settle(session, scopeId(state), 'r3').advisor, false)
+  assert.equal(progress.settle(session, scopeId(state), 'r3').estimate, 2)
 })

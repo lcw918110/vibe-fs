@@ -13,7 +13,7 @@ import {
 
 // Field incident 2026-10-28 01:08–01:22 UTC (Manager ses_e7fff8f2fffe…): two
 // children (Engineer `review-admission`, DevOps `devops`) were still writing
-// their closing prose when an Advisor answer was queued as a busy steer. The
+// their closing prose when a consultation answer was queued as a busy steer. The
 // Host loop ran straight from the finished report into that answer without a
 // session.idle, the late-consultation stop aborted the queued step, and the
 // only turn after the answer was the stop's own empty MessageAbortedError. The
@@ -57,7 +57,7 @@ test('WHAT[delegation-039] a late consultation stop settles the run on the finis
 
       // The consultation answer arrives while the report is still running: a
       // busy steer queued behind it.
-      const guided = await resumeCall(hooks, owner, 'Ada', 'ADVISOR-ANSWER')
+      const guided = await resumeCall(hooks, owner, 'Ada', 'CONSULTATION-ANSWER')
       assert.match(guided, /Ada/)
       await runtime.awaitIngress()
       const steer = physicalUserMessageOf(runtime, child)

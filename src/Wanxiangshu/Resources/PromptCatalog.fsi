@@ -8,5 +8,4 @@ type PromptCatalog =
       DevopsSystemPrompt: string
       OrchestratorSystemPrompt: string
 
-      PlanSystemPrompt: string
-      AdvisorSystemPrompt: string }
+      PlanSystemPrompt: string }

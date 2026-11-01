@@ -44,21 +44,9 @@ Host 上报的 session error 一律解码为 `ProviderTransient`，只有 typed 
 
 恢复由 `provider-attempt-recovery` 独占：去掉旧 retry 行，以 `ProviderRetryAttempt` 执行原样重试或拉黑 Provider 后重试（[021]）；不盲目重放已有可见输出的 attempt。预算耗尽按 `host-provider-failure-ownership` 产生唯一 typed terminal。
 
-## [010] 致命入口逐处有据
-
-所有生产 fatal 入口及转入边界必须登记触发前提、所属状态和不可达证明或实际回归；新增入口、入口漂移、缺失证据使标准验证失败。性质测试调用生产实现，以固定 seed 重放反例，不用自造模型替代。
-
-协议修复耗尽、过期回调、确定未发送和运行环境拒绝，不因“未预料”就成为 `LocalInvariant`。可达失败由所属请求或资源收敛，不释放他人的所有权、不重发未知 effect；保留的熔断满足 [006]。
-
-## [014] 可检查的致命入口索引
-
-fatal 索引用稳定 ID 登记 owner、源符号与 operation、触发与输入、exact identity、phase、不变量、提交和资源处置、影响范围、证据及正式测试。按符号与 operation 定位，不以行号定位；状态为 `Open | Proved | PropertyChecked | FixedWithRegression | RetainedFuse | ExcludedWithEvidence`。
-
-标准检查拒绝未登记入口（含间接转接）、过期定位及缺失的正式回归。真实的进程致命入口与受管子进程终止、存活探测、解码选项、结果类别等同名概念分开，排除也须有据。索引不另定失败策略。
-
 ## [011] 未分类 hook 失败保留自有证据
 
-不可识别 hook 异常只能由本次实参证明 execution key：会话标识与末尾物理用户消息必须无歧义。能证明则下发 `SettlementIncomplete`，由所属 phase 的 settlement owner 处置；不能证明则 key 为 None，均不得补造干净终态。原异常不变地交回 Host，不升级为 process fatal，也不降为可重试 provider 噪音。
+不可识别 hook 异常只能凭本次实参定 execution key：会话标识与末尾物理用户消息必须无歧义。能定则下发 `SettlementIncomplete`，由所属 phase 的 settlement owner 处置；定不了则 key 为 None，都不补造干净终态。原异常不变地交回 Host，不升级为 process fatal，也不降为可重试 provider 噪音。
 
 ## [012] StopPhysicalRun
 

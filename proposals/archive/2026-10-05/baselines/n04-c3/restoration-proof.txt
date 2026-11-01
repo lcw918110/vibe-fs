@@ -1,3 +1,0 @@
-Production helper restored byte SHA256: f921e069531aa8f55f297f8e8129e130b05db9d9e2d6cabbc87be1979f8d7709
-All three before/after freshness receipts byte-identical.
-Controlled mutations are not present in delivered production code.

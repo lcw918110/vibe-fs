@@ -12,7 +12,6 @@ type Persona =
     | Operator
     | Researcher
     | Analyst
-    | Auditor
     | Distiller
     | Curator
     | Planner

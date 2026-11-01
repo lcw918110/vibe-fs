@@ -34,6 +34,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.execution-fission-fact.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-taskresult.fsproj"/><ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-async-support.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.managed-session-lifecycle.execution-session-recoveryclosureprojection.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.managed-chat-execution.execution-session-chatexecution-facts.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.participant-identity.foundation-roles.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.process-execution.process-processrequest.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.provider-language.participant-provider-language.fsproj"/>

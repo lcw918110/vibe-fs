@@ -41,7 +41,6 @@ module AttemptPlannerSurface =
         | ToolPermission.DevOpsConsultation -> "DevOpsConsultation"
         | ToolPermission.Deliver -> "Deliver"
         | ToolPermission.Review -> "Review"
-        | ToolPermission.Advisor -> "Advisor"
         | ToolPermission.ResetScope -> "ResetScope"
 
     let private requestKindOf (label: string) : ProviderRequestKind option =

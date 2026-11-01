@@ -57,7 +57,6 @@ const MEMBERS_BY_PERMISSION = {
   DevOpsConsultation: ['devops'],
   Fission: ['fission'],
   Horizon: ['horizon'],
-  Advisor: [],
   Ask: ['ask'],
   Review: ['review'],
   ReviewAssessment: ['review'],
@@ -185,12 +184,11 @@ const recordingHost = () => {
     join: async () => ({ ok: true, records: [], byName: {} }),
     fission: async () => ({ ok: false, code: 'fission-unavailable' }),
     horizon: async () => ({ ok: true, agents: [], ptys: [] }),
-    advisor: async () => ({ ok: true, advice: 'stub-advice' }),
   }
 }
 
 const install = (sessionId, host) =>
-  installDelegationHost(sessionId, host.delegate, host.fission, host.horizon, host.advisor)
+  installDelegationHost(sessionId, host.delegate, host.fission, host.horizon)
 
 test('WHAT[repository-programming-002] registered_js_tools_match_js_tool_generator_output', () => {
   for (const role of allRoleLabels) {
@@ -402,22 +400,6 @@ test('WHAT[repository-programming-002] JS004_horizon_projects_four_layers_for_ev
   // The permission is the sole source of the member: Fork/Join without Horizon
   // project fork/dag/join but never horizon.
   assert.equal(memberBinding('Engineer', caps('Fork', 'Join'), 'horizon'), undefined)
-})
-
-test('WHAT[repository-programming-002] dedicated Advisor is automatic and has no callable JS member', () => {
-  const holders = allRoleLabels.filter(role => rolePermissions(role.toLowerCase()).includes('Advisor'))
-  assert.deepEqual(holders,['devops','engineer','manager','orchestrator'])
-  for(const role of holders){
-    const permissions=rolePermissions(role)
-    const result=surface(role,permissions)
-    assert.equal(isSome(result),true)
-    assert.equal(memberBinding(role,permissions,'advisor'),undefined)
-    assert.equal(memberNames(result).includes('advisor'),false)
-    assert.doesNotMatch(result.baseClassSource,/async advisor\(/)
-    assert.doesNotMatch(result.description,/advisor\(intent/)
-  }
-  assert.equal(surface('Engineer', caps('Advisor')), null,
-    'the retired Advisor permission cannot manufacture a programming surface')
 })
 
 test('WHAT[repository-programming-002] dispatch members accept no carry parameter; pull members take no selection', () => {

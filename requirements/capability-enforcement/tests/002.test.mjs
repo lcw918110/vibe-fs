@@ -155,10 +155,10 @@ const { nameOf: managedAgentName } = await import('../../../dist/Participant/Per
 
 test('WHAT[capability-enforcement-002] P7_SURFACE_role_labels_are_js_native_strings', () => {
   assertJsData(allRoleLabels, 'allRoleLabels')
-  assert.equal(allRoleLabels.length, 6, 'exactly six canonical roles')
+  assert.equal(allRoleLabels.length, 5, 'exactly five canonical roles')
   assert.deepEqual(
     allRoleLabels,
-    ['advisor', 'devops', 'engineer', 'manager', 'orchestrator', 'plan']
+    ['devops', 'engineer', 'manager', 'orchestrator', 'plan']
       .sort(),
   )
 })
@@ -166,7 +166,7 @@ test('WHAT[capability-enforcement-002] P7_SURFACE_public_internal_partition_and_
   assertJsData(allPublicRoleLabels, 'allPublicRoleLabels')
   assertJsData(allInternalRoleLabels, 'allInternalRoleLabels')
   assert.deepEqual(allPublicRoleLabels, ['devops', 'engineer', 'manager', 'orchestrator', 'plan'])
-  assert.deepEqual(allInternalRoleLabels, ['advisor'])
+  assert.deepEqual(allInternalRoleLabels, [])
   assert.equal(allPublicRoleLabels.length + allInternalRoleLabels.length, allRoleLabels.length)
   assert.equal(managedAgentName('deep', 'blogger'), '', 'retired blogger fails closed to empty name')
   assert.equal(managedAgentName('engineer', 'engineer'), 'engineer')
@@ -253,10 +253,7 @@ test('WHAT[capability-enforcement-002] TOOLSPEC_plugin_owned_cognitive_utility_t
     assert.equal(rolePredicate(tool, 'predictor'), false, `${tool} should fail closed for retired predictor`)
   }
 })
-test('WHAT[capability-enforcement-002] TOOLSPEC_negotiation_and_reset_admission_excludes_the_tool_less_advisor_seat', () => {
-  // The dedicated Advisor seat is tool-less (`tools:false`): its Host
-  // AgentConfig, Provider tool map and execution admission all refuse every
-  // tool, including the protocol-only `negotiate`.
+test('WHAT[capability-enforcement-002] TOOLSPEC_negotiation_and_reset_admission_fails_closed_for_unknown_callers', () => {
   // [PRODUCT-RETIRED standalone-resetScope] the `resetScope` ToolSpec is
   // deleted; reset rides `scope.kind=resetScope` on any admitted tool, so
   // its admission is that tool's admission. Only fail-closed remains.
@@ -265,9 +262,7 @@ test('WHAT[capability-enforcement-002] TOOLSPEC_negotiation_and_reset_admission_
   for (const role of ['manager', 'orchestrator', 'engineer', 'devops', 'plan']) {
     assert.equal(rolePredicate('negotiate', role), true, `the protocol-only negotiation tool is admitted for ${role}`)
   }
-  assert.equal(rolePredicate('negotiate', 'advisor'), false, 'the tool-less Advisor seat must not be admitted to negotiate')
   assert.equal(rolePredicate('negotiate', 'unknown'), false, 'unknown callers cannot negotiate')
-  assert.equal(rolePredicate('resetScope', 'advisor'), false, 'the tool-less Advisor seat is never admitted to resetScope')
   assert.equal(rolePredicate('resetScope', 'unknown'), false, 'resetScope must fail closed for unknown role')
 })
 }

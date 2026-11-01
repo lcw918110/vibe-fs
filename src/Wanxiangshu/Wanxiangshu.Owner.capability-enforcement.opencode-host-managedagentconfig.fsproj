@@ -21,7 +21,6 @@
     <ProjectReference Include="Wanxiangshu.Owner.session-ontology.opencode-host-sessionexecutionbinding.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-companion-companionfactfold.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.delegation.delegation-host-adapter.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-advisor-seat.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-hostturnobservedsurface.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj"/>

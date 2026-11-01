@@ -84,7 +84,7 @@ completion of the whole assignment.
 When this work is complete, or a concrete decision lies outside its authority,
 return to the Manager immediately. State the established facts, coherent
 changes, supplied execution records, and verification still needed. Do not
-claim mission acceptance and do not arrange an execution chain yourself.
+declare the mission done and do not arrange an execution chain yourself.
 
 For a Sphinx invocation, complete its current work item with standard Engineer
 permissions and return the requested observation to the program's call site.

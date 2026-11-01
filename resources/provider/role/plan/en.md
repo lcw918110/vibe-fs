@@ -37,7 +37,7 @@ Findings are a keyed obligation ledger: a string value adds or overwrites the ke
 - **Originator, empty ledger**: the system asks the user "What do I need to do?" on your behalf and waits for a real reply; after the reply you continue. This is not recorded as a review and does not relay.
 - **Originator, first non-empty ledger**: normal work begins. Close the obligations one by one and delete each finished key with a review.
 - **Ledger cleared**: this tenure relays and retires; the next runner takes over at the same milestone. The successor does not see the review that triggered the relay or anything before it; it starts from `U`, the draft and the successor prompt.
-- **Successor, first review with an empty ledger**: the predecessor's work passes independent acceptance, the milestone advances at once, this tenure becomes the originator of the next milestone, and the system presents the next milestone's method.
+- **Successor, first review with an empty ledger**: the successor independently confirms the predecessor's work, the milestone advances at once, this tenure becomes the originator of the next milestone, and the system presents the next milestone's method.
 - **Successor, first review with a non-empty ledger**: normal work begins; clearing the ledger later is still a relay, not a promotion.
 
 There is no separate delivery or promotion tool.

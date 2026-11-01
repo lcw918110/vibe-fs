@@ -11,9 +11,22 @@ module ChildRecoveryWorkflow =
     /// the durable journal handle.
     type DeliveryWitnessReader = SessionId -> ProviderRunIdentity -> AuthorityRootUserMessageId -> bool
 
+    /// The durable chat-execution acceptance of one physical user message.
+    /// The accepted physical id is not the authority root: a retry carries a
+    /// new physical message under the original root. Recovery must take both
+    /// from this record instead of promoting the last user message.
+    type AcceptedRoot =
+        { PhysicalUserMessageId: PhysicalUserMessageId
+          AuthorityRoot: AuthorityRootUserMessageId }
+
+    /// Reads the durable Accepted evidence for one physical user message.
+    /// None = no durable acceptance was observed; recovery must not guess.
+    type AcceptedRootReader = SessionId -> PhysicalUserMessageId -> AcceptedRoot option
+
     type Ports =
         { Journal: AgentJournalPort option
           DeliveryWitness: DeliveryWitnessReader option
+          AcceptedRoot: AcceptedRootReader option
           ParentId: SessionId
           Snapshot: ISessionSnapshotPort option
           AgentId: string

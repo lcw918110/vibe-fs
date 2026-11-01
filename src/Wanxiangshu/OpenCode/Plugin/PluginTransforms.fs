@@ -285,26 +285,22 @@ module PluginTransforms =
         | StopDelivery of DeliveryAttemptFence
 
     type NormalTransformCapabilities =
-        {
-            BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
-            StopCompletedContinuation: string option -> PhysicalUserMessageId option -> obj -> Task<bool>
-            BindSessionStartedAt: string option -> Task<DateTimeOffset option>
-            ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
-            ApplyTenureIsolation: string option -> obj -> Task<unit>
-            CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
-            RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
-            ApplyCompanion: string option -> obj -> obj -> Task<unit>
-            ApplyXWire: obj -> Task
-            FreezeProviderAttemptPlan: string option -> PhysicalUserMessageId option -> Task<unit>
-            InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
-            SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
-            SanitizeMessages: string option -> obj -> unit
-            /// Advisor is pure chat: no Pair Hint plan, steer or estimate request.
-            IsPureChatSession: string option -> bool
-            AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
-            StopAfterDelivery:
-                string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit>
-        }
+        { BeginPhysicalProviderAttempt: string option -> obj -> Task<unit>
+          StopCompletedContinuation: string option -> PhysicalUserMessageId option -> obj -> Task<bool>
+          BindSessionStartedAt: string option -> Task<DateTimeOffset option>
+          ApplyRelayProjection: string option -> obj -> Task<RelayProjectionDisposition>
+          ApplyTenureIsolation: string option -> obj -> Task<unit>
+          CaptureXTraceMessages: string option -> obj -> Task<TraceTransformCapture>
+          RefreshCompanionXTrace: string option -> XTraceProjectionState option -> unit
+          ApplyCompanion: string option -> obj -> obj -> Task<unit>
+          ApplyXWire: obj -> Task
+          FreezeProviderAttemptPlan: string option -> PhysicalUserMessageId option -> Task<unit>
+          InjectPairGuideline: string option -> DateTimeOffset option -> obj -> Task<unit>
+          SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
+          SanitizeMessages: string option -> obj -> unit
+          AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
+          StopAfterDelivery:
+              string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit> }
 
     type TransformBranchCapabilities = { RegisterOwned: string -> unit }
 
@@ -1364,16 +1360,7 @@ module PluginTransforms =
                         HostMessageProjection.replaceMessagesInPlace outObj replaced
                 }
           SanitizeMessages =
-            fun sidOpt outObj ->
-                match sidOpt with
-                | Some sid when ownerRole sid = Some Role.Advisor ->
-                    HostMessageProjection.sanitizeAdvisorOutputMessages outObj
-                | _ -> HostMessageProjection.sanitizeOutputMessages outObj
-          IsPureChatSession =
-            fun sidOpt ->
-                match sidOpt with
-                | Some sid when not (String.IsNullOrWhiteSpace sid) -> ownerRole sid = Some Role.Advisor
-                | _ -> false
+            fun _ outObj -> HostMessageProjection.sanitizeOutputMessages outObj
 
           // 条款 3：裁决只认真实交付事实——本次 attempt 存在一次已成立的
           // 交付，且登记时的物理输入仍是当前物理输入。view 声明、助手正文与
@@ -2061,9 +2048,7 @@ module PluginTransforms =
                   { Name = "scope-purge"
                     Run =
                       fun frame ->
-                          if not (caps.IsPureChatSession frame.SessionId) then
-                              applyScopePurgeAndSuffix frame.SessionId frame.OutObj
-
+                          applyScopePurgeAndSuffix frame.SessionId frame.OutObj
                           Task.FromResult(Some frame) }
                   { Name = "current-auxiliaries"
                     Run =

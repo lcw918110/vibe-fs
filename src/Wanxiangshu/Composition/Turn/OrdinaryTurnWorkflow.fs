@@ -111,8 +111,7 @@ module OrdinaryTurnWorkflow =
     /// witness or nudging unfinished work. An empty `stop` never reaches this: it is
     /// TurnNeedsContinuation and earns the missing-final-report nudge (WHAT[interaction-authority-024]).
     let private deliversByProse (turn: ReconciledTurn) : bool =
-        turn.Role = Some Role.Advisor
-        || turn.Role = Some Role.Engineer
+        turn.Role = Some Role.Engineer
         || turn.Role = Some Role.DevOps
 
     let private classifyManagerOrPlanTurn (context: ReconciledTurnContext) : LongWorkGate =

@@ -1,93 +1,0 @@
-[36m[build][0m Compiling F# (focused)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @theimowski
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/4b2a5ce50571d0d04094c4d58a4f339cb0d588d2ab5de36abc1efbb17f7bb0a4/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (652 source files) parsed in 1178ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 16092ms
-
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fsi(11,15): (11,34) error FSHARP: The type 'IBloggerRuntimeHost' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fsi(15,24): (15,44) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fsi(24,24): (24,44) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fsi(35,24): (35,44) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(41,25): (41,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(50,33): (50,49) error FSHARP: The value, namespace, type or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostSignalRouter   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(59,21): (59,37) error FSHARP: The value, namespace, type or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostSignalRouter   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(72,23): (72,30) error FSHARP: Incomplete pattern matches on this expression. (code 25)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(73,19): (73,35) error FSHARP: The namespace or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(79,29): (79,36) error FSHARP: This expression was expected to have type    'PromptAuthority.AuthorityExecutionProfile'    but here has type    'ProviderFailureProjection' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(85,19): (85,35) error FSHARP: The namespace or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(86,19): (86,35) error FSHARP: The namespace or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(87,19): (87,35) error FSHARP: The namespace or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(88,19): (88,35) error FSHARP: The namespace or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(91,83): (91,88) error FSHARP: The value or constructor 'error' is not defined. Maybe you want one of the following:   Error (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(92,19): (92,35) error FSHARP: The namespace or module 'HostSessionNudge' is not defined. Maybe you want one of the following:   HostSessionContext   HostSessionContextSurface   HostEventCodec   HostMessageCodec (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(99,112): (99,117) error FSHARP: The value or constructor 'error' is not defined. Maybe you want one of the following:   Error (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(112,83): (112,88) error FSHARP: The value or constructor 'error' is not defined. Maybe you want one of the following:   Error (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(121,25): (121,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(157,25): (157,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(204,55): (204,75) error FSHARP: The type 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerDeltaItem   BloggerCycleReceipt   BloggerRequestRejection   BloggerRequestId   BloggerRetryError (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(205,15): (205,22) error FSHARP: Incomplete pattern matches on this expression. (code 25)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(206,11): (206,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(207,11): (207,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(208,11): (208,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(209,11): (209,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(210,11): (210,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(211,11): (211,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(212,11): (212,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(213,11): (213,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(214,11): (214,31) error FSHARP: The namespace or module 'BloggerRepairOutcome' is not defined. Maybe you want one of the following:   BloggerRetryPolicy   BloggerRequestMaterial   BloggerCycleProjection   BloggerRequestId   BlogProjection (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(217,16): (217,35) error FSHARP: The type 'IBloggerRuntimeHost' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(223,25): (223,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(228,17): (228,35) error FSHARP: The value, namespace, type or module 'BloggerCoordinator' is not defined. Maybe you want one of the following:   BloggerDeltaItem   BloggerDeltaPart   BlogProjectionState   BloggerDeltaChunk   BloggerRetryPolicy (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(244,16): (244,35) error FSHARP: The type 'IBloggerRuntimeHost' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(250,25): (250,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(256,16): (256,35) error FSHARP: The type 'IBloggerRuntimeHost' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(260,25): (260,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(264,27): (264,53) error FSHARP: Lookup on object of indeterminate type based on information prior to this program point. A type annotation may be needed prior to this program point to constrain the type of the object. This may allow the lookup to be resolved. (code 72)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(331,25): (331,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(364,25): (364,45) error FSHARP: The type 'IRootWorkspaceReader' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Interaction/Repair/InteractionRepair.fs(1,1): error EXCEPTION: error recovery at (92,18--92,71)
-   at FSharp.Compiler.Symbols.ExprTranslationImpl.wfail[a](String msg, Range m) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 85
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreeCase(SymbolEnv cenv, ExprTranslationEnv env, Range m, Expr inpExpr, TType dtreeRetTy, DecisionTreeCase dcase, E acc) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1335
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim@1277.Invoke(DecisionTreeCase dcase, E acc)
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 420
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrim(SymbolEnv cenv, ExprTranslationEnv env, Expr expr) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 585
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 431
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvModuleValueOrMemberUseLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, ValRef vref, ValUseFlag vFlags, FSharpList`1 tyargs, FSharpList`1 curriedArgs, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 504
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 431
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrim(SymbolEnv cenv, ExprTranslationEnv env, Expr expr) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 585
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 431
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvModuleValueOrMemberUseLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, ValRef vref, ValUseFlag vFlags, FSharpList`1 tyargs, FSharpList`1 curriedArgs, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 502
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrim(SymbolEnv cenv, ExprTranslationEnv env, Expr expr) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 585
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrim(SymbolEnv cenv, ExprTranslationEnv env, Expr expr) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 567
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrim(SymbolEnv cenv, ExprTranslationEnv env, Expr expr) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 845
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprOnDemand@1340.Invoke(Unit unitVar0) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1340
-   at FSharp.Compiler.Symbols.FSharpExpr.get_E() in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 153
-   at FSharp.Compiler.Symbols.FSharpExprPatterns.|Coerce|_|(FSharpExpr e) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1452
-   at Fable.Transforms.FSharp2Fable.Compiler.transformExpr@639.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 733
-   at MonadicTrampoline.run[a](Thunk`1 _arg1) in /home/runner/work/Fable/Fable/src/Fable.Transforms/MonadicTrampoline.fs:line 9
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunction(IFableCompiler com, Context ctx, String name, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1842
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunctionOrValue(IFableCompiler com, Context ctx, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1924
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Fable.Transforms.FSharp2Fable.Compiler.transformFile(Compiler com) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2984
-   at Fable.Cli.Pipeline.Js.compileFile@174.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Cli/Pipeline.fs:line 180
-   at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 509
-   at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 112
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

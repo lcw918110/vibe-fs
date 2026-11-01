@@ -23,8 +23,6 @@ RUNTIME: 生命周期与事件注入
 USER:    当前分配的 Mission 任务
 ```
 
-内部 Advisor 是纯聊天例外：只加载自身聊天指引，不继承面向工作者的 Common Law、Office Library 或工具交接协议。
-
 ## [004] Tools 不是 Role Prompt 章节
 
 System Prompt 表达职位职责、认识论原则、权能边界与易犯错误，不枚举当前环境的全部工具。工具面决定可用工具，工具可用不等于职位获权。

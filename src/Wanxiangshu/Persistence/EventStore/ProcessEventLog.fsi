@@ -43,6 +43,11 @@ module ProcessEventLog =
 
     val readLastCompleteLine: path: string -> Result<string option, string>
     val writerPhysicalMetadata: commonDir: string -> WriterPhysicalMetadata list
+
+    /// durable-events-006/013/017: deterministic inventory of every writer file
+    /// (name + canonical file identity) without reading historical content.
+    val physicalInventory: commonDir: string -> string
+
     val internal withSegmentCap: cap: int -> work: (unit -> 'T) -> 'T
     val internal withSegmentCapTask: cap: int -> work: (unit -> Task<'T>) -> Task<'T>
     val internal convergeWriterFiles: commonDir: string -> writerId: string -> Result<unit, string>

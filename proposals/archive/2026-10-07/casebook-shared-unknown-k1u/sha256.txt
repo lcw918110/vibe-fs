@@ -1,7 +1,0 @@
-a8f05fe064a83af5eaf313d2cef7c784e68ab95a75f5daf0015ea90be8cd3957  receipt.txt
-5c3c778a0f487c5dfe391ace5abbfbd00dc003290c727ab65f3bba6e9475ad64  vibe-fs-k1u-build-doc.log
-6fdb6f3f4563929787451667c860b9565720ff026561219bc790b2a0fe581a4e  vibe-fs-k1u-build-first.log
-2f8975f1ab0a9a44b7974746b00f181a3dc6aafd7dcc182b59ef2f06ce613977  vibe-fs-k1u-check.log
-443b32a307095cfd8306ab599fbe5dc0be2fab145b1f7a0983e69415a897dbd4  vibe-fs-k1u-final-fresh.json
-661617c4fd32ffb879371b2a08be5794631840940fdf3ed6112677a41ab37b12  vibe-fs-k1u-formal-first.log
-92b295e1ffcc5b20be1c2fa7ba6718092ae91c9e16f5e203bf078bf39f79071c  vibe-fs-k1u-source-fresh.json

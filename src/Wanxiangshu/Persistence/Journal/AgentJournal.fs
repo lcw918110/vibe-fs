@@ -165,12 +165,29 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
 
     /// Trigger the enqueued recovery once (first caller) and await its
     /// completion (all callers). No recovery registered is a no-op.
+    ///
+    /// A faulting recovery is propagated to every awaiter — a handoff must
+    /// never read the journal past a barrier that silently swallowed its own
+    /// settlement failure — and then cleared, so a later caller starts a fresh
+    /// recovery instead of re-observing the stale failure forever. The
+    /// settlement is idempotent per obligation (crash-reconciliation-020 voids
+    /// each orphan once), so the retry repairs exactly what the faulted run
+    /// left unsettled. A previous generation's fault is isolated for the same
+    /// reason: this generation re-derives and re-settles whatever it left. (No
+    /// diagnostic here: the journal shard must not reference the host
+    /// diagnostics runtime; the propagation itself is the trace.)
     member _.RunOrAwaitRecovery() : Task =
         task {
             let awaitPrevious () =
                 task {
                     match previousRecovery with
-                    | Some previous -> do! previous
+                    | Some previous ->
+                        // Isolate the previous generation's fault: this
+                        // generation re-derives every unsettled obligation.
+                        try
+                            do! previous
+                        with _ ->
+                            ()
                     | None -> ()
                 }
 
@@ -189,7 +206,15 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
                         started
                     | None, None -> Task.FromResult())
 
-            do! work
+            try
+                do! work
+            with error ->
+                lock gate (fun () ->
+                    match startedRecovery with
+                    | Some started when obj.ReferenceEquals(started, work) -> startedRecovery <- None
+                    | _ -> ())
+
+                raise error
         }
 
     member _.AwaitChangeFromOrCancel

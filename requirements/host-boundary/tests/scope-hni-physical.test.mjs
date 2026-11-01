@@ -1,6 +1,5 @@
 // PRODUCT-RETIRED compat-pass (2026-10-29): standalone resetScope tool (c7a80d58) and remainingScopeTurnsEstimate billing are not product contract; affected cases are test.skip, steer asserts follow scope-steer/missing-estimate (newScopeRetentionBudget). See scope-retention.
 import { JournalHandle__get_Journal } from '../../../dist/Persistence/Journal/Surface.js'
-import { AdvisorSeat_consult } from '../../../dist/Execution/Delegation/Advisor/Seat.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWith } from '../../../dist/OpenCode/Host/ProviderSystemTransform.js'
@@ -41,7 +40,6 @@ function safeCaps() {
     InjectPairGuideline: yes,
     SettleAndReplaceDeferredInspections: yes,
     SanitizeMessages: () => {},
-    IsPureChatSession: () => false,
     AdjudicateDelivery: async () => new DeliveryAdjudication(0, []),
     StopAfterDelivery: yes,
   }
@@ -517,22 +515,6 @@ test('WHAT[delegation-negotiation-004] registered negotiate sends ephemeral BTW 
 })
 
 
-test('WHAT[delegation-negotiation-005] dedicated Advisor has no tools in Host config or execution policy', async () => {
-  const { advisorAgentConfig } = await import('../../../dist/OpenCode/Tools/StaticTools.js')
-  const { rolePredicate } = await import('../../../dist/OpenCode/Tools/ToolRegistrySurface.js')
-  const agent = advisorAgentConfig('Advisor role law')
-  const permission = agent.permission
-  const allowed = Object.entries(permission).filter(([, status]) => status === 'allow').map(([name]) => name).sort()
-  assert.deepEqual(allowed, [])
-  assert.equal(permission.external_directory, 'deny', 'Advisor never receives broad external path permission')
-  // PRODUCT-RETIRED standalone-resetScope: no resetScope tool exists, so Host config has no key to deny;
-  // reset is a scope.kind annotation on tools the Advisor already cannot call.
-  for (const name of ['skill', 'assume', 'fetch', 'bash-honeypot', 'todowrite-for-engineer', 'negotiate', 'askPreviousScope']) {
-    assert.equal(permission[name], 'deny', name + ' must be explicitly denied in Host agent config')
-    assert.equal(rolePredicate(name, 'advisor'), false, name + ' must be denied at the product tool admission layer')
-  }
-})
-
 test('WHAT[delegation-negotiation-006] user-facing root hides negotiate while a real managed child keeps it', async () => {
   await withExecutablePlugin(async (hooks, _directory, _ids, runtime) => {
     const root = 'ses-user-facing-negotiate-006'
@@ -917,44 +899,6 @@ test('WHAT[context-compression-053] the OpenCode request copy retires closed Sco
   clearSessionState(sid)
 })
 
-test('WHAT[advisor-pure-chat] an Advisor session is pure chat: no Pair Hint steer, estimate request or Scope protocol', async () => {
-  const { Role } = await import('../../../dist/Foundation/Roles.js')
-  const advisorSid = 'pure-chat-advisor', workerSid = 'pure-chat-control-engineer'
-  const caps = { ...safeCaps(), IsPureChatSession: sid => sid === advisorSid }
-  const outgoing = async sid => {
-    clearSessionState(sid)
-    const out = { messages: [user('u-' + sid, 'Please think this through with me', 1)] }
-    await normalTransform(caps, sid, {}, out)
-    clearSessionState(sid)
-    scopeProgress.clear(sid)
-    return out.messages
-  }
-  const worker = await outgoing(workerSid)
-  assert.match(JSON.stringify(worker), /newScopeRetentionBudget/, 'control: a worker still gets its retention-budget steer')
-  const advisor = await outgoing(advisorSid)
-  assert.doesNotMatch(JSON.stringify(advisor), /newScopeRetentionBudget/, 'Advisor is never asked for a Scope retention budget')
-  assert.doesNotMatch(JSON.stringify(advisor), /remainingScopeTurnsEstimate/, 'Advisor is never asked for a Scope estimate')
-  assert.equal(advisor.length, 1, 'no Pair Hint steer reaches Advisor')
-  assert.equal(advisor[0].parts[0].text, 'Please think this through with me')
-
-  const roleOf = sid => (String(sid?.fields?.[0] ?? sid) === advisorSid ? Role.Advisor : Role.Engineer)
-  const transform = createWith(roleOf, async () => undefined)
-  const { systemForRole, runtimeInstallFromPackage } = await import('../../../dist/Resources/PromptSurface.js')
-  runtimeInstallFromPackage()
-  const systemFor = async (sid, language) => {
-    const role = sid === advisorSid ? 'advisor' : 'engineer'
-    const output = { system: [systemForRole(language, role)] }
-    await transform({ sessionID: sid })(output)
-    return JSON.stringify(output.system)
-  }
-  for (const language of ['English', 'SimplifiedChinese']) {
-    assert.match(await systemFor(workerSid, language), /resetScope/, 'control: a worker system carries the Scope protocol')
-    assert.doesNotMatch(await systemFor(advisorSid, language), /\b(?:deliver|negotiate|resetScope|turnBudget)\b|`view`/,
-      'the complete Advisor system carries no tool or delivery protocol')
-  }
-})
-
-
 test.skip('WHAT[context-compression-043] OpenCode resetScope strictly refused when no sealed outbound view snapshot exists [PRODUCT-RETIRED standalone-resetScope]', async () => {
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const sid = 'test-unarchived-refusal-043'
@@ -1222,57 +1166,6 @@ test.skip('WHAT[context-compression-043] OpenCode resetScope appendAgent failure
 })
 
 
-test('WHAT[host-boundary-011] physically registered Advisor provider hook excludes fictitious assistant dot from continuing consultation',async()=>{
-  await withExecutablePlugin(async(hooks,_directory,_created,runtime)=>{
-    const sid='ses_advisor_no_fake_dot_011'
-    const u1=user('a-user-011','What actually happened?',101)
-    const onlyReasoning=assistant('a-thought-011',{type:'reasoning',text:'No final prose in this run'})
-    const u2=user('a-user-012','Please provide the missing observation.',102)
-    await hooks['chat.message']({sessionID:sid,agent:'advisor',messageID:'a-user-012'},
-      {message:{...u2.info,sessionID:sid,model:{providerID:'fixture',modelID:'advisor-model'}},parts:u2.parts})
-    const providerAssistant={info:{id:'assistant-provider-011',sessionID:sid,parentID:'a-user-012',
-      role:'assistant',agent:'advisor',providerID:'fixture',modelID:'advisor-model',time:{created:103}},parts:[]}
-    runtime.pushHostMessage(sid,providerAssistant)
-    await hooks.event({event:{type:'message.updated',properties:{info:providerAssistant.info}}})
-    const payload={messages:[u1,onlyReasoning,u2]}
-    const snapshot=structuredClone(payload.messages)
-    await hooks['experimental.chat.messages.transform']({sessionID:sid},payload)
-    assert.equal(payload.messages.filter(m=>m.info?.role==='assistant'
-      && m.parts?.some(p=>p.text==='.'||p.text==='...')).length,0,
-      'the real dedicated Advisor must never see a synthetic assistant answer')
-    assert.equal(payload.messages.some(m=>m.info?.id==='a-thought-011'),false,
-      'reasoning-only assistant run remains in original evidence, not as fake provider reply')
-    assert.deepEqual(snapshot,[u1,onlyReasoning,u2],
-      'the persisted/raw transcript is not rewritten by provider projection')
-  })
-})
-
-
-test('WHAT[advisor-031] a durable Advisor owner cannot create another Advisor seat or consume model capacity', async()=>{
-  await withExecutablePlugin(async (_hooks,_directory, createdIds,runtime)=>{
-    const caller='advisor-caller-031'
-    await acceptAuthorityRoot(runtime,caller,'advisor')
-    const before=createdIds.length
-    const deps={
-      Journal:JournalHandle__get_Journal(runtime.journal),
-      Snapshot:null,
-      Sessions:{
-        FamilyRootOf:()=>{throw Error('must not inspect or create Advisor child')},
-        ListChildren:()=>{throw Error('must not list Advisor children')},
-        CreateChildSession:()=>{throw Error('must not create Advisor child')},
-      },
-      Directory:runtime.directory,
-      Participant:'advisor',
-      BindDelegation:()=>{throw Error('must not bind nested Advisor')},
-    }
-    const result=await AdvisorSeat_consult(deps,caller,'consult a second Advisor')
-    assert.match(JSON.stringify(result),/dedicated Advisor cannot open another dedicated Advisor seat/)
-    assert.equal(createdIds.length,before,'no child session was dispatched')
-    assert.equal(runtime.prompts.length,0,'no physical root prompt nor provider admission was attempted')
-  })
-})
-
-
 test.skip('WHAT[context-compression-052] one actual OpenCode provider run charges once and takes min across real registered todowrites [PRODUCT-RETIRED estimate]',async()=>{
   await withExecutablePlugin(async(hooks,_dir,_created,runtime)=>{
     const estimateIntent='Observe this real LLM request and preserve existing work.'
@@ -1302,7 +1195,7 @@ test.skip('WHAT[context-compression-052] one actual OpenCode provider run charge
     const replay=await tool.execute(estimateArgs('estimate-low',4),context('todo-low-052','physical-run-one-052'))
     assert.ok(typeof replay==='string')
     await hooks['chat.params']({sessionID:sid,model},{})
-    assert.equal(scopeProgress.status(sid).estimate,4,'same run cannot double charge or invent advisor trigger')
+    assert.equal(scopeProgress.status(sid).estimate,4,'same run cannot double charge')
     const fractional=await tool.execute(estimateArgs('estimate-fraction',3.5),context('todo-fraction-052','physical-run-two-052'))
     assert.match(String(fractional),/# ok/,'a real Host call accepts a fractional estimate')
     await hooks['chat.params']({sessionID:sid,model},{})

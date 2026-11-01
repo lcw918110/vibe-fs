@@ -192,7 +192,7 @@ test('WHAT[capability-enforcement-025] P16_final_incumbent_keeps_read_cleanup_an
 
 test('WHAT[capability-enforcement-025] final incumbent may still delegate Engineer and DevOps for substantive closure', () => {
   const facts = managerFacts(true, true, true, undefined)
-  for (const permission of ['Fork', 'Resume', 'Advisor', 'ReviewAssessment', 'Finality']) {
+  for (const permission of ['Fork', 'Resume', 'ReviewAssessment', 'Finality']) {
     assert.equal(isAllowedForManagerFacts(facts, permission), true, `final manager retains ${permission}`)
   }
   assert.equal(isAllowedForManagerFacts(managerFacts(false, true, true, undefined), 'Resume'), false,

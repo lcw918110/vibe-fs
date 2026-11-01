@@ -189,7 +189,10 @@ module internal SyncDelegateInternals =
         (call: SyncDelegateCall)
         (turn: ReconciledTurn)
         : string option =
-        let assistant = CompletedTurnClassifier.partsSessionText turn.Parts
+        // WHAT[context-compression-037]: the fallback body prose handed to the
+        // parent is the terminal turn's formal text; reasoning and tool parts
+        // never travel with it.
+        let assistant = CompletedTurnClassifier.partsText turn.Parts
 
         let resolved =
             durableWitnessView journal turn
@@ -229,7 +232,7 @@ module internal SyncDelegateInternals =
         | None ->
             // context-compression [037]: a natural stop returns the completed turn's
             // assistant prose as body material — no snapshot messages, no session table.
-            let prose = CompletedTurnClassifier.partsSessionText turn.Parts
+            let prose = CompletedTurnClassifier.partsText turn.Parts
 
             let record = ReturnedMaterial.encode (naturalStopBody prose) []
 

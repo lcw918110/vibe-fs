@@ -113,7 +113,6 @@ module CompressionSurface =
         | ToolPermission.DevOpsConsultation -> "DevOpsConsultation"
         | ToolPermission.Deliver -> "Deliver"
         | ToolPermission.Review -> "Review"
-        | ToolPermission.Advisor -> "Advisor"
         | ToolPermission.ResetScope -> "ResetScope"
 
     let private participantIdentityToJs (identity: ParticipantIdentityEvidence) : obj =

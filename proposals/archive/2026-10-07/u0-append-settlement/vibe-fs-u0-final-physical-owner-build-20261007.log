@@ -1,23 +1,0 @@
-[36m[build][0m Compiling F# (focused)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @inchingforward
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/a0c6f5cc917806ad8261d36d92dd6a55851423ab3b2e11c3d51e6270639171ca/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (770 source files) parsed in 1129ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 17767ms
-
-[39m[22m[31m./src/Wanxiangshu/Persistence/EventStore/Surface.fs(9,28): (9,39) error FSHARP: The namespace 'Composition' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/EventStore/Surface.fs(179,37): (179,48) error FSHARP: The value, constructor, namespace or type 'Composition' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/EventStore/Surface.fs(322,69): (322,75) error FSHARP: Type mismatch. Expecting a    'Result<PreparedIntegration,AppendError>'    but given a    'Result<AppendReceipt,AppendError>'    The type 'PreparedIntegration' does not match the type 'AppendReceipt' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Persistence/EventStore/Surface.fs(367,29): (367,35) error FSHARP: Type mismatch. Expecting a    'Result<PreparedIntegration,AppendError>'    but given a    'Result<AppendReceipt,AppendError>'    The type 'PreparedIntegration' does not match the type 'AppendReceipt' (code 1)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

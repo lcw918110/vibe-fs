@@ -42,7 +42,8 @@ module SessionRecoveryHostSurface =
           PortOutcome: string
           TerminalGate: TaskCompletionSource<unit>
           TerminalArrival: TaskCompletionSource<unit>
-          ResumeCalls: System.Collections.Generic.List<bool> }
+          ResumeCalls: System.Collections.Generic.List<bool>
+          TranscriptReads: System.Collections.Generic.List<string> }
 
 
     let private acceptedEvidence (sessionId: string) (physicalUserMessageId: string) : AcceptedChatExecutionEvidence =
@@ -144,6 +145,7 @@ module SessionRecoveryHostSurface =
     let bootRecoveryHost (directory: string) (portOutcome: string) : Task<RecoveryHostHandle> =
         task {
             let calls = System.Collections.Generic.List<bool>()
+            let reads = System.Collections.Generic.List<string>()
             // Fail fast on an unknown port answer before booting durability.
             let port = portOf calls portOutcome
 
@@ -166,7 +168,9 @@ module SessionRecoveryHostSurface =
 
                 let transcript =
                     { new ITranscriptPort with
-                        member _.Messages _ = Task.FromResult(Ok []) }
+                        member _.Messages sessionId =
+                            reads.Add(SessionId.value sessionId)
+                            Task.FromResult(Ok []) }
 
                 let host = SessionRecoveryHost(journalHandle.Journal, transcript, scope, port, None)
 
@@ -187,7 +191,15 @@ module SessionRecoveryHostSurface =
                       PortOutcome = portOutcome
                       TerminalGate = plainGate
                       TerminalArrival = plainArrival
-                      ResumeCalls = calls }
+                      ResumeCalls = calls
+                      TranscriptReads = reads }
+        }
+
+    let signalReload (handle: RecoveryHostHandle) : Task<string array> =
+        task {
+            handle.TranscriptReads.Clear()
+            do! handle.Host.Signal ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded
+            return handle.TranscriptReads.ToArray()
         }
 
     /// Resume one accepted execution through the production host and report
@@ -478,7 +490,8 @@ module SessionRecoveryHostSurface =
                           PortOutcome = portOutcome
                           TerminalGate = gate
                           TerminalArrival = arrival
-                          ResumeCalls = calls }
+                          ResumeCalls = calls
+                          TranscriptReads = System.Collections.Generic.List<string>() }
         }
 
     /// managed-chat-execution-006: wait until the controlled writer has parked a
@@ -542,3 +555,10 @@ module SessionRecoveryHostSurface =
     /// SignalChatRecoverySession through — settling every key of the session.
     let signalSessionCancelled (handle: RecoveryHostHandle) (sessionId: string) : Task =
         handle.Host.SignalSession(SessionId.create sessionId, ChatExecutionRecoveryLifecycleEvent.SessionCancelled)
+
+    /// managed-session-lifecycle-030: the production drain await — the same
+    /// SessionRecoveryHost.Drain the cancel path (`drainTermination`) and the
+    /// delete chain await — so a regression can observe the drain convergence
+    /// of a session-scoped settlement directly.
+    let drainSession (handle: RecoveryHostHandle) (sessionId: string) : Task =
+        handle.Host.Drain(SessionId.create sessionId)

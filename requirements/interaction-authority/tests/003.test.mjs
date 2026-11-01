@@ -244,7 +244,7 @@ test('WHAT[interaction-authority-003] rejects hand-built mismatched profile', ()
   const mismatches = {
     participant: 'reviewer',
     role: 'reviewer',
-    persona: 'Auditor',
+    persona: 'Lead',
   }
 
   for (const [field, value] of Object.entries(mismatches)) {
@@ -501,11 +501,11 @@ test('WHAT[interaction-authority-003] malformed schema-v2 identity fails closed 
 })
 test('WHAT[interaction-authority-003] mismatched schema-v2 identity fails closed precisely', () => {
   const mismatch = replacePayload(factCodec.encode(currentFact()), (payload) => {
-    identityInSeed(payload.IdentitySeed).Persona = 'Auditor'
+    identityInSeed(payload.IdentitySeed).Persona = 'Lead'
   })
   assertDecodeErrorAcrossReplayRoutes(
     mismatch,
-    /participant identity Persona mismatch: expected Engineer, got Auditor/,
+    /participant identity Persona mismatch: expected Engineer, got Lead/,
   )
 })
 test('WHAT[interaction-authority-003] rejects unprovable historical identity', () => {
@@ -536,7 +536,7 @@ const personas = {
   engineer: 'Engineer',
   coder: 'Coder',
   manager: 'Lead',
-  reviewer: 'Auditor',
+  reviewer: 'Investigator',
   inspector: 'Investigator',
   devops: 'Operator',
 }

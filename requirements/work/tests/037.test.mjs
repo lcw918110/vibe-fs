@@ -38,9 +38,7 @@ test('WHAT[work-037] only a new operator message reopens a completed work, once'
 
   complete(work)
   assert.equal(work.inspect().active, null)
-  const advisor = work.execute('steer', { type: 'OperatorMessage', kind: 'Advisor', messageId: 'steer-1' })
   const agent = work.execute('agent', { type: 'OperatorMessage', kind: 'Agent', messageId: 'agent-1' })
-  assert.equal(advisor.result.kind, 'Ignored')
   assert.equal(agent.result.kind, 'Ignored')
   assert.equal(work.inspect().completed, true)
   const reopened = work.execute('operator', { type: 'OperatorMessage', kind: 'Operator', messageId: 'operator-1' })

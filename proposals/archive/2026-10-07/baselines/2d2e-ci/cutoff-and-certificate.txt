@@ -1,6 +1,0 @@
-runner: suite exceeded the 300000ms physical backstop
-runner: file streams: 738 drained, 2 active, 84 queued
-runner: active file requirements/speculative-investigation/tests/013.test.mjs; waiting for stream drain; last verdict: test:pass:WHAT[speculative-investigation-013] STRENGTH_013_two_owner_decisions_project_independently
-runner: active file requirements/speculative-investigation/tests/015.test.mjs; waiting for stream drain; last verdict: test:pass:WHAT[speculative-investigation-015] STRENGTH_015_the_migration_script_rejects_an_unregistered_contract_revision
-runner: post-exit group verification/reclamation: pid=3082; elapsedMs=10.183; accepted=true
-runner: verdict counts unavailable; no authoritative summary; 738/824 planned file(s) completed

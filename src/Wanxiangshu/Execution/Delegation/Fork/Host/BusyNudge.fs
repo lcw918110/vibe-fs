@@ -135,22 +135,6 @@ module HostForkBusyNudge =
                 (Some observer)
                 PromptDispatcher.AwaitMode.Detached
 
-    /// Advisor final steer may settle only after a real PhysicalAccepted receipt.
-    /// This is not the detached confirmation semantics of negotiate/busy guidance.
-    let sendObservedAwait
-        (sessions: ISessionHostPort)
-        (journal: AgentJournal option)
-        (childId: SessionId)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
-        (directory: string option)
-        (prompt: string)
-        (observer: ContinuationAcceptanceObserver)
-        : Task<Result<unit, string>> =
-        match journal with
-        | None -> Task.FromResult(Error "Advisor steer needs a durable AgentJournal")
-        | Some j ->
-            sendWithProfile sessions j childId profile directory prompt (Some observer) PromptDispatcher.AwaitMode.Await
-
     let sender sessions journal (directoryOf: string -> string option) =
         fun (agentId: string) childId profile prompt ->
             send sessions journal childId profile (directoryOf agentId) prompt

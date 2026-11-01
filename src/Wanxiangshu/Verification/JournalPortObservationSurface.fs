@@ -88,6 +88,7 @@ module JournalPortObservationSurface =
         | Error(WriteUnknown(_, StoreAppendUnknown evidence)) -> "Unknown:" + evidence.Primary.Cause.Message
         | Error(WriterUnavailable(_, WriterPoisoned first)) -> "Poisoned:" + AppendError.describe first.Error
         | Error(JournalAppendFailure.NoNewWriteReleaseFailed _) -> "NoNewWriteReleaseFailed"
+        | Error(WriterUnavailable(_, WriterRefused reason)) -> "Refused:" + reason
         | Error(WriterUnavailable(_, WriterClosing)) -> "Closing"
         | Error(WriterUnavailable(_, WriterDisposed)) -> "Disposed"
         | Error(FactRejected _) -> "Rejected"

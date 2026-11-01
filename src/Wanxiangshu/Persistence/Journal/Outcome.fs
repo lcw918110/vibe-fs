@@ -19,6 +19,9 @@ module JournalOutcome =
     /// distinct from CommitUnknown: lifecycle refusal is known-not-committed.
     type JournalUnavailable =
         | WriterPoisoned of firstFailure: JournalAppendPoison
+        /// Pure pre-write refusal: no bytes were written, the writer is not
+        /// poisoned, and a fresh caller decision may append again.
+        | WriterRefused of reason: string
         | WriterClosing
         | WriterDisposed
 
@@ -67,6 +70,8 @@ module JournalOutcome =
                         "%s: %s"
                         (EventId.value firstFailure.FailedEventId)
                         (AppendError.describe firstFailure.Error))
+            | WriterUnavailable(eventId, WriterRefused reason) ->
+                sprintf "append refused for %s before any write: %s" (EventId.value eventId) reason
             | NoNewWriteReleaseFailed(eventId, failure) ->
                 sprintf
                     "no new journal write for %s; store release failed: %s"

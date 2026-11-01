@@ -342,8 +342,12 @@ type EventStoreJournalWriter private (runtimeId: RuntimeId, init: Envelope, blob
         | AppendError.CommitUnknown evidence -> CommitUnknown(eventId, StoreAppendUnknown evidence)
         | AppendError.NoNewWriteReleaseFailed evidence -> CommitResult.NoNewWriteReleaseFailed(eventId, evidence)
         | AppendError.SemanticCut cut -> Rejected(eventId, cut.Reason)
+        | AppendError.AppendFailed reason ->
+            // Pure pre-write refusal (a business rule or the append freshness
+            // guard refused this exact fact before any byte was written). The
+            // writer stays healthy so a caller can re-read and decide again.
+            NotAttempted(eventId, WriterRefused reason)
         | AppendError.StorageInvalid _
-        | AppendError.AppendFailed _
         | AppendError.AppendNotAttempted _ ->
             NotAttempted(
                 eventId,
@@ -361,7 +365,14 @@ type EventStoreJournalWriter private (runtimeId: RuntimeId, init: Envelope, blob
                 currentSeq <- currentSeq + 1L
                 return EventStoreJournalWriter.businessCommitResult eventId envelope receipt
             | Error error ->
-                this.Poison(eventId, error)
+                match error with
+                | AppendError.AppendFailed _ ->
+                    // Known-not-attempted pre-write refusal. No bytes changed,
+                    // so latching poison would turn one competing admission
+                    // into a dead writer for the whole process.
+                    ()
+                | _ -> this.Poison(eventId, error)
+
                 return EventStoreJournalWriter.businessAppendFailure eventId error
         }
 

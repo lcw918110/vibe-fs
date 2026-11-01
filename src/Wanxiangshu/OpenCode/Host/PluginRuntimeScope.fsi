@@ -30,7 +30,8 @@ type PluginRuntimeScope =
     member ActivateDurability: unit -> unit
 
     /// crash-reconciliation-020: load-phase recovery work whose completion the
-    /// next handoff must observe; admission awaits these before dispatching.
+    /// next handoff must observe; admission awaits these before dispatching. A
+    /// tracked task may fault and the awaiter sees the real failure.
     member TrackDurabilityActivation: work: Task -> unit
 
     member AwaitDurabilityActivation: unit -> Task
@@ -60,6 +61,15 @@ type PluginRuntimeScope =
         sessionId: SessionId -> eventOf: (ChatExecutionKey -> ChatExecutionRecoveryLifecycleEvent) -> Task
 
     member DrainChatRecovery: sessionId: SessionId -> Task
+
+    /// crash-reconciliation-023: session ids that still owe a load-phase reload
+    /// decision (unsettled, or capacity held/unknown). Empty without a runtime.
+    member PendingChatRecoverySessions: unit -> SessionId list
+
+    /// Start or join THIS session's load-phase reload sweep: the session's own
+    /// leftovers settle before its admission proceeds, while every other
+    /// session's recovery runs in the background and never blocks it.
+    member ReloadChatSession: sessionId: SessionId -> Task
 
     member SyncDelegateRuntime: SyncDelegateRuntime option
 
@@ -130,9 +140,6 @@ type PluginRuntimeScope =
     member TrackReconcileShutdown: stopAndDrain: (unit -> Task) -> unit
 
     member RunBackground: start: (unit -> Task) -> unit
-
-    /// RunBackground variant returning the observed task for await tracking.
-    member RunBackgroundTracked: start: (unit -> Task) -> Task
 
     member RunOwnedWork: start: (unit -> Task) -> Task
 

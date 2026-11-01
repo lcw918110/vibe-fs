@@ -10,7 +10,7 @@ test('WHAT[provider-attempt-recovery-024] long-running roles continue their work
 })
 
 test('WHAT[provider-attempt-recovery-024] short roles and non-transient failures keep the terminal stop', () => {
-  for (const role of ['devops', 'engineer', 'advisor']) {
+  for (const role of ['devops', 'engineer']) {
     assert.equal(longWorkContinuationPath(role, 'ProviderTransient'), '', role)
   }
   assert.equal(longWorkContinuationPath('manager', 'ProviderPermanent'), '')

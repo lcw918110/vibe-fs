@@ -1,44 +1,34 @@
 # 计划与提案目录
 
-本文档索引当前工作树中具有指导意义、约束效力或架构参考价值的方案与设计记录。
-依照《纠偏令》与两仓宪法，活文档不供养证明宗教与旧 CUT 看板；历史施工截面与未决线索交由 Git 版本历史归档。
+`proposals/` 放未来材料、设计记录与延期提案。它**不是活规则**：规则在根 `AGENTS.md`、`wanxiangli/AGENTS.md` 与各包规范文件里。除使用者明确要求，不把这里的文字当施工依据（`requirement-system` [011]）。
 
----
+历史施工截面、验收日志、基线 JSON 与旧原型已删除，需要时翻 git。`wanxiangli` 内若有 `CUT-NN`、`evidence/CUT-*` 之类的历史指称，同样只作考古坐标，不是活文档。
 
-## 一、现行业务与运行时核心设计
+## 一、现行约束与已实施的设计
 
-| 提案 / 规范 | 状态与性质 | 核心内容 |
-|---|---|---|
-| [todowrite：命名程序与 program/runtime clean-break](todowrite-program-runtime-clean-break-2026-10-24.md) | 现行实施契约（2026-10-24；**估计字段已删**） | `name/program/intent` + `scope` 注解；统一请求期限；call／park／unpark。 |
-| [Scope 进度自评、专席 Advisor 与双重压缩](Scope进度自评-专席Advisor-双重压缩-2026-10-25.md) | **历史**（估计路径已退役） | 曾用 `remainingScopeTurnsEstimate` 驱 Stall／Advisor；现行 Scope 走 retention 注解。 |
-| [跨 Scope 回问：向过去的自己澄清](跨Scope回问-2026-10-24.md) | **历史／部分落地**（工具签名已迁） | askPreviousScope 仍在；入口改为 `scope.kind=resetScope`，勿按旧 resetScope 工具稿施工。 |
-| [长程任务不停机与显式用户询问](long-work-user-question-static-handoff.md) | 现行契约（2026-10-15） | 任务未完成时禁止静默停止或以空回复交差；缺信息时通过显式提问等待用户决断。 |
-| [验收驱动接力：Wanxiangli Clean-break 重构方案](验收驱动.md) | 已实施的架构方案（2026-10-26） | 围绕 `work`、`durable-work`、`projection` 重构生命周期；明确保留 `delivery` 包（材料交还与去重）；残留见其第七节。 |
+| 文档 | 性质 | 为什么还在 |
+| --- | --- | --- |
+| [todowrite：命名程序与 program/runtime 公开面](todowrite-program-runtime-clean-break-2026-10-24.md) | 设计记录，已按现行代码校正 | `name/program/intent`、一条请求期限、call/park/unpark、program 与 runtime 的包边界。现行合同以 `requirements/repository-programming/WHAT.md` 与 `wanxiangli/src/program/AGENTS.md` 为准。 |
+| [N04：真实只读输入的执行契约](N04真实只读Fable执行契约-2026-10-05.md) | 设计记录 + 未完成清单 | `scripts/lib/verification-readonly-inputs.mjs` 的所有权转换、失败回收与保护边界；接入 `verify.mjs` 与 Linux/Windows 仍未完成。 |
+| [长程任务不停机与显式用户询问](long-work-user-question-static-handoff.md) | 已实施的设计记录 | 自然停机的业务门、`ask(question)` 与等待的 durable 事实。规则见 `requirements/work/WHAT.md` [049]–[051]。 |
 
----
+## 二、决策依据（不施工，防止重交学费）
 
-## 二、长期构想与接口原型参考
+| 文档 | 性质 | 保留理由 |
+| --- | --- | --- |
+| [js- 编程面：暂停-恢复与 as-is 写语义](旧的.md) | 2026-10-16 定稿的取舍记录 | 保活现场为何胜过决定性重放、as-is 为何全局翻转、finalizer 为何用原生栈展开。 |
+| [Scope、专席 Advisor 与上下文压缩](Scope进度自评-专席Advisor-双重压缩-2026-10-25.md) | 已按 `scope-retention` 改写 | 现行 Advisor 触发源、四段咨询、临时只读会话与唯一 transform view 的约束。 |
+| [跨 Scope 回问](跨Scope回问-2026-10-24.md) | 已按现行实现改写 | `askPreviousScope` 的分界、fail-close 与未完成的 OpenCode 侧边界。 |
+| [Work / DurableWork / Projection：2026-10-26 设计记录](验收驱动.md) | 历史设计记录（已实施） | 为何是三个包、用户看得见的时序、Ask 跨账本与「先提交再发送」等仍成立的协调约束；现行合同指向 `requirements/work/WHAT.md` 与 `wanxiangli/src/lifecycle/AGENTS.md`。 |
 
-| 文档 | 状态与性质 | 说明 |
-|---|---|---|
-| [Steward 角色提案](Steward.md) | 长期纯架构提案 | 预留未来第 11 个角色（Steward），探讨在无总指挥形态下负责准入、时序与用户意图连续性的纯架构方案，不作为现行运行依据。 |
-| [宿主中立接口原型 (HNI)](host-neutral-interface/) | 原型与测试参考 | 中立端口与宿主适配的原型代码与 smoke 夹具，作为后续万象通（wanxiangtong）翻译层设计的技术参考。 |
+## 三、构想
 
----
+| 文档 | 性质 |
+| --- | --- |
+| [Steward 角色构想](Steward.md) | 未实施的第 11 个角色与 Standing Sphinx 骨架；不作施工依据。 |
 
-## 三、宿主兼容性与未决技术事实
+## 写作约定
 
-| 记录 | 状态与性质 | 说明 |
-|---|---|---|
-| [38-Host 重试兼容性核查](38-Host重试兼容性核查-2026-09-26.md) | 实测记录（OpenCode 1.18.29） | 记录了宿主外层重试策略导致多发 provider 请求的实测事实，作为后续万象通隔离宿主重试的输入。 |
-| [交付迁移待核事项](交付迁移待核事项.md) | 程序待改 | fork 侧 `childViewForRun` 在生产路径恒为 `None`（`PluginHooks.fs:926`），是死参数；接上真实视图或删除，二选一。 |
-
----
-
-## 四、背景依据与归档说明
-
-- [只读输入挂载：物理边界与恢复纪律](N04真实只读Fable执行契约-2026-10-05.md)：`scripts/lib/verification-readonly-inputs.mjs` 的物理边界（UDRO 能力范围、平台拒绝、失败回收纪律、各阶段输入矩阵）。
-- [js- 编程面暂停-恢复与 as-is 写语义：决策依据](旧的.md)：park/unpark、as-is 写语义当年排除过的路径与理由，防止同类改动重新交学费。
-- `archive/` 目录：2026-10-08 之前的早期历史施工记录、基线文本、收据及压缩包。依照「历史在 Git」原则，本目录不再作为活文档维护；其中包含的非文档历史资产（如 `.zip`、`.txt.gz`、收据文件）按授权边界完整保留。
-
-已删除的旧交账与施工存根（两仓合并 CI 日志、TODO 施工分册、旧验收收据）不再出现在索引里，历史在 Git。
+- 不写验收栏、证明栏、oracle 或批次红绿数字；需要差分时写「改了什么、在哪个世代跑了哪几条」。
+- 与程序对不上就标明「程序待改」，或直接按程序改写；不用旧证明腔把目标拖回教会。
+- 新文件先问：它挡住了哪条总流程？没有答案就不写。

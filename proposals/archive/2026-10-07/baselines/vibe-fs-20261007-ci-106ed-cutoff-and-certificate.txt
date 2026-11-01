@@ -1,6 +1,0 @@
-runner: suite exceeded the 300000ms physical backstop
-runner: file streams: 770 drained, 2 active, 52 queued
-runner: active file requirements/sphinx-v2/tests/036.test.mjs; waiting for stream drain; last verdict: test:pass:WHAT[sphinx-v2-036] invalid inquiry identities and material identities receive named refusals over real stdio
-runner: active file requirements/structured-workflow/tests/009.test.mjs; waiting for stream drain; last verdict: none received
-runner: post-exit group verification/reclamation: pid=3058; elapsedMs=9.043; accepted=true
-runner: verdict counts unavailable; no authoritative summary; 770/824 planned file(s) completed

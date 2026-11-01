@@ -1,6 +1,0 @@
-fatal-inventory-gate FAILED:
-  - src/Wanxiangshu/Persistence/Journal/EventStoreJournalWriter.fs: [fatal-entry-unregistered] line 231: fatal call has no fatal-inventory.json row (operation: dynamic)
-  - src/Wanxiangshu/Sphinx/V2/Composition/Commands.fs: [fatal-entry-unregistered] line 265: fatal call has no fatal-inventory.json row (operation: sphinx-semantic-cut)
-  - src/Wanxiangshu/Sphinx/V2/Hosts/Mcp/Server.fs: [fatal-entry-unregistered] line 161: fatal call has no fatal-inventory.json row (operation: sphinx-semantic-cut)
-  - src/Wanxiangshu/Strength/OpenCode/Delegate.fs: [fatal-entry-unregistered] line 54: fatal call has no fatal-inventory.json row (operation: strength-semantic-cut)
-  - src/Wanxiangshu/Strength/OpenCode/Replay.fs: [fatal-entry-unregistered] line 31: fatal call has no fatal-inventory.json row (operation: strength-semantic-cut)

@@ -427,7 +427,7 @@ const summaryMd = `# 事故现场全景诊断报告: ${incidentDirName}
 | 关键指标 | 现场事实 | 风险分析 |
 | :--- | :--- | :--- |
 | **发生会话 (SessionId)** | \`${sessionContext.sessionId}\` | - |
-| **触发角色 (Agent)** | \`${sessionContext.agent}\` | ${sessionContext.agent === 'advisor' ? '⚠️ 顾问专席请求异常' : '正常'} |
+| **触发角色 (Agent)** | \`${sessionContext.agent}\` | 正常 |
 | **目标模型 (Model/Provider)** | \`${sessionContext.providerId} / ${sessionContext.modelId}\` | - |
 | **单会话最高步数 (Max Step)** | **\`${maxStepObserved}\`** 步 | ${maxStepObserved > 100 ? '🚨 步数暴涨，存在无限循环自激风暴' : '步数正常'} |
 | **进程内存驻留 (RSS Memory)** | ${runningProcessInfo ? `\`${runningProcessInfo[0]?.rssMb} MB\` (CPU: ${runningProcessInfo[0]?.cpuPercent}%)` : '进程已退出'} | ${runningProcessInfo && parseFloat(runningProcessInfo[0]?.rssMb || 0) > 4096 ? '🚨 内存极高，濒临系统 OOM 崩溃' : '内存正常'} |

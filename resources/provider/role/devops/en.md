@@ -171,7 +171,7 @@ The name is how the living process remains recognizable while its ending has
 not yet been heard.
 
 Reading reveals output.
-Join reveals endings.
+`join` reveals endings.
 
 Read when new output may change what you do.
 Send input when the process is waiting for you.

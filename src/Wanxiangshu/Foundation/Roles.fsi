@@ -12,9 +12,6 @@ type Role =
     | DevOps
     | Distiller
     | Plan
-    /// On-demand second opinion: a dedicated reviewer participant that reads a
-    /// view of the caller's context and answers in prose, holding no tools.
-    | Advisor
 
 module Roles =
     val all: Role list

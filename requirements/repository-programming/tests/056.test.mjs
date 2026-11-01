@@ -59,12 +59,11 @@ const fakeHost = () => {
       lanes: Array.from({ length: payload.lanes }, (_, index) => ({ index, sessionId: `lane-${index}` })),
     }),
     horizon: async () => ({ ok: true, agents: [], ptys: [] }),
-    advisor: async () => ({ ok: true, advice: 'stub-advice' }),
   }
 }
 
 const install = (sessionId, host) =>
-  installDelegationHost(sessionId, host.delegate, host.fission, host.horizon, host.advisor)
+  installDelegationHost(sessionId, host.delegate, host.fission, host.horizon)
 
 test('WHAT[repository-programming-056] delegation members return data envelopes, never prose', async () => {
   const { dir, cleanup } = sandbox()
@@ -138,7 +137,6 @@ test('WHAT[repository-programming-056] this.horizon serves the installed host ro
       notExercised,
       notExercised,
       async () => roster,
-      notExercised,
     )
     const wired = await runProgram(dir, `    return await this.horizon();`, sessionId)
     assert.equal(caseName(wired), 'Succeeded')

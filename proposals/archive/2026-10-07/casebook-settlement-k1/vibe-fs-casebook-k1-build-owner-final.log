@@ -1,20 +1,0 @@
-[36m[build][0m Compiling F# (focused)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @kerams
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/20e8e267a5777f8d1889ac5a21b93a7c81671ff94a7e3d195861d7047d3a00d6/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (1562 source files) parsed in 836ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 33059ms
-
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/SettlementOwner.fs(37,14): (37,23) error FSHARP: Module 'Wanxiangshu.Repository.Knowledge.Casebook' contains    member CasebookSettlementOwner.Redeliver<'a> : incident: CasebookSemanticCutIncident -> 'a    but its signature specifies    member CasebookSettlementOwner.Redeliver: incident: CasebookSemanticCutIncident -> unit    The respective type parameter counts differ (code 34)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

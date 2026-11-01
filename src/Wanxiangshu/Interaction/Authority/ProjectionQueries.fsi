@@ -39,6 +39,14 @@ module PromptAuthorityProjectionQueries =
         agentProjections: AgentProjectionSet ->
             PromptAuthority.AcceptedRootClosure option
 
+    /// interaction-authority-018: the closure already recorded for one logical
+    /// run, so a replay can tell a duplicate from a conflict.
+    val closedRun:
+        sessionId: SessionId ->
+        logicalRunId: LogicalRunId ->
+        agentProjections: AgentProjectionSet ->
+            PromptAuthority.AuthorityClosureRecord option
+
     val terminalSources:
         sessionId: SessionId ->
         logicalRunId: LogicalRunId ->

@@ -22,7 +22,6 @@ module ManagedAgentCatalog =
         | Persona.Operator -> "operator"
         | Persona.Researcher -> "researcher"
         | Persona.Analyst -> "analyst"
-        | Persona.Auditor -> "auditor"
         | Persona.Distiller -> "distiller"
         | Persona.Curator -> "curator"
         | Persona.Planner -> "planner"
@@ -49,8 +48,6 @@ module ManagedAgentCatalog =
         | "analyst"
         | "inquiry"
         | "inquirer" -> Some Persona.Analyst
-        | "auditor"
-        | "examiner" -> Some Persona.Auditor
         | "distiller"
         | "condenser" -> Some Persona.Distiller
         | "curator"

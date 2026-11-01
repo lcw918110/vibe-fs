@@ -88,12 +88,11 @@ module StaticTools =
         knownToolNames
         |> List.map (fun name ->
             name,
-            (role <> Role.Advisor
-             && (name = "negotiate"
-                 || (name = "askPreviousScope" && Set.contains ToolPermission.ResetScope allowed)
-                 || OfficeCapability.admitsUtility role name
-                 || (permissionOfToolName role name
-                     |> Option.exists (fun permission -> Set.contains permission allowed)))))
+            (name = "negotiate"
+             || (name = "askPreviousScope" && Set.contains ToolPermission.ResetScope allowed)
+             || OfficeCapability.admitsUtility role name
+             || (permissionOfToolName role name
+                 |> Option.exists (fun permission -> Set.contains permission allowed))))
         |> Map.ofList
         |> AblationGate.filterToolPermissionMap registry
 
@@ -125,7 +124,6 @@ module StaticTools =
         // Orchestrator's Fork duty runs on the programming surface, and its
         // host verb is `commission` (no office permission of its own).
         | true, "fork", Role.Orchestrator -> "deny"
-        | true, _, Role.Advisor -> "deny"
         | true, "negotiate", _ -> "allow"
         | true, "askPreviousScope", role when OfficeCapability.isAllowed role ToolPermission.ResetScope -> "allow"
         | true, "askPreviousScope", _ -> "deny"
@@ -144,7 +142,7 @@ module StaticTools =
         // stops permission.asked prompts on paths outside the project directory.
         let pairs =
             [ yield "*", box "deny"
-              yield "external_directory", box (if role = Role.Advisor then "deny" else "allow")
+              yield "external_directory", box "allow"
               for name in knownToolNames do
                   yield name, box (permissionFor registry allowed role name) ]
 
@@ -167,15 +165,6 @@ module StaticTools =
                   "permission", permissionObj role
                   "temperature", box 1.0
                   "options", box (createObj [ "temperature", box 1.0 ]) ]
-
-    let private hiddenAgent (role: Role) (systemPrompt: string) : obj =
-        createObj
-            [ "mode", box "primary"
-              "hidden", box true
-              "permission", permissionObj role
-              "prompt", box systemPrompt
-              "temperature", box 1.0
-              "options", box (createObj [ "temperature", box 1.0 ]) ]
 
     let managerAgentConfig (prompt: string option) : obj = primaryAgent Role.Manager prompt
 
@@ -204,6 +193,3 @@ module StaticTools =
     let devopsAgentConfig (prompt: string option) : obj = primaryAgent Role.DevOps prompt
 
     let planAgentConfig (prompt: string option) : obj = primaryAgent Role.Plan prompt
-
-    /// The dedicated Advisor has no tools. Its consultation uses Host-managed prompts.
-    let advisorAgentConfig (prompt: string) : obj = hiddenAgent Role.Advisor prompt

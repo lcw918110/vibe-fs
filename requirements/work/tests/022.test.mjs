@@ -79,7 +79,7 @@ test('WHAT[work-022] rotation facts are the published events and an exact replay
   assert.equal(closed.result.kind, 'Completed')
   assert.deepEqual(types(manager), ['IncumbencyRetired', 'StopObliged'])
   confirm(manager, closed.result.effect, 'Requested')
-  assert.equal(manager.execute('steer', { type: 'OperatorMessage', kind: 'Advisor', messageId: 'steer-1' }).result.kind, 'Ignored')
+  assert.equal(manager.execute('steer', { type: 'OperatorMessage', kind: 'Agent', messageId: 'steer-1' }).result.kind, 'Ignored')
   const reopened = manager.execute('operator', { type: 'OperatorMessage', kind: 'Operator', messageId: 'operator-1' })
   assert.equal(reopened.result.kind, 'Reopened')
   assert.deepEqual(types(manager), ['IncumbencyOpened'])

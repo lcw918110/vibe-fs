@@ -218,7 +218,7 @@ const personas = {
   engineer: 'Engineer',
   coder: 'Coder',
   manager: 'Lead',
-  reviewer: 'Auditor',
+  reviewer: 'Investigator',
   inspector: 'Investigator',
 }
 const rootSelection = (agent) => {

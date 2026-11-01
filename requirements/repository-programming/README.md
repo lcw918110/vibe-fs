@@ -1,6 +1,6 @@
 # repository-programming — README
 
-本包的条款正文在 WHAT.md，用例覆盖与局限在 tests/README.md。这里补说 028-041 涉及的 JS 编程面与持久化机制，说法与 WHAT.md 保持同一套。
+本包的条款正文在 WHAT.md，用例覆盖与局限在 tests/README.md。这里补说 028–041 涉及的 JS 编程面与持久化机制，与 WHAT.md 同一套说法。
 
 ## 沙箱句柄与 deadline（WHAT[repository-programming-028]）
 
@@ -22,9 +22,9 @@ park 现场表是独立的进程级静态表模块 JsParkedSites（ParkedSites.f
 
 一次编程调用只携带 `program` / `unpark` / `abandon` 之一，三个参数在调用面上都是可选的，模型只发其中之一。同时给出两个及以上（例如同时给 `program` 与 `abandon`）以 `INVALID_ARGUMENT` 拒绝，reason 点名冲突的字段名，且是零效果：程序不跑、不恢复、不放弃、不产生文件效果，也不留待下一请求消费的视图声明，更不消费被点名的 handle——现场原样留在现场表里，等模型用单状态调用处置。一个状态都不给是缺状态，报缺少 program 的错误（`missing 'program' argument`），与“两个状态”的拒绝是两件事。
 
-## 泄漏兜底三件套（WHAT[repository-programming-031]）
+## 泄漏兜底三处（WHAT[repository-programming-031]）
 
-交付硬门禁接在 deliverSpec 执行链，plan/manager 分派之前：存在未处理 parked handle 时拒绝交付并列出全部 handle（资源 `tool/js-program/parked-deliver-blocked`）。每回合提醒经由 PairHint 的 composeMarkerDocument 并入（资源 `tool/js-program/parked-hint`），无载体回合不注入。会话终结在 ClearSession 清理链强制 reap 该 session 名下全部现场，durable 记 Reaped。两个资源均为 zh-CN.md/en.md 成对双语、占位符一致且含 `{{handles}}`；三个调用点只调用 JsParkedSites，不定义现场表。
+交付检查接在 deliverSpec 执行链、plan/manager 分派之前：还有未处理的 parked handle 时拒绝交付，并列出全部 handle（资源 `tool/js-program/parked-deliver-blocked`）。每回合提醒经由 PairHint 的 composeMarkerDocument 并入（资源 `tool/js-program/parked-hint`），无载体回合不注入。会话终结在 ClearSession 清理链强制 reap 该 session 名下全部现场，durable 记 Reaped。两个资源均为 zh-CN.md/en.md 成对双语、占位符一致且含 `{{handles}}`；三个调用点只调用 JsParkedSites，不定义现场表。
 
 ## rm/mv 编程面（WHAT[repository-programming-040]）
 
@@ -55,8 +55,8 @@ Exec capability 投影 `this.call(command, intent)`、`this.signal(signal)`、`t
 
 as-is 逐笔落盘：每笔 `write`（及 `rm`/`mv`）调用即经 MutationFs 单笔原子落盘，跨笔不回滚；程序以任何方式终止时，已落盘改动保持为事实分界线，失败结果如实附已落盘清单（`# failed` 加 `[fs]`），无落盘改动时不附 fs 节。
 
-durable 记账只进统一 EventStore：Prepare/Committed 成对追加。记账追加失败以稳定 `TRANSACTION_PREPARE_*`/`TRANSACTION_COMMIT_*` 码拒绝成功、如实上报已落盘效果，不重试追加、不换事务身份，失败携带原事件 id、事务 id 与原始 cause。物理写失败同样以 `TRANSACTION_COMMIT_FAILED` 失败且失败笔之前的落盘改动保留；程序失败先于记账完成时不留 durable pending。Prepare 无 Committed 是中断审计证据，EventStore 重开只观察证据，不重放、不回滚、不补交。EventStore 端口的坏输入先结算字节事实，再经唯一的语义熔断终止。
+durable 记账只进统一 EventStore：Prepare/Committed 成对追加。记账追加失败以稳定 `TRANSACTION_PREPARE_*`/`TRANSACTION_COMMIT_*` 码拒绝成功、如实上报已落盘效果，不重试追加、不换事务身份，失败携带原事件 id、事务 id 与原始 cause。物理写失败同样以 `TRANSACTION_COMMIT_FAILED` 失败且失败笔之前的落盘改动保留；程序失败先于记账完成时不留 durable pending。Prepare 无 Committed 是中断留下的审计记录；EventStore 重开只观察，不重放、不回滚、不补交。EventStore 端口遇到坏输入，先结算字节事实，再经唯一的语义熔断终止。
 
 ## Lifecycle 审计接线（WHAT[repository-programming-041]）
 
-Parked/Unparked/Abandoned 的审计沿生产组装路径接线：PluginHostInterop 从 workspace 的统一 WorkspaceEventStore 同源构造 `IJsLifecyclePersistence`，经 ToolRegistry.create 贯通到每个生成的 JsToolSpec，执行调用点传入该 persistence、不留硬编码 None；执行链记录 Parked、Unparked、Abandoned。会话关闭链经 PluginBoot → PluginRuntimeScope → PluginSessionScope 贯通；ClearSession 先枚举现场再 reap，逐 handle 记录 Reaped。四种 lifecycle 事件同住 TransactionStore 单一审计流；ParkedSites 现场表保持进程内存活，Reaped 审计归调用方，现场表自身不触碰 durable。
+Parked/Unparked/Abandoned 的审计沿生产组装路径接好：PluginHostInterop 从 workspace 的统一 WorkspaceEventStore 同源构造 `IJsLifecyclePersistence`，经 ToolRegistry.create 贯通到每个生成的 JsToolSpec，执行调用点传入该 persistence、不留硬编码 None；执行链记录 Parked、Unparked、Abandoned。会话关闭链经 PluginBoot → PluginRuntimeScope → PluginSessionScope 贯通；ClearSession 先枚举现场再 reap，逐 handle 记录 Reaped。四种 lifecycle 事件同在 TransactionStore 的单一审计流；ParkedSites 现场表只在进程内存活，Reaped 由调用方记录，现场表自身不碰 durable。

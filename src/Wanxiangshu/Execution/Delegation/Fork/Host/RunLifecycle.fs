@@ -351,10 +351,10 @@ module HostForkRunLifecycle =
             let! observed = childViewForRun run.ChildId result.ProviderRun
 
             let prose =
-                if System.String.IsNullOrWhiteSpace result.TerminalText then
+                if System.String.IsNullOrWhiteSpace result.TurnFormalText then
                     None
                 else
-                    Some result.TerminalText
+                    Some result.TurnFormalText
 
             // D2: the cell is peeked, never taken. Two entries (the terminal
             // subscription and the runtime's Complete) read the same child
@@ -636,6 +636,7 @@ module HostForkRunLifecycle =
             match! commitment with
             | Ok() -> return agentOutcome
             | Error error ->
+                logError "FORK-PERSIST" (sprintf "run %s completion append failed: %s" run.AgentId error)
                 return
                     AgentCompletion.failed
                         run.AgentId
@@ -693,6 +694,7 @@ module HostForkRunLifecycle =
             removeClaimedRun gate pendingRuns run
 
     let private deliverClaimSettlementFault (run: PendingHostRun) (error: exn) =
+        logError "FORK-PERSIST" (sprintf "run %s completion settlement faulted: %s" run.AgentId error.Message)
         // The claim consumed this run's only completion promise. An
         // unsettled Source strands the Fork await and the join ledger
         // forever — settle an explicit failure even when settlement
@@ -889,11 +891,14 @@ module HostForkRunLifecycle =
                 // 另行核对。
                 None
 
+    /// WHAT[context-compression-037]: the handback prose of a natural stop is
+    /// the terminal turn's formal body text; reasoning and tool parts stay
+    /// with the child.
     let private terminalProse (result: AgentRunResult) : string option =
-        if System.String.IsNullOrWhiteSpace result.TerminalText then
+        if System.String.IsNullOrWhiteSpace result.TurnFormalText then
             None
         else
-            Some result.TerminalText
+            Some result.TurnFormalText
 
     let private resolveView (view: ViewResolution option) : Task<string option> =
         match view with

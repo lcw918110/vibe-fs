@@ -57,13 +57,13 @@ module ToolAdmissions =
     /// There is no standalone resetScope tool; this admission is only used by
     /// askPreviousScope (and any future protocol verbs that need the same right).
     let scopeProtocol: ToolAdmission =
-        officeRole (fun r -> r <> Role.Advisor && OfficeCapability.isAllowed r ToolPermission.ResetScope)
+        officeRole (fun r -> OfficeCapability.isAllowed r ToolPermission.ResetScope)
 
     /// Backward-compatible alias — do not register a resetScope tool against it.
     let resetScope: ToolAdmission = scopeProtocol
 
     /// Non-authorizing protocol: only bound delegates can submit questions.
-    let negotiate: ToolAdmission = officeRole (fun role -> role <> Role.Advisor)
+    let negotiate: ToolAdmission = officeRole (fun _ -> true)
 
     let askPreviousScope: ToolAdmission = scopeProtocol
 

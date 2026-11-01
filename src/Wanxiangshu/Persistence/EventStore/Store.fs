@@ -256,6 +256,7 @@ module EventStore =
         (log: ProcessEventLog)
         (requested: EventEnvelope list)
         (fresh: EventEnvelope list)
+        (refuseSelfCut: bool)
         : AppendWork =
         match tryPreparation (fun () -> integrator.PrepareLive fresh) with
         | Error primary -> notAttempted requested None primary
@@ -263,18 +264,39 @@ module EventStore =
             AppendWork.Rejected(
                 AppendPreWriteRejection.PreparationRejected("integration preparation failed: " + reason)
             )
-        | Ok(Ok prepared) -> commitPrepared requested log prepared
+        | Ok(Ok prepared) ->
+            let requestedIds =
+                fresh |> List.map (fun event -> EventId.value event.EventId) |> Set.ofList
+
+            let selfCut =
+                prepared.Cuts
+                |> List.tryFind (fun cut -> Set.contains (EventId.value cut.FailedEventId) requestedIds)
+
+            match selfCut with
+            | Some cut when refuseSelfCut ->
+                // durable-events-006/013: a fact admitted from a snapshot that
+                // predates another writer's committed fact is a freshness
+                // conflict, not a live semantic failure. Refuse before any
+                // byte is written so no bad fact/cut-tail is created and the
+                // journal cannot mistake this race for a semantic cut.
+                AppendWork.Rejected(
+                    AppendPreWriteRejection.PreparationRejected(
+                        "freshness conflict with committed facts: " + cut.Reason
+                    )
+                )
+            | _ -> commitPrepared requested log prepared
 
     let private appendValidated
         (integrator: ICanonicalIntegrator)
         (log: ProcessEventLog)
         (events: EventEnvelope list)
+        (refuseSelfCut: bool)
         : AppendWork =
         match tryPreparation (fun () -> validateForAppend integrator events) with
         | Error primary -> notAttempted events None primary
         | Ok(Error invalid) -> AppendWork.Rejected(AppendPreWriteRejection.StorageInvalid invalid)
         | Ok(Ok []) -> AppendWork.NoNewWrite(AppendReceipt.empty, None)
-        | Ok(Ok fresh) -> appendFresh integrator log events fresh
+        | Ok(Ok fresh) -> appendFresh integrator log events fresh refuseSelfCut
 
     let private rejectionError rejection =
         match rejection with
@@ -358,18 +380,115 @@ module EventStore =
         | Ok() -> settleWork work
         | Error cause -> settleReleaseFailure requested work cause
 
+    /// durable-events-006/013/017: per-store freshness witness.
+    ///
+    /// The canonical Integrator Current is trusted for append admission only
+    /// while the physical writer-file inventory it was loaded from is
+    /// unchanged. A changed inventory forces exactly one canonical reload
+    /// inside the same cross-process store lock; the steady-state append path
+    /// performs one inventory comparison and reads no historical content.
+    ///
+    /// `pending` carries the lazy-initialization window: the journal may append
+    /// `RuntimeStarted` and its first business fact in two store appends, and
+    /// the caller's admission decision predates both. A foreign refresh during
+    /// either append must therefore re-decide the following append too.
+    type private StoreFreshness(commonDir: string, integrator: ICanonicalIntegrator) =
+        // DSL-MUTABLE: resource — inventory this store's Current was last
+        // proven against; None means the next append must reload.
+        let mutable witness: string option = None
+        // DSL-MUTABLE: resource — the next append must re-run the business
+        // decision even when no further file changed.
+        let mutable pending = false
+
+        member _.BootReload() : Result<unit, string> =
+            let before = ProcessEventLog.physicalInventory commonDir
+
+            match integrator.ReloadLocal commonDir with
+            | Ok() ->
+                let after = ProcessEventLog.physicalInventory commonDir
+                // A commit between the replay read and this capture means the
+                // Current cannot be proven against one inventory; leave the
+                // witness absent so the first append reloads under the lock.
+                witness <- if before = after then Some after else None
+                Ok()
+            | Error reason ->
+                witness <- None
+                Error reason
+
+        /// Returns whether this call refreshed the Current. The caller must
+        /// hold the cross-process store lock, so no append or retention
+        /// rewrite can interleave with the reload.
+        member _.RefreshUnderLock() : Result<bool, exn> =
+            let inventory = ProcessEventLog.physicalInventory commonDir
+
+            if witness = Some inventory then
+                Ok false
+            else
+                match integrator.ReloadLocal commonDir with
+                | Ok() ->
+                    witness <- Some(ProcessEventLog.physicalInventory commonDir)
+                    Ok true
+                | Error reason ->
+                    witness <- None
+                    Error(System.Exception reason)
+
+        member _.TakePending() =
+            let current = pending
+            pending <- false
+            current
+
+        member _.ArmNext(flag: bool) = pending <- flag
+
+        member _.Committed() =
+            witness <- Some(ProcessEventLog.physicalInventory commonDir)
+
+        member _.SettledNoWrite() =
+            // No bytes changed and Current was not advanced; the witness still
+            // describes the loaded state and no re-decision is owed.
+            pending <- false
+
+        member _.Unsettled() =
+            witness <- None
+            pending <- true
+
     let private appendOwned
         (commonDir: string)
         (integrator: ICanonicalIntegrator)
         (log: ProcessEventLog)
         gate
+        (freshness: StoreFreshness)
         requested
         =
         task {
             match! acquireAppendGate commonDir with
             | Error primary -> return notAttempted requested None primary |> settleWork
             | Ok acquired ->
-                let work = lock gate (fun () -> appendValidated integrator log requested)
+                let work =
+                    lock gate (fun () ->
+                        match freshness.RefreshUnderLock() with
+                        | Error cause ->
+                            notAttempted
+                                requested
+                                None
+                                { Phase = AppendPhase.Preparation
+                                  Cause = cause }
+                        | Ok refreshed ->
+                            let refuseSelfCut = refreshed || freshness.TakePending()
+                            // A refresh in this append also arms the next one:
+                            // the journal's lazy RuntimeStarted and its first
+                            // business fact are separate store appends, and the
+                            // admission decision predates both.
+                            freshness.ArmNext(refreshed)
+                            let work = appendValidated integrator log requested refuseSelfCut
+
+                            match work with
+                            | AppendWork.NewWrite _ -> freshness.Committed()
+                            | AppendWork.NoNewWrite _
+                            | AppendWork.Rejected _ -> freshness.SettledNoWrite()
+                            | AppendWork.NotAttempted _
+                            | AppendWork.Unknown _ -> freshness.Unsettled()
+
+                            work)
                 let! released = releaseAppendGate acquired
 
                 return settleReleased requested work released
@@ -387,6 +506,7 @@ module EventStore =
         : IEventStore =
         let log = ProcessEventLog.createWithSegmentCap commonDir writerId segmentCap
         let gate = obj ()
+        let freshness = StoreFreshness(commonDir, integrator)
         // DSL-MUTABLE: resource — staged inline payload bytes awaiting the next append.
         let staged = System.Collections.Generic.Dictionary<string, byte[]>()
         let digestOf (content: byte[]) : string = ProcessEventLog.payloadDigest content
@@ -421,7 +541,7 @@ module EventStore =
                 { envelope with
                     Payloads = inlinePayloads }
 
-        let reloadFromDisk () = integrator.ReloadLocal commonDir
+        let reloadFromDisk () = freshness.BootReload()
 
         match reloadFromDisk () with
         | Error error -> failwith ("local EventStore boot failed: " + error)
@@ -429,7 +549,7 @@ module EventStore =
 
         { new IEventStore with
             member _.Append(events) =
-                appendOwned commonDir integrator log gate (events |> List.map attachInline)
+                appendOwned commonDir integrator log gate freshness (events |> List.map attachInline)
 
             member _.WritePayload(content) =
                 let digest = digestOf content

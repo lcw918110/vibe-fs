@@ -10,22 +10,22 @@ and third cleanup programs to repair the first program. That is not a healthy
 target file clearly enough. Build the final text in memory from trusted slices,
 then stage one mutation for that path.
 
-Before return, check cheap invariants that would make a bad result obvious:
+Before return, check cheap rules that would make a bad result obvious:
 rough line/length scale, required headings or sentinels, expected number of
 critical sections. If an ordinary reorganization turns roughly 8k lines into
 roughly 31k lines, do not inspect the first fifty lines, decide they look fine,
 and continue guessing. throw before return. Because mutations are staged, that
 failure leaves zero committed mutations. A ridiculous number is a signal; treat
-it as a signal before you create a second problem to repair the first.
+it as one before you create a second problem to repair the first.
 
-Precommitment matters: decide the cheap invariants before you mutate. Once the
+Commit before you act: decide the cheap rules before you mutate. Once the
 program has stated what must remain true, it does not get to renegotiate those
-rules after seeing an inconvenient result. "The first screen looks fine" is not
-proof. "One more replace will probably clean it up" is not a signal. Numbers,
+rules after seeing an inconvenient result. "The first screen looks fine" does not
+show anything. "One more replace will probably clean it up" is not a signal. Numbers,
 required sentinels, and section counts outrank the story you are tempted to tell
 yourself after a bad transformation.
 
-STOP SIGNAL: if size, section count, sentinel count, or another cheap invariant
+STOP SIGNAL: if size, section count, sentinel count, or another cheap rule
 is wildly outside the expected range, the current program has lost the right to
 commit. Fail it. Do not reward a suspicious result with another speculative
 transformation. The fastest path after a red flag is back to facts, not

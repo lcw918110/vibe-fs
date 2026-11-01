@@ -87,7 +87,7 @@ test('WHAT[delegation-037] the late-consultation stop sees raw history once, nev
     ApplyTenureIsolation: yes, CaptureXTraceMessages: async () => ({ Current: null, RawMessages: [], Receipt: null }),
     RefreshCompanionXTrace: () => {}, ApplyCompanion: yes, ApplyXWire: yes, FreezeProviderAttemptPlan: yes,
     InjectPairGuideline: yes, SettleAndReplaceDeferredInspections: yes, SanitizeMessages: () => {},
-    IsPureChatSession: () => false, AdjudicateDelivery: async () => new DeliveryAdjudication(0, []), StopAfterDelivery: yes,
+    AdjudicateDelivery: async () => new DeliveryAdjudication(0, []), StopAfterDelivery: yes,
     StopCompletedContinuation: async (_sid, _physical, out) => {
       const before = out.messages.find(m => m.info?.id === 'a-tw2')
       seen.push(before.parts.some(p => p.type === 'tool'))

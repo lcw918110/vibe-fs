@@ -71,11 +71,33 @@ module ProviderRecoveryWorkflow =
         | ExecutionFailure.ProviderTransient, Some Role.Orchestrator -> Some "work/orchestrator-continue"
         | _ -> None
 
+    /// A late failure of a run that has already closed durably is stale: the
+    /// work it belongs to is finished. Silence requires the full durable
+    /// association — no active run, the session's last authority profile
+    /// naming this turn's authority root, and a recorded closure for exactly
+    /// that run. A missing active profile alone proves nothing; without the
+    /// closure the failure stays real.
+    let private sameRunAlreadyClosed (durable: AgentJournal) (turn: ReconciledTurn) : bool =
+        let agentProjections = (AgentJournal.snapshot durable).AgentProjections
+
+        match PromptAuthorityProjectionQueries.projectionFor turn.SessionId agentProjections with
+        | Some authority when authority.ActiveLogicalRun.IsNone ->
+            PromptAuthorityProjectionQueries.lastAuthorityProfile turn.SessionId agentProjections
+            |> Option.exists (fun profile ->
+                profile.AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
+                && (PromptAuthorityProjectionQueries.closedRun
+                        turn.SessionId
+                        profile.LogicalRunId
+                        agentProjections
+                    |> Option.isSome))
+        | _ -> false
+
     [<RequireQualifiedAccess>]
     type private LongWorkAfterStop =
         | Continued
         | ReceiptUnknown
         | WaitDenied
+        | RunClosed
         | NotSent of reason: string
 
     /// A context-window overflow is not a gateway-style transient: resending the
@@ -142,7 +164,11 @@ module ProviderRecoveryWorkflow =
                 | HostSessionNudge.GateContinuationOutcome.AlreadyAdmitted
                 | HostSessionNudge.GateContinuationOutcome.Retired -> return LongWorkAfterStop.Continued
             | "Stopped", Some _ -> return LongWorkAfterStop.Continued
-            | "Stopped", None -> return LongWorkAfterStop.NotSent "No active authority profile"
+            | "Stopped", None ->
+                if sameRunAlreadyClosed durable turn then
+                    return LongWorkAfterStop.RunClosed
+                else
+                    return LongWorkAfterStop.NotSent "No active authority profile"
             | "Denied", _ -> return LongWorkAfterStop.WaitDenied
             | _, _ -> return LongWorkAfterStop.ReceiptUnknown
         }
@@ -165,6 +191,7 @@ module ProviderRecoveryWorkflow =
             | Some path ->
                 match! sendLongWorkContinuation sessionPort rootWorkspace durable turn path with
                 | LongWorkAfterStop.Continued -> ()
+                | LongWorkAfterStop.RunClosed -> ()
                 | LongWorkAfterStop.ReceiptUnknown ->
                     notifyFailure eventPort turn (reason + "; stop receipt did not arrive")
                 | LongWorkAfterStop.WaitDenied -> notifyFailure eventPort turn (reason + "; stop wait was denied")
@@ -246,7 +273,7 @@ module ProviderRecoveryWorkflow =
         kind = Some PromptAuthority.ContinuationKind.ProviderRetryAttempt
         && establishedRun = Some providerRun
 
-    let private continueSameProvider
+    let internal continueSameProvider
         (sessionPort: ISessionHostPort)
         (rootWorkspace: IRootWorkspaceReader)
         (durable: AgentJournal)
@@ -273,7 +300,8 @@ module ProviderRecoveryWorkflow =
                         observer
 
                 return observeWorkContinuation durable turn authorization observer error continuation
-            | _ -> return RetryVerdict.Superseded
+            | Some _ -> return RetryVerdict.Superseded
+            | None -> return RetryVerdict.Terminal "No active authority profile"
         }
 
     let private redispatchAfterFailure
@@ -445,6 +473,7 @@ module ProviderRecoveryWorkflow =
                             currentFailure projections turn.SessionId ProviderRequestKind.WorkMain))
 
             match hasCapacity, recoveryContext with
+            | _ when sameRunAlreadyClosed durable turn -> ()
             | _ when isHardStop failure error -> notifyFailure eventPort turn error
             | false, _ -> notifyFailure eventPort turn "All candidate providers exhausted (zero capacity)"
             | true, None ->

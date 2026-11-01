@@ -13,5 +13,5 @@ Strongly recommended:
 Different named programs can run concurrently; waiting does not hold the whole provider run. Each mutation remains atomic. A changed read version fails with FILE_CHANGED, so arbitrary concurrent writes to the same file are not guaranteed to succeed.
 
 Write complex JavaScript in one program. Every write lands immediately (as-is):
-there is no rollback of earlier writes, so validate before each write you cannot
+there is no rollback of earlier writes, so check before each write you cannot
 afford to keep.

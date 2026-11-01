@@ -15,7 +15,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readCompileShardInventory } from './compile-shards.mjs'
 import { maskFSharpTrivia } from './fsharp-source.mjs'
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -76,13 +75,6 @@ export const createCheckContext = (opts = {}) => {
 
   /** Repo-relative POSIX path for an absolute or relative path. */
   const toRel = (p) => norm(relative(root, p.startsWith('/') ? p : resolve(root, p)))
-
-  // Lazily-loaded compile inventory: shared across  every gate that needs it.
-  let inventory
-  const compileInventory = () => {
-    if (!inventory) inventory = readCompileShardInventory({ repositoryRoot: root, sourceRoot: join(root, PRODUCTION_ROOT), aggregatePath: null })
-    return inventory
-  }
 
   // File-content cache. Modules may share text through this slot to avoid
   // re-reading within a single gate run.
@@ -167,7 +159,6 @@ export const createCheckContext = (opts = {}) => {
     productionFiles,
     requirementTests,
     isRequirementTestFile,
-    compileInventory,
     withLines,
     assertReadable,
   }

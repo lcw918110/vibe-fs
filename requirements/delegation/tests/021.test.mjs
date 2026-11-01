@@ -8,7 +8,7 @@ const assignment = 'Investigate the failing integration test.'
 
 test('WHAT[delegation-021] late consultation stops only after a tool-free completed turn', async () => {
   await withRealFork('manager-consultation-boundary', async ({ hooks, runtime }) => {
-    for (const kind of ['askPreviousScope', 'negotiate', 'advisor']) {
+    for (const kind of ['askPreviousScope', 'negotiate']) {
       const sid = `consult-${kind}`
       const earlier = { info: { id: 'user-original', role: 'user', sessionID: sid }, parts: [{ type: 'text', text: 'task' }] }
       const assistant = { info: { id: 'assistant-before', role: 'assistant', sessionID: sid, time: { completed: 5 } }, parts: [{ type: 'text', text: 'Finished' }] }

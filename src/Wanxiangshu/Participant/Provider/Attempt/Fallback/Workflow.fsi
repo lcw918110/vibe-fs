@@ -57,3 +57,19 @@ module ProviderRecoveryWorkflow =
         failure: ExecutionFailure ->
         error: string ->
             Task<RetryVerdict>
+
+    /// The same-provider recovery classification for one confirmed failure.
+    /// Superseded only when a different authority root owns the session now;
+    /// a missing active profile is a terminal failure, never a silent
+    /// supersession. Exposed internal for the provider-attempt-recovery-026
+    /// test seam.
+    val internal continueSameProvider:
+        sessionPort: ISessionHostPort ->
+        rootWorkspace: IRootWorkspaceReader ->
+        durable: AgentJournal ->
+        turn: ReconciledTurn ->
+        observer: ContinuationAcceptanceObserver option ->
+        authorization: ProviderRecoveryAuthorization ->
+        continuationPrompt: string ->
+        error: string ->
+            Task<RetryVerdict>

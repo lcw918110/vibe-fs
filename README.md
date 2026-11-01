@@ -45,7 +45,7 @@
 
 ## 用户指南
 
-使用入门见 [功能导览](docs/功能导览.md)；运行与人工核验见 [人工巡检方法](docs/人工巡检.md)；技术待办见 [待决事项与已知限制](requirements/GAP.md)。
+使用入门见 [功能导览](docs/功能导览.md)；运行与人工核验见 [人工巡检方法](docs/人工巡检.md)；技术待办见 [程序待改清单](requirements/GAP.md)。
 
 ### 产品形式与入口
 
@@ -103,14 +103,14 @@ npm install wanxiangshu --registry=<私有源URL>
 | `npm run verify:release` | 发布验证：clean build、端到端与安装包完整性校验 |
 | `npm run format` | Fantomas 代码格式化写盘 |
 
-编写、构建或优化测试时，阅读[测试规则](requirements/verification-system/AXIOMS.md)；现有测试 prompt 可追加[测试效率补充段落](proposals/高效测试Prompt.md)。
+编写、构建或优化测试时，阅读[测试规则](requirements/verification-system/AXIOMS.md)；测试入口与设施见[测试说明](requirements/verification-system/tests/README.md)。
 
 ### 文档与规范索引
 
 - **功能导览**：[docs/功能导览.md](docs/功能导览.md)
 - **人工巡检方法**：[docs/人工巡检.md](docs/人工巡检.md)
-- **功能说明书目录**：[requirements/README.md](requirements/README.md)（含 48 个功能说明包与 INDEX 导航）
-- **待决事项与限制**：[requirements/GAP.md](requirements/GAP.md)
+- **功能说明书目录**：[requirements/README.md](requirements/README.md)（包清单与写法；分组索引见 [INDEX.md](requirements/INDEX.md)）
+- **程序待改清单**：[requirements/GAP.md](requirements/GAP.md)
 - **计划与提案**：[proposals/README.md](proposals/README.md)
 - **根目录纠偏令**：[AGENTS.md](AGENTS.md)
 - **万象理总宪法**：[wanxiangli/AGENTS.md](wanxiangli/AGENTS.md)

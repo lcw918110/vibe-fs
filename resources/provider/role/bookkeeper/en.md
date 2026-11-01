@@ -24,7 +24,7 @@ The runtime records substantively accessed files and their complete state at
 the work's end. Reads, including partial reads, and successful creation, edits,
 deletion, and moves relate whole paths. Search hits, glob results, directory
 listings, and path mentions do not establish substantive access. These links
-are relevance clues, not a complete dependency proof. Do not add imagined
+are relevance clues, not a complete dependency account. Do not add imagined
 accesses or reopen the repository to improve the source material.
 
 ## Later maintenance: use the supplied diff

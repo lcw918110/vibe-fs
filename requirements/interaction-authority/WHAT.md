@@ -109,7 +109,7 @@ DevOps 的固定绑定由道路初始化确立，其模型配置与 Persona 在�
 
 ## [024] 全角色空终态必须继续，无最大次数
 
-任何角色（包括 Advisor、Distiller、Engineer、DevOps、Plan、Manager，以及未映射角色）的自然 `finish=stop`，若没有有效正文也没有真实工具调用，不构成有效会话终止。仅推理内容不是正文，不能当作已经回复。必须沿既有 InteractionRepair 的 exact-terminal gate nudge 接续同一会话；同一个终止的重复观察只发一次，不同新回合连续空终止则每次继续请求，**暂不设最大 nudge 次数**。已经有真实工具调用的回合不是“无正文无工具”；已确认的真实人工取消仍按取消处理，不自动抢回。
+任何角色（包括 Distiller、Engineer、DevOps、Plan、Manager，以及未映射角色）的自然 `finish=stop`，若没有有效正文也没有真实工具调用，不构成有效会话终止。仅推理内容不是正文，不能当作已经回复。必须沿既有 InteractionRepair 的 exact-terminal gate nudge 接续同一会话；同一个终止的重复观察只发一次，不同新回合连续空终止则每次继续请求，**暂不设最大 nudge 次数**。已经有真实工具调用的回合不是“无正文无工具”；已确认的真实人工取消仍按取消处理，不自动抢回。
 
 OpenCode 给每个 assistant step 包 `step-start`/`step-finish` 标记。这两个标记只说明跑过一步，不是工具调用；判“无正文无工具”时只认真实工具部件（含已结算的 tool 部件）与 patch。
 

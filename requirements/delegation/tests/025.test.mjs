@@ -316,3 +316,34 @@ test('WHAT[delegation-025] a real Host send promise exception preserves its actu
   })
 })
 
+test('WHAT[delegation-025] the natural-stop handback prose excludes thinking and tool material', async () => {
+  const owner = 'owner-natural-stop-prose-025'
+  await withSyncRuntime(owner, async runtime => {
+    const work = sync.invoke(runtime, owner, 'Engineer', 'SYNC-PROSE-CHARGE')
+    await sync.awaitPromptCount(runtime, owner, 'Engineer', 1)
+    assert.equal(sync.acceptPrompt(runtime, owner, 'Engineer', 0), true)
+    const child = sync.child(runtime, owner, 'Engineer')
+
+    // The terminal turn mixes thinking, body prose and a settled tool result;
+    // only the body prose may settle the call.
+    assert.equal(
+      await sync.settleExactTerminal(
+        runtime,
+        child,
+        'msg-physical-1',
+        'msg-physical-1',
+        'run-prose-025',
+        'BODY-PROSE-025',
+        'SECRET-THOUGHT-025',
+      ),
+      true,
+    )
+
+    const result = await work
+    assert.equal(result.ok, true)
+    assert.match(String(result.value), /BODY-PROSE-025/, 'the body prose settles the call')
+    assert.doesNotMatch(String(result.value), /SECRET-THOUGHT-025/, 'thinking never settles the call')
+    assert.doesNotMatch(String(result.value), /TOOL-RESULT-ONLY/, 'tool material never settles the call')
+  })
+})
+

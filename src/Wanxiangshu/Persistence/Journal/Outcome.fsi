@@ -16,6 +16,7 @@ module JournalOutcome =
 
     type JournalUnavailable =
         | WriterPoisoned of firstFailure: JournalAppendPoison
+        | WriterRefused of reason: string
         | WriterClosing
         | WriterDisposed
 

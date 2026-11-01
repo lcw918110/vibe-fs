@@ -76,7 +76,6 @@ module ProviderSystemTransform =
         | Role.Engineer -> Some catalog.EngineerSystemPrompt
         | Role.DevOps -> Some catalog.DevopsSystemPrompt
         | Role.Plan -> Some catalog.PlanSystemPrompt
-        | Role.Advisor -> Some catalog.AdvisorSystemPrompt
         | Role.Coder
         | Role.Inspector
         | Role.Browser
@@ -267,10 +266,8 @@ module ProviderSystemTransform =
             | Some turn -> do! applyTurnSystem turn sid role system output
             | None -> ()
 
-            // Advisor is pure chat: no Scope protocol, no Pair Hint vocabulary.
-            if role sid <> Some Role.Advisor then
-                let scopeProtocol = ProviderProse.render lang "host/scope-protocol" Map.empty
-                injectScopeProtocol system scopeProtocol output
+            let scopeProtocol = ProviderProse.render lang "host/scope-protocol" Map.empty
+            injectScopeProtocol system scopeProtocol output
         }
 
     let createWithTurn

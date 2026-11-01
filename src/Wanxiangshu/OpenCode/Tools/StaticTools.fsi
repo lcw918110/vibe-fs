@@ -17,4 +17,3 @@ module StaticTools =
     val bookkeeperAgentConfig: prompt: string -> obj
     val devopsAgentConfig: prompt: string option -> obj
     val planAgentConfig: prompt: string option -> obj
-    val advisorAgentConfig: prompt: string -> obj

@@ -1,6 +1,0 @@
-{"phase":"supervise-call","pid":42685,"wallTime":1791113671654,"monotonic":321.584875}
-{"phase":"beforeEach-enter","pid":42687,"parentPid":42686,"wallTime":1791113672016,"monotonic":123.39925,"name":"synchronous work 0","testContext":"child-v8"}
-{"phase":"beforeEach-return","pid":42687,"parentPid":42686,"wallTime":1791113672018,"monotonic":124.102584,"name":"synchronous work 0","testContext":"child-v8"}
-{"phase":"afterEach","pid":42687,"parentPid":42686,"wallTime":1791113672324,"monotonic":429.763542,"name":"synchronous work 0","testContext":"child-v8"}
-{"phase":"beforeEach-enter","pid":42687,"parentPid":42686,"wallTime":1791113672340,"monotonic":445.475542,"name":"synchronous work 1","testContext":"child-v8"}
-{"phase":"beforeEach-return","pid":42687,"parentPid":42686,"wallTime":1791113672340,"monotonic":446.008459,"name":"synchronous work 1","testContext":"child-v8"}

@@ -4,7 +4,7 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 
-/// DSL-class: Vocabulary — the fixed persona catalog, canonical 12 cases.
+/// DSL-class: Vocabulary — the fixed persona catalog, canonical 11 cases.
 /// No case carries state or ordering.
 [<RequireQualifiedAccess>]
 type Persona =
@@ -16,7 +16,6 @@ type Persona =
     | Operator
     | Researcher
     | Analyst
-    | Auditor
     | Distiller
     | Curator
     | Planner
@@ -45,7 +44,6 @@ module Persona =
         | Persona.Operator -> "Operator"
         | Persona.Researcher -> "Researcher"
         | Persona.Analyst -> "Analyst"
-        | Persona.Auditor -> "Auditor"
         | Persona.Distiller -> "Distiller"
         | Persona.Curator -> "Curator"
         | Persona.Planner -> "Planner"
@@ -59,7 +57,6 @@ module Persona =
           Persona.Operator
           Persona.Researcher
           Persona.Analyst
-          Persona.Auditor
           Persona.Distiller
           Persona.Curator
           Persona.Planner ]

@@ -1491,6 +1491,17 @@ module HostSignalBootstrap =
                         // the same frozen claim and identity evidence.
                         let decoded = PromptIngressCodec.decodeWith input output
 
+                        match decoded.SessionId with
+                        | Some sessionId ->
+                            // crash-reconciliation-023: this session's own
+                            // load-phase recovery (leftover executions, resources,
+                            // unknowns, settlements) lands before its identity
+                            // judgment reads the journal, while unrelated sessions'
+                            // recovery runs in the background and never delays
+                            // this admission.
+                            do! scope.ReloadChatSession sessionId
+                        | None -> ()
+
                         let intent =
                             match decoded.SessionId with
                             | Some sessionId when

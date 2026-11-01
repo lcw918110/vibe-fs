@@ -98,4 +98,4 @@ OpenCode 1.19 的 `chat.message` 以 `{ agent: input.agent, ... }` 触发，未�
 
 Host 已为一条 durable `Accepted` 的 physical user message 建出真实 assistant run 时，这次 run 的 attempt plan 总能给出：有 transform 冻结的 plan 就用它，没有就从该 `Accepted` 事实重建同一份 ordinary plan。进程内的冻结 plan 只是缓存，缓存缺了、被并发消费或该 run 先前绑在别的 physical 上，都不构成拒收理由；Host 亲口给出的 run→physical 关系优先。`ProviderStarted` 照常落盘，provider 照常启动，不报启动边界拒绝，也不因此写 `Failed` 终态。
 
-来由：2026-10-28 18:32 UTC，Manager 正在跑时 Advisor 答复作为新的 user 行插进 loop，下一步的 transform 以 `MANAGED-CHAT-005 … frozen-attempt-plan-missing` 被拒，Manager 空转 38 分钟。
+来由：2026-10-28 18:32 UTC，Manager 正在跑时代理答复作为新的 user 行插进 loop，下一步的 transform 以 `MANAGED-CHAT-005 … frozen-attempt-plan-missing` 被拒，Manager 空转 38 分钟。

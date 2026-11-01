@@ -19,8 +19,6 @@ test('WHAT[cognitive-environment-017] permanent host prompts carry no state-spec
 
 test('WHAT[cognitive-environment-017] role and stage resources do not ask the model to resolve known Host gates', () => {
   for (const locale of ['en', 'zh-CN']) {
-    const advisor = read('role/advisor/' + locale + '.md')
-    assert.doesNotMatch(advisor, /Initial clarification is mandatory|第一次协商必须执行|Until it arrives, do not call/)
     const plan = read('role/plan/' + locale + '.md')
     const s3 = read('planning/s3/' + locale + '.md')
     assert.doesNotMatch(plan, /when the user enters a command asking to execute|若用户再次输入指令要求执行交付/)

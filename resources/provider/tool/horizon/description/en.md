@@ -5,7 +5,7 @@ nothing is running, who is at hand and idle, and which terminals remain open.
 horizon is pull-only. Use it only when that orientation would change your next
 action. Do not poll it: it does not watch, subscribe, or refresh in the background.
 
-horizon and join read the same ledger: when horizon says returned, did not return,
+horizon and join read the same roster: when horizon says returned, did not return,
 or voided, join will hand over exactly that consequence; when it says still away,
 join will wait for exactly that charge; nothing join already received reappears.
 horizon does not hand over the consequence itself; that is join.

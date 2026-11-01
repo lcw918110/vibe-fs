@@ -127,3 +127,14 @@ semantic fold失败必须先durable写入对应bad fact与`ProjectionCutTail`，
 目录解析只查询 Git 的公开 worktree 拓扑，不打开旧运行数据。主工作树、其子目录及 linked worktree 必须定位同一 `.Herdchestra`；独立仓库、submodule 及非 Git 工作区保持隔离。给定 `.git` 内路径、bare 仓库或链接伪装的 `.Herdchestra` 必须拒绝，不能把这些位置当成状态目录。
 
 新根内的已确认日志和 SQLite 正常恢复；旧 `.git` 数据即使存在、损坏或拥有同一工作身份，也不能影响新根的读取。清理只涉及已确认的应用专属目录、配置及引用，不清空源码 objects，不重写代码历史。测试区分拓扑查询、实际写入和旧数据隔离，不能只凭路径字符串通过宣称整个持久化已经验证。
+
+
+
+## [029] 跨写者 append 必须在同一持久锁内复核 Current 新鲜度
+
+本地 append 的业务判定不得依赖可能与 durable facts 脱节的内存快照。append 在取得跨进程 store lock 之后、发出任何物理写入之前，必须以 writer 文件清单（文件名与 canonical 文件标识，不读历史内容）核对本地 Current 是否仍对应全部已提交事实；
+
+清单不一致时必须在同一锁内先 `ReloadLocal` 刷新 Current，再在刷新状态上重新业务判定。单写者稳态核对只做一次元数据扫描，append 成本不随历史事件总数或历史文件大小增长（durable-events-017 保持）；只有其他 writer 真正提交或 retention 改写时才支付一次锁内重放。
+
+若刷新后的 fold 拒绝本批事实（prepared cut 指向本批事件），且刷新观察到其他 writer 的提交，append 必须以已知未提交的正常拒绝结束（`AppendFailed`/`WriterRefused`）：不得落盘坏事实或 `ProjectionCutTail`，不得升级为 semantic cut 或进程 fatal，journal 不得因此 poison。
+

@@ -1,29 +1,0 @@
-[36m[build][0m Compiling F# (focused)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @pauldorehill
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/851317f0509292b5401563dc64bfc055ab4bd2afc8f9713798a87076374a1764/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (98 source files) parsed in 1032ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 3625ms
-
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fsi(31,16): (31,27) error FSHARP: The type 'IEventStore' is not defined. Maybe you want one of the following:   IEvent (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fsi(34,16): (34,27) error FSHARP: The type 'IEventStore' is not defined. Maybe you want one of the following:   IEvent (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fsi(36,35): (36,46) error FSHARP: The type 'IEventStore' is not defined. Maybe you want one of the following:   IEvent (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs(98,17): (98,28) error FSHARP: The type 'IEventStore' is not defined. Maybe you want one of the following:   IEvent (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs(110,33): (110,46) error FSHARP: Lookup on object of indeterminate type based on information prior to this program point. A type annotation may be needed prior to this program point to constrain the type of the object. This may allow the lookup to be resolved. (code 72)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs(114,20): (114,32) error FSHARP: Lookup on object of indeterminate type based on information prior to this program point. A type annotation may be needed prior to this program point to constrain the type of the object. This may allow the lookup to be resolved. (code 72)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs(140,17): (140,28) error FSHARP: The type 'IEventStore' is not defined. Maybe you want one of the following:   IEvent (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs(152,33): (152,46) error FSHARP: Lookup on object of indeterminate type based on information prior to this program point. A type annotation may be needed prior to this program point to constrain the type of the object. This may allow the lookup to be resolved. (code 72)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs(156,20): (156,32) error FSHARP: Lookup on object of indeterminate type based on information prior to this program point. A type annotation may be needed prior to this program point to constrain the type of the object. This may allow the lookup to be resolved. (code 72)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionStore.fs(180,35): (180,46) error FSHARP: The type 'IEventStore' is not defined. Maybe you want one of the following:   IEvent (code 39)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

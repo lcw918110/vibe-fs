@@ -1,8 +1,0 @@
-runner: 1 test file(s), 5000ms verdict-silence window
-coverage: running tests with NODE_V8_COVERAGE in /private/var/folders/g_/3ydzn7kx5lg9ylq8fd9p_13r0000gn/T/coverage-permission-runner-E7qTx3/.fable-build/coverage/1791110081553-3194/raw...
-WATCHDOG: 'coverage-child-permission' silent for 5001ms (limit 5000ms); 5 blocking progress update(s), last progress: test:complete:WHAT[verification-system-011] coverage exclude globs are fixed: node_modules, fable_modules, tests, scripts lane=/Users/yuanxi/Workwork/vibe-fs/requirements/verification-system/tests/011.test.mjs expectation=none
-WATCHDOG: background progress 4999ms ago: test:stdout lane=/Users/yuanxi/Workwork/vibe-fs/requirements/verification-system/tests/011.test.mjs (1 background update(s), none of them renewals)
-runner: 1 file(s) had not reported completion
-runner: file streams: 0 drained, 1 active, 0 queued
-runner: active file requirements/verification-system/tests/011.test.mjs; waiting for stream drain; last verdict: test:complete:WHAT[verification-system-011] coverage exclude globs are fixed: node_modules, fable_modules, tests, scripts
-runner: verdict counts unavailable; no authoritative summary before the silence

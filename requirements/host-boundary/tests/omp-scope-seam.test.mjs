@@ -1455,102 +1455,6 @@ test.skip('WHAT[context-compression-043] OMP resetScope refusal on missing snaps
 })
 
 
-test.skip('WHAT[scope-progress-016] OMP native todowrite settles min and triggers four Advisor turns [PRODUCT-RETIRED estimate/standalone-resetScope]', async () => {
-  const {mkdtempSync,rmSync}=await import('node:fs')
-  const {tmpdir}=await import('node:os')
-  const {join}=await import('node:path')
-  const {execFileSync}=await import('node:child_process')
-  const {SqliteJournal}=await import('wanxiangli/eventstore')
-  const {DatabaseSync}=await import('node:sqlite')
-  const {stateRoot}=await import('../../../dist/Persistence/Journal/RuntimePath.js')
-  const {scopeProgress,advisorProcessQueue}=await import('wanxiangli/scope-progress')
-  const workspace=mkdtempSync(join(tmpdir(),'wxs-omp-advisor-'))
-  execFileSync('git',['init','-q',workspace])
-  const sid='ses_omp_scope_native_016'
-  try {
-    const env=createOmpTestEnvironment()
-    const asks=[],steers=[]
-    const ctx={...ompSession(()=>sid),cwd:workspace,
-      model:{provider:'fixture',id:'native'},
-      runEphemeralTurn:async args=>{
-        asks.push(args)
-        const reply='The work remaining is a verified backlog.'
-        return {replyText:reply,assistantMessage:{role:'assistant',content:[{type:'text',text:reply}]}}
-      },
-    }
-    env.mockPi.sendUserMessage=async (text,options)=>{
-      steers.push({text,options})
-      await env.eventHandlers.get('message_start')({type:'message_start',message:{
-        role:'user',attribution:'agent',content:[{type:'text',text}],
-      }},ctx)
-    }
-    await activateOnOmp(env.mockPi,env.mockPlugin,env.agentsList)
-    await env.eventHandlers.get('session_start')({},ctx)
-    const todo=env.registeredTools.find(x=>x.name==='todowrite')
-    assert.ok(todo)
-    assert.equal(todo.parameters.properties.remainingScopeTurnsEstimate.type,'number')
-    const estimateHelp=[readFileSync(new URL('../../../resources/provider/tool/js-program/arg-estimate/en.md',import.meta.url),'utf8').trim(),
-      readFileSync(new URL('../../../resources/provider/tool/js-program/arg-estimate/zh-CN.md',import.meta.url),'utf8').trim()]
-    assert.ok(estimateHelp.includes(todo.description),'OMP todowrite carries the contract text, not its own wording')
-    assert.equal(todo.parameters.properties.remainingScopeTurnsEstimate.description,todo.description)
-    const record=(id,n)=>todo.execute(id,{remainingScopeTurnsEstimate:n},null,null,ctx)
-    const begin=i=>env.eventHandlers.get('turn_start')({type:'turn_start',turnIndex:i},ctx)
-    const end=i=>env.eventHandlers.get('turn_end')({type:'turn_end',turnIndex:i,
-      message:{role:'assistant',stopReason:'stop',content:[{type:'text',text:'Normal completed turn.'}]},toolResults:[]},ctx)
-    await begin(0)
-    assert.equal((await record('first',7)).details.estimate,7)
-    assert.equal((await record('second',3)).details.minimum,3)
-    await end(0)
-    assert.equal(scopeProgress.status(sid).estimate,3)
-    await begin(1)
-    assert.equal((await record('third',3.5)).details.estimate,3.5)
-    await end(1)
-    for(let n=0;n<90&&steers.length===0;n++)await new Promise(resolve=>setTimeout(resolve,15))
-    assert.equal(asks.length,4)
-    assert.match(JSON.stringify(asks[0]),/没有下降 0.1|did not fall by 0.1/,
-      'a round short of the promised 0.1 drop asks the stall question from the shared resource')
-    assert.deepEqual(asks.map(x=>x.tools),[undefined,false,undefined,false],
-      'the worker retains its provider tools while the dedicated Advisor has none')
-    assert.equal(steers.length,1)
-    assert.equal(steers[0].options.attribution,'agent')
-    assert.doesNotMatch(steers[0].text,/advisor:|StageBegan|StageAnswered|AdvisorFlow/,
-      'the working model must not receive internal Advisor process labels')
-    const root=await stateRoot(workspace)
-    const journal=new SqliteJournal(new DatabaseSync(join(root,'wanxiangshu','advisor-process.sqlite')))
-    try {
-      const progress=journal.read('scope-progress:'+sid.length+':'+sid+':1:0').map(JSON.parse)
-      assert.deepEqual(progress.filter(x=>x.kind==='Settled').map(x=>x.estimate),[3,3.5])
-      assert.equal(progress.filter(x=>x.kind==='Recorded').length,3)
-      let facts=[]
-      for(let n=0;n<100;n++){
-        facts=journal.read('advisor-process:'+sid).map(JSON.parse)
-        if(facts.some(x=>x.kind==='Finished'))break
-        await new Promise(resolve=>setTimeout(resolve,10))
-      }
-      assert.deepEqual(facts.filter(x=>x.kind==='StageBegan').map(x=>x.phase),[1,2,3,4,5])
-      assert.equal(facts.filter(x=>x.kind==='StageAnswered').length,5)
-      assert.equal(facts.find(x=>x.kind==='Finished')?.outcome,'Completed')
-      await begin(2)
-      assert.equal((await record('zero',0)).details.estimate,0)
-      assert.equal((await record('zero',1)).details.refused,true,'same tool identity may not revise the original estimate')
-      assert.equal((await record('negative',-1)).details.refused,true,'negative estimates are never billed')
-      await end(2)
-      assert.equal(scopeProgress.status(sid).resetDue,true)
-      const finalProgress=journal.read('scope-progress:'+sid.length+':'+sid+':1:0').map(JSON.parse)
-      assert.deepEqual(finalProgress.filter(x=>x.kind==='Settled').map(x=>x.estimate),[3,3.5,0])
-      await new Promise(resolve=>setTimeout(resolve,20))
-      assert.equal(asks.length,4,'a settled AdvisorDue replay cannot cause a second paid consultation')
-      assert.equal(steers.length,1)
-    }finally{journal.close()}
-  }finally{
-    scopeProgress.clear(sid)
-    advisorProcessQueue.clear(sid)
-    clearSessionState(sid)
-    rmSync(workspace,{recursive:true,force:true})
-  }
-})
-
-
 test.skip('WHAT[scope-progress-017] OMP cold restart settles an already accepted but unfinished native Provider turn [PRODUCT-RETIRED estimate/standalone-resetScope]', async()=>{
   const {mkdtempSync,rmSync}=await import('node:fs')
   const {tmpdir}=await import('node:os')
@@ -1633,5 +1537,172 @@ test('WHAT[interaction-authority-024] OMP every role auto-nudges each NEW tool-f
     assert.equal(steers.length,36,'explicit operator cancellation must remain cancelled')
   } finally {
     clearSessionState(sid)
+  }
+})
+
+
+test('askPreviousScope carrying scope.kind=resetScope refuses at the negotiate gate instead of silently dropping the reanchor', async () => {
+  const env = createOmpTestEnvironment()
+  await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
+  const sid = 'ses_omp_reanchor_gate_locked'
+  const ctx = await activateSession(env, sid)
+  // The negotiate gate only speaks for a delegated assignment: bind one so
+  // negotiationRequired(sid) is true and the gate actually fires.
+  bindDelegation(sid, 'ses_omp_reanchor_gate_parent')
+  assert.equal(negotiationRequired(sid), true, 'a fresh delegated assignment requires negotiate first')
+  const tool = env.registeredTools.find((t) => t.name === 'askPreviousScope')
+  assert.ok(tool, 'askPreviousScope must be registered')
+  const outcome = await tool.execute('reanchor-gate-1', {
+    questions: 'Which rule did the old scope establish?',
+    scope: { kind: 'resetScope', newScopeGoal: 'g', newScopeRetentionBudget: 4 },
+  }, null, null, ctx)
+  assert.ok(outcome && outcome.content, JSON.stringify(outcome))
+  assert.match(contentText(outcome.content), /unavailable until the first negotiate/)
+})
+
+test('plain askPreviousScope keeps its durable-evidence failure semantics', async () => {
+  const env = createOmpTestEnvironment()
+  await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
+  const sid = 'ses_omp_reanchor_plain'
+  const ctx = await activateSession(env, sid)
+  const tool = env.registeredTools.find((t) => t.name === 'askPreviousScope')
+  assert.ok(tool, 'askPreviousScope must be registered')
+  const outcome = await tool.execute('plain-ask-1', { questions: 'What did the old scope decide?', scope: { kind: 'keepLast' } }, null, null, ctx)
+  assert.ok(outcome && outcome.content)
+  assert.match(contentText(outcome.content), /NoPreviousScope|durable journal|previous Scope/i)
+  assert.equal(outcome.details.answerDelivered, false)
+})
+
+
+
+test('askPreviousScope carrying scope.kind=resetScope commits the reanchor before asking in the new epoch', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { execFileSync } = await import('node:child_process')
+  const workspace = mkdtempSync(join(tmpdir(), 'omp-reanchor-success-'))
+  execFileSync('git', ['init', '-q', workspace])
+  let journalHandle = null
+  const sid = 'omp-reanchor-success-001'
+  try {
+    const env = createOmpTestEnvironment()
+    const model = { provider: 'anthropic', id: 'claude-3-5-sonnet' }
+    const liveCtx = {
+      cwd: workspace,
+      model,
+      sessionManager: {
+        getSessionId: () => sid,
+        getSessionDir: () => workspace,
+        getHeader: () => ({ parentSession: null }),
+      },
+    }
+    await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
+    await env.eventHandlers.get('session_start')({}, liveCtx)
+
+    const acquire = await acquireSharedForWorkspace(workspace, process.pid, new Date().toISOString())
+    assert.ok(acquire?.ok, 'acquireSharedForWorkspace must succeed')
+    journalHandle = acquire.journal
+
+    const providerHook = env.eventHandlers.get('before_provider_request')
+    assert.ok(providerHook, 'before_provider_request hook must be registered')
+    await providerHook({ payload: {
+      messages: [
+        { role: 'system', content: 'SYSTEM_REANCHOR_SENTINEL_065' },
+        { role: 'user', content: 'USER_REANCHOR_SENTINEL_065' },
+      ],
+      tools: [{ name: 'read', description: 'Read file tool' }],
+      system: ['SYSTEM_REANCHOR_SENTINEL_065'],
+    } }, liveCtx)
+    assert.ok(outboundViewStore.tryGetSealed(sid), 'precondition: a real provider request sealed an outbound snapshot')
+
+    const tool = env.registeredTools.find((t) => t.name === 'askPreviousScope')
+    assert.ok(tool, 'askPreviousScope must be registered')
+
+    const outcome = await tool.execute('call-reanchor-success-065', {
+      questions: 'Which evidence did the old scope retain?',
+      scope: {
+        kind: 'resetScope',
+        newScopeGoal: 'epoch after reanchor',
+        newScopeRetentionBudget: 6,
+        oldScopeVerboseVerbatim: 'old scope verbatim sentinel 065',
+      },
+    }, null, null, liveCtx)
+
+    assert.ok(outcome && outcome.content, JSON.stringify(outcome))
+    const prose = contentText(outcome.content)
+    assert.match(prose, /askPreviousScope accepted|receipt is durable/,
+      'the ask body must run against the archived previous scope after the reanchor commits')
+    assert.doesNotMatch(prose, /NoPreviousScope|unavailable until/)
+    assert.equal(outcome.details.answerDelivered, false, 'acceptance never proves answer delivery')
+    assert.equal(outcome.details.receiptRecorded, true)
+
+    const snap = AgentJournalModule_snapshot(JournalHandle__get_Journal(journalHandle))
+    const proj = AgentProjection_tryFind(SessionIdModule_create(sid), snap.AgentProjections)
+    assert.ok(proj?.PrefixEpoch, 'the reanchor must commit a PrefixEpoch — silently dropping it leaves this undefined')
+    assert.equal(proj.PrefixEpoch.EpochId?.fields?.[0] ?? proj.PrefixEpoch.EpochId, 1n, 'the first reanchor advances the epoch to 1n')
+    assert.ok(proj.PrefixEpoch.LastScopeArchive, 'the closed scope must be archived before the new epoch begins')
+    assert.equal(outboundViewStore.tryGetSealed(sid), undefined, 'single-drain: the sealed snapshot is consumed by the archive')
+  } finally {
+    if (journalHandle && typeof journalHandle.Dispose === 'function') {
+      try { journalHandle.Dispose() } catch {}
+    }
+    rmSync(workspace, { recursive: true, force: true })
+  }
+})
+
+test('askPreviousScope carrying scope.kind=resetScope propagates a refused reanchor and never asks in the closed epoch', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { execFileSync } = await import('node:child_process')
+  const workspace = mkdtempSync(join(tmpdir(), 'omp-reanchor-refused-'))
+  execFileSync('git', ['init', '-q', workspace])
+  let journalHandle = null
+  const sid = 'omp-reanchor-refused-066'
+  try {
+    const env = createOmpTestEnvironment()
+    const liveCtx = {
+      cwd: workspace,
+      model: { provider: 'anthropic', id: 'claude-3-5-sonnet' },
+      sessionManager: {
+        getSessionId: () => sid,
+        getSessionDir: () => workspace,
+        getHeader: () => ({ parentSession: null }),
+      },
+    }
+    await activateOnOmp(env.mockPi, env.mockPlugin, env.agentsList)
+    await env.eventHandlers.get('session_start')({}, liveCtx)
+
+    const acquire = await acquireSharedForWorkspace(workspace, process.pid, new Date().toISOString())
+    assert.ok(acquire?.ok, 'acquireSharedForWorkspace must succeed')
+    journalHandle = acquire.journal
+
+    const tool = env.registeredTools.find((t) => t.name === 'askPreviousScope')
+    assert.ok(tool, 'askPreviousScope must be registered')
+
+    // No real provider request has sealed an outbound snapshot for this session.
+    assert.equal(outboundViewStore.tryGetSealed(sid), undefined, 'precondition: nothing sealed')
+
+    const outcome = await tool.execute('call-reanchor-refused-066', {
+      questions: 'Which evidence did the old scope retain?',
+      scope: { kind: 'resetScope', newScopeGoal: 'refused epoch', newScopeRetentionBudget: 4 },
+    }, null, null, liveCtx)
+
+    assert.ok(outcome && outcome.content, JSON.stringify(outcome))
+    const prose = contentText(outcome.content)
+    assert.match(prose, /no complete archived system\/messages\/model observation/,
+      'a refused commit must surface the typed refusal, not silently collapse into NoPreviousScope')
+    assert.doesNotMatch(prose, /NoPreviousScope/)
+    assert.equal(outcome.details.answerDelivered, false)
+    assert.equal(outcome.details.receiptRecorded, false, 'the ask body must not run when the reanchor commit was refused')
+
+    const snap = AgentJournalModule_snapshot(JournalHandle__get_Journal(journalHandle))
+    const proj = AgentProjection_tryFind(SessionIdModule_create(sid), snap.AgentProjections)
+    assert.equal(proj?.PrefixEpoch, undefined, 'a refused reanchor commits no epoch')
+  } finally {
+    if (journalHandle && typeof journalHandle.Dispose === 'function') {
+      try { journalHandle.Dispose() } catch {}
+    }
+    rmSync(workspace, { recursive: true, force: true })
   }
 })

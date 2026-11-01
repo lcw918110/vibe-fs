@@ -9,7 +9,7 @@ const assistant = (sid, id, agent, parts) =>
 
 // Field incident 2026-10-28 10:56 UTC (Manager ses_e7ed7cdb2ffe…, "指南.txt 重构指南实施"):
 // the Manager ended a turn in prose with no tool call (msg_18227b36a, finish=stop);
-// the Advisor answer msg_18227b433 landed as its consultation steer; the late-consultation
+// the consultation answer msg_18227b433 landed as its steer; the late-consultation
 // stop judged the prose a closing report and aborted the answer's step 9 s later
 // (opencode.log `message=cancel`, msg_18227d63d MessageAbortedError). The Manager
 // stood still until the owner typed again at 11:00:36.

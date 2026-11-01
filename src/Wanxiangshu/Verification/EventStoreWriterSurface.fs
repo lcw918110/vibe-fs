@@ -55,6 +55,7 @@ module EventStoreWriterSurface =
             match failure.Error with
             | AppendError.CommitUnknown evidence -> "WriterPoisoned:" + evidence.Primary.Cause.Message
             | error -> "WriterPoisoned:" + AppendError.describe error
+        | NotAttempted(_, WriterRefused reason) -> "WriterRefused:" + reason
         | NotAttempted(_, WriterClosing) -> "WriterClosing"
         | NotAttempted(_, WriterDisposed) -> "WriterDisposed"
 

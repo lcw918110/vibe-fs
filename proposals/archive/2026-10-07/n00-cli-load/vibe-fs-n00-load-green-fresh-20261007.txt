@@ -1,6 +1,0 @@
-{
-  "generation": 236,
-  "compilerInputDigest": "aba345c1deb08c1f2f41b4837c31dfb55c70f9bf658af13f19a6856c6255cab4",
-  "generatedInputDigest": "fbb82d8e0debdabe23f7c1b7b91dc9cbae48fb939df3fece975726e104df5c89",
-  "artifactInputDigest": "624e33e4e020e8c42e90f53151e94081b6e9751a81c745978199771889d7bba2"
-}

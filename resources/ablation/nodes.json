@@ -335,13 +335,6 @@
       "borrowed_surface": []
     },
     {
-      "id": "advisor",
-      "package": "advisor",
-      "station": 59,
-      "kind": "package",
-      "borrowed_surface": []
-    },
-    {
       "id": "latency-degeneration",
       "package": "latency-degeneration",
       "station": 60,

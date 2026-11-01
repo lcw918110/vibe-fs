@@ -12,14 +12,13 @@ const EXPECTED_ROLES = [
   'engineer',
   'devops',
   'plan',
-  'advisor',
 ]
 
 test('WHAT[participant-identity-001] catalog_has_canonical_roles', () => {
   assertJsData(identity.allRoleLabels, 'allRoleLabels')
   assert.deepEqual([...identity.allRoleLabels].sort(), [...EXPECTED_ROLES].sort())
-  assert.equal(identity.allRoleLabels.length, 6)
-  assert.equal(identity.allPublicRoleLabels.length + identity.allInternalRoleLabels.length, 6)
+  assert.equal(identity.allRoleLabels.length, 5)
+  assert.equal(identity.allPublicRoleLabels.length + identity.allInternalRoleLabels.length, 5)
   assert.deepEqual(
     [...identity.allPublicRoleLabels, ...identity.allInternalRoleLabels].sort(),
     [...EXPECTED_ROLES].sort(),
@@ -27,7 +26,7 @@ test('WHAT[participant-identity-001] catalog_has_canonical_roles', () => {
 })
 test('WHAT[participant-identity-001] required_names_are_canonical_and_include_managed_agents', () => {
   assertJsData(identity.requiredNames, 'requiredNames')
-  assert.equal(identity.requiredNames.length, 7)
+  assert.equal(identity.requiredNames.length, 6)
   for (const role of EXPECTED_ROLES) {
     assert.equal(identity.isManagedName(role), true)
   }
@@ -139,7 +138,6 @@ const EXPECTED = {
   devops: { role: 'devops', persona: 'Operator' },
   plan: { role: 'plan', persona: 'Planner' },
   bookkeeper: { role: 'bookkeeper', persona: 'Curator' },
-  advisor: { role: 'advisor', persona: 'Auditor' },
 }
 const expectedView = (name, origin = 'ResolvedAtRoot') => ({
   name,

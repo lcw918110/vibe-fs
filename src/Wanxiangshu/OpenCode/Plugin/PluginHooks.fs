@@ -13,7 +13,6 @@ open Wanxiangshu.Context.Companion
 open Wanxiangshu.Context.Trace
 open Wanxiangshu.Context.Scope
 open Wanxiangshu.Execution.Delegation.Fork
-open Wanxiangshu.Execution.Delegation.Advisor
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Execution.Failure
@@ -73,26 +72,8 @@ open PluginHostInterop
 
 module PluginHooks =
 
-    [<Import("AdvisorFlow", "wanxiangli/scope-progress")>]
-    let private createAdvisorFlow: obj = jsNative
-
-    [<Import("advisorClaim", "wanxiangli/scope-progress")>]
-    let private advisorClaim: obj = jsNative
-
-    [<Import("advisorFinish", "wanxiangli/scope-progress")>]
-    let private advisorFinish: obj = jsNative
-
-    [<Import("advisorStageBegin", "wanxiangli/scope-progress")>]
-    let private advisorStageBegin: obj = jsNative
-
-    [<Import("advisorStageConfirm", "wanxiangli/scope-progress")>]
-    let private advisorStageConfirm: obj = jsNative
-
-    [<Import("advisorPending", "wanxiangli/scope-progress")>]
-    let private advisorPending: obj = jsNative
-
     [<Import("SqliteJournal", "wanxiangli/eventstore")>]
-    let private advisorJournalConstructor: obj = jsNative
+    let private retentionJournalConstructor: obj = jsNative
 
     [<Import("createRequire", "node:module")>]
     let private createRequire (url: string) : obj = jsNative
@@ -112,15 +93,12 @@ module PluginHooks =
     [<Import("mkdirSync", "node:fs")>]
     let private mkdirSync (directory: string) (options: obj) : unit = jsNative
 
-    // scope-progress product boundary (WP0, 2026-10-29): only epoch bookkeeping (reset/ensureEpoch/status.epoch/bind/clear) is live here; estimate record/settle/resetDue are PACKAGE-HISTORICAL. Lifecycle budget = scope-retention.
+    // scope-progress product boundary (WP0, 2026-10-29): only epoch bookkeeping (reset/ensureEpoch/status.epoch/clear) is live here; estimate record/settle/resetDue are PACKAGE-HISTORICAL. Lifecycle budget = scope-retention.
     [<Import("scopeProgress", "wanxiangli/scope-progress")>]
     let private scopeProgress: obj = jsNative
 
     [<Import("scopeRetention", "wanxiangli/scope-retention")>]
     let private scopeRetention: obj = jsNative
-
-    [<Import("advisorProcessQueue", "wanxiangli/scope-progress")>]
-    let private advisorProcessQueue: obj = jsNative
 
     [<Import("outboundViewStore", "wanxiangli/pair-hint")>]
     let private outboundViewStore: obj = jsNative
@@ -667,57 +645,47 @@ module PluginHooks =
                             requestLatencyDetector?Forget sessionId |> ignore }
                 )
 
-            // DSL-MUTABLE: resource — durable progress journal factory resolved once at activation
-            let mutable progressJournalFactory: obj option = None
+            // Scope retention is the only durable scope store: its annotation
+            // stream replays on cold start.
+            // DSL-MUTABLE: resource — retention journal factory resolved once at activation
+            let mutable retentionJournalFactory: obj option = None
 
-            // The JS todowrite port is synchronous. Resolve the physical store once
-            // at plugin activation, then open a fresh transactional journal per call.
-            // Progress and Advisor use different streams in the same SQLite database.
             match workspaceDirectory with
             | Some workspace ->
                 let! root = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
                 let directory = joinPath root "wanxiangshu"
                 mkdirSync directory (createObj [ "recursive" ==> true ])
-                let target = joinPath directory "advisor-process.sqlite"
-
-                let makeJournal =
-                    Func<string, obj>(fun _session ->
-                        let loader = createRequire moduleUrl
-
-                        let sqlite =
-                            requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
-
-                        let connection =
-                            if runningOnBun () then
-                                createNew sqlite?Database target
-                            else
-                                createNew sqlite?DatabaseSync target
-
-                        try
-                            createNew advisorJournalConstructor connection
-                        with _ ->
-                            connection?close () |> ignore
-                            reraise ())
-
-                progressJournalFactory <- Some(box makeJournal)
-                scopeProgress?configureJournal (makeJournal) |> ignore
-                scopeRetention?configureJournal (makeJournal) |> ignore
+                let target = joinPath directory "scope-retention.sqlite"
+                let makeJournal = Func<string, obj>(fun _session ->
+                    let loader = createRequire moduleUrl
+                    let sqlite = requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
+                    let connection =
+                        if runningOnBun () then createNew sqlite?Database target
+                        else createNew sqlite?DatabaseSync target
+                    try createNew retentionJournalConstructor connection
+                    with _ ->
+                        connection?close() |> ignore
+                        reraise ())
+                retentionJournalFactory <- Some(box makeJournal)
+                scopeRetention?configureJournal(makeJournal) |> ignore
             | None ->
-                let unavailable =
-                    Func<string, obj>(fun _ -> failwith "ScopeProgress requires a verified durable workspace")
+                let unavailable = Func<string, obj>(fun _ -> failwith "ScopeRetention requires a verified durable workspace")
+                scopeRetention?configureJournal(unavailable) |> ignore
 
-                scopeProgress?configureJournal (unavailable) |> ignore
-                scopeRetention?configureJournal (unavailable) |> ignore
+            let scopeEpoch (sessionId: string) : string =
+                journal
+                |> Option.bind (fun durable ->
+                    AgentProjection.tryFind (SessionId.create sessionId) (AgentJournal.snapshot durable).AgentProjections)
+                |> Option.bind (fun session -> session.PrefixEpoch)
+                |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+                |> Option.defaultValue "0"
 
-            let bindProgressJournal (sessionId: string) =
-                match progressJournalFactory with
-                | Some factory when not (String.IsNullOrWhiteSpace sessionId) ->
-                    scopeProgress?bindSessionJournal (sessionId, factory) |> ignore
-                    scopeRetention?bindSessionJournal (sessionId, factory) |> ignore
-                | None when not (String.IsNullOrWhiteSpace sessionId) ->
-                    scopeProgress?unbindSessionJournal (sessionId) |> ignore
-                    scopeRetention?unbindSessionJournal (sessionId) |> ignore
-                | _ -> ()
+            let bindRetentionJournal (sessionId: string) =
+                if not (String.IsNullOrWhiteSpace sessionId) then
+                    match retentionJournalFactory with
+                    | Some factory -> scopeRetention?bindSessionJournal(sessionId, factory) |> ignore
+                    | None -> scopeRetention?unbindSessionJournal(sessionId) |> ignore
+                    scopeRetention?ensureEpoch(sessionId, scopeEpoch sessionId) |> ignore
 
             let roleFor (sessionId: SessionId) =
                 journal
@@ -836,13 +804,7 @@ module PluginHooks =
 
             let ownedSystemPrompts =
                 [ for language in [ ProviderLanguage.English; ProviderLanguage.SimplifiedChinese ] do
-                      for role in
-                          [ Role.Manager
-                            Role.Orchestrator
-                            Role.Engineer
-                            Role.DevOps
-                            Role.Plan
-                            Role.Advisor ] do
+                      for role in [ Role.Manager; Role.Orchestrator; Role.Engineer; Role.DevOps; Role.Plan ] do
                           yield (PromptResources.systemForRole language role).Trim()
 
                       yield (PromptResources.loadBookkeeperSystemFor language).Trim() ]
@@ -1102,181 +1064,6 @@ module PluginHooks =
                         return Some registration
                     }
 
-            let scopeEpochForAdvisor (sessionId: string) =
-                let durableEpoch =
-                    journal
-                    |> Option.bind (fun durable ->
-                        AgentProjection.tryFind
-                            (SessionId.create sessionId)
-                            (AgentJournal.snapshot durable).AgentProjections)
-                    |> Option.bind (fun session -> session.PrefixEpoch)
-                    |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
-
-                match durableEpoch with
-                | Some verified -> verified
-                | None ->
-                    // Epoch fallback only (no estimate semantics): scope-progress still mirrors the reanchor epoch.
-                    let state: obj = scopeProgress?status (sessionId)
-
-                    if not (isNull state?epoch) then
-                        string state?epoch
-                    else
-                        let originalSessionIsKnown =
-                            journal
-                            |> Option.bind (fun durable ->
-                                AgentProjection.tryFind
-                                    (SessionId.create sessionId)
-                                    (AgentJournal.snapshot durable).AgentProjections)
-                            |> Option.isSome
-
-                        if originalSessionIsKnown then
-                            let recovered: obj = scopeProgress?recordedEpoch (sessionId, "0")
-                            if isNull recovered then "" else string recovered
-                        else
-                            ""
-
-            let createManagedAdvisor (registered: ToolRegistration) : obj =
-                let runtime = registered.Runtime
-
-                let proseResult (answer: Result<string, string>) =
-                    match answer with
-                    | Ok prose -> createObj [ "Ok" ==> true; "Prose" ==> prose; "Reason" ==> "" ]
-                    | Error reason -> createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> reason ]
-
-                let steerResult (answer: Result<unit, string>) =
-                    match answer with
-                    | Ok() -> createObj [ "Ok" ==> true; "Prose" ==> ""; "Reason" ==> "" ]
-                    | Error reason -> createObj [ "Ok" ==> false; "Prose" ==> ""; "Reason" ==> reason ]
-
-                let workerRequest (session: string) (question: string) =
-                    negotiateBtw client roleFor session session question
-
-                let askWorker =
-                    Func<string, string, Task<obj>>(fun session question ->
-                        task {
-                            let! answered = workerRequest session question
-                            return proseResult answered
-                        })
-
-                let askSeat =
-                    Func<string, string, Task<obj>>(fun session prompt ->
-                        let deps: AdvisorSeatDeps =
-                            { Sessions = runtime.Sessions
-                              Snapshot = runtime.Snapshot
-                              Journal = runtime.Journal
-                              Directory = runtime.WorkspaceDirectory
-                              Participant = ManagedAgent.nameOf Role.Advisor
-                              BindDelegation = fun _ _ -> () }
-
-                        task {
-                            let! answered = AdvisorSeat.consult deps session prompt
-                            return proseResult answered
-                        })
-
-                let sendSteer =
-                    Func<string, string, string, string, Task<obj>>(fun session epoch processId text ->
-                        task {
-                            let isCurrent () = scopeEpochForAdvisor session = epoch
-                            let! sent = runtime.SendAdvisorSteer(session, text, processId, isCurrent)
-                            return steerResult sent
-                        })
-
-                let currentEpoch = Func<string, string>(scopeEpochForAdvisor)
-
-                let languageFor =
-                    Func<string, string>(fun session ->
-                        ProviderLanguage.label (ProviderLanguageBinding.forSessionText session))
-
-                let withAdvisorJournal (action: obj -> obj) : Task<obj> =
-                    task {
-                        match runtime.WorkspaceDirectory with
-                        | None ->
-                            return
-                                createObj
-                                    [ "ok" ==> false; "reason" ==> "Advisor persistence needs a durable workspace" ]
-                        | Some workspace ->
-                            try
-                                let! root = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
-                                let directory = joinPath root "wanxiangshu"
-                                mkdirSync directory (createObj [ "recursive" ==> true ])
-                                let target = joinPath directory "advisor-process.sqlite"
-                                let loader = createRequire moduleUrl
-
-                                let sqlite =
-                                    requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
-
-                                let connection =
-                                    if runningOnBun () then
-                                        createNew sqlite?Database target
-                                    else
-                                        createNew sqlite?DatabaseSync target
-
-                                let journal =
-                                    try
-                                        createNew advisorJournalConstructor connection
-                                    with error ->
-                                        connection?close () |> ignore
-                                        reraise ()
-
-                                try
-                                    return action journal
-                                finally
-                                    journal?close () |> ignore
-                            with error ->
-                                return
-                                    createObj
-                                        [ "ok" ==> false
-                                          "reason" ==> ("Advisor durable operation unavailable: " + error.Message) ]
-                    }
-
-                let claim =
-                    Func<string, string, string, string, Task<obj>>(fun session epoch report issue ->
-                        withAdvisorJournal (fun journal ->
-                            emitJsExpr (advisorClaim, journal, session, epoch, report, issue) "$0($1,$2,$3,$4,$5)"))
-
-                let finish =
-                    Func<string, string, string array, string, Task<obj>>(fun session epoch reports outcome ->
-                        withAdvisorJournal (fun journal ->
-                            emitJsExpr (advisorFinish, journal, session, epoch, reports, outcome) "$0($1,$2,$3,$4,$5)"))
-
-                let beginStage =
-                    Func<string, string, string, int, string, string array, Task<obj>>
-                        (fun session epoch processId phase question reports ->
-                            withAdvisorJournal (fun journal ->
-                                emitJsExpr
-                                    (advisorStageBegin, journal, session, epoch, processId, phase, question, reports)
-                                    "$0($1,$2,$3,$4,$5,$6,$7)"))
-
-                let confirmStage =
-                    Func<string, string, string, int, string, Task<obj>>(fun session epoch processId phase prose ->
-                        withAdvisorJournal (fun journal ->
-                            emitJsExpr
-                                (advisorStageConfirm, journal, session, epoch, processId, phase, prose)
-                                "$0($1,$2,$3,$4,$5,$6)"))
-
-                let pending =
-                    Func<string, string, Task<obj>>(fun session epoch ->
-                        withAdvisorJournal (fun journal ->
-                            emitJsExpr (advisorPending, journal, session, epoch) "$0($1,$2,$3)"))
-
-                let ports =
-                    createObj
-                        [ "AskWorker" ==> askWorker
-                          "AskSeat" ==> askSeat
-                          "SendSteer" ==> sendSteer
-                          "CurrentEpoch" ==> currentEpoch
-                          "LanguageFor" ==> languageFor
-                          "Claim" ==> claim
-                          "Finish" ==> finish
-                          "BeginStage" ==> beginStage
-                          "ConfirmStage" ==> confirmStage
-                          "Pending" ==> pending ]
-
-                emitJsExpr (createAdvisorFlow, advisorProcessQueue, ports) "$0($1,$2)"
-
-            let advisorFlow: obj =
-                toolRegistration |> Option.map createManagedAdvisor |> Option.defaultValue null
-
             let toolDefinition (_toolInput: obj) (_toolOutput: obj) = ()
 
             let toolField (toolInput: obj) (name: string) =
@@ -1509,7 +1296,7 @@ module PluginHooks =
                             || not (sessionPort.IsManagedChild(SessionId.create sessionId)))
                     then
                         invalidOp
-                            "negotiate is only available in delegated child or Advisor sessions, not user-facing sessions."
+                            "negotiate is only available in delegated child sessions, not user-facing sessions."
 
                     // capability-enforcement-002/007: a Host-declared external
                     // (MCP) tool holds no office capability, so it is advertised
@@ -1541,11 +1328,6 @@ module PluginHooks =
                                 Map.empty
                         )
                     | _ -> ()
-
-                    let actorSession = toolField toolInput "sessionID"
-
-                    if roleFor (SessionId.create actorSession) = Some Role.Advisor then
-                        invalidOp "The dedicated Advisor has no tools"
 
                     do! checkManagerReviewPermissions toolName toolInput
 
@@ -1579,7 +1361,7 @@ module PluginHooks =
                 }
 
             /// User-facing Host roots must not present negotiate to the LLM.
-            /// A managed child (including Advisor) keeps its protocol tool even
+            /// A managed child keeps its protocol tool even
             /// when it has the same office role as a user-facing root. The SDK
             /// user message owns the per-request tools map; role AgentConfig is
             /// not a sufficient session identity discriminator.
@@ -1637,109 +1419,6 @@ module PluginHooks =
             let chatMessage =
                 registeredHook HookKey.ChatMessage (curriedHook (box chatMessageWithNegotiationPolicy))
 
-            let advisorIssue (sessionId: string) (receipt: obj) =
-                let question =
-                    match string receipt?trigger with
-                    | "RetentionExhausted" -> "host/advisor-question/reset-due"
-                    | "IdleSpin" -> "host/advisor-question/stall"
-                    | "ResetDue" -> "host/advisor-question/reset-due" // legacy estimate path; still render if somehow fired
-                    | _ -> "host/advisor-question/stall"
-
-                ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) question Map.empty
-
-            let observeAdvisorTask (sessionId: string) (started: Task<obj>) =
-                task {
-                    try
-                        let! result = started
-
-                        if not (isNull result?ok) && not (unbox<bool> result?ok) then
-                            let reason =
-                                if isNull result?reason then
-                                    "Advisor admission failed"
-                                else
-                                    string result?reason
-
-                            Diagnostic.emit "advisor-flow-failed" [ "session_id", sessionId; "reason", reason ]
-                    with error ->
-                        Diagnostic.emit "advisor-flow-failed" [ "session_id", sessionId; "reason", error.Message ]
-                }
-                |> ignore
-
-            let dispatchAdvisor (sessionId: string) (epoch: string) (item: obj) =
-                let receipt = item?result
-                let id = epoch + ":" + string item?providerRunId
-                let question = advisorIssue sessionId receipt
-
-                if isNull advisorFlow then
-                    Diagnostic.emit "advisor-flow-unavailable" [ "session_id", sessionId; "provider_run", id ]
-                else
-                    let started: Task<obj> =
-                        unbox (advisorFlow?trigger (sessionId, epoch, id, question))
-
-                    observeAdvisorTask sessionId started
-
-            let maybeRetentionAdvisor (sessionId: string) (epoch: string) =
-                if not (String.IsNullOrWhiteSpace sessionId || String.IsNullOrWhiteSpace epoch) then
-                    scopeRetention?ensureEpoch (sessionId, epoch) |> ignore
-                    let st: obj = scopeRetention?status (sessionId)
-
-                    if not (isNull st?advisorDue) && unbox<bool> st?advisorDue then
-                        let streak =
-                            if isNull st?removeStreak then
-                                0
-                            else
-                                unbox<int> st?removeStreak
-
-                        let remaining = st?remaining
-
-                        let trigger =
-                            if streak >= 3 then
-                                "IdleSpin"
-                            elif not (isNull remaining) && unbox<int> remaining = 0 then
-                                "RetentionExhausted"
-                            else
-                                "IdleSpin"
-
-                        let item =
-                            createObj
-                                [ "providerRunId" ==> ("retention:" + trigger + ":" + string streak)
-                                  "result" ==> createObj [ "advisor" ==> true; "trigger" ==> trigger ] ]
-
-                        dispatchAdvisor sessionId epoch item
-
-            let settlePriorProgress (sessionId: string) =
-                let durableScope = scopeEpochForAdvisor sessionId
-
-                if not (String.IsNullOrWhiteSpace durableScope) then
-                    scopeProgress?ensureEpoch (sessionId, durableScope) |> ignore
-                    scopeRetention?ensureEpoch (sessionId, durableScope) |> ignore
-                // PRODUCT-RETIRED (WP0): no estimate settlement and no refusal on
-                // historical scope-progress health. scope-progress only carries the
-                // epoch fallback; Advisor opens from retention advisorDue alone.
-                let active: obj = scopeProgress?status (sessionId)
-
-                let epoch =
-                    if isNull active || isNull active?epoch then
-                        ""
-                    else
-                        string active?epoch
-                // Prefer journal epoch for retention; fall back to progress epoch.
-                let retentionEpoch =
-                    if not (String.IsNullOrWhiteSpace durableScope) then
-                        durableScope
-                    else
-                        epoch
-
-                maybeRetentionAdvisor sessionId retentionEpoch
-
-            let tryRecoverAdvisor (sessionId: string) =
-                if not (isNull advisorFlow) && not (String.IsNullOrWhiteSpace sessionId) then
-                    let epoch = scopeEpochForAdvisor sessionId
-
-                    if not (String.IsNullOrWhiteSpace epoch) then
-                        let resumed: Task<obj> = unbox (advisorFlow?resume (sessionId, epoch))
-                        observeAdvisorTask sessionId resumed
-
             let rememberModelParams (input: obj) (output: obj) =
                 let unmanaged = isExplicitlyUnmanagedAgent input
 
@@ -1753,12 +1432,8 @@ module PluginHooks =
                     not (String.IsNullOrWhiteSpace currentSession)
                     && PluginTransforms.negotiationIsTemporary currentSession
 
-                let shouldTouchJournal =
-                    not temporary && not unmanaged && not (String.IsNullOrWhiteSpace currentSession)
-
-                if shouldTouchJournal then
-                    bindProgressJournal currentSession
-                    settlePriorProgress currentSession
+                if not temporary && not unmanaged then
+                    bindRetentionJournal currentSession
 
                 if not temporary && not unmanaged then
                     emitJsExpr (chatParams, input, output) "$0($1, $2)" |> ignore
@@ -1767,7 +1442,6 @@ module PluginHooks =
 
                 if shouldRememberModel then
                     PluginTransforms.negotiationRememberModel input
-                    tryRecoverAdvisor currentSession
 
                 let modelSessionId = unbox<string> input?sessionID
 
@@ -1958,18 +1632,15 @@ module PluginHooks =
                     HostEventEnvelope.trySessionId raw
                     |> Option.iter (fun sessionId ->
                         Surface.clearSessionState (SessionId.value sessionId)
-                        scopeProgress?clear (SessionId.value sessionId) |> ignore
-                        scopeProgress?unbindSessionJournal (SessionId.value sessionId) |> ignore
-                        scopeRetention?clear (SessionId.value sessionId) |> ignore
-                        scopeRetention?unbindSessionJournal (SessionId.value sessionId) |> ignore
-                        advisorProcessQueue?clear (SessionId.value sessionId) |> ignore
-                        calibration?clearSession (SessionId.value sessionId) |> ignore
+                        scopeProgress?clear(SessionId.value sessionId) |> ignore
+                        scopeRetention?clear(SessionId.value sessionId) |> ignore
+                        scopeRetention?unbindSessionJournal(SessionId.value sessionId) |> ignore
+                        calibration?clearSession(SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
                         activeCompactingSessions.Remove(SessionId.value sessionId) |> ignore
-                        AdvisorSeat.clear (SessionId.value sessionId)
-                        latencyWatchdog.Cancel(SessionId.value sessionId)
-                        latencyWatchdog.ForgetDetector(SessionId.value sessionId)
+                        latencyWatchdog.Cancel (SessionId.value sessionId)
+                        latencyWatchdog.ForgetDetector (SessionId.value sessionId)
                         Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.forget sessionId)
 
@@ -2039,7 +1710,6 @@ module PluginHooks =
             let dispose =
                 let disposeAll () =
                     task {
-                        AdvisorSeat.clearAll ()
                         // Idempotent, never throws; cancels any armed timer.
                         latencyWatchdog.Dispose()
                         do! product.Dispose()

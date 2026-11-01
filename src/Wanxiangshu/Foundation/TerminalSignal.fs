@@ -71,7 +71,7 @@ type ISessionTerminalSource =
 /// The interrupt is a Host session abort, so the session reports an `Aborted`
 /// terminal; but the latency watchdog owns that abort and either continues the
 /// same session or returns `Failed`. A consumer that fails fast on `Aborted`
-/// (Advisor consult, SyncDelegate call) consumes one interrupt per `Aborted`
+/// (SyncDelegate call) consumes one interrupt per `Aborted`
 /// it ignores, instead of treating the watchdog's own abort as the answer.
 [<RequireQualifiedAccess>]
 module DegenerationInterrupts =

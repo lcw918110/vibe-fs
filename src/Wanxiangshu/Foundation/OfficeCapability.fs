@@ -35,10 +35,6 @@ type ToolPermission =
     /// with Manager's ReviewAssessment; the label stays distinct.
     | Review
     | DevOpsConsultation
-    /// advisor: the caller session's second-opinion seat (`this.advisor`).
-    /// A consult, not an actor: the caller hands over a view plus an intent
-    /// and reads prose back, so the office holding it gains no acting surface.
-    | Advisor
     | ResetScope
 
 [<RequireQualifiedAccess>]
@@ -104,7 +100,6 @@ module OfficeCapability =
         | ToolPermission.Deliver -> "Deliver"
         | ToolPermission.Review -> "Review"
         | ToolPermission.DevOpsConsultation -> "DevOpsConsultation"
-        | ToolPermission.Advisor -> "Advisor"
         | ToolPermission.ResetScope -> "ResetScope"
 
     /// Unknown labels are not a permission.
@@ -133,7 +128,6 @@ module OfficeCapability =
         | "Deliver" -> Some ToolPermission.Deliver
         | "Review" -> Some ToolPermission.Review
         | "DevOpsConsultation" -> Some ToolPermission.DevOpsConsultation
-        | "Advisor" -> Some ToolPermission.Advisor
         | "ResetScope" -> Some ToolPermission.ResetScope
         | _ -> None
 

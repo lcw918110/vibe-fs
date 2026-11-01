@@ -1,4 +1,0 @@
-{
-  "_note": "CUT-34 ratchet: kernel files that still reference Wanxiangshu.OpenCode (adapter layer). Entries may only be removed; see scripts/checks/architecture.mjs gate 8. CUT-40 F40-03: .fsi signature files are scanned too; the 3 signature entries were recorded when the scan was widened (their .fs had already dropped the open).",
-  "files": []
-}

@@ -123,6 +123,7 @@ Success prints canonical execution/capacity/recovery equality, `EffectRequestOnl
 1. Capture the pre-restart envelope and retain its SHA-256 seal.
 2. Stop/reload only through the deployment's normal process control; this repository exposes no operator command that mutates recovery state.
 3. On startup, wait for durable substrate activation. `HostSignalBootstrap` emits `DurabilityActivated`; `PluginRecoveryWiring` emits `PluginRuntimeReloaded`. These events re-enter ordinary recovery from canonical facts. Do not invoke a private Host API or inject a lifecycle event.
+   A recovery pass reads each active session transcript once. Settled executions do not read transcripts; held or unknown resources still receive recovery attention. Admission currently waits for the load-phase recovery of other sessions too.
 4. Query the exact status and shared capacity snapshot again. Compare owner projections, not process-local lease handles, waiter tokens, callbacks, subscriptions, or old bindings.
 5. Capture and replay the post-restart envelope. Submit only the returned typed effect request to its named owner. If replay fails closed, preserve evidence and escalate.
 

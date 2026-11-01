@@ -1,3 +1,3 @@
-[ABSOLUTE PROHIBITION] This is a temporary snapshot dialogue, not a work turn. Calling any tool is strictly forbidden — no tool, not once, for no reason, read-only tools included. Every tool you can see is off-limits here; a call is a privilege violation and will be refused on the spot and recorded.
+[PROHIBITION] This is a temporary snapshot dialogue, not a work turn. Calling any tool is forbidden — no tool, not once, for no reason, read-only tools included. Every tool you can see is off-limits here; a call will be refused on the spot.
 Do not investigate, do not read files, do not run commands, do not delegate, do not ask follow-up questions, do not plan next steps. Answer only from the conversation above.
 Output body text now: answer the question above directly in prose, then end the dialogue naturally and immediately. Do nothing else.

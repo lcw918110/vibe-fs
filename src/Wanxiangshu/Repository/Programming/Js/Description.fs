@@ -690,7 +690,7 @@ class JsProgram {"""
             | "plan" -> Some(set [ JsCapability.Read ], prose.UltraPlan)
             // Manager's admission set must list every capability the manager
             // role currently projects: the manager capability set is
-            // { Advisor, Fork, Glob, Grep, Horizon, Join, Read, Resume, Review }, and
+            // { Fork, Glob, Grep, Horizon, Join, Read, Resume, Review }, and
             // `Set.isSubset capabilities admission` fails (so the ultra
             // example disappears) as soon as the role gains a capability this
             // set does not mention. Resume was added to the manager role

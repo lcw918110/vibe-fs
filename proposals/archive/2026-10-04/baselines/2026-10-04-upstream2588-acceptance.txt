@@ -1,8 +1,0 @@
-upstream 31e69b3dd →2588f89d0，普通合并五个提交。
-gen107 Fable build 与静态门禁通过；F# 生产源码未改，没有新增格式检查声明。
-正式日常选集26文件全部排空：137 pass、0 fail、2 skip、22 TODO。
-默认并发、5000ms verdict-silence 未变，exit1仅 pending proof。
-2个speculative-investigation013实际Host integration未启用，不计为通过。
-首轮误启integration导致26选集25排空/013active/no summary的失败另保留，不能用日常通过声称Host canary通过。
-015六项registered TODO及WHAT003制度学习语义/能力隔离欠账保留，真实日志oracle与repair drain不被上游历史自述覆盖。
-S03旧gen103统一静默失败和前批Fable未提交实现未因本次merge关闭。

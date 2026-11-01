@@ -1,1 +1,1 @@
-The `root_requirement` entries below provide context from the user's original request. Keep the user's genuine intent in view while carrying out your charge; the charge provides specific direction for this action.
+The `root_requirement` entries below give context from the user's original request. Keep the user's genuine intent in view while carrying out your charge; the charge gives the specific direction for this action.

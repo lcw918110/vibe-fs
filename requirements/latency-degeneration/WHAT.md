@@ -120,11 +120,11 @@ dispose 收尾。
 启动／取消／丢弃与 idle，断言受理的中断恰好续行或返回一次；旧实现的最小反例为
 `[["step-end"]]`。
 
-## [012] 看门狗自己的 Abort 不是 Advisor / SyncDelegate 的答案
+## [012] 看门狗自己的 Abort 不是 SyncDelegate 的答案
 
-Advisor 咨询与 SyncDelegate 调用一见 `Aborted` 就立即失败（DidNotAnswer / "run aborted"）。
+SyncDelegate 调用一见 `Aborted` 就立即失败（DidNotAnswer / "run aborted"）。
 看门狗的中断就是一次宿主 Abort，随后由看门狗续跑或返回 `Failed`；把它当成答案，
-等于还没续就把咨询判死，用户只看到「advisor 被打断」而不知原因。宿主在发出中断
+等于还没续就把咨询判死，用户只看到「咨询被打断」而不知原因。宿主在发出中断
 **之前**为该 session 记一次（`DegenerationInterrupts.record`，宿主拒绝则撤回），
 上述消费者各持一个游标，每次中断只豁免一条 `Aborted`；续跑失败时看门狗返回的
 `Failed` 带 `degeneration continuation unavailable: …` 原因，照常让咨询失败。
@@ -135,8 +135,8 @@ Fork 的 Join 本来就把 `Aborted` 当观察，不受影响。
 真机事件序（OpenCode 1.18.29，`/event` 实录）：assistant `message.updated`（开始）→ 工具 part
 `pending → running → completed` → **之后**才有同一 assistant 的 `finish=tool-calls` + `time.completed`。
 工具在 Provider step 内执行，[008] 依赖的终态事件要等工具全部返回才到。旧实现因此把 `join`、bash、
-咨询（advisor / askPreviousScope）、`negotiate` 等长工具的执行时间都算成模型延迟；阈值随快速步骤收紧
-（无地板，几秒级）后，长工具几乎必被看门狗 Abort——这就是「经常被打断」「advisor 都被打断」的来源。
+咨询（askPreviousScope）、`negotiate` 等长工具的执行时间都算成模型延迟；阈值随快速步骤收紧
+（无地板，几秒级）后，长工具几乎必被看门狗 Abort——这就是「经常被打断」「咨询都被打断」的来源。
 
 宿主 `tool.execute.before` 一到，就把该 session 的在途测量按工具边界结束（`LatencyWatchdog.ToolStarted`，
 样本是模型自己的耗时）。中断已在途时仍按 [011] 停放、由回执决定续跑。同一步的并行工具、无测量时的
@@ -151,3 +151,19 @@ Fork 的 Join 本来就把 `Aborted` 当观察，不受影响。
 库侧阈值无先验，p99 至少要 100 条观测：之前 `ThresholdMs` 为 +∞。宿主照常测量与记样本（样本本身
 结束保护期），但 +∞ 阈值不调度任何定时器、不中断；这类从未武装的测量在 idle 时也不返回失败。
 验收：`tests/014.test.mjs`。
+
+## [015] 两次中断同时在途时，受理的回执仍各得一次结算
+
+第二次测量的定时器可能在第一次中断的宿主回执仍待定时到点，于是同一 session 同时挂着两条在途中断。
+旧实现只留一个恢复槽和一个停放槽：第二次触发覆盖第一次的恢复登记，第二次停放又覆盖第一次的停放测量；
+第一次中断的**受理回执**到达时既找不到在途测量也找不到自己的停放项，便静默返回——
+受理的 AbortSession 已停掉 session 循环，无人续行、无人报败，父方 Join 永远等待。
+
+- 停放表按代际保留每一条待回执测量，新停放不再销毁旧停放；每条受理回执记自己那次测量的删失样本。
+- 恢复登记按代际各留一条；同一时刻至多一条续行在途：第一条派发的回执拥有循环续跑，
+  其后受理的回执被吸收（只记自己的删失样本，不再发第二条物理续行）。
+- 拒绝或抛错的回执照 [011] 静默结清；[010] 的立即续行窗口、未知回执保持未定、以及纯用户取消
+  （无中断在途时不续行、不报败）全部不变。Cancel 先清停放再撤恢复（见成员注释）。
+
+回归：`tests/015.test.mjs` 以两种回执到达顺序、受理/拒绝的四种组合断言「受理的中断恰好结算一次、
+被吸收的回执恰好记一次删失样本」，另覆盖两次受理只发一条续行与无中断在途的普通用户取消。

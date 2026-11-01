@@ -13,7 +13,6 @@ module PromptResources =
         | Role.DevOps -> "role/devops"
         // retired roles are not prompted
         | Role.Plan -> "role/plan"
-        | Role.Advisor -> "role/advisor"
         | Role.Coder
         | Role.Inspector
         | Role.Browser
@@ -35,10 +34,9 @@ module PromptResources =
     let instructionTextsForRole (lang: ProviderLanguage) (role: Role) =
         let law = ProviderResources.readText lang (roleSemanticPath role)
 
-        match role, libraryPaths role with
-        | Role.Advisor, _ -> composeInstructions [ law ]
-        | _, [] -> composeInstructions [ ProviderResources.readText lang "world/common-law"; law ]
-        | _, inherited ->
+        match libraryPaths role with
+        | [] -> composeInstructions [ ProviderResources.readText lang "world/common-law"; law ]
+        | inherited ->
             let books = inherited |> List.map (ProviderResources.readText lang)
 
             composeInstructions (
@@ -71,8 +69,7 @@ module PromptResources =
           DevopsSystemPrompt = systemForRole lang Role.DevOps
           OrchestratorSystemPrompt = systemForRole lang Role.Orchestrator
 
-          PlanSystemPrompt = systemForRole lang Role.Plan
-          AdvisorSystemPrompt = systemForRole lang Role.Advisor }
+          PlanSystemPrompt = systemForRole lang Role.Plan }
 
     let load () : PromptCatalog =
         loadForLanguage ProviderLanguage.English

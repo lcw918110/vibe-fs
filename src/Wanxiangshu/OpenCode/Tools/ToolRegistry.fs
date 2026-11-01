@@ -15,7 +15,6 @@ open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Durable
-open Wanxiangshu.Execution.Delegation.Advisor
 open Wanxiangshu.Execution.Delegation.Fork.OpenCode
 open Wanxiangshu.Execution.Delegation.SyncDelegate
 open Wanxiangshu.Execution.Fission.OpenCode

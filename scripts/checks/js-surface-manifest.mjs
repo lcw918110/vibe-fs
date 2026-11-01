@@ -16,7 +16,21 @@ import { walk } from '../lib/walk.mjs'
 import { ruleClauseHeadings, ruleDocumentName } from '../lib/spec-rules.mjs'
 
 const read = (root, path) => readFileSync(join(root, path), 'utf8')
-export const whatIds = (text, owner) => [...new Set(ruleClauseHeadings(text, owner).map(({ id }) => id))]
+
+/**
+ * Law ids declared by a package's rule document, normalized to `<package>-<clause>`.
+ *
+ * The owner comes from `lawOwners` or `entry.owner`, never from the law's own prefix:
+ * `TIME-004`, `PID-005` and `HOST-BOUNDARY-035` are shorthands that name whatever
+ * owner the entry resolves to, and the prefix is not checked. Both sides reduce to
+ * owner + clause number; the number keeps its letter suffix (`[013A]` stays `013a`).
+ */
+const clauseId = (id, owner) => {
+  const clause = /(\d{3}[a-z]?)$/.exec(id)?.[1] ?? id
+  return `${owner.toLowerCase()}-${clause.toLowerCase()}`
+}
+export const lawIds = (text, owner) =>
+  [...new Set(ruleClauseHeadings(text, owner).map(({ id }) => clauseId(id, owner)))]
 
 const sourceCompileStem = (source) => {
   const prefix = 'src/Wanxiangshu/'
@@ -107,10 +121,8 @@ export const validateSurfaceManifest = (manifest = SURFACE_MANIFEST, root = proc
         fail(`${label}: law ${law} owner rule document is missing (${lawRulePath})`)
         continue
       }
-      const lawIds = new Set(whatIds(read(root, lawRulePath), lawOwner))
-      const numMatch = /-(\d{3}[a-z]?)$/.exec(law)
-      const lawNum = numMatch ? numMatch[1] : null
-      if (!lawIds.has(law) && !(lawNum && lawIds.has(lawNum))) fail(`${label}: law ${law} is absent from ${lawRulePath}`)
+      const declared = new Set(lawIds(read(root, lawRulePath), lawOwner))
+      if (!declared.has(clauseId(law, lawOwner))) fail(`${label}: law ${law} is absent from ${lawRulePath}`)
     }
 
     if (typeof entry.source !== 'string' || !existsSync(join(root, entry.source))) {

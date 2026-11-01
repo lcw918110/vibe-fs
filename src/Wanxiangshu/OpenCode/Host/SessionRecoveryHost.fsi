@@ -40,3 +40,15 @@ type SessionRecoveryHost =
     /// 返回值是该信号的可观察结局：`terminalized` | `already-terminal` |
     /// `no-execution` | `ignored`。
     member SettleProviderStartBoundaryRejected: key: ChatExecutionKey * reason: string -> Task<string>
+
+    /// crash-reconciliation-023: start or join THIS session's load-phase reload
+    /// sweep: the session's own leftover executions (resources, unknowns,
+    /// settlements) decide before its next admission proceeds, while every
+    /// other session's sweep runs in the background and never blocks it. A
+    /// faulting sweep propagates to its awaiter and is cleared, so a later
+    /// caller starts a fresh sweep instead of re-observing a stale failure.
+    member ReloadSession: sessionId: SessionId -> Task
+
+    /// The session ids that still owe a load-phase reload decision — the same
+    /// set the process-wide sweep would visit, one id per session.
+    member SessionsPendingReload: unit -> SessionId list

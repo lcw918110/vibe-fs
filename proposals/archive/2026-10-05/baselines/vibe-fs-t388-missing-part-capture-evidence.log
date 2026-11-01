@@ -1,3 +1,0 @@
-[{"cursor":{"sequence":1},"generation":0,"hostToolPartId":null,"kind":"tool_result","partIndex":0,"provenance":"g:0/msg:asst-c36-evidence/part:0","providerRun":"asst-c36-evidence","role":"assistant","textDigest":"7bb6f9f7a47a63e684925af3608c059edcc371eb81188c48c9714896fb1091fd","textRef":"blobs/7bb6f9f7a47a63e684925af3608c059edcc371eb81188c48c9714896fb1091fd","toolCallId":"call-c36-evidence","toolName":null,"turn":0}]
-{"messages":[{"parts":[{"kind":"tool-result","result":"file contents"}],"role":"assistant"}]}
-{"directory":"/var/folders/g_/3ydzn7kx5lg9ylq8fd9p_13r0000gn/T/wxs-plugin-exec-xKdlKS","firstLength":1819,"secondLength":3625,"physicalPartId":null}

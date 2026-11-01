@@ -27,9 +27,6 @@ module ScopeReset =
     [<Import("scopeProgress", "wanxiangli/scope-progress")>]
     let private scopeProgress: obj = jsNative
 
-    [<Import("advisorProcessQueue", "wanxiangli/scope-progress")>]
-    let private advisorProcessQueue: obj = jsNative
-
     [<Import("scopeRetention", "wanxiangli/scope-retention")>]
     let private scopeRetention: obj = jsNative
 
@@ -200,7 +197,6 @@ module ScopeReset =
                                 let budget = max 0 retentionBudget
                                 Surface.resetScopeState ctx.SessionId budget
                                 scopeProgress?reset (ctx.SessionId, nextEpochKey) |> ignore
-                                advisorProcessQueue?reset (ctx.SessionId, nextEpochKey) |> ignore
                                 // New retention epoch carries the annotation budget.
                                 scopeRetention?reset (ctx.SessionId, nextEpochKey) |> ignore
 

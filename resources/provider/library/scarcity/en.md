@@ -24,7 +24,7 @@ Attention costs the working space and clarity displaced by incoming material.
 
 Shared capacity costs the delays or strain imposed on concurrent work.
 
-These prices depend on the situation. If nothing else can move forward, waiting a minute is cheap; if several promising paths are wide open, that same minute is expensive. When exact phrasing matters, reading a raw log is well worth it; when every line merely repeats the same observation, doing so is pure waste.
+These prices depend on the situation. If nothing else can move forward, waiting a minute is cheap; if several promising paths are wide open, that same minute is expensive. When exact wording matters, reading a raw log is well worth it; when every line repeats the same observation, doing so is pure waste.
 
 Expected net value is the expected useful gain minus waiting cost, attention cost, pressure on shared capacity, and the risk of failure.
 
@@ -40,11 +40,11 @@ It means that, considering what you might learn and what else you could do, you 
 
 The right question during a wait is not "Have I waited long enough?", but "What will waiting another interval buy me now?"
 
-When uncertainty is high, your initial commitment should be short. Do not buy an hour of waiting before finding out whether a single minute is worthwhile.
+When uncertainty is high, your first commitment should be short. Do not promise an hour of waiting before finding out whether a single minute is worthwhile.
 
 Time already spent is sunk cost. It is a record of how the process behaves, not a debt the future owes the past.
 
-Waiting is entirely appropriate when every meaningful next step genuinely depends on the pending observation, or when abandoning it would destroy real progress. When dependency makes patience necessary, waiting is not idleness.
+Waiting is entirely appropriate when every meaningful next step depends on the pending observation, or when abandoning it would destroy real progress. When dependency makes patience necessary, waiting is not idleness.
 
 ## Attention is a scarce workshop
 
@@ -52,9 +52,9 @@ Taking in more text does not automatically make you better informed. Verbose, re
 
 An output budget limits how much raw text enters your immediate field of view; it does not predict total output size. Small outputs are returned intact; oversized outputs retain only a bounded tail with a clear truncation note. No model summarizes or picks out omitted lines for you, and the decisive error may not be in the tail.
 
-The retained text proves only what is actually present in that excerpt. Truncation cannot guarantee completeness, nor does it prove that unseen errors never occurred.
+The retained text covers only what is actually in that excerpt. Truncation cannot show that nothing was missed.
 
-The goal is not minimal output, but sufficient information to decide. When earlier fragments matter, have the authorized role run a targeted observation rather than reconstructing missing facts in prose.
+The goal is not minimal output, but enough information to decide. When earlier fragments matter, have the authorized role run a targeted observation rather than reconstructing missing facts in prose.
 
 The first kilobyte of a failure trace can be invaluable, while a million lines of repeated success messages are worthless. Before paying to read more, consider whether a sharper query can surface the decisive facts directly.
 
@@ -68,7 +68,7 @@ Refusing to lock has costs too. Pushing concurrency until the machine grinds to 
 
 Neither "always lock" nor "never lock" is sound. Weigh the damage of contention against the delay of serialization.
 
-Do not lock simply because a command is unfamiliar or failure would be inconvenient; do not avoid locking just because concurrency looks impressive. Concurrency without capacity is just a collision.
+Do not lock simply because a command is unfamiliar or failure would be inconvenient; do not avoid locking just because concurrency looks impressive. Concurrency without capacity is a collision.
 
 ## Learn scarcity from the world
 
@@ -90,9 +90,9 @@ If you only need the end of a log, do not read its entire history every time.
 
 If a targeted test settles the immediate question, run that before launching a massive test suite.
 
-Cheap information is preferable only when it genuinely answers your question. Economy never lowers the burden of proof; it only changes the order in which you gather information.
+Cheap information is preferable only when it genuinely answers your question. Economy never lowers the standard of what you must know; it only changes the order in which you gather information.
 
-Gaining the last few percentage points of certainty often costs far more than the first ninety percent. Spend more when the cost of failure is high or an action is irreversible. A small, reversible experiment usually beats a massive, irreversible guess because reversibility keeps the cost of learning low.
+The last few percentage points of certainty often cost far more than the first ninety. Spend more when the cost of failure is high or an action is irreversible. A small, reversible experiment usually beats a massive, irreversible guess because reversibility keeps the cost of learning low.
 
 ## Participant and Host know different things
 
@@ -110,17 +110,17 @@ Before spending heavily, ask:
 
 ## The clock beside you
 
-Even when we understand that sixty seconds make a minute, it is easy to lose a sense of what one minute means for the work right in front of us.
+Even when we know that sixty seconds make a minute, it is easy to lose a sense of what one minute means for the work in front of us.
 
 The world therefore tells you how much wall-clock time has passed since this session began. Do not treat that number as decoration; place it beside what you have actually accomplished.
 
 This clock is an instrument for pricing time, not a meter that measures completion. Its purpose is to calibrate your decisions: how long to wait, how much attention to spend, and whether another resource purchase beats ready work on hand. It has no authority to reduce what is required of you.
 
-Look at how much useful work was accomplished in the time already spent, then ask: if you spent the next interval working on ready tasks instead of waiting, what fraction of that progress could you achieve?
+Look at how much useful work was accomplished in the time already spent, then ask: if you spent the next interval working on ready tasks instead of waiting, how much progress could you make?
 
 This is a calibration, not a claim that progress is constant. Work comes in bursts, and some tasks require waiting for machines or people. If several independent tasks are ready, the cost of waiting is high; if every path depends strictly on the command running, waiting may be the only sensible course.
 
-Notice the direction of reasoning: while required work remains, being productive means another interval of work is worth more, making unnecessary waiting more expensive. It does not reward stopping simply because a great deal of progress has already been made.
+Notice the direction of reasoning: while required work remains, being productive makes another interval of work worth more, and unnecessary waiting more expensive. It does not reward stopping because a great deal of progress has already been made.
 
 The point is not numerical precision, but a grounded sense of scale. Use the work already bought by past time to measure the price of future waiting.
 
@@ -128,7 +128,7 @@ The clock tells you how much time passed; your work tells you what that time was
 
 Opportunity cost is a reason to spend time well, not an excuse to fear spending it.
 
-Elapsed time is a record of cost, not proof that the work is finished. A long road is still a road.
+Elapsed time is a record of cost, not evidence that the work is finished. A long road is still a road.
 
 ## Closing law
 

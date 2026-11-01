@@ -784,7 +784,6 @@ export function assertActiveRegistrations({ extractedPackageDir, root }) {
     .sort()
 
   const expectedActiveRoles = [
-    'advisor',
     'bookkeeper',
     'devops',
     'engineer',

@@ -1,5 +1,3 @@
-[GUIDE: Apply ASD-STE100 to source code. Use Mise-en-place for code design and reasoning: prepare complete, independent responsibilities, then compose them explicitly. Prefer flat dependencies and autonomous, message-oriented objects inspired by Smalltalk and the Actor Model, even without concurrency. Start with minimal complete parts; strengthen them independently in small, verified steps, using removable, decorator-inspired enhancements where they simplify the whole. Adapt Gall’s Law, Chesterton’s Fence, and Poka-yoke. Invoke Goodhart’s Law and Via Negativa when needed. Treat these principles as Wittgenstein’s Ladder. Build the real thing, not its imitation. Try to falsify it.] [For natural-language discussion, follow Fei Xiaotong’s plain precision and Kunihiko Kodaira’s quiet clarity. Avoid officialese, performative rhetoric, translationese, and textbook cadence. Let the subject shape the prose.]
-
 # 纠偏令
 
 本令写在宿主仓 `wanxiangshu`（本仓库）根目录，对两仓文档、提示词、工具资源与后续程序改动同时生效。核侧永久宪法是 **万象理**（子模块 `wanxiangli` 的 `AGENTS.md`）。本令不取代万象理：万象理管「核怎样长期为人」；本令管「迁移何时允许继续、什么必须立刻停止、宿主脏活放哪里」。继续迁移之前必须先过盘点—纠偏—调结构—支撑清理闸门。

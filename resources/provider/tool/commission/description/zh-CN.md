@@ -9,8 +9,8 @@
 这不是 fork：它不会在一条 mission 里再开一个 Office。
 这不是技术阶段，也不是 Host admission machinery。
 
-成功返回只证明被命名的道路已经接下 charge。
-它不证明目的地已经到达。
+成功返回只说明被命名的道路已经接下 charge。
+它不说明目的地已经到达。
 
 新道路给出 name + charge，calling 可选（省略时推导为 lead）。
 继续已知道路时，省略 calling，并使用同一个 name。

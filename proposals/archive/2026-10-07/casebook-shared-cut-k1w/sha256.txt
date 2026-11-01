@@ -1,6 +1,0 @@
-036b4e2f8710d7ba3d05edde83606d5dcf3355e428ad17b88868c82c2522cfe9  proposals/archive/2026-10-07/casebook-shared-cut-k1w/vibe-fs-k1w-build-doc.log
-e3d8feeabcc725aae863b9806793be2b34b1570a4f006efb57d7cc9b79ed7c8b  proposals/archive/2026-10-07/casebook-shared-cut-k1w/vibe-fs-k1w-build.log
-25ec1c40d67f2470d42ba44d3c6db1e7aee0ef50180eb82271ec5545de0da7f4  proposals/archive/2026-10-07/casebook-shared-cut-k1w/vibe-fs-k1w-doc-fresh.json
-a1a05a1f09fcf548f1fd738ae41d6a97d008aa6153aa248004d8ec90e77636c5  proposals/archive/2026-10-07/casebook-shared-cut-k1w/vibe-fs-k1w-formal-final.log
-7444ddacd02d59f54bf6b94eb3a96f8aa092644c89d5a420e30e7f3433e01f58  proposals/archive/2026-10-07/casebook-shared-cut-k1w/vibe-fs-k1w-formal.log
-c3cce761fc76763c564396ab862be2b9bf55ffa5ab956b756230316e71fb2ef7  proposals/archive/2026-10-07/casebook-shared-cut-k1w/vibe-fs-k1w-fresh.json

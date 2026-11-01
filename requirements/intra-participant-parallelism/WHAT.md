@@ -76,7 +76,7 @@ V1 按 canonical index 从 lane 0 到 N−1 环行，以 keyed union 合并；�
 
 fission 是同一 logical participant 换一条执行道，不是委派：每条 lane 无条件继承本对话的衣钵，其上下文来源是顶层整理后的当前会话上下文，不是旧的交付记录视图。旧交付记录是上一次交付的产物，不代表本对话的现状，不得作为 lane 的上下文来源；当前会话上下文为空也不构成准入阻碍。
 
-成员签名上 `this.fission(payload)` 只有 payload 一个形参，不带 `carry`：拉取或换道动作不承载委派材料。可带 `carry` 的是委派成员 `fork`、`resume`、`commission`、`devops`、`advisor`、`dag`；`join` 与 `horizon` 同 fission 一样不带。
+成员签名上 `this.fission(payload)` 只有 payload 一个形参，不带 `carry`：拉取或换道动作不承载委派材料。可带 `carry` 的是委派成员 `fork`、`resume`、`commission`、`devops`、`dag`；`join` 与 `horizon` 同 fission 一样不带。
 
 ## [019] 裂变终态与 clearOwner 后迟到物理回调的安全拒绝
 

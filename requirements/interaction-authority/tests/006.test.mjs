@@ -106,7 +106,7 @@ const personas = {
   engineer: 'Engineer',
   coder: 'Coder',
   manager: 'Lead',
-  reviewer: 'Auditor',
+  reviewer: 'Investigator',
   inspector: 'Investigator',
   devops: 'Operator',
   plan: 'Planner',

@@ -112,7 +112,7 @@ const EXPECTED_MEMBERS = [
 ]
 
 // The offices whose permission set projects no member at all.
-const SURFACE_LESS_ROLES = ['Coder', 'Inspector', 'Browser', 'Inquiry', 'Distiller', 'Advisor']
+const SURFACE_LESS_ROLES = ['Coder', 'Inspector', 'Browser', 'Inquiry', 'Distiller']
 
 test('WHAT[repository-programming-001] JS001_generate_none_when_no_filesystem_capability', () => {
   for (const role of SURFACE_LESS_ROLES) {
@@ -154,7 +154,7 @@ test('WHAT[repository-programming-001] JS001_manager_carries_the_delegation_memb
   const manager = surface('Manager', permissions)
   const names = memberNames(manager)
 
-  // Manager holds Fork/Resume/Join/Horizon/Advisor, so it carries the
+  // Manager holds Fork/Resume/Join/Horizon, so it carries the
   // dispatch members and the pull members alike.
   for (const member of ['fork', 'resume', 'horizon']) {
     assert.ok(names.includes(member), `Manager carries ${member}`)
@@ -193,7 +193,7 @@ test('WHAT[repository-programming-001] JS001_lifecycle_members_are_carried_by_ev
 })
 
 test('WHAT[repository-programming-001] JS001_non_projected_permissions_never_produce_members', () => {
-  for (const name of ['Join', 'Edit', 'Pty', 'Fetch', 'Finality', 'ResetScope', 'BashHoneypot', 'Advisor']) {
+  for (const name of ['Join', 'Edit', 'Pty', 'Fetch', 'Finality', 'ResetScope', 'BashHoneypot']) {
     const result = generate('Engineer', caps(name), 'en')
     assert.equal(isNone(result), true, `${name} alone must not generate a surface`)
   }

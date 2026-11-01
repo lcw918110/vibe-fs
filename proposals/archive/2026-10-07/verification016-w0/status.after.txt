@@ -1,6 +1,0 @@
-M  requirements/durable-events/tests/024.test.mjs
-M  requirements/durable-events/tests/support/journal-physical-child.mjs
-M  requirements/durable-events/tests/support/journal-physical-coordinator.mjs
-M  scripts/lib/test-surface-scan.mjs
-M  src/Wanxiangshu/Persistence/EventStore/Surface.fs
-M  src/Wanxiangshu/Persistence/EventStore/Surface.fsi

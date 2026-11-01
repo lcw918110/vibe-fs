@@ -104,7 +104,6 @@ async function verifyArtifacts(targetRoot = root) {
     'devops',
     'orchestrator',
     'plan',
-    'advisor',
     'bookkeeper',
   ]
   for (const name of providerRoles) {

@@ -10,7 +10,7 @@ import {
 
 // Field incident 2026-10-28 06:20–06:25 UTC (Manager ses_e7ed7cdb2ffe…, child
 // Engineer `esb1t2`/控制路径 ses_e7ed78478ffe…): the child's turn ended
-// finish=length with no prose and no tool call while an Advisor answer was
+// finish=length with no prose and no tool call while a consultation answer was
 // queued as a busy steer. The late-consultation stop judged that empty turn
 // "finished", aborted the answer's step, and its Cancelled terminal revoked the
 // session's quiescence; the missing-final-report repair was abandoned twice
@@ -40,7 +40,7 @@ test('WHAT[delegation-040] an empty finished turn is no closing report: the queu
       runtime.pushHostMessage(child, empty)
       await hooks['experimental.chat.messages.transform']({ sessionID: child }, { messages: await history() })
 
-      const guided = await resumeCall(hooks, owner, 'Ada', 'ADVISOR-ANSWER')
+      const guided = await resumeCall(hooks, owner, 'Ada', 'CONSULTATION-ANSWER')
       assert.match(guided, /Ada/)
       await runtime.awaitIngress()
       const steer = physicalUserMessageOf(runtime, child)

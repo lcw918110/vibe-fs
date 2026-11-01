@@ -252,7 +252,7 @@ async function main() {
       `export const routingProtocol = 2
 export const hasTheoreticalCapacity = () => true
 export default function route(role, running, previous, purpose) {
-  if (!new Set(['manager', 'orchestrator', 'engineer', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'bookkeeper', 'plan', 'advisor']).has(role)) throw new Error('unexpected managed role: ' + role)
+  if (!new Set(['manager', 'orchestrator', 'engineer', 'coder', 'inspector', 'browser', 'inquiry', 'reviewer', 'devops', 'distiller', 'bookkeeper', 'plan']).has(role)) throw new Error('unexpected managed role: ' + role)
   return { model: 'provider/' + role + '-model', reasoning: 'none' }
 }
 \n`,

@@ -96,7 +96,7 @@ session-only idle 是唤醒，不能证明同 session 所有已接受输入都�
 
 Manager、Orchestrator、Plan 的工作在会话里还开着。上游可恢复错误（Bad Gateway、5xx、网络、重试预算耗尽、重投失败）让本拍失败时，宿主等确切宿主终态后，向该会话发本角色的续工指令（`work/<role>-continue`，前面带一句网络故障说明），不报终态失败，不停会话。预算耗尽也不挡这类角色的空回复/未完成提醒。
 
-DevOps、Engineer、Advisor 等短工照旧：耗尽即报失败。用户取消与非瞬时错误不在此列。上下文窗口溢出（`input_too_large`、context window 超限等）不是网关类瞬时错误：原样重发不可能成功，不得续工 nudge，也不得作为可无限重试的瞬时失败。
+DevOps、Engineer 等短工照旧：耗尽即报失败。用户取消与非瞬时错误不在此列。上下文窗口溢出（`input_too_large`、context window 超限等）不是网关类瞬时错误：原样重发不可能成功，不得续工 nudge，也不得作为可无限重试的瞬时失败。
 
 账户额度耗尽同理且更硬：xAI `personal-team-blocked:spending-limit: You have run out of credits or need a Grok subscription`、OpenAI `insufficient_quota` 等「没额度／超支出上限／需订阅」是外部硬停。宿主边界把它归为 `ProviderPermanent`；确认失败即本拍终态失败并原文报出，不重试、不续工 nudge、不发缺报告提醒，长短角色一律。其余真瞬时错误（502、网络等）照旧重试／续工。
 

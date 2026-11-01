@@ -10,7 +10,7 @@
 
 ## [002] 四层同构应用
 
-能力在公开基类、工具描述、canonical examples 与运行时门禁中一致投影。Read → `cat/stat/whereAll/where`，Glob → `ls`，Grep → `rg`，Write → `write/mkdir`，Move → `mv`，Remove → `rm`，Exec → `call/signal/send`，Fork → `fork`，Resume → `resume`，Commission → `commission`，DevOps → `devops`，Fission → `fission`，Horizon → `horizon`，Advisor → `advisor`，Ask → `ask`，Review → `review`。canonical 成员序为 `write, rm, mv, cat, ls, rg, stat, mkdir, whereAll, where, call, signal, send, fork, resume, commission, devops, fission, horizon, advisor, ask, review`，仅列实际授权成员。`park/unpark/abandon` 是普遍生命周期成员，不进入能力列表，仍受会话及权限边界约束。Manager 的 reviewOnly、Plan 写前评审与 PLAN_PATH、Ask 业务门禁保持不变。编程内 join/dag 的投影、实现、类型和教学全部退出；委派 resume 不是程序恢复，resetScope 与 Work 生命周期决策不成为程序成员。
+能力在公开基类、工具描述、canonical examples 与运行时门禁中一致投影。Read → `cat/stat/whereAll/where`，Glob → `ls`，Grep → `rg`，Write → `write/mkdir`，Move → `mv`，Remove → `rm`，Exec → `call/signal/send`，Fork → `fork`，Resume → `resume`，Commission → `commission`，DevOps → `devops`，Fission → `fission`，Horizon → `horizon`，Ask → `ask`，Review → `review`。canonical 成员序为 `write, rm, mv, cat, ls, rg, stat, mkdir, whereAll, where, call, signal, send, fork, resume, commission, devops, fission, horizon, ask, review`，仅列实际授权成员。`park/unpark/abandon` 是普遍生命周期成员，不进入能力列表，仍受会话及权限边界约束。Manager 的 reviewOnly、Plan 写前评审与 PLAN_PATH、Ask 业务门禁保持不变。编程内 join/dag 的投影、实现、类型和教学全部退出；委派 resume 不是程序恢复，resetScope 与 Work 生命周期决策不成为程序成员。
 
 ## [003] 确定性生成
 
@@ -254,7 +254,7 @@ this.signal(name,signal)、this.send(name,input) 是与 call 平级的 Exec 成�
 
 独立 SDK 操作可用 Promise.all/Promise.allSettled，各自按合同结清，兄弟失败不回滚落地效果。进入 call 后先结清全部既有操作，续体停在调用点，排空消耗入口剩余期限。call 不参与同程序命令并行：漏 await 或 Promise.all 两个 call，第二表达式只能在首个 call 真实结果放行后求值。宿主和其他程序保持响应；同文件竞态靠原子写与 FILE_CHANGED 处理，不靠整程序互斥掩盖。
 
-## [056] 委托原语：fork / resume / commission / devops / fission / horizon / advisor
+## [056] 委托原语：fork / resume / commission / devops / fission / horizon
 
 **所有 js.* 成员的返回值都是数据，绝不返回渲染后的 prose**（宿主在工具结果与 parked 载荷边界统一把值渲染给模型）。委托成员统一用信封：
 
@@ -269,13 +269,11 @@ this.signal(name,signal)、this.send(name,input) 是与 call 平级的 Exec 成�
 - 独立宿主工具 `join()`（无参数，无 name/program/intent，不创建临时 JS 程序）：按本会话成员归属收拢，返回 `{ ok, records: [{ name, agentId, role, status, returned: [{ text }] }] }`，不重复输出 `byName` 索引；子智能体（Engineer/DevOps）以无未决调用的自然停机作为 proven terminal，其末轮 assistant 散文随 join 记录以 `# ...` 注释交回，`returned` 不再承载子智能体的完整视图；`status ∈ completed | failed | abandoned | voided`。执行已不可能（abort、cancel 或重启加载结算）的成员以 `voided` 进入 join 记录，`returned` 为空数组：作废结清该成员的未解除义务，join 关闭，报告一次后该成员退役。拒绝码：`context-unavailable`/`not-ready`/`nothing-to-join`/`join-in-progress`/`interrupted`/`abandoned`。
 - `fission({ charge, lanes })`：同身份多 lane 的任务分片执行（宿主负责 lane 绑定与收拢），返回 `{ ok, groupId, lanes: [{ index, sessionId }] }`；owner 的 `join()` 收拢本组 lane。拒绝码：`fission-unavailable`/`lane-start-failed`/`not-ready`/`context-unavailable`/`invalid-prompt`。
 - `horizon()`：返回在场名册的数据信封 `{ ok, agents: [{ label, status, pace? }], ptys: [{ terminal }] }`，与 join 读同一份账（participant-horizon [011]）。`status ∈ still-away | stalled | returned | did-not-return | voided | idle`：`returned`/`did-not-return`/`voided` 恰是下一次 join 会交出的后果，`still-away` 恰是 join 会等的在跑任务，`stalled` 是未结清但无人在跑的任务，`idle` 是在场待命、手上无任务的固定 DevOps。`pace = { turnsUsed, turnsLeft, timeUsedMs, timeLeftMs }` 只出现在 `still-away` 行且委任者 estimate 与子会话起点两者都可读时；不可读即缺省该字段，绝不以 0 顶替。名册不带底层 id、target 或报告正文（正文由 join 交付）。拒绝码：`horizon-unavailable`。
-- `advisor(intent)`：请求本调用 session 自己的顾问专席；intent 散文作为 `# ...` 注释头，连同调用方当前完整的 post-scope 视图（TOML `[[context]]` 表）作为单一请求文档投递给顾问。返回数据信封 `{ ok: true, advice }` 或 `{ ok: false, code: "advisor-unavailable", reason }`，其中 `advice` 为顾问自然停机时的末轮 assistant 散文。每次 consult 均把调用方当前最新 post-scope 视图作为背景送出。拒绝码：`advisor-unavailable`。
-
-派遣成员 `fork`、`resume`、`commission`、`devops`、`advisor` 均不携带任何背景数组参数。任务只由 `charge` 或 `intent` 表达一次，背景材料由发送方当前的完整 post-scope 消息视图承载并在最终边界统一渲染为 TOML。
+派遣成员 `fork`、`resume`、`commission`、`devops` 均不携带任何背景数组参数。任务只由 `charge` 或 `intent` 表达一次，背景材料由发送方当前的完整 post-scope 消息视图承载并在最终边界统一渲染为 TOML。
 
 实现边界：delegation shard 提供结构化入口（`ForkTool.executeReceipt`/`JoinTool.executeReceipt`/`FissionTool.executeReceipt`，返回数据与上述稳定码；宿主 `join`/`horizon`/`fission` 工具的 prose 输出保持不变，`fork`/`resume`/`commission`/`devops` 已无宿主工具注册，一律经编程面成员调用）；接线层在每次编程调用期间安装进程内委托宿主驱动这些入口，调用结束清除；未安装宿主时成员以 `{ ok:false, code:"DELEGATION_UNAVAILABLE" }` 拒绝，不静默降级。
 
-委托面按能力投影：Manager 持有 Fork/Resume/Join/Horizon/Advisor 权限，因而获得 `fork`/`resume`/`horizon`/`advisor` 成员，以及独立 `join()` 工具；Plan 的 DevOpsConsultation 权限投影出 `devops` 成员；Orchestrator 没有文件权限，其 Fork 权限投影为 `commission`（同一委派执行入口），因而是纯委派编程面。`hasFsCapability`/`jsToolSpec.admissionFor` 同步把 Fork/Resume/DevOps/Fission 计入编程面授权，Join 只授权独立工具，四层一致。
+委托面按能力投影：Manager 持有 Fork/Resume/Join/Horizon 权限，因而获得 `fork`/`resume`/`horizon` 成员，以及独立 `join()` 工具；Plan 的 DevOpsConsultation 权限投影出 `devops` 成员；Orchestrator 没有文件权限，其 Fork 权限投影为 `commission`（同一委派执行入口），因而是纯委派编程面。`hasFsCapability`/`jsToolSpec.admissionFor` 同步把 Fork/Resume/DevOps/Fission 计入编程面授权，Join 只授权独立工具，四层一致。
 
 ## [057] ls 的 ignore 语义与搜索面
 

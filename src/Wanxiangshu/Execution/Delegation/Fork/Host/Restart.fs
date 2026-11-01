@@ -9,6 +9,7 @@ open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Delegation.Fork.ChildRecovery
 open Wanxiangshu.Execution.Delegation.Handle
+open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Execution.Session.Recovery.SessionRecovery
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -51,6 +52,25 @@ module HostForkRestart =
                         None
                         None
                     |> Option.isSome)
+          // The retry's physical id is not its Authority Root. Read the
+          // durable Accepted cell for the exact physical message so both the
+          // delivery witness and the encoded completion use the same root.
+          AcceptedRoot =
+            durableJournal
+            |> Option.map (fun durable ->
+                fun childSession physical ->
+                    let key: ChatExecutionKey =
+                        { SessionId = childSession
+                          PhysicalUserMessageId = physical }
+
+                    (AgentJournal.snapshot durable).AgentProjections.ChatExecutions
+                    |> ChatExecutionProjection.byKey key
+                    |> Option.map (fun execution ->
+                        let accepted = execution.acceptedEvidence
+
+                        ({ PhysicalUserMessageId = accepted.PhysicalUserMessageId
+                           AuthorityRoot = accepted.AuthorityRootUserMessageId }
+                        : ChildRecoveryWorkflow.AcceptedRoot)))
           ParentId = parentId
           Snapshot = snapshot
           AgentId = agentId

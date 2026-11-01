@@ -145,13 +145,16 @@ type PluginRuntimeScope
     /// Register load-phase recovery work started by a durability activator so the
     /// first admission can await it (crash-reconciliation-020 ordering: the void
     /// settlement must land before the next handoff reads the durable authority).
+    /// A tracked task may fault: the awaiter then sees the settlement's real
+    /// failure instead of a silent success.
     member _.TrackDurabilityActivation(work: Task) : unit =
         lock durabilityActivationGate (fun () -> durabilityActivationWorks <- work :: durabilityActivationWorks)
         ()
 
     /// Await every durability-activation recovery work registered so far. The
-    /// tracked tasks never fault (failures are captured into the background
-    /// failure slot), so awaiting cannot throw.
+    /// tracked tasks may fault; a faulting settlement propagates to this
+    /// awaiter — the honest answer for the handoff that was about to read the
+    /// journal past an unsettled barrier.
     member _.AwaitDurabilityActivation() : Task =
         let pending = lock durabilityActivationGate (fun () -> durabilityActivationWorks)
 
@@ -208,6 +211,23 @@ type PluginRuntimeScope
     member _.DrainChatRecovery(sessionId: SessionId) : Task =
         match chatRecoveryRuntime with
         | Some runtime -> runtime.Drain sessionId
+        | None -> Task.FromResult(()) :> Task
+
+    /// The session ids whose chat executions still owe a load-phase reload
+    /// decision (unsettled, or capacity held/unknown). Empty without a
+    /// recovery runtime.
+    member _.PendingChatRecoverySessions() : SessionId list =
+        match chatRecoveryRuntime with
+        | Some runtime -> runtime.SessionsPendingReload()
+        | None -> []
+
+    /// Start or join THIS session's load-phase reload sweep (crash-reconciliation-023):
+    /// the session's own leftover executions, resources and unknowns settle before
+    /// its admission proceeds, while every other session's recovery runs in the
+    /// background and never blocks this call.
+    member _.ReloadChatSession(sessionId: SessionId) : Task =
+        match chatRecoveryRuntime with
+        | Some runtime -> runtime.ReloadSession sessionId
         | None -> Task.FromResult(()) :> Task
 
     member _.SyncDelegateRuntime = syncDelegateRuntime
@@ -325,16 +345,9 @@ type PluginRuntimeScope
         }
         :> Task
 
-    /// RunBackground variant that returns the observed task so a durability
-    /// activator can register it for admission awaiting.
-    member this.RunBackgroundTracked(start: unit -> Task) : Task =
-        if this.AdmitOwnedWork() then
-            this.ObserveBackgroundWork start
-        else
-            Task.FromResult(()) :> Task
-
     member this.RunBackground(start: unit -> Task) : unit =
-        this.RunBackgroundTracked start |> ignore
+        if this.AdmitOwnedWork() then
+            this.ObserveBackgroundWork start |> ignore
 
     member private this.RunAdmittedOwnedWork(start: unit -> Task) : Task =
         task {

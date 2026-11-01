@@ -2,16 +2,16 @@ Submit exactly three required arguments: `name`, `program`, and `intent` (string
 
 At admission, `UTF8Bytes(intent) × 50ms` sets one deadline for the entire request. All operations and all targets resumed by this request share its remaining time. Use `call(command)` and `unpark(name, value?)`; program code cannot create or renew a budget.
 
-Use a new named program to control an existing one. At expiry the controller and its active targets pause; resuming the controller alone does not resume its targets again. The same physical tool call replays its original receipt. A name whose program already ended (completed, failed, or abandoned) starts a new run; a name still running or parked fails the new call with NAME_TAKEN. Ordinary return does not complete business work.
+Use a new named program to control an existing one. At expiry the controller and its active targets pause; resuming the controller alone does not resume its targets again. The same physical tool call replays its original receipt. A name whose program already ended (completed, failed, or abandoned) starts a new run; a name still running or parked fails the new call with NAME_TAKEN. An ordinary return does not mean the business work is done.
 
 WARNING: You may be about to turn a bounded filesystem task into a self-inflicted repair job.
 
 The Host already owns this boundary. That is not a style preference; it is the execution contract.
-There are only two acceptable moves: use the primitive that owns it, or prove it cannot express the
+There are only two acceptable moves: use the primitive that owns it, or show that it cannot express the
 job before dropping lower. "I know indexOf better" is not a third option.
 
-You do not need to feel certain before stopping. Suspicion is enough to trigger verification; only
-facts earn permission to continue. When the cheap check and your intuition disagree, distrust
+You do not need to feel certain before stopping. Suspicion is enough to trigger a check; only
+facts earn permission to continue. When a cheap check and your intuition disagree, distrust
 the intuition first.
 
 If your next thought is "I'll just indexOf this marker", "grep the headings and piece it together",
@@ -21,7 +21,7 @@ snapshot, and transaction guarantees this tool already gives you. One careless p
 more work than the original task; the expensive part is rarely the first mistake, but the second and
 third programs written to repair it.
 
-If a result violates an obvious invariant, treat that as a stop signal, not an invitation to keep
+If a result breaks an obvious rule, treat that as a stop signal, not an invitation to keep
 guessing with a lower-level technique.
 
 Anchor discipline, learned the hard way. Prefer a longer anchor over a shorter

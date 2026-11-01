@@ -1,7 +1,0 @@
-21387835f0e6393ea123c8c609a31a6f94ce4094e0734a59259b99069c53bd1a  final-receipt.txt
-443ea90f30d41203b23cb00b03e81ba13753f9280ec636e96ba5e67adad1f901  vibe-fs-sphinx-s0-build.log
-54faddcbed1dba62e7b5f42295973a1ac36b4f887d406a460e7a6733faa566c1  vibe-fs-sphinx-s0-check.log
-acfc3326667e53733171710e593ce6cd202ac4d655ccf0ebc8c8a41a1d10d3bf  vibe-fs-sphinx-s0-final-build.log
-d16d2442baa048db38d7dfaa3ef23376fc3979a0e400bf064fae59d6c5c64ce4  vibe-fs-sphinx-s0-formal.log
-ce8fdd8c2c7c386aecac3a4f7bafc5527090b194a61783f62448c5ec3c0c211f  vibe-fs-sphinx-s0-fresh-final.json
-dafd987378570255eb6fa11d273e92e33ede69616cd6c5a62d1421277a7bdd6e  vibe-fs-sphinx-s0-fresh252.json

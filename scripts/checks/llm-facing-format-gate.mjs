@@ -68,7 +68,6 @@ export function check(context) {
   // Responsibilities:
   //   * SyntheticTomlSurface.fs: shared JS-native serialization primitive surface
   //   * LlmFacing.fs: canonical LLM boundary for structured representation
-  //   * Advisor/View.fs: consumer rendering its own representation
   // Any file may access the shared primitives. Output validity is verified by behavioral tests.
   return { issues: [], violations: [] }
 }

@@ -25,6 +25,16 @@ module ChildRecoveryWorkflow =
     /// durable composition owns the concrete journal read behind it.
     type DeliveryWitnessReader = SessionId -> ProviderRunIdentity -> AuthorityRootUserMessageId -> bool
 
+    /// The durable chat-execution acceptance of one physical user message.
+    /// A retry lands as a new physical user message under the original
+    /// Authority Root, so the physical id must never be promoted to a root.
+    type AcceptedRoot =
+        { PhysicalUserMessageId: PhysicalUserMessageId
+          AuthorityRoot: AuthorityRootUserMessageId }
+
+    /// Durable Accepted lookup by physical message. None = not observed.
+    type AcceptedRootReader = SessionId -> PhysicalUserMessageId -> AcceptedRoot option
+
     /// DSL-state-combination: physical — optional Journal/Snapshot capabilities
     /// are injected infrastructure ports; the remaining fields are one recovery
     /// invocation's identities and observations, not a stored program counter.
@@ -35,6 +45,9 @@ module ChildRecoveryWorkflow =
             /// Durable delivery-witness reader; None = no witness source, so a
             /// restored terminal is not proven.
             DeliveryWitness: DeliveryWitnessReader option
+            /// Durable Accepted reader; None = no acceptance source, so the
+            /// restored terminal's true root cannot be observed.
+            AcceptedRoot: AcceptedRootReader option
             ParentId: SessionId
             Snapshot: ISessionSnapshotPort option
             AgentId: string
@@ -63,6 +76,17 @@ module ChildRecoveryWorkflow =
         messages
         |> List.rev
         |> List.tryFind (fun message -> message.Role.Equals(role, StringComparison.OrdinalIgnoreCase))
+
+    /// A user message after the last assistant means the child has a newer
+    /// pending turn; the older assistant is not this child's terminal.
+    let private userAfterLastAssistant (messages: SessionMessage list) =
+        let rec scan (messages: SessionMessage list) =
+            match messages with
+            | [] -> false
+            | message :: rest when message.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) -> false
+            | message :: rest -> message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) || scan rest
+
+        scan (List.rev messages)
 
     let private isTerminalCompleted (assistant: SessionMessage) =
         match assistant.Finish with
@@ -123,51 +147,84 @@ module ChildRecoveryWorkflow =
         | None -> Task.FromResult DurableHandleEvidence.Unknown
         | Some journal -> readDurableFromJournal ports journal
 
-    let private deliveryWitnessed (ports: Ports) (user: SessionMessage) (assistant: SessionMessage) : bool =
-        let authorityRoot =
-            PhysicalUserMessageId.promoteToAuthorityRoot (PhysicalUserMessageId.create user.Id)
-
+    let private deliveryWitnessed
+        (ports: Ports)
+        (authorityRoot: AuthorityRootUserMessageId)
+        (assistant: SessionMessage)
+        : bool =
         let providerRun = ProviderRunIdentity.create assistant.Id
 
         ports.DeliveryWitness
         |> Option.exists (fun reader -> reader ports.ChildSession providerRun authorityRoot)
 
-    let private terminalFromMessages
+    let private acceptedRootForPhysical
         (ports: Ports)
-        (messages: SessionMessage list)
-        (assistant: SessionMessage)
-        : ChildSnapshotEvidence =
-        match lastByRole messages "user" with
-        | None -> ChildSnapshotEvidence.Unreadable "host restart: terminal child has no user message"
-        | Some user when assistant.ParentId <> Some user.Id ->
-            ChildSnapshotEvidence.Unreadable "terminal assistant does not answer the exact accepted physical message"
-        | Some user when not (deliveryWitnessed ports user assistant) ->
-            ChildSnapshotEvidence.Unreadable "restart terminal has no durable delivery witness"
-        | Some user ->
-            let runId = "run-restored-" + ports.AgentId
-            let view = textOfParts assistant.Parts
+        (physical: PhysicalUserMessageId)
+        : Result<AuthorityRootUserMessageId, string> =
+        match ports.AcceptedRoot with
+        | None -> Error "restart terminal has no durable Accepted source"
+        | Some read ->
+            match read ports.ChildSession physical with
+            | None -> Error "restart terminal has no durable Accepted for its exact physical message"
+            | Some accepted when accepted.PhysicalUserMessageId <> physical ->
+                Error "durable Accepted does not answer the assistant's exact physical message"
+            | Some accepted -> Ok accepted.AuthorityRoot
 
-            let agentOutcome =
-                AgentCompletion.completed
-                    ports.AgentId
-                    ports.ChildSession
-                    runId
-                    ports.Role
-                    (PhysicalUserMessageId.promoteToAuthorityRoot (PhysicalUserMessageId.create user.Id))
-                    (ProviderRunIdentity.create assistant.Id)
-                    view
-                    None
+    let private admittedRoot (ports: Ports) (authorityRoot: AuthorityRootUserMessageId) : Result<unit, string> =
+        let work =
+            { Handle = ports.Handle
+              ChildSessionId = ports.ChildSession
+              AuthorityRoot = authorityRoot }
 
-            let body = HandleCompletionCodec.encodeOutcome runId agentOutcome
+        match ports.Journal with
+        | None -> Error "restart terminal has no durable journal to prove its canonical work"
+        | Some journal ->
+            match HandleProjection.tryAdmittedWork work (journal.HandleProjection ports.ParentId) with
+            | Ok _ -> Ok()
+            | Error _ -> Error "durable Accepted root has no matching canonical admitted work"
 
-            ChildSnapshotEvidence.Terminal(
-                TerminalEvidence.completed ports.AgentId ports.Handle ports.ChildSession body
-            )
+    let private terminalFromMessages (ports: Ports) (assistant: SessionMessage) : ChildSnapshotEvidence =
+        // The assistant's parent is the exact physical message it answers.
+        // The last user message may be a retry whose physical id is not the
+        // Authority Root; only the durable Accepted record knows the root.
+        match assistant.ParentId with
+        | None -> ChildSnapshotEvidence.Unreadable "terminal assistant has no exact physical parent message"
+        | Some parentId ->
+            let physical = PhysicalUserMessageId.create parentId
+
+            match acceptedRootForPhysical ports physical with
+            | Error reason -> ChildSnapshotEvidence.Unreadable reason
+            | Ok authorityRoot ->
+                match admittedRoot ports authorityRoot with
+                | Error reason -> ChildSnapshotEvidence.Unreadable reason
+                | Ok() when not (deliveryWitnessed ports authorityRoot assistant) ->
+                    ChildSnapshotEvidence.Unreadable "restart terminal has no durable delivery witness"
+                | Ok() ->
+                    let runId = "run-restored-" + ports.AgentId
+                    let view = textOfParts assistant.Parts
+
+                    let agentOutcome =
+                        AgentCompletion.completed
+                            ports.AgentId
+                            ports.ChildSession
+                            runId
+                            ports.Role
+                            authorityRoot
+                            (ProviderRunIdentity.create assistant.Id)
+                            view
+                            None
+
+                    let body = HandleCompletionCodec.encodeOutcome runId agentOutcome
+
+                    ChildSnapshotEvidence.Terminal(
+                        TerminalEvidence.completed ports.AgentId ports.Handle ports.ChildSession body
+                    )
 
     let private snapshotFromMessages (ports: Ports) (messages: SessionMessage list) : ChildSnapshotEvidence =
         match lastByRole messages "assistant" with
         | None -> ChildSnapshotEvidence.Active
-        | Some assistant when isTerminalCompleted assistant -> terminalFromMessages ports messages assistant
+        | Some assistant when isTerminalCompleted assistant && not (userAfterLastAssistant messages) ->
+            terminalFromMessages ports assistant
         | Some _assistant ->
             // Mid-turn / non-terminal assistant: stream readable → still running.
             ChildSnapshotEvidence.Active

@@ -125,7 +125,6 @@ module ManagedAgentConfig =
         | Role.Engineer -> Some(StaticTools.engineerAgentConfig (Some prompts.EngineerSystemPrompt))
         | Role.DevOps -> Some(StaticTools.devopsAgentConfig (Some prompts.DevopsSystemPrompt))
         | Role.Plan -> Some(StaticTools.planAgentConfig (Some prompts.PlanSystemPrompt))
-        | Role.Advisor -> Some(StaticTools.advisorAgentConfig prompts.AdvisorSystemPrompt)
         | Role.Coder
         | Role.Inspector
         | Role.Browser

@@ -12,7 +12,7 @@ WHAT 拥有输入、提交与生命周期边界；本文只说明现有测试如
 | 017 | 真实用户消息保留规则（操作员用户消息永不删除且按序夹在 resetScope 之间，断言需重写适配 resetScope 语义）。 |
 | 019 | 辅助注入的 epoch 退休与 tentative horizon。 |
 | 023 | typed park 返回及取消；事件驱动依赖与 durable producer 判据仍待完整验证。 |
-| 030 | assume 调用与结果原样保留，所有后续 resetScope 也不能删去；与 negotiate、askPreviousScope、advisor 同组 [046]。 |
+| 030 | assume 调用与结果原样保留，所有后续 resetScope 也不能删去；与 negotiate、askPreviousScope 同组 [046]。 |
 | 031 | （条款已废止，编号永久空缺；原测试已删除） |
 | 032 | （条款已废止，编号永久空缺；原测试已删除） |
 | 033 | （待实现）resetScope 屏障执行、旧 scope 清理与操作员用户消息/成对 reset 结果保留。 |

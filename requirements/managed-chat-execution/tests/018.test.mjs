@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import * as recovery from '../../../dist/OpenCode/Host/SessionRecoveryHostSurface.js'
 import { withExecutablePlugin } from '../../verification-system/tests/support/plugin-fixture.mjs'
 
-// Field incident 2026-10-28 18:32 UTC (Manager ses_e7ed7cdb2ffe…): an Advisor answer
+// Field incident 2026-10-28 18:32 UTC (Manager ses_e7ed7cdb2ffe…): a consultation answer
 // arrived as user row msg_183c8b54d while the Host loop was still running; the Host
 // built assistant run msg_183c8b793 under it, and the transform died with
 // `MANAGED-CHAT-005 … frozen-attempt-plan-missing` because the process-local frozen

@@ -97,6 +97,12 @@ Load Phase 必须一次性结算上一 runtime 遗留、本进程无法继续持
 - 装载阶段不再有“预登记/预热”特例通道：同一件事只有一个按需规则，避免重启路径每多一处读取就多一处补丁；
 - 只有进程资源归属（本进程持有的 PTY、pending run、teardown 集合、live companion host）可以只读本地表；它们描述的是进程，而不是世界。
 
-## [022] pre-provider 子失败结算为 durable Failed，装载结算仍作废孤儿子工作
+## [023] 首条 admission 只等加载结算与本会话的遗留恢复
 
-pre-provider 的子失败必须结算为 durable `Failed` terminal：真实信号路径（`SessionRecoveryHost`）在真实磁盘 journal 上持久化该 terminal，冷重开后仍能按子身份（session + physical message）读回 `Failed`。装载结算（load settlement）对已被结算的孤儿子工作仍产生 `ChildWorkVoided`：父方视角子工作为 `Abandoned (Voided)`，子方 `Failed` 事实各自保留，重复结算幂等（不再追加任何事实）。`ChildWorkVoided` 幂等：同一子工作的重复结算不产生新事实。父方 Join wire 输出不在本条断言范围（无公开入口可从重开 journal 重建 drain 状态）。
+journal 恢复屏障（`RunOrAwaitRecovery`）只承载加载期的**持久结算**（作废 + 重启指导标记），不得混入宿主往返的 reconciliation——两者串在同一全局任务里时，无关会话的宿主应答一旦慢或悬而未决，第一条 admission（每条 `chat.message` 钩子的首步）就随之停滞，且屏障故障被吞进只在 dispose 才可见的后台失败位，恢复慢无从追究。
+
+- 屏障的真实失败向所有等待者诚实传播，并在同一调用者处清除：下一次调用重试幂等结算，不留下永久不可恢复的假死。上一代故障以诊断隔离（本代重新推导并结清其未结义务）。
+- 宿主往返的 reconciliation 拆到屏障之外：交付观察留在后台（与今日相同的后台失败约定）；重载扫描由恢复宿主**按会话**单飞（`ReloadSession`），后台逐会话启动，失败只隔离该会话并诚实记录；`DurabilityActivated` 的全局兜底扫描保持不变（每会话切片至多被它幂等重访）。
+- 第一条 admission 在 decode 之后等待「屏障 + 本会话自己的切片」，再进入身份判定与准入事务（`admissionSequence` 的同会话串行不变）；其准入看到的恢复裁决与本会话的遗留相互独立。
+
+回归：`tests/023.test.mjs` 以真实插件两个 incarnation 驱动——无关会话的 transcript 读被门控时，第一条 admission 仍完成（重载扫描按会话单飞，重）；本会话的遗留恢复先于其准入完成（保序，重基线亦绿）；无关会话的恢复不丢（释放其门控后切片仍结算）；journal 单元验证屏障故障诚实传播、等待者共享单飞、故障后重试（重：旧实现永陷陈旧故障）。

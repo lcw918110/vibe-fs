@@ -1,20 +1,0 @@
-[36m[build][0m Compiling F# (focused)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @battermann
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/42106f8812d7f536ba2f213dfaaa741d65df1a1ab365c4e7f0e5b551a9fdfa39/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (1552 source files) parsed in 921ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 45995ms
-
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Host/RequirementGrounding/Gate.fs(45,9): (45,31) error FSHARP: Module 'Wanxiangshu.OpenCode.Host.RequirementGrounding.RequirementGroundingGate' contains    val nativeReadObservations<'a> : toolName: string -> args: 'a -> output: obj -> GroundingFileRead list    but its signature specifies    val nativeReadObservations: toolName: string -> args: obj -> output: obj -> GroundingFileRead list    The respective type parameter counts differ (code 34)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

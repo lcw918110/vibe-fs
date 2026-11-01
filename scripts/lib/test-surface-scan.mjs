@@ -73,6 +73,10 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
   'requirements/work/tests/host/008.test.mjs',
   // Exact assistant terminal event -> typed lifecycle observer payload, including run identity.
   'requirements/managed-session-lifecycle/tests/029.test.mjs',
+  // Restart recovery canary: the test must construct the exact physical
+  // SessionMessage and ChatExecution.Accepted records and read the real
+  // journal projection to prove that a retry's physical id is not its root.
+  'requirements/delegation/tests/042.test.mjs',
   // Physical-exit canary: the child must reach the real Diagnostic.fatal and
   // FatalProcess.trip links — a wire-level invariant, not a test seam.
   'requirements/host-boundary/tests/fixtures/fatal-process-child.fixture.mjs',
@@ -319,11 +323,11 @@ export const SURFACE_MANIFEST = [
       'PAR-020',
       'PAR-021',
       'EFFECT-ACCOUNTING-004',
-      'VERIFICATION-SYSTEM-008',
+      'verification-system-008',
     ],
     lawOwners: {
       'EFFECT-ACCOUNTING-004': 'effect-accounting',
-      'VERIFICATION-SYSTEM-008': 'verification-system',
+      'verification-system-008': 'verification-system',
     },
     source: 'src/Wanxiangshu/Participant/Provider/Attempt/Fallback/ProviderFailureSurface.fs',
     representation: 'opaque-capability',
@@ -1513,7 +1517,7 @@ export const SURFACE_MANIFEST = [
   {
     module: 'Verification/TemporalSurface.js',
     owner: 'verification-system',
-    laws: ['VERIFICATION-SYSTEM-007'],
+    laws: ['verification-system-007'],
     source: 'src/Wanxiangshu/Verification/TemporalSurface.fs',
     representation: 'opaque-capability',
     kind: 'resource',
@@ -1548,8 +1552,7 @@ export const SURFACE_MANIFEST = [
   {
     module: 'OpenCode/Tools/ToolRuntimeScopeSurface.js',
     owner: 'work',
-    laws: ['WORK-009', 'WORK-044', 'advisor-005', 'advisor-007'],
-    lawOwners: { 'advisor-005': 'advisor', 'advisor-007': 'advisor' },
+    laws: ['WORK-009', 'WORK-044'],
     source: 'src/Wanxiangshu/OpenCode/Tools/ToolRuntimeScopeSurface.fs',
     representation: 'json',
     kind: 'resource',

@@ -94,13 +94,15 @@ Attempt/TurnAborted、provider failure/retry、Fission、插件卸载、进程 s
 
 ## [020] Fresh identity 先关闭旧 run
 
-复用 SessionId 安装新身份前，依次完成 exact execution settlement、受权 child drain、`interaction-authority` 的 durable exact prior-run closure，并取得匹配 witness。association removal、detach、idle、timeout、Host observation、restart 都不能替代；缺证或 run 不匹配则拒绝。
+复用 SessionId 安装新身份前，依次完成 exact execution settlement、受权 child drain、`interaction-authority` 的 durable exact prior-run closure，并取得匹配的关闭记录。association removal、detach、idle、timeout、Host observation、restart 都不能替代；缺记录或 run 不匹配就拒绝。
 
-本轮接线验证：Manager 唯一 `review` 的 `Completed` 后置 stop effect 在已提交的 Work 中读取 `completedClosureId` 确切 retirement witness，调用共享 Journal 的 `appendAuthorityLogicalRunClosed`；`Relayed`、Plan 或缺少 exact retirement 时不得清除身份。原始 Work 领域直写的测试夹具必须显式调用同一官方窄口，不能将里程碑字串冒充 authority 已关闭。`requirements/work/tests/009.test.mjs` 验证真实注册 review 工具完成后 activeLogicalRun 为 null；`tests/020.test.mjs` 验证同 SessionId 的新身份和冷重开。
+Manager 唯一 `review` 的 `Completed` 后置 stop effect 在已提交的 Work 中读 `completedClosureId`，调用共享 Journal 的 `appendAuthorityLogicalRunClosed`；`Relayed`、Plan 或缺少 exact retirement 时不清除身份。Work 领域的测试夹具要显式调用同一官方窄口，不能用里程碑字符串冒充 authority 已关闭。
+
+测试：`requirements/work/tests/009.test.mjs` 与 `tests/020.test.mjs`。
 
 ## [021] Lifecycle fatal
 
-Session delete、turn observation 或 strength semantic-cut incident 先完成其要求的 exact settlement、child drain 与 durable closure，再使用 composition 注入的 mandatory fatal capability。detach 不授权 fatal，不直接使用 physical adapter 或 optional/default/global fallback；同一 incident 至多一次 report/kill，不伪造 session terminal 或 child abandon。
+Session delete、turn observation 或 strength semantic-cut incident 先完成它要求的 exact settlement、child drain 与 durable closure，再用 composition 注入的 mandatory fatal capability。detach 不授权 fatal，不直接用 physical adapter，也不设 optional/default/global 兜底；同一 incident 至多一次 report/kill，不伪造 session terminal 或 child abandon。
 
 ## [022] Inspector finalize 的结算边界
 
@@ -122,7 +124,9 @@ Finalize 恒带 exact Inspector identity，commitment 闭合为 `Finalized | Not
 
 ## [025] DevOps 每次工作返回即排空 PTY
 
-固定 DevOps 每次 run 终态结算，立即收束其拥有的全部 PTY：TERM 后等待真实退出，必要时升级 KILL，随后清除记账。不得留到下次 resume，不因 Manager 退休触发，不影响其他会话的资源和生命周期。
+固定 DevOps 每次 run 终态结算后立即收束它拥有的全部 PTY：TERM 后等真实退出，必要时升级 KILL，再清记账。不留到下次 resume，不因 Manager 退休触发，也不影响其他会话的资源与生命周期。
+
+**程序待改**：端口级用例只到受控 PTY 端口边界，「TERM 后真实退出并按需升级 KILL」的物理一半仍是 `test.todo`，见 tests/README。
 
 ## [026] Main 收束级联 Attached InternalLeaf 的 execution 结算
 
@@ -147,7 +151,7 @@ Session 收束（`PluginSessionScope.ClearSession`，覆盖宿主 `SessionDelete
 
 ## [028] Child 终态结算必须可观察
 
-child run 已在 journal 中证实的 Terminal 事实必须总能转化为一次可观察的 settlement。结算路径的任何故障都不得让父 join 陷入无界等待，也不得只靠 shutdown 取消收场。
+child run 已在 journal 中确认的 Terminal 事实必须能变成一次可观察的 settlement。结算路径出任何故障，都不能让父 join 无界等待，也不能只靠 shutdown 取消收场。
 
 - 允许后果：交付视图读取故障时降级为空视图继续结算，已完成的 child 仍写入可 join 的 `CompletedAwaitingJoin`，owner 的交付视图不因读取失败丢失。结算本身故障时，该 run 的唯一 completion promise 以显式 joinable 失败解决，join 消费到明确 outcome（完成、失败或取消），不静默，不搁浅 Source。
 - PERSIST 形态：Source 结算为 PERSIST 失败而 durable work 仍 Active 时，join 经 pending Source 浮现该失败，不挂等 journal revision 前进；未知 durable commit 不放行新工作，durable work 保持 Active，不得伪装成成功或按完成释放。
@@ -158,10 +162,19 @@ child run 已在 journal 中证实的 Terminal 事实必须总能转化为一次
 
 Engineer/DevOps 的自然停止必须使父 join 取得一次真正可消费的完成事实。宿主确切观察到相同物理请求的 assistant message.updated（完成时间、合法 stop/length/content-filter 结尾）以及有 ProviderStarted 证据且 durable 提交成功的 ChatExecution.Terminal(Completed) 后，可以使用现有带代际和在途工具检查的 SessionQuiescenceGate permit 唤醒 Reconcile；不得额外要求另一个可能丢失的粗粒度 session.idle 才结算子任务。后续 session.idle 应幂等。
 
-此规则只处理已证实的精确当前 Completed。旧物理 parent、superseded run、Cancelled/Failed、未完成的工具、没有匹配 ProviderStarted 的伪消息均不得产生完成证明。终态归属与持久写入仍由已有 Host/Fork owner 验证，不能按时间或进程存活猜测完成。
+此规则只处理已确认的精确当前 Completed。旧物理 parent、superseded run、Cancelled/Failed、未完成的工具、没有匹配 ProviderStarted 的伪消息都不能产生完成。终态归属与持久写入仍由既有 Host/Fork owner 核对，不按时间或进程存活猜完成。
 
-本轮定位与修复：HostEventCodec 的 `tryDecodeExactProviderStart` 明确排除含 `time.completed` 的消息；HostSignalRouter 原先只在这个 start decoder 成功时才调用 exact lifecycle callback，因此真正独立送达的 assistant terminal 被吞掉。现在路由器优先保留真实 Start，否则直接使用已解码并携全套确切 `(SessionId, PhysicalUserMessageId, ProviderRunId)` 的 Terminal 作为同一生命周期回调的身份，不从当前 Session 猜一个 run。`tests/029.test.mjs` 同时覆盖路由器最小红绿与真实 fork→Join，不靠额外 idle。
+HostEventCodec 的 `tryDecodeExactProviderStart` 排除含 `time.completed` 的消息；HostSignalRouter 原先只在 start decoder 成功时才调 exact lifecycle callback，于是真正独立送达的 assistant terminal 被吞掉。现在路由器优先保留真实 Start，否则直接用已解码、带全套 `(SessionId, PhysicalUserMessageId, ProviderRunId)` 的 Terminal 作为同一生命周期回调的身份，不从当前 Session 猜 run。
 
-真实事故（2026-10-25 UTC）：21:25 父 Manager resume(backport-runtime) 后 join；该子 Engineer 21:28:28 将 ChatExecution.Terminal(Completed) 写入 event sourcing 且有非空终态正文，但父 HandleWorkCompleted 从未追加，Join 停留在 external:child-completion。不能对磁盘日志直接补造 completion。
+测试：`tests/029.test.mjs` 覆盖路由器与真实 fork→Join（故意不发 `session.idle`；旧实现 JOIN-HUNG，修复后父 join 拿到报告与 Retired 墓碑；不同 physical parentID 的伪 Completed 不结算）。`host-boundary/tests/005.test.mjs` 与 `tests/028.test.mjs` 另守身份、失败与未知持久化结果不被当成成功。
 
-先红后绿的物理证明：tests/029.test.mjs 从真实 fork 到新 assistant message.updated 的自然 stop，故意不发送 session.idle：旧实现得到 JOIN-HUNG，精确终态唤醒修复后得到父 join 的真实报告与 Retired 墓碑。不同 physical parentID 的伪 Completed 不结算。host-boundary/tests/005.test.mjs 与 tests/028.test.mjs 进一步保护身份/失败与未知持久化结果不被伪成功。
+
+## [030] 会话级取消结算必须归还保留信用，取消 drain 才能收敛
+
+会话级结算入口（`SessionRecoveryHost.SignalSession`，承载 `SessionCancelled`/`SessionDeleted` 的逐 key 结算）在结算完该会话全部 key 之后，必须取消该 session 名下全部 retained continuation input 并完成由此解锁的旧 exact capacity 归还（[027] 的同一操作在取消链上的落地），然后脉冲 drain。
+
+- 真实事故（2026-10-30 UTC）：父 `ses_e744ea0b5ffeHmjXtfLQPgI266`（Manager）在 join；子 `ses_e744e6b7effeTdACLz9fwBjugt`（devops）08:49:42.968 ProviderStarted、08:49:43.142 Cancelled，此后无 continuation claim、无 HandleCompleted/Abandoned，父 join 长期等待；宿主日志 08:49:43.180 后整体静默。被取消（而非删除）的会话，其终态执行的确切信用被保留输入持有（`HeldForInput`，`observePhysicalResource` 报 `ResourceHeld`），`sessionDrained` 永不成立，`drainTermination`/`DrainChatRecovery` 的 `Drain` 无限等待——共享信号管线上的第一条后续 admission 随之停滞。
+- 允许后果：与 [027] 相同——只取消该 session 名下的保留，按 exact `admissionOwner.ReleasePhysical` 路径回放挂起的旧 key 归还；最后一份保留撤销后旧 credit 立即归还；归还完成后旧 execution 不得再出现在 shared capacity 快照中。取消 drain 只在「逐 key 已结算 + 信用已归还」后脉冲完成。
+- 禁止后果：不取消其他 session 的保留；不使用 `ReleaseExecution`/`ReleaseSession` 等 force 路径；不对未结算执行（非终态或 manual intervention）谎报 drain——`Drain` 的等待语义不变。取消未必意味着工作失败：本条不写任何新 Terminal、不改写既有终态、不放弃任何未结算义务；保留未取消时不得宣称归还完成。
+- 失败后果：保留取消回放对 `AlreadyApplied`/`StaleFence` 幂等接受（视同归还完成并清除挂起记录）；对 `Conflict` 不得吞没——以带 exact key 信息的 `InvalidOperationException` 显式暴露，保留挂起记录，使「取消已完成、归还未完成」不被静默改写。重复结算幂等：保留已取消时无第二次释放副作用。
+- 回归：`tests/030.test.mjs` 在真实 journal 与真实共享 capacity 上驱动保留输入持有信用的会话级取消：drain 必须收敛（而非挂起）、终态保持唯一 Cancelled、旧 credit 归还、无关会话的租约与事实原样不动。

@@ -1012,8 +1012,6 @@ Interaction/Repair/InteractionRepair.fsi
 Interaction/Repair/InteractionRepair.fs
 Composition/Turn/OrdinaryTurnWorkflow.fsi
 Composition/Turn/OrdinaryTurnWorkflow.fs
-Execution/Delegation/Advisor/Seat.fsi
-Execution/Delegation/Advisor/Seat.fs
 OpenCode/Host/HostCompactionGate.fsi
 OpenCode/Host/HostCompactionGate.fs
 Context/Prefix/AttemptSettlement.fsi

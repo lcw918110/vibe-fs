@@ -1,6 +1,0 @@
-Mach Virtual Memory Statistics: (page size of 16384 bytes)
-    free   active   specul inactive throttle    wired  prgable   faults     copy    0fill reactive   purged file-backed anonymous cmprssed cmprssor  dcomprs   comprs  pageins  pageout  swapins swapouts
-    5715   164765      581   163640        0   382059        2   25429M  510154K   12133M 9967642K 2835447K      104405    224581  3822752   422684   11791M   12356M  719597K 16159384  160735K  169053K 
-    5340   164098      728   162004        0   387319       16    39531      317    13623    33234      430      104645    222185  3820848   419155    26191    24404      224        1        4        0 
-The system has 19327352832 (1179648 pages with a page size of 16384).
-System-wide memory free percentage: 29%

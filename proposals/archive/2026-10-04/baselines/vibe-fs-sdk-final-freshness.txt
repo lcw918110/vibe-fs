@@ -1,9 +1,0 @@
-{
-  "ok": true,
-  "generation": 94,
-  "sources": 1796,
-  "artifacts": 885,
-  "compilerInputDigest": "961502eed90eb916c5a07d28d109e2c51f0ca0f1890fee44d42f35d1705d2a61",
-  "generatedInputDigest": "7372cc8c1cf19e9c558d9de82cd7901812d7683f7e410bd08a77484d8278c2fa",
-  "artifactInputDigest": "e534b5e353d9446399e769473c958b0a29ad4421c914c6a39877ab53e2d067c6"
-}

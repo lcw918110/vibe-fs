@@ -91,7 +91,7 @@ export function check(context) {
   }
 
   // Verify revoked package nodes are completely removed
-  const REVOKED_PACKAGES = ['external-investigation', 'output-distillation']
+  const REVOKED_PACKAGES = ['external-investigation', 'output-distillation', 'advisor']
   for (const revoked of REVOKED_PACKAGES) {
     const node = nodes.nodes.find((n) => n.id === revoked)
     if (node) {

@@ -10,7 +10,7 @@ const call = [{type:'tool-call',callID:'call-24',tool:'read',args:'{}'}]
 
 test('WHAT[interaction-authority-024] every role rejects textless tool-free stop and must be repairable', () => {
   const roles=['manager','plan','orchestrator','engineer','devops','coder',
-    'inspector','browser','inquiry','advisor','distiller','']
+    'inspector','browser','inquiry','distiller','']
   for(const role of roles) {
     for(const parts of [[],prose(' \t\n '),thinking('private reasoning only')]) {
       const outcome=classifyOutcome(true,'stop',null,parts)
@@ -42,7 +42,7 @@ test('WHAT[interaction-authority-024] OpenCode step markers are not a tool call:
   const shells=[[step('step-start'),step('step-finish')],
     [step('step-start'),{type:'reasoning',text:'only thinking'},step('step-finish')],
     [step('step-start'),{type:'text',text:'  \n'},step('step-finish')]]
-  for(const role of ['engineer','devops','advisor','manager','']) {
+  for(const role of ['engineer','devops','manager','']) {
     for(const parts of shells) {
       assert.equal(classifyOutcome(true,'stop',null,parts).kind,'TurnNeedsContinuation',
         role+': a step-wrapped empty stop is no closing report')
