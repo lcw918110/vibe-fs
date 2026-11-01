@@ -1,15 +1,29 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { parse } from 'smol-toml'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { FSharpResult$2_Ok as ok } from '@fable-org/fable-library-js/Result.js'
 import { succeeded } from '../../../dist/Repository/Knowledge/Casebook/BookkeeperPolicy.js'
 import { ProviderLanguageModule_parse } from '../../../dist/Participant/Provider/Language.js'
 import * as returned from '../../../dist/Foundation/ReturnedMaterial.js'
 import * as delivered from '../../../dist/Repository/Programming/Js/DeliveredValues.js'
 import * as completionCodec from '../../../dist/Execution/Delegation/Handle/CompletionCodec.js'
 import * as join from '../../../dist/Execution/Delegation/Fork/JoinSurface.js'
+import { AgentCompletion_completed } from '../../../dist/Execution/Session/AgentCompletion.js'
+import { AgentJournalPort } from '../../../dist/Execution/Delegation/JournalPort.js'
+import { HandleCompletion, HandleLifecycle, HandleRecord } from '../../../dist/Execution/Delegation/LinkageProjection.js'
+import { HandleCompletionKind, HandleOwnership, HandleWorkId } from '../../../dist/Execution/Delegation/Facts.js'
+import { Role } from '../../../dist/Foundation/Roles.js'
 import {
+  AgentHandleIdModule_create as agentHandle,
+  AuthorityRootUserMessageIdModule_create as authorityRoot,
+  BlobDigestModule_create as blobDigest,
+  BlobRefModule_create as blobRef,
+  BlobRefModule_value as blobRefValue,
+  HandleId,
   ProviderRunIdentityModule_create as providerRun,
+  SessionIdModule_create as sessionId,
+  SessionIdModule_value as sessionValue,
   ToolCallIdModule_create as toolCall,
 } from '../../../dist/Foundation/Identity.js'
 
@@ -41,7 +55,7 @@ test('llm-text integration: ReturnedMaterial presentation preserves canonical st
   assert.equal(returned.renderBody(stored), '# Report\n# Keep this decision.\n')
 })
 
-test('returned-material integration: fenced delivery retains canonical storage through completion decoding and Join presentation', () => {
+test('returned-material integration: fenced delivery retains canonical storage through completion writing, reading and Join presentation', async () => {
   const session = `returned-material-composition-${randomUUID()}`
   const run = providerRun('returned-material-run')
   const call = toolCall('returned-material-call')
@@ -61,23 +75,50 @@ test('returned-material integration: fenced delivery retains canonical storage t
     assert.equal(stored, expectedStored)
     assert.equal(delivered.ownsCell(session, run, call), false)
 
-    const completionBody = JSON.stringify({
-      schemaVersion: 4,
-      finality: 'completed',
-      run_id: 'returned-material-run',
-      view: stored,
-      child_session_id: session,
-      authority_root: 'returned-material-root',
-      provider_run: 'returned-material-run',
-      directory: '',
-    })
-    const decoded = completionCodec.decodeBody(completionBody)
-    assert.equal(decoded.cases()[decoded.tag], 'Current')
-    const current = decoded.fields[0]
-    assert.equal(current.cases()[current.tag], 'CompletedV2')
-    const payload = current.fields[0]
+    const child = sessionId(session)
+    const root = authorityRoot('returned-material-root')
+    const outcome = AgentCompletion_completed(session, child, 'returned-material-run', Role.Engineer, root, run, stored, undefined)
+    const completionBody = completionCodec.encodeOutcome('returned-material-run', outcome)
+    assert.equal(JSON.parse(completionBody).schemaVersion, 4)
+    assert.equal(JSON.parse(completionBody).view, expectedStored)
+
+    const sha256 = body => createHash('sha256').update(body, 'utf8').digest('hex')
+    const reference = blobRef('returned-material-completion')
+    const completion = new HandleCompletion(HandleCompletionKind.Terminal, reference, blobDigest(sha256(completionBody)))
+    const handle = new HandleId(0, [agentHandle(session)])
+    const record = new HandleRecord(
+      handle, child, 'Ada', 'Ada', Role.Engineer, HandleOwnership.DurableParentHandle,
+      new HandleLifecycle(1, [completion]), 0, completion, new HandleWorkId(handle, child, root),
+    )
+    const calls = []
+    const unused = () => assert.fail('completion reading must not call another journal capability')
+    const journal = new AgentJournalPort(
+      unused, unused,
+      async value => {
+        calls.push('read')
+        assert.equal(blobRefValue(value), blobRefValue(reference))
+        return ok(completionBody)
+      },
+      unused, unused,
+      body => {
+        calls.push('digest')
+        assert.equal(body, completionBody)
+        return sha256(body)
+      },
+      unused,
+    )
+    const completedAt = new Date('2026-11-01T00:00:00.000Z')
+    const read = await completionCodec.tryRead(journal, record, session, completedAt)
+    assert.equal(read.cases()[read.tag], 'Ok')
+    assert.deepEqual(calls, ['read', 'digest'])
+    const restored = read.fields[0]
+    assert.equal(restored.AgentName, 'Ada')
+    assert.equal(restored.Role, Role.Engineer)
+    assert.equal(restored.CompletedAt, completedAt)
+    assert.equal(restored.Outcome.cases()[restored.Outcome.tag], 'AgentCompleted')
+    const payload = restored.Outcome.fields[0]
     assert.equal(payload.View, expectedStored)
-    assert.equal(payload.ChildSessionId, session)
+    assert.equal(sessionValue(payload.ChildSessionId), session)
 
     const [body] = Array.from(returned.body(payload.View))
     const wire = join.renderBatch('en', [{
