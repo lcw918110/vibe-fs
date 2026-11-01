@@ -29,6 +29,10 @@ open Wanxiangshu.Persistence.Journal
 /// tool adapter only decodes the call and encodes the outcome.
 module FissionLaunch =
 
+    [<Import("FissionLifecycle", "wanxiangli/fission-group")>]
+    let private lifecycleClass: obj = jsNative
+    let private lifecycle: obj = createNew lifecycleClass ()
+
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let private fissionRuntime: obj = jsNative
     [<Emit("$0 === undefined")>]
@@ -97,320 +101,116 @@ module FissionLaunch =
         |> LlmFacing.withData [ LlmFacing.Data.stringField "completion_id" completionId ]
         |> LlmFacing.render
 
-    let private capturedGroup (durable: AgentJournal) groupId =
-        FissionProjection.tryGroup groupId (AgentJournal.snapshot durable).AgentProjections.Fission
-
-    let private appendDelivery (durable: AgentJournal) owner providerRun groupId completionId laneIndex =
-        appendFission
-            durable
-            owner
-            providerRun
-            (FissionFact.FissionCompletionDelivered
-                {| GroupId = groupId
-                   OwnerSessionId = owner
-                   CompletionId = completionId
-                   LaneIndex = laneIndex |})
-
-    /// A failed delivered-fact append is reported, not raised: the lane already
-    /// received (or closed before) the completion.
-    let private appendDeliveryReported durable owner groupId completionId laneIndex =
+    let private nativeResult convert (operation: Task<Result<'a, string>>) =
         task {
-            let! appended = appendDelivery durable owner None groupId completionId laneIndex
-
-            match appended with
-            | Error failure ->
-                Diagnostic.emit
-                    "fission-delivery-fact-append-failed"
-                    [ "session_id", SessionId.value owner
-                      "result",
-                      sprintf
-                          "fission completion delivered fact append failed: group=%s completion=%s lane=%d reason=%s"
-                          groupId
-                          completionId
-                          laneIndex
-                          failure ]
-            | Ok() -> ()
+            let! answer = operation
+            return
+                match answer with
+                | Ok value -> createObj [ "ok" ==> true; "value" ==> convert value ]
+                | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
         }
 
-    /// A failed captured-fact append is reported, not raised: the completion
-    /// blob is already durable.
-    let private appendCaptureReported durable owner groupId completionId blob =
+    let private appendCompletion (durable: AgentJournal) (fact: obj) =
+        let owner = SessionId.create(unbox fact?owner)
+        let event =
+            if string fact?kind = "completionCaptured" then
+                FissionFact.FissionCompletionCaptured
+                    {| GroupId = unbox fact?groupId
+                       OwnerSessionId = owner
+                       CompletionId = unbox fact?completion
+                       PayloadRef = BlobRef.create(unbox fact?reference)
+                       PayloadDigest = BlobDigest.create(unbox fact?digest) |}
+            else
+                FissionFact.FissionCompletionDelivered
+                    {| GroupId = unbox fact?groupId
+                       OwnerSessionId = owner
+                       CompletionId = unbox fact?completion
+                       LaneIndex = unbox fact?laneIndex |}
+        appendFission durable owner None event |> nativeResult box
+
+    let private sendSharedCompletion (port: FissionHostPort) (durable: AgentJournal) (request: obj) (lane: obj) =
         task {
-            let! appended =
-                appendFission
-                    durable
-                    owner
-                    None
-                    (FissionFact.FissionCompletionCaptured
-                        {| GroupId = groupId
-                           OwnerSessionId = owner
-                           CompletionId = completionId
-                           PayloadRef = blob.BlobRef
-                           PayloadDigest = blob.BlobDigest |})
-
-            match appended with
-            | Error failure ->
-                Diagnostic.emit
-                    "fission-capture-fact-append-failed"
-                    [ "session_id", SessionId.value owner
-                      "result",
-                      sprintf
-                          "fission completion captured fact append failed: group=%s completion=%s reason=%s"
-                          groupId
-                          completionId
-                          failure ]
-            | Ok() -> ()
-        }
-
-    let private writeAndAppendCapture (durable: AgentJournal) owner groupId completionId payload =
-        task {
-            match! durable.WriteBlob payload with
-            | Error reason ->
-                Diagnostic.emit
-                    "fission-capture-write-failed"
-                    [ "session_id", SessionId.value owner
-                      "result",
-                      sprintf
-                          "fission completion capture blob write failed: group=%s completion=%s reason=%s"
-                          groupId
-                          completionId
-                          reason ]
-
-                return ()
-            | Ok blob -> do! appendCaptureReported durable owner groupId completionId blob
-        }
-
-    let private ensureCompletionCaptured (durable: AgentJournal) owner groupId completionId payload =
-        task {
-            match
-                capturedGroup durable groupId
-                |> Option.bind (fun group -> Map.tryFind completionId group.CapturedCompletions)
-            with
-            | Some _ -> return ()
-            | None -> return! writeAndAppendCapture durable owner groupId completionId payload
-        }
-
-    let private deliveryState (durable: AgentJournal) groupId completionId (lane: FissionStartedLane) =
-        match capturedGroup durable groupId with
-        | None -> true, true
-        | Some group ->
-            let delivered =
-                group.CompletionDeliveries
-                |> Map.tryFind completionId
-                |> Option.defaultValue Set.empty
-                |> Set.contains lane.Index
-
-            delivered, Map.containsKey lane.Index group.LaneWork
-
-    let private continueLiveLane
-        (port: FissionHostPort)
-        (durable: AgentJournal)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
-        (groupId: string)
-        (owner: SessionId)
-        (lane: FissionStartedLane)
-        (completionId: string)
-        (payload: string)
-        =
-        task {
-            let laneProfile =
-                PromptAuthorityProjectionQueries.activeProfile
-                    lane.SessionId
-                    (AgentJournal.snapshot durable).AgentProjections
-
-            match laneProfile with
-            | None -> return ()
-            | Some activeLaneProfile ->
+            let session = SessionId.create(unbox lane?session)
+            let authority =
+                PromptAuthorityProjectionQueries.activeProfile session (AgentJournal.snapshot durable).AgentProjections
+            match authority with
+            | None -> return Ok false
+            | Some profile ->
                 let dispatcher = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
-
-                match!
+                let! sent =
                     dispatcher.SendContinuation
                         (DispatchSessionPort.ofSessionPort port.Sessions)
-                        lane.SessionId
-                        (deliveryPrompt owner completionId payload)
+                        session
+                        (deliveryPrompt (SessionId.create(unbox request?owner)) (unbox request?completion) (unbox request?payload))
                         PromptAuthority.ContinuationKind.FissionHandoff
-                        activeLaneProfile
-                        (port.DirectoryFor lane.SessionId)
+                        profile
+                        (port.DirectoryFor session)
                         PromptDispatcher.AwaitMode.Detached
                         None
-                with
-                | Error reason ->
-                    Diagnostic.emit
-                        "fission-send-failed"
-                        [ "session_id", SessionId.value lane.SessionId
-                          "result",
-                          sprintf
-                              "fission shared completion send failed: group=%s completion=%s lane=%d reason=%s"
-                              groupId
-                              completionId
-                              lane.Index
-                              reason ]
-
-                    return ()
-                | Ok _ ->
-                    do! appendDeliveryReported durable owner groupId completionId lane.Index
-
-                    return ()
+                return sent |> Result.map (fun _ -> true)
         }
+        |> nativeResult box
 
-    let private deliverLaneBody
-        (port: FissionHostPort)
-        (durable: AgentJournal)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
-        (groupId: string)
-        (owner: SessionId)
-        (lane: FissionStartedLane)
-        (completionId: string)
-        (payload: string)
-        (laneClosed: bool)
-        =
-        task {
-            if laneClosed then
-                do! appendDeliveryReported durable owner groupId completionId lane.Index
+    let private reportBroadcast kind (request: obj) (detail: obj) =
+        let owner: string = unbox request?owner
+        let group: string = unbox request?id
+        let completion: string = unbox request?completion
+        let error: string = unbox detail?error
+        let event, session, message =
+            match kind with
+            | "capture-write" ->
+                "fission-capture-write-failed", owner,
+                sprintf "fission completion capture blob write failed: group=%s completion=%s reason=%s" group completion error
+            | "capture-append" ->
+                "fission-capture-fact-append-failed", owner,
+                sprintf "fission completion captured fact append failed: group=%s completion=%s reason=%s" group completion error
+            | "delivery-append" ->
+                "fission-delivery-fact-append-failed", owner,
+                sprintf "fission completion delivered fact append failed: group=%s completion=%s lane=%d reason=%s"
+                    group completion (unbox<int> detail?lane) error
+            | "shared-send" ->
+                "fission-send-failed", unbox detail?session,
+                sprintf "fission shared completion send failed: group=%s completion=%s lane=%d reason=%s"
+                    group completion (unbox<int> detail?lane) error
+            | _ ->
+                "fission-broadcast-failed", owner,
+                sprintf "fission shared completion broadcast failed: group=%s completion=%s error=%s" group completion error
+        Diagnostic.emit event [ "session_id", session; "result", message ]
 
-                return ()
-            else
-                return! continueLiveLane port durable profile groupId owner lane completionId payload
-        }
-
-    let private deliverLaneGuarded
-        (port: FissionHostPort)
-        (durable: AgentJournal)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
-        (groupId: string)
-        (owner: SessionId)
-        (lane: FissionStartedLane)
-        (completionId: string)
-        (payload: string)
-        (laneClosed: bool)
-        =
-        task {
-            try
-                do! deliverLaneBody port durable profile groupId owner lane completionId payload laneClosed
-            finally
-                fissionRuntime?endDelivery (groupId, completionId, lane.Index)
-        }
-
-    let private deliverOneLane
-        (port: FissionHostPort)
-        (durable: AgentJournal)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
-        (groupId: string)
-        (owner: SessionId)
-        (completionId: string)
-        (payload: string)
-        (lane: FissionStartedLane)
-        =
-        task {
-            let alreadyDelivered, laneClosed = deliveryState durable groupId completionId lane
-
-            if
-                alreadyDelivered
-                || not (fissionRuntime?tryBeginDelivery (groupId, completionId, lane.Index))
-            then
-                return ()
-            else
-                return! deliverLaneGuarded port durable profile groupId owner lane completionId payload laneClosed
-        }
-
-    let private readyExceptForRetirement (durable: AgentJournal) groupId =
-        capturedGroup durable groupId
-        |> Option.exists FissionProjection.convergenceReady
-
-    let private convergeWithScope (port: FissionHostPort) (durable: AgentJournal) (owner: SessionId) (groupId: string) =
-        task {
-            let _, beforeRevision = durable.SnapshotWithRevision
-
-            let directoryFor sessionId = port.DirectoryFor sessionId
-
-            let! converged = FissionHost.tryConverge port.Sessions durable directoryFor owner
-
-            if converged then
-                return ()
-            elif not (readyExceptForRetirement durable groupId) then
-                return ()
-            else
-                let! _ = durable.AwaitChangeFrom beforeRevision
-                let! _ = FissionHost.tryConverge port.Sessions durable directoryFor owner
-                return ()
-        }
-
-    let private convergeOwnerIfNeeded (port: FissionHostPort) durable owner groupId =
-        task {
-            match port.Events with
-            | None -> return ()
-            | Some _ -> return! convergeWithScope port durable owner groupId
-        }
-
-    let private deliverAllLaneCompletions
-        (port: FissionHostPort)
-        (durable: AgentJournal)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
-        (groupId: string)
-        (owner: SessionId)
-        (lanes: FissionStartedLane list)
-        (completionId: string)
-        (payload: string)
-        =
-        task {
-            for lane in lanes |> List.sortBy (fun lane -> lane.Index) do
-                do! deliverOneLane port durable profile groupId owner completionId payload lane
-        }
-
-    let private broadcastAfterBegin
-        (port: FissionHostPort)
-        (durable: AgentJournal)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
-        (groupId: string)
-        (owner: SessionId)
-        (lanes: FissionStartedLane list)
-        (completionId: string)
-        (payload: string)
-        =
-        let broadcast =
-            task {
-                do! ensureCompletionCaptured durable owner groupId completionId payload
-                do! deliverAllLaneCompletions port durable profile groupId owner lanes completionId payload
-                do! convergeOwnerIfNeeded port durable owner groupId
-            }
-
-        task {
-            try
-                do! broadcast
-            with ex ->
-                Diagnostic.emit
-                    "fission-broadcast-failed"
-                    [ "session_id", SessionId.value owner
-                      "result",
-                      sprintf
-                          "fission shared completion broadcast failed: group=%s completion=%s error=%s"
-                          groupId
-                          completionId
-                          ex.Message ]
-
-            fissionRuntime?endDelivery (groupId, completionId, -1)
-        }
-
-    /// Capture exactly one canonical payload for a pre-Fission completion, then
-    /// account/deliver that same payload once per lane. Closed lanes are accounted
-    /// through the durable group closure; live lanes also receive a same-run
-    /// continuation. No per-lane view copy is created.
     let private captureAndBroadcast
         (port: FissionHostPort)
         (durable: AgentJournal)
-        (profile: PromptAuthority.AuthorityExecutionProfile)
+        (_profile: PromptAuthority.AuthorityExecutionProfile)
         (groupId: string)
         (owner: SessionId)
         (lanes: FissionStartedLane list)
         (completionId: string)
         (payload: string)
-        =
-        task {
-            if not (fissionRuntime?tryBeginDelivery (groupId, completionId, -1)) then
-                return ()
-            else
-                return! broadcastAfterBegin port durable profile groupId owner lanes completionId payload
-        }
+        : Task<unit> =
+        let request =
+            createObj
+                [ "id" ==> groupId
+                  "owner" ==> SessionId.value owner
+                  "completion" ==> completionId
+                  "payload" ==> payload
+                  "lanes" ==> (lanes |> List.map (fun lane ->
+                      createObj [ "index" ==> lane.Index; "session" ==> SessionId.value lane.SessionId; "prompt" ==> lane.Prompt ]) |> List.toArray) ]
+        let effects =
+            createObj
+                [ "history" ==> (fun () -> FissionProjection.native (AgentJournal.snapshot durable).AgentProjections.Fission)
+                  "writeBlob" ==> (fun text -> durable.WriteBlob text |> nativeResult (fun receipt ->
+                      createObj [ "reference" ==> BlobRef.value receipt.BlobRef; "digest" ==> BlobDigest.value receipt.BlobDigest ]))
+                  "append" ==> (fun fact -> appendCompletion durable fact)
+                  "sendShared" ==> (fun request lane -> sendSharedCompletion port durable request lane)
+                  "canConverge" ==> port.Events.IsSome
+                  "revision" ==> (fun () -> snd durable.SnapshotWithRevision)
+                  "awaitChange" ==> (fun revision -> task {
+                      let! _ = durable.AwaitChangeFrom revision
+                      return () })
+                  "converge" ==> (fun owner ->
+                      FissionHost.tryConverge port.Sessions durable (fun session -> port.DirectoryFor session) (SessionId.create owner))
+                  "report" ==> (fun kind request detail -> reportBroadcast kind request detail) ]
+        lifecycle?broadcast (request, effects)
 
     let private payloadFromView view fallback =
         match view with

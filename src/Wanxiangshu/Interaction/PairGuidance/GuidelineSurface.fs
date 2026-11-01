@@ -48,7 +48,7 @@ module GuidelineSurface =
     let private stateToJs (state: GuidelineProjectionState) : obj =
         box
             {| pairs = GuidelineProjection.pairs state |> List.map pairToJs |> List.toArray
-               visibleFromOrdinal = state.VisibleFromOrdinal |}
+               visibleFromOrdinal = GuidelineProjection.visibleFromOrdinal state |}
 
     let private pairOfJs (value: obj) : PairProgrammingGuideline =
         { Ordinal = int64Value value?ordinal

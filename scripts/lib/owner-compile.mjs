@@ -377,7 +377,7 @@ function discoverOwnerProjects(projectDirectory, aggregatePath) {
   }
 
   return fs.readdirSync(resolvedDirectory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.fsproj'))
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.fsproj') && !/^Wanxiangshu\.Impact\.[0-9a-f]{64}\.fsproj$/.test(entry.name))
     .map((entry) => norm(path.join(resolvedDirectory, entry.name)))
     // Exclude the wrapper aggregate by identity (caller may still pass its
     // path during the migration window) AND by content marker when the
@@ -1126,11 +1126,17 @@ export function materializeOwnerCompile(plan, {
   const generatedProjectDir = outputDir
     ? norm(path.join(flatAnchor, '.fable-build/output-compile', restoreFingerprint))
     : norm(path.join(resolvedScratchRoot, `project-${restoreFingerprint}`))
-  const generatedProjectPath = norm(path.join(generatedProjectDir, plan.candidateBasename))
+  const hasOuterSources = plan.compileItems.some((item) => {
+    const relative = path.relative(flatAnchor, item)
+    return relative === '..' || relative.startsWith(`..${path.sep}`)
+  })
+  const generatedProjectPath = norm(hasOuterSources
+    ? path.join(flatAnchor, `Wanxiangshu.Impact.${restoreFingerprint}.fsproj`)
+    : path.join(generatedProjectDir, plan.candidateBasename))
   const scratchPropsPath = norm(path.join(generatedProjectDir, 'Directory.Build.props'))
   const artifactPropsPath = norm(path.join(artifactDir, 'Directory.Build.props'))
 
-  const projectName = path.basename(plan.candidateBasename, path.extname(plan.candidateBasename))
+  const projectName = path.basename(generatedProjectPath, path.extname(generatedProjectPath))
   // Restore identity owns the obj/assets slot; artifact identity owns the
   // emission marker + scratch output. Mixing them would force a restore on
   // every body-only source edit.
@@ -1143,7 +1149,13 @@ export function materializeOwnerCompile(plan, {
   // synthetic flat project (Sdk + canonical absolute items). The aggregatePath
   // argument only feeds path resolution for rewritten `Include` attrs in the
   // legacy content branch — pass the scratch dir as the anchor either way.
-  const flatXml = generateFlatProjectXml(plan.aggregateContent, flatAnchor, plan.aggregatePath ?? flatAnchor, plan.compileItems)
+  let flatXml = generateFlatProjectXml(plan.aggregateContent, flatAnchor, plan.aggregatePath ?? flatAnchor, plan.compileItems)
+  if (hasOuterSources) {
+    flatXml = flatXml.replace('<Project Sdk="Microsoft.NET.Sdk">', `<Project>
+  <PropertyGroup><DirectoryBuildPropsPath>${escapeXmlAttr(scratchPropsPath)}</DirectoryBuildPropsPath></PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk"/>`)
+      .replace('</Project>', '  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk"/>\n</Project>')
+  }
 
   // Generate scratch Directory.Build.props setting isolated ArtifactsDir then importing root props
   const artifactRoot = outputDir
@@ -1730,14 +1742,23 @@ export function rebaseEmittedImports(stagingDir, targetDir) {
   }
 }
 
+function relativeOutput(sourceDirectory, sourcePath) {
+  const relativeSource = path.relative(sourceDirectory, sourcePath)
+  if (!path.isAbsolute(relativeSource) && relativeSource !== '..' && !relativeSource.startsWith(`..${path.sep}`)) {
+    return relativeSource.replace(/\.fs$/, '.js')
+  }
+  const adapterRoot = path.resolve(sourceDirectory, '../../wanxiangtong')
+  const adapterSource = path.relative(adapterRoot, sourcePath)
+  if (!path.isAbsolute(adapterSource) && adapterSource !== '..' && !adapterSource.startsWith(`..${path.sep}`)) {
+    return path.join('wanxiangtong', adapterSource.replace(/\.fs$/, '.js'))
+  }
+  throw new Error(`Source is outside the application source directories: ${sourcePath}`)
+}
+
 function removeRetiredOutputs(outputDir, sourceDirectory, removedSources = []) {
   for (const sourcePath of removedSources) {
     if (!sourcePath.endsWith('.fs')) continue
-    const relativeSource = path.relative(sourceDirectory, sourcePath)
-    if (path.isAbsolute(relativeSource) || relativeSource === '..' || relativeSource.startsWith(`..${path.sep}`)) {
-      throw new Error(`Removed source is outside the compile source directory: ${sourcePath}`)
-    }
-    const outputPath = path.join(outputDir, relativeSource.replace(/\.fs$/, '.js'))
+    const outputPath = path.join(outputDir, relativeOutput(sourceDirectory, sourcePath))
     let directory = path.dirname(outputPath)
     while (directory !== path.dirname(outputDir)) {
       const entry = fs.lstatSync(directory, { throwIfNoEntry: false })
@@ -1759,14 +1780,10 @@ function removeRetiredOutputs(outputDir, sourceDirectory, removedSources = []) {
 function removeUnemittedOutputs(outputDir, stagingOutputDir, sourceDirectory, compileItems) {
   for (const sourcePath of compileItems) {
     if (!sourcePath.endsWith('.fs')) continue
-    const relativeSource = path.relative(sourceDirectory, sourcePath)
-    if (path.isAbsolute(relativeSource) || relativeSource === '..' || relativeSource.startsWith(`..${path.sep}`)) {
-      throw new Error(`Compiled source is outside the compile source directory: ${sourcePath}`)
-    }
-    const relativeOutput = relativeSource.replace(/\.fs$/, '.js')
-    if (fs.existsSync(path.join(stagingOutputDir, relativeOutput))) continue
-    fs.rmSync(path.join(outputDir, relativeOutput), { force: true })
-    fs.rmSync(path.join(outputDir, `${relativeOutput}.map`), { force: true })
+    const output = relativeOutput(sourceDirectory, sourcePath)
+    if (fs.existsSync(path.join(stagingOutputDir, output))) continue
+    fs.rmSync(path.join(outputDir, output), { force: true })
+    fs.rmSync(path.join(outputDir, `${output}.map`), { force: true })
   }
 }
 
@@ -1902,6 +1919,10 @@ export async function compileIncremental({
       removeRetiredOutputs(resolvedOutputDir, resolvedProjectDirectory, plan.removedSources)
     }
   } finally {
+    if (path.dirname(preview.projectPath) === norm(resolvedProjectDirectory)
+      && /^Wanxiangshu\.Impact\.[0-9a-f]{64}\.fsproj$/.test(path.basename(preview.projectPath))) {
+      fs.rmSync(preview.projectPath, { force: true })
+    }
     // A failed compile leaves no reusable marker. Drop its staging so the
     // next attempt cannot treat partial JavaScript as a warm hit. Successful
     // staging stays: it is the warm input of the next identical compile.

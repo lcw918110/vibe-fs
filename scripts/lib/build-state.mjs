@@ -31,7 +31,7 @@ export function computeDigest(entries) {
 }
 
 const REQUIRED_VERIFICATION_DIRS = ['src', 'scripts', 'requirements', 'resources']
-const OPTIONAL_VERIFICATION_DIRS = ['.github', '.config']
+const OPTIONAL_VERIFICATION_DIRS = ['.github', '.config', 'wanxiangtong']
 const SKIP_DIR_NAMES = new Set([
   'node_modules',
   '.git',
@@ -48,6 +48,7 @@ const SKIP_DIR_NAMES = new Set([
 
 function isIgnoredVerificationFile(fileName) {
   if (fileName === '.DS_Store') return true
+  if (/^Wanxiangshu\.Impact\.[0-9a-f]{64}\.fsproj$/.test(fileName)) return true
   if (fileName === '.env.example') return false
   if (fileName.startsWith('.env')) return true
   if (fileName.endsWith('.pem') || fileName.endsWith('.key') || fileName.endsWith('.tgz')) return true

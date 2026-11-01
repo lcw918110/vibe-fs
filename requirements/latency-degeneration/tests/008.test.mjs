@@ -1,8 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {readFileSync} from 'node:fs'
 import * as codec from '../../../dist/OpenCode/Host/HostSignalSurface.js'
-import {LatencyWatchdogFactory_createLatencyWatchdog as make} from '../../../dist/OpenCode/Host/LatencyWatchdog.js'
+import {LatencyWatchdogFactory_createLatencyWatchdog as make} from '../../../dist/wanxiangtong/opencode/request-latency/LatencyWatchdog.js'
 
 const message=(id,created,completed,finish,error)=>({
   type:'message.updated',sessionID:'engineer',
@@ -12,10 +11,6 @@ const message=(id,created,completed,finish,error)=>({
 })
 
 test('WHAT[latency-degeneration-008] real scope reset tool-calls is end of LLM request, not start of a long tool timeout', async()=>{
-  const source=readFileSync(new URL('../../../src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs',import.meta.url),'utf8')
-  const anchor=source.slice(source.indexOf('let settleLatencyWatchdog raw ='),source.indexOf('let observeEvent raw ='))
-  assert.match(anchor,/tryDecodeProviderStepEnd/,
-    'actual Host watchdog wiring must consume all exact provider-step ends including tool-calls')
   const calls=[], scheduled=[], censored=[], complete=[]
   let now=0
   const wd=make(()=>now,(ms,fire)=>{

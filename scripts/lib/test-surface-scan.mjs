@@ -95,12 +95,12 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
  */
 export const SURFACE_MANIFEST = [
   {
-    module: 'OpenCode/Host/LatencyWatchdog.js',
+    module: 'wanxiangtong/opencode/request-latency/LatencyWatchdog.js',
     owner: 'latency-degeneration',
     laws: ['latency-degeneration-001', 'latency-degeneration-002', 'latency-degeneration-003',
       'latency-degeneration-004', 'latency-degeneration-005', 'latency-degeneration-008',
       'latency-degeneration-009', 'latency-degeneration-010', 'latency-degeneration-011'],
-    source: 'src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fs',
+    source: 'wanxiangtong/opencode/request-latency/LatencyWatchdog.fs',
     representation: 'opaque-capability',
     kind: 'resource',
   },
@@ -1186,10 +1186,10 @@ export const SURFACE_MANIFEST = [
     kind: 'resource',
   },
   {
-    module: 'OpenCode/Host/HostMessageProjection.js',
+    module: 'wanxiangtong/opencode/provider-request/MessageProjection.js',
     owner: 'host-boundary',
     laws: ['HOST-BOUNDARY-011'],
-    source: 'src/Wanxiangshu/OpenCode/Host/HostMessageProjection.fs',
+    source: 'wanxiangtong/opencode/provider-request/MessageProjection.fs',
     representation: 'json',
     kind: 'resource',
   },

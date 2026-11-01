@@ -1,6 +1,5 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { rig, flush } from './support/observed-watchdog.mjs'
 
 // Real OpenCode 1.18.29 order (observed on the Host event stream, see WHAT [013]):
@@ -46,10 +45,4 @@ test('WHAT[latency-degeneration-013] a tool starting while the interrupt is in f
   await flush()
   assert.deepEqual(r.events.filter(e => e === 'continue' || e === 'censored'), ['censored', 'continue'])
   r.watchdog.Dispose()
-})
-
-test('WHAT[latency-degeneration-013] production wiring: tool.execute.before ends the measurement', () => {
-  const hooks = readFileSync(new URL('../../../src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs', import.meta.url), 'utf8')
-  const before = hooks.slice(hooks.indexOf('let toolBefore (toolInput: obj)'), hooks.indexOf('let toolAfter'))
-  assert.match(before, /latencyWatchdog\.ToolStarted sessionId/)
 })

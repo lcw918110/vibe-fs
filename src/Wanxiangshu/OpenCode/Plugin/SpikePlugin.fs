@@ -61,7 +61,7 @@ module SpikePlugin =
                 let productPlugin: Wanxiangshu.Host.Ports.IHostPlugin = Plugin.ProductHostPlugin()
                 let! activationResult = productPlugin.Activate ports
                 let productHooks = unpackActivation activationResult
-                let transform = PluginTransforms.create boot host
+                let transform = PluginTransformComposition.create boot host
                 let! hooks = PluginHooks.create boot host transform productHooks liveConfig
                 return { Hooks = hooks; Scope = boot.Scope }
             with ex ->

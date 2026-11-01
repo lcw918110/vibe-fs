@@ -76,7 +76,4 @@ module PluginTransforms =
         outObj: obj ->
             Task<unit>
 
-    /// Provider-facing transform composition: order only.
-    /// Relay cut → Companion/XWire → pair; retired raw history is removed
-    /// before any downstream context owner.
-    val create: boot: PluginBoot.Boot -> host: PluginHostWiring.Host -> (obj -> obj -> Task<unit>)
+    val createWithCaps: caps: NormalTransformCapabilities -> branches: TransformBranchCapabilities -> (obj -> obj -> Task<unit>)

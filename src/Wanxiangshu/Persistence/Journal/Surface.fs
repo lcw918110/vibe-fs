@@ -312,12 +312,12 @@ module JournalSurface =
 
     let private guidelinesToJs (state: GuidelineProjectionState) : obj =
         box
-            {| pairCount = List.length state.Pairs
-               callIds = state.CallIds |> Set.toList |> List.toArray
-               placementCount = Set.count state.Placements
-               visibleFromOrdinal = state.VisibleFromOrdinal
+            {| pairCount = GuidelineProjection.pairs state |> List.length
+               callIds = GuidelineProjection.callIds state
+               placementCount = GuidelineProjection.placementCount state
+               visibleFromOrdinal = GuidelineProjection.visibleFromOrdinal state
                pairs =
-                state.Pairs
+                GuidelineProjection.pairs state |> List.rev
                 |> List.map (fun pair ->
                     box
                         {| ordinal = pair.Ordinal

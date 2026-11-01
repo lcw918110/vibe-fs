@@ -1,9 +1,10 @@
 namespace Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Foundation.Identity
-open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt
 
 [<RequireQualifiedAccess>]
@@ -13,154 +14,64 @@ type FailureAdmissionOutcome =
     | EpisodeSuperseded
     | NoActiveRun
 
-/// Single writer: policy-authorized provider failure → durable dedupe → budget advance/exhaust.
 module ProviderFailureLedger =
 
-    let private replayLatestFailure
-        (budgetLimit: int)
-        (identity: FailedProviderAttemptIdentity)
-        (current: ProviderFailureProjection)
-        =
-        match ProviderFailureProjection.replay budgetLimit identity current with
-        | ProviderFailureReplay.LatestMayRetry -> FailureAdmissionOutcome.RetryAuthorized
-        | ProviderFailureReplay.LatestExhausted -> FailureAdmissionOutcome.RetryExhausted
-        | ProviderFailureReplay.Superseded -> FailureAdmissionOutcome.EpisodeSuperseded
+    [<Import("DurableProviderBudget", "wanxiangli/failure-budget")>]
+    let private budgetClass: obj = jsNative
 
-    let private appendExhausted
-        (port: ProviderFailureJournalPort)
-        (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
-        (current: ProviderFailureProjection)
-        (finalCount: int)
-        : Task<Result<FailureAdmissionOutcome, string>> =
-        task {
-            let exhausted =
-                ProviderFailureFactCases.RetryExhausted
-                    {| SessionId = sessionId
-                       LogicalRunId = current.LogicalRunId
-                       AuthorityRootUserMessageId = current.AuthorityRootUserMessageId
-                       FinalConsecutiveFailureCount = finalCount |}
+    let private stateView (state: ProviderFailureProjection) =
+        createObj
+            [ "logicalRun" ==> LogicalRunId.value state.LogicalRunId
+              "authorityRoot" ==> AuthorityRootUserMessageId.value state.AuthorityRootUserMessageId
+              "consecutiveFailureCount" ==> state.Budget.ConsecutiveFailureCount
+              "recentFailureKeys" ==> List.toArray state.RecentFailureKeys
+              "exhausted" ==> state.Exhausted
+              "lastTransitionWasSuccess" ==> state.LastTransitionWasSuccess ]
 
-            let! appended = port.Append sessionId providerRun exhausted
-
-            return appended |> Result.map (fun _ -> FailureAdmissionOutcome.RetryExhausted)
-        }
-
-    let private completeAdvance
-        (port: ProviderFailureJournalPort)
-        (budgetLimit: int)
-        (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
-        (current: ProviderFailureProjection)
-        (nextBudget: ProviderFailureBudget.FailureBudget)
-        : Task<Result<FailureAdmissionOutcome, string>> =
-        task {
-            match ProviderFailureBudget.verdict budgetLimit nextBudget with
-            | ProviderFailureBudget.MayRetry _ -> return Ok FailureAdmissionOutcome.RetryAuthorized
-            | ProviderFailureBudget.Exhausted _ ->
-                return! appendExhausted port sessionId providerRun current nextBudget.ConsecutiveFailureCount
-        }
-
-    let private appendFailureRecorded
-        (port: ProviderFailureJournalPort)
-        (budgetLimit: int)
-        (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
-        (reason: string)
-        (current: ProviderFailureProjection)
-        (nextCount: int)
-        : Task<Result<FailureAdmissionOutcome, string>> =
-        task {
-            let recorded =
+    let private factOf (value: obj) =
+        let session = SessionId.create (unbox value?sessionId)
+        let run = LogicalRunId.create (unbox value?logicalRun)
+        let root = AuthorityRootUserMessageId.create (unbox value?authorityRoot)
+        let provider = ProviderRunIdentity.create (unbox value?providerRun)
+        let fact =
+            match string value?kind with
+            | "FailureRecorded" ->
                 ProviderFailureFactCases.FailureRecorded
-                    {| SessionId = sessionId
-                       LogicalRunId = current.LogicalRunId
-                       AuthorityRootUserMessageId = current.AuthorityRootUserMessageId
-                       ProviderRun = providerRun
-                       ConsecutiveFailureCount = nextCount
-                       Reason = reason |}
+                    {| SessionId = session
+                       LogicalRunId = run
+                       AuthorityRootUserMessageId = root
+                       ProviderRun = provider
+                       ConsecutiveFailureCount = unbox value?count
+                       Reason = unbox value?reason |}
+            | "RetryExhausted" ->
+                ProviderFailureFactCases.RetryExhausted
+                    {| SessionId = session
+                       LogicalRunId = run
+                       AuthorityRootUserMessageId = root
+                       FinalConsecutiveFailureCount = unbox value?count |}
+            | _ ->
+                ProviderFailureFactCases.SuccessRecorded
+                    {| SessionId = session
+                       LogicalRunId = run
+                       AuthorityRootUserMessageId = root
+                       ProviderRun = provider |}
+        session, provider, fact
 
-            let! appended = port.Append sessionId providerRun recorded
-
-            match appended with
-            | Error failure -> return Error failure
-            | Ok _ ->
-                return!
-                    completeAdvance
-                        port
-                        budgetLimit
-                        sessionId
-                        providerRun
-                        current
-                        { ConsecutiveFailureCount = nextCount }
-        }
-
-    let private checkRecoveryLicence
-        (authorization: ProviderRecoveryAuthorization)
-        (current: ProviderFailureProjection)
-        : Result<ProviderFailureProjection, string> =
-        if current.LogicalRunId <> authorization.LogicalRun then
-            Error "Provider recovery licence belongs to a different logical run"
-        else
-            Ok current
-
-    let private outcomeForAdvanceRejection
-        (identity: FailedProviderAttemptIdentity)
-        (current: ProviderFailureProjection)
-        (rejection: ProviderFailureAdvanceRejection)
-        : Result<FailureAdmissionOutcome, string> =
-        match rejection with
-        | ProviderFailureAdvanceRejection.AlreadyObserved ->
-            Ok(replayLatestFailure ProviderFailureBudget.DefaultBudget identity current)
-        | ProviderFailureAdvanceRejection.AlreadyExhausted -> Ok FailureAdmissionOutcome.RetryExhausted
-        | ProviderFailureAdvanceRejection.DifferentRun
-        | ProviderFailureAdvanceRejection.NoActiveBudget -> Ok FailureAdmissionOutcome.NoActiveRun
-        | ProviderFailureAdvanceRejection.InvalidTransition ->
-            Error "Provider failure advance violates validation (consecutive failure count is not the successor)"
-
-    let private recordReadyFailure
-        (port: ProviderFailureJournalPort)
-        (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
-        (reason: string)
-        (current: ProviderFailureProjection)
-        : Task<Result<FailureAdmissionOutcome, string>> =
-        task {
-            let identity =
-                ProviderFailureBudget.attemptIdentity
-                    sessionId
-                    current.LogicalRunId
-                    current.AuthorityRootUserMessageId
-                    providerRun
-
-            let nextCount = current.Budget.ConsecutiveFailureCount + 1
-
-            match ProviderFailureProjection.applyFailure identity nextCount current with
-            | Error rejection -> return outcomeForAdvanceRejection identity current rejection
-            | Ok _ ->
-                return!
-                    appendFailureRecorded
-                        port
-                        ProviderFailureBudget.DefaultBudget
-                        sessionId
-                        providerRun
-                        reason
-                        current
-                        nextCount
-        }
-
-    let private recordAfterLicenceCheck
-        (port: ProviderFailureJournalPort)
-        (sessionId: SessionId)
-        (authorization: ProviderRecoveryAuthorization)
-        (reason: string)
-        (current: ProviderFailureProjection)
-        : Task<Result<FailureAdmissionOutcome, string>> =
-        task {
-            match checkRecoveryLicence authorization current with
-            | Error message -> return Error message
-            | Ok ready -> return! recordReadyFailure port sessionId authorization.ProviderRun reason ready
-        }
+    let private create (port: ProviderFailureJournalPort) =
+        let append value =
+            task {
+                let session, provider, fact = factOf value
+                let! answer = port.Append session provider fact
+                return
+                    match answer with
+                    | Ok () -> createObj [ "ok" ==> true ]
+                    | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+            }
+        let native =
+            createObj
+                [ "current" ==> (fun session -> port.CurrentState (SessionId.create session) |> Option.map stateView |> Option.toObj)
+                  "append" ==> append ]
+        createNew budgetClass native
 
     let recordAuthorizedFailure
         (port: ProviderFailureJournalPort)
@@ -169,40 +80,21 @@ module ProviderFailureLedger =
         (reason: string)
         : Task<Result<FailureAdmissionOutcome, string>> =
         task {
-            match port.CurrentState sessionId with
-            | None -> return Ok FailureAdmissionOutcome.NoActiveRun
-            | Some current -> return! recordAfterLicenceCheck port sessionId authorization reason current
+            let owner = create port
+            let input =
+                createObj
+                    [ "logicalRun" ==> LogicalRunId.value authorization.LogicalRun
+                      "providerRun" ==> ProviderRunIdentity.value authorization.ProviderRun ]
+            let! answer: obj = owner?recordAuthorizedFailure (SessionId.value sessionId, input, reason)
+            return
+                if not (unbox<bool> answer?ok) then Error(unbox answer?error)
+                else
+                    match string answer?value with
+                    | "RetryAuthorized" -> Ok FailureAdmissionOutcome.RetryAuthorized
+                    | "RetryExhausted" -> Ok FailureAdmissionOutcome.RetryExhausted
+                    | "EpisodeSuperseded" -> Ok FailureAdmissionOutcome.EpisodeSuperseded
+                    | _ -> Ok FailureAdmissionOutcome.NoActiveRun
         }
-
-    let private appendSuccessFact
-        (port: ProviderFailureJournalPort)
-        (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
-        (current: ProviderFailureProjection)
-        : Task<Result<unit, string>> =
-        task {
-            let succeeded =
-                ProviderFailureFactCases.SuccessRecorded
-                    {| SessionId = sessionId
-                       LogicalRunId = current.LogicalRunId
-                       AuthorityRootUserMessageId = current.AuthorityRootUserMessageId
-                       ProviderRun = providerRun |}
-
-            let! appended = port.Append sessionId providerRun succeeded
-
-            return appended |> Result.map (fun _ -> ())
-        }
-
-    let private recordSuccessForCurrent
-        (port: ProviderFailureJournalPort)
-        (sessionId: SessionId)
-        (providerRun: ProviderRunIdentity)
-        (current: ProviderFailureProjection)
-        : Task<Result<unit, string>> =
-        if current.Budget.ConsecutiveFailureCount = 0 then
-            Task.FromResult(Ok())
-        else
-            appendSuccessFact port sessionId providerRun current
 
     let recordConfirmedSuccess
         (port: ProviderFailureJournalPort)
@@ -210,14 +102,7 @@ module ProviderFailureLedger =
         (providerRun: ProviderRunIdentity)
         : Task<Result<unit, string>> =
         task {
-            match port.CurrentState sessionId with
-            // No budget for this session means nothing to clear. A Fission lane
-            // continues its owner's logical run and owns no budget of its own,
-            // so its confirmed success has no streak to reset — the same
-            // NoActiveRun verdict the failure side already gives such a
-            // session. The success path must not turn that into a fault: the
-            // caller settles a provider attempt, and a session without a
-            // budget has nothing to settle.
-            | None -> return Ok()
-            | Some current -> return! recordSuccessForCurrent port sessionId providerRun current
+            let owner = create port
+            let! answer: obj = owner?recordConfirmedSuccess (SessionId.value sessionId, ProviderRunIdentity.value providerRun)
+            return if unbox<bool> answer?ok then Ok () else Error(unbox answer?error)
         }

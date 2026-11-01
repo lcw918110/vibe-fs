@@ -1,6 +1,7 @@
 namespace Wanxiangshu.Execution.Delegation.SyncDelegate
 
 open System.Threading.Tasks
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Execution.Session
@@ -9,27 +10,13 @@ open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Execution.Delegation
 open Wanxiangshu.Foundation.TerminalSignal
 
-/// Composition-internal CE module: referenced only by SyncDelegateRuntime.
 module internal SyncDelegateWorkflow =
-
-    /// Everything SyncDelegateRuntime.Invoke needs from its host, so the workflow
-    /// runs against the store + dependencies without touching runtime fields.
     type Dependencies =
         { Attached: IAttachedSessionPort
           AwaitView: DiagnosticWait -> Task<Result<string, string>> -> Task<Result<string, string>>
-          AwaitInvocation:
-              DiagnosticWait
-                  -> Task<Result<SyncDelegateInvocationResult, string>>
-                  -> Task<Result<SyncDelegateInvocationResult, string>>
-          ObserveChild:
-              SessionId -> ReuseScopeId -> SyncDelegateRole -> string -> Task<Result<AttachedChildObservation, string>>
-          CreateChild:
-              SessionId
-                  -> ReuseScopeId
-                  -> SyncDelegateRole
-                  -> string
-                  -> string option
-                  -> Task<Result<SessionId, string>>
+          AwaitInvocation: DiagnosticWait -> Task<Result<SyncDelegateInvocationResult, string>> -> Task<Result<SyncDelegateInvocationResult, string>>
+          ObserveChild: SessionId -> ReuseScopeId -> SyncDelegateRole -> string -> Task<Result<AttachedChildObservation, string>>
+          CreateChild: SessionId -> ReuseScopeId -> SyncDelegateRole -> string -> string option -> Task<Result<SessionId, string>>
           BindChild: SessionId -> SessionId -> string -> unit
           OnDelegateReady: SessionId -> string -> unit
           NoteDelegatePrompt: string -> string -> unit
@@ -41,323 +28,66 @@ module internal SyncDelegateWorkflow =
           DescribeWait: SyncDelegateWait -> DiagnosticWait
           SubscribeFutureTerminal: SessionId -> TerminalCompletionListener -> System.IDisposable }
 
-    let private completeError (invocations: SyncDelegateInvocation list) error =
-        for invocation in invocations do
-            AsyncSupport.trySetResult invocation.Completion (Error error) |> ignore
+    let private effects (store: SyncDelegateCallStore) (deps: Dependencies) =
+        let attach (request: obj) =
+            let owner = SessionId.create (unbox request?owner)
+            let role = DelegateValues.roleOf (unbox request?role)
+            task {
+                let! attached = deps.Attached.GetOrCreate(owner, role, SyncDelegate.agentNameFor role, deps.Directory, deps.ObserveChild, deps.CreateChild, deps.BindChild, deps.OnDelegateReady)
+                return
+                    match attached with
+                    | Error reason -> DelegateValues.resultToNative (Error reason: Result<string, string>)
+                    | Ok(session, agent) -> createObj [ "ok" ==> true; "session" ==> SessionId.value session; "agent" ==> agent ]
+            }
+        let subscribe (raw: obj) =
+            let call = SyncDelegateCall raw
+            let degeneration = DegenerationInterrupts.Cursor call.Delegate
+            let report (_: SessionId) outcome =
+                let payload =
+                    match outcome with
+                    | TerminalOutcome.Completed _ -> None
+                    | TerminalOutcome.Failed stop -> Some("failed", stop, false)
+                    | TerminalOutcome.Aborted stop -> Some("aborted", stop, degeneration.IsOwnAbort())
+                payload |> Option.iter (fun (kind, stop, ownAbort) ->
+                    let event = createObj [ "kind" ==> kind; "root" ==> DelegateValues.nullable AuthorityRootUserMessageId.value stop.AuthorityRootUserMessageId; "reason" ==> stop.Reason; "ownAbort" ==> ownAbort ]
+                    store.Raw?observeTerminal(SessionId.value call.Delegate, event) |> ignore)
+            let subscription = deps.SubscribeFutureTerminal call.Delegate report
+            fun () -> subscription.Dispose()
+        let awaitView (raw: obj) (pending: Task<obj>) =
+            let call = SyncDelegateCall raw
+            let translated = task { let! result = pending
+                                    return DelegateValues.resultFromNative result }
+            task {
+                let! result = deps.AwaitView (deps.DescribeWait(DelegateCompletion(call.Owner, call.Delegate, call.Role))) translated
+                return DelegateValues.resultToNative result
+            }
+        let awaitInvocation (request: obj) (pending: Task<obj>) =
+            let owner = SessionId.create (unbox request?owner)
+            let role = DelegateValues.roleOf (unbox request?role)
+            let translated = task { let! result = pending
+                                    return DelegateValues.invocationFromNative result }
+            task {
+                let! result = deps.AwaitInvocation (deps.DescribeWait(InvocationJoin(owner, role))) translated
+                return DelegateValues.invocationToNative result
+            }
+        createObj
+            [ "attach" ==> attach
+              "cleanupDraft" ==> deps.CleanupDelegateDraft
+              "replaceEstimate" ==> (fun (session: string) (estimate: obj) -> deps.ReplaceToolEstimate (SessionId.create session) (DelegateValues.optional id estimate))
+              "fallbackPrompt" ==> (fun (charge: string) -> box (LlmFacing.instruction charge))
+              "combinePrompts" ==> (fun (prompts: obj array) -> prompts |> Array.map unbox<LlmFacing.Document> |> Array.toList |> LlmFacing.combine |> box)
+              "resolveAgent" ==> (fun (session: string) -> deps.ResolveBoundAgent (SessionId.create session) |> DelegateValues.nullable id)
+              "subscribe" ==> subscribe
+              "send" ==> (fun (raw: obj) (charge: string) (prompt: obj) -> task {
+                  let request = SyncDelegatePrompt.withProviderPrompt charge (unbox prompt)
+                  let! result = deps.SendPrompt (SyncDelegateCall raw) request
+                  return DelegateValues.resultToNative result })
+              "notePrompt" ==> (fun (session: string) (charge: string) -> deps.NoteDelegatePrompt session charge)
+              "awaitView" ==> (fun (call: obj) (pending: Task<obj>) -> awaitView call pending)
+              "awaitInvocation" ==> (fun (request: obj) (pending: Task<obj>) -> awaitInvocation request pending) ]
 
-    let private completeMergedSiblings (siblings: SyncDelegateInvocation list) (canonicalCall: ToolCallId) =
-        for sibling in siblings do
-            AsyncSupport.trySetResult sibling.Completion (Ok(SyncDelegateInvocationResult.MergedInto canonicalCall))
-            |> ignore
-
-    let private completeUngroupedSiblings (siblings: SyncDelegateInvocation list) =
-        for sibling in siblings do
-            AsyncSupport.trySetResult
-                sibling.Completion
-                (Error "sync delegate protocol defect: ungrouped invocation has siblings")
-            |> ignore
-
-    let private completeCanonicalBatch
-        (canonical: SyncDelegateInvocation)
-        (siblings: SyncDelegateInvocation list)
-        (view: string)
-        =
-        AsyncSupport.trySetResult canonical.Completion (Ok(SyncDelegateInvocationResult.View view))
-        |> ignore
-
-        match canonical.Batch with
-        | Some batch -> completeMergedSiblings siblings (List.head batch.CallOrder)
-        | None -> completeUngroupedSiblings siblings
-
-    let private completeBatch (invocations: SyncDelegateInvocation list) answered =
-        match answered, invocations with
-        | Error error, _ -> completeError invocations error
-        | Ok _, [] -> ()
-        | Ok view, canonical :: siblings -> completeCanonicalBatch canonical siblings view
-
-    let private failAdmission
-        (store: SyncDelegateCallStore)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (invocations: SyncDelegateInvocation list)
-        (error: string)
-        =
-        store.ReleaseAdmission(ownerScope, role)
-        completeError invocations error
-
-    let private maybeCleanupDelegateDraft
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        =
-        match role with
-        | SyncDelegateRole.Inspector
-        | SyncDelegateRole.Engineer
-        | SyncDelegateRole.DevOps ->
-            store.TryTakeDeletedDelegate ownerScope
-            |> Option.iter (fun sessionId -> deps.CleanupDelegateDraft(SessionId.value sessionId))
-        | SyncDelegateRole.Coder -> ()
-
-    let private sumExpectedToolCalls (invocations: SyncDelegateInvocation list) =
-        match invocations |> List.choose (fun item -> item.ExpectedToolCalls) with
-        | [] -> None
-        | values -> Some(List.sum values)
-
-    let private prepareOnePrompt (item: SyncDelegateInvocation) : Task<LlmFacing.Document> =
-        task {
-            try
-                return! item.PrepareProviderPrompt()
-            with
-            | error when item.ObserveAdmission.IsSome -> return raise error
-            | _ -> return LlmFacing.instruction item.Charge
-        }
-
-    let private prepareAllPrompts (invocations: SyncDelegateInvocation list) : Task<LlmFacing.Document list> =
-        task {
-            // DSL-MUTABLE: algorithm-scratch — prompt result accumulator
-            let results = ResizeArray<LlmFacing.Document>()
-
-            for item in invocations do
-                let! prompt = prepareOnePrompt item
-                results.Add prompt
-
-            return results |> Seq.toList
-        }
-
-    let private failCurrentCall
-        (store: SyncDelegateCallStore)
-        (delegateSession: SessionId)
-        (stop: TerminalStop)
-        (message: string)
-        =
-        store.TryPeekCallByDelegate delegateSession
-        |> Option.filter (fun call ->
-            match call.TerminalFailureScope with
-            | Some(FreshAuthorityRoot root) -> TerminalStop.belongsTo root stop
-            | Some(ExistingAuthorityContinuation _)
-            | None -> false)
-        |> Option.bind store.TryPopExactCall
-        |> Option.iter (fun current -> store.FailCall(current, message))
-
-    let private onTerminalOutcome
-        (store: SyncDelegateCallStore)
-        (delegateSession: SessionId)
-        (degeneration: DegenerationInterrupts.Cursor)
-        (_sessionId: SessionId)
-        (outcome: TerminalOutcome)
-        =
-        match outcome with
-        | TerminalOutcome.Failed stop ->
-            failCurrentCall store delegateSession stop (sprintf "SyncDelegate run failed: %s" stop.Reason)
-        // The latency watchdog owns its own interrupt: it continues the
-        // session or returns Failed.
-        | TerminalOutcome.Aborted _ when degeneration.IsOwnAbort() -> ()
-        | TerminalOutcome.Aborted stop ->
-            failCurrentCall store delegateSession stop (sprintf "SyncDelegate run aborted: %s" stop.Reason)
-        | TerminalOutcome.Completed _ -> ()
-
-    let private sendAndAwait
-        (deps: Dependencies)
-        (store: SyncDelegateCallStore)
-        (role: SyncDelegateRole)
-        (batchOwner: SessionId)
-        (delegateSession: SessionId)
-        (call: SyncDelegateCall)
-        (request: SyncDelegatePromptRequest)
-        : Task<Result<string, string>> =
-        taskResult {
-            use _terminalSub =
-                deps.SubscribeFutureTerminal
-                    delegateSession
-                    (onTerminalOutcome store delegateSession (DegenerationInterrupts.Cursor delegateSession))
-
-            do! deps.SendPrompt call request
-
-            if
-                role = SyncDelegateRole.Inspector
-                || role = SyncDelegateRole.Engineer
-                || role = SyncDelegateRole.DevOps
-            then
-                deps.NoteDelegatePrompt (SessionId.value delegateSession) request.Charge
-
-            let! view =
-                deps.AwaitView
-                    (deps.DescribeWait(DelegateCompletion(batchOwner, delegateSession, role)))
-                    call.Answer.Task
-
-            return view
-        }
-
-    let private dispatchBegunCall
-        (deps: Dependencies)
-        (store: SyncDelegateCallStore)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (batchOwner: SessionId)
-        (delegateSession: SessionId)
-        (invocations: SyncDelegateInvocation list)
-        (combinedCharge: string)
-        (combinedProviderPrompt: LlmFacing.Document)
-        (begun: SyncDelegateCall * System.IDisposable)
-        : Task<unit> =
-        task {
-            let call, registration = begun
-            use _registration = registration
-
-            let request =
-                SyncDelegatePrompt.withProviderPrompt combinedCharge combinedProviderPrompt
-
-            let! answered = sendAndAwait deps store role batchOwner delegateSession call request
-            store.ReleaseAdmission(ownerScope, role)
-            registration.Dispose()
-            completeBatch invocations answered
-        }
-
-    let private beginAndDispatch
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (batchOwner: SessionId)
-        (delegateSession: SessionId)
-        (sendAgent: string)
-        (invocations: SyncDelegateInvocation list)
-        (combinedCharge: string)
-        (combinedProviderPrompt: LlmFacing.Document)
-        : Task<unit> =
-        match store.BeginCall(batchOwner, ownerScope, role, delegateSession, sendAgent, invocations) with
-        | Error error ->
-            failAdmission store ownerScope role invocations error
-            Task.FromResult(())
-        | Ok begun ->
-            dispatchBegunCall
-                deps
-                store
-                ownerScope
-                role
-                batchOwner
-                delegateSession
-                invocations
-                combinedCharge
-                combinedProviderPrompt
-                begun
-
-    let private afterAttached
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (batchOwner: SessionId)
-        (invocations: SyncDelegateInvocation list)
-        (delegateSession: SessionId)
-        (attachedAgent: string)
-        : Task<unit> =
-        task {
-            do! deps.ReplaceToolEstimate delegateSession (sumExpectedToolCalls invocations)
-            let! preparedPrompts = prepareAllPrompts invocations
-
-            let combinedCharge =
-                invocations |> List.map (fun item -> item.Charge) |> String.concat "\n\n"
-
-            let combinedProviderPrompt = preparedPrompts |> LlmFacing.combine
-
-            let sendAgent =
-                deps.ResolveBoundAgent delegateSession |> Option.defaultValue attachedAgent
-
-            if invocations |> List.exists (fun invocation -> invocation.IsCancelled()) then
-                failAdmission store ownerScope role invocations "Sync delegate call was cancelled before dispatch"
-            else
-                do!
-                    beginAndDispatch
-                        store
-                        deps
-                        ownerScope
-                        role
-                        batchOwner
-                        delegateSession
-                        sendAgent
-                        invocations
-                        combinedCharge
-                        combinedProviderPrompt
-        }
-
-    let private runAttachedPair
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (batchOwner: SessionId)
-        (invocations: SyncDelegateInvocation list)
-        (attached: SessionId * string)
-        : Task<unit> =
-        let delegateSession, attachedAgent = attached
-        afterAttached store deps ownerScope role batchOwner invocations delegateSession attachedAgent
-
-    let private acquireAndRun
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (batchOwner: SessionId)
-        (agentName: string)
-        (invocations: SyncDelegateInvocation list)
-        : Task<unit> =
-        task {
-            let! attached =
-                deps.Attached.GetOrCreate(
-                    batchOwner,
-                    role,
-                    agentName,
-                    deps.Directory,
-                    deps.ObserveChild,
-                    deps.CreateChild,
-                    deps.BindChild,
-                    deps.OnDelegateReady
-                )
-
-            match attached with
-            | Error error -> failAdmission store ownerScope role invocations error
-            | Ok pair -> do! runAttachedPair store deps ownerScope role batchOwner invocations pair
-        }
-
-    let private runReadyWithRole
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (batchOwner: SessionId)
-        (invocations: SyncDelegateInvocation list)
-        : Task<unit> =
-        let agentName = SyncDelegate.agentNameFor role
-
-        task {
-            try
-                do! acquireAndRun store deps ownerScope role batchOwner agentName invocations
-            with ex ->
-                failAdmission store ownerScope role invocations ex.Message
-        }
-
-    let private runReadyBatch
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerScope: ReuseScopeId)
-        (role: SyncDelegateRole)
-        (invocations: SyncDelegateInvocation list)
-        : Task<unit> =
-        let first = List.head invocations
-        let batchOwner = first.Owner
-        maybeCleanupDelegateDraft store deps ownerScope role
-
-        runReadyWithRole store deps ownerScope role batchOwner invocations
-
-    /// EXEC-026 / EXEC-031: reusable SyncDelegate CE. A semantic batch is fixed by
-    /// ProviderRun tool-call membership before dispatch; scheduler timing never
-    /// changes which invocations are concatenated.
-    let invoke
-        (store: SyncDelegateCallStore)
-        (deps: Dependencies)
-        (ownerSessionId: SessionId)
+    let private request
+        (owner: SessionId)
         (role: SyncDelegateRole)
         (charge: string)
         (expectedToolCalls: int option)
@@ -366,34 +96,38 @@ module internal SyncDelegateWorkflow =
         (observeAdmission: (SyncDelegateObservedAdmission -> unit) option)
         (captureResponse: (SyncDelegateTerminalResponse -> unit) option)
         (isCancelled: unit -> bool)
-        : Task<Result<SyncDelegateInvocationResult, string>> =
-        task {
-            let owner = ownerSessionId
-            let ownerScope = ReuseScope.ofSession owner
+        : obj =
+        let batchValue = batch |> Option.map (fun value ->
+            createObj [ "providerRun" ==> ProviderRunIdentity.value value.ProviderRun
+                        "callOrder" ==> (value.CallOrder |> List.map ToolCallId.value |> List.toArray)
+                        "currentCall" ==> ToolCallId.value value.CurrentCall ]) |> Option.defaultValue null
+        let request =
+            createObj
+                [ "owner" ==> SessionId.value owner
+                  "scope" ==> ReuseScopeId.value (ReuseScope.ofSession owner)
+                  "role" ==> DelegateValues.roleName role
+                  "charge" ==> charge
+                  "estimate" ==> DelegateValues.nullable id expectedToolCalls
+                  "batch" ==> batchValue
+                  "prepare" ==> (fun () -> task { let! prompt = prepareProviderPrompt ()
+                                                 return box prompt })
+                  "observed" ==> observeAdmission.IsSome
+                  "observeAdmission" ==> DelegateValues.nullable id observeAdmission
+                  "captureResponse" ==> DelegateValues.nullable id captureResponse
+                  "isCancelled" ==> isCancelled
+                  "noteDraft" ==> (role <> SyncDelegateRole.Coder) ]
+        request
 
-            let completion =
-                TaskCompletionSource<Result<SyncDelegateInvocationResult, string>>(
-                    TaskCreationOptions.RunContinuationsAsynchronously
-                )
+    let invoke (store: SyncDelegateCallStore) deps owner role charge expectedToolCalls batch prepareProviderPrompt observeAdmission captureResponse isCancelled : Task<Result<SyncDelegateInvocationResult, string>> =
+        let value = request owner role charge expectedToolCalls batch prepareProviderPrompt observeAdmission captureResponse isCancelled
+        let pending = DelegateValues.invoke store.Raw value (effects store deps)
+        task { let! result = pending
+               return DelegateValues.invocationFromNative result }
 
-            let invocation: SyncDelegateInvocation =
-                { Owner = owner
-                  OwnerScope = ownerScope
-                  Role = role
-                  Charge = charge
-                  ExpectedToolCalls = expectedToolCalls
-                  PrepareProviderPrompt = prepareProviderPrompt
-                  ObserveAdmission = observeAdmission
-                  CaptureResponse = captureResponse
-                  IsCancelled = isCancelled
-                  Batch = batch
-                  Completion = completion
-                  StartCursor = None }
+    let invokeResponse (store: SyncDelegateCallStore) deps owner role charge prepare isCancelled =
+        let value = request owner role charge None None prepare None None isCancelled
+        DelegateValues.invokeResponse store.Raw value (effects store deps)
 
-            match store.Admit invocation with
-            | SyncDelegateAdmission.Rejected error -> AsyncSupport.trySetResult completion (Error error) |> ignore
-            | SyncDelegateAdmission.Waiting -> ()
-            | SyncDelegateAdmission.Ready invocations -> do! runReadyBatch store deps ownerScope role invocations
-
-            return! deps.AwaitInvocation (deps.DescribeWait(InvocationJoin(owner, role))) completion.Task
-        }
+    let invokeObserved (store: SyncDelegateCallStore) deps owner charge prepare isCancelled =
+        let value = request owner SyncDelegateRole.Engineer charge None None prepare None None isCancelled
+        DelegateValues.invokeObserved store.Raw value (effects store deps) (SyncDelegateObservedAdmission.NotDispatched >> box)

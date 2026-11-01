@@ -32,8 +32,8 @@
     <Compile Include="OpenCode/Host/SessionQuiescenceGate.fs"/>
     <Compile Include="OpenCode/Host/QuiescenceSurface.fsi"/>
     <Compile Include="OpenCode/Host/QuiescenceSurface.fs"/>
-    <Compile Include="OpenCode/Host/HostMessageProjection.fsi"/>
-    <Compile Include="OpenCode/Host/HostMessageProjection.fs"/>
+    <Compile Include="../../wanxiangtong/opencode/provider-request/MessageProjection.fsi"/>
+    <Compile Include="../../wanxiangtong/opencode/provider-request/MessageProjection.fs"/>
     <Compile Include="Participant/Persona/AgentRole.fsi"/>
     <Compile Include="Participant/Persona/AgentRole.fs"/>
     <Compile Include="OpenCode/Host/HostSessionContext.fsi"/>

@@ -724,6 +724,10 @@ export async function runExternalConsumer({
     fs.rmSync(topLevelWanxiangli, { recursive: true, force: true })
   }
 
+  // 复用所选库候选的公开消费者，导入仍从实际主体包内解析。
+  fs.copyFileSync(path.join(REPO_ROOT, 'wanxiangli/scripts/tests/fission-lifecycle-consumer.mjs'),
+    path.join(targetPkgDir, '.verify-fission-lifecycle.mjs'))
+
   // 探针位于实际主体包内，裸导入只能使用随包交付的库。
   fs.writeFileSync(path.join(targetPkgDir, '.verify-library-entries.mjs'), [
     "import { mapBounded } from 'wanxiangli/bounded-map'",
@@ -744,7 +748,11 @@ export async function runExternalConsumer({
     "import { ProgramInvocation, ProgramSession } from 'wanxiangli/program'",
     "import { DispatchAttempt, PromptPhysicalAcceptance } from 'wanxiangli/dispatch'",
     "import { ExecutionRouting } from 'wanxiangli/routing'",
-    "import { TraceHistory } from 'wanxiangli/trace'",
+    "import { TraceHistory, TraceCapture } from 'wanxiangli/trace'",
+    "import { PairGuidanceHistory, PairGuidanceOccurrences } from 'wanxiangli/pair-hint'",
+    "import { ProviderRecovery } from 'wanxiangli/failure'",
+    "import { DurableProviderBudget, ProviderFailureBudget } from 'wanxiangli/failure-budget'",
+    "import { DelegateInvocationRuntime } from 'wanxiangli/delegate-batch'",
     "import { runProcess } from 'wanxiangli/runtime'",
     "import { createHash } from 'node:crypto'",
     "import { execFile } from 'node:child_process'",
@@ -804,6 +812,40 @@ export async function runExternalConsumer({
     '  for (const lease of dispatchLeases) lease.dispose()',
     '  packedAcceptance.clear()',
     '}',
+    'const guidance = new PairGuidanceHistory().append({ ordinal: 1n, callId: "packed-guidance", markerText: "original\\0", placementKey: "s|a:x", metadata: "x" })',
+    'assert.equal(guidance.ok, true)',
+    'assert.equal(guidance.value.reanchor().visible().length, 0)',
+    'assert.equal(guidance.value.history()[0].markerText, "original\\0")',
+    'let appendedGuidance',
+    'const occurrence = await new PairGuidanceOccurrences().occur({ history: [], visible: [], occupied: [], syntheticCallIds: [], placement: { ok: true, value: { callGapKey: "Start", resultGapKey: "After:x", metadata: "x" } }, skipNew: false, sessionKey: "packed", markerText: "original\\0" }, rows => ({ ok: true, value: rows }), async row => { appendedGuidance = row; return { ok: true, value: null } })',
+    'assert.equal(occurrence.ok, true)',
+    'assert.equal(occurrence.value.wire[0], appendedGuidance)',
+    'const budgetLaw = new ProviderFailureBudget()',
+    'let recoveryBudget = budgetLaw.forAuthority("logical", "root")',
+    'const durableBudget = new DurableProviderBudget({ current: () => recoveryBudget, append: async event => { recoveryBudget = budgetLaw.applyFailure({ sessionId: event.sessionId, logicalRun: event.logicalRun, authorityRoot: event.authorityRoot, providerRun: event.providerRun }, event.count, recoveryBudget).state; return { ok: true } } })',
+    'const recovery = new ProviderRecovery()',
+    'let recoverySends = 0',
+    'const recoveryResult = await recovery.attempt({ resolution: "RetryFreshAttempt", authorization: { logicalRun: "logical", providerRun: "run" } }, { admit: auth => durableBudget.recordAuthorizedFailure("packed", auth, "failure"), redispatch: auth => recovery.redispatch("root", auth, { alreadyAdmitted: () => false, observeAcceptance: () => {}, waitForStop: async () => "Stopped", currentAuthority: () => ({ root: "root", value: null }), sendRetry: async () => { recoverySends++; return { kind: "Sent" } } }, "failure") }, "failure")',
+    'assert.equal(recoveryResult.kind, "Dispatched")',
+    'assert.equal(recoveryBudget.consecutiveFailureCount, 1)',
+    'assert.equal(recoverySends, 1)',
+    'const delegateRuntime = new DelegateInvocationRuntime()',
+    'let markDelegateSent; let delegateDisposals = 0',
+    'const delegateSent = new Promise(resolve => { markDelegateSent = resolve })',
+    'const delegateEffects = { attach: async () => ({ ok: true, session: "packed-child", agent: "engineer" }), cleanupDraft() {}, replaceEstimate: async () => {}, fallbackPrompt: text => text, combinePrompts: parts => parts.join("\\n"), resolveAgent: () => null, subscribe: () => () => { delegateDisposals++ }, send: async call => { call.invocations[0].cursor = 0n; call.accept("input", () => { call.acceptedPhysical = "input"; call.acceptedRoot = "root"; call.admit("root") }); call.invocations[0].request.observeAdmission({ kind: "accepted", physical: "input" }); markDelegateSent(); return { ok: true } }, notePrompt() {}, awaitView: (_, answer) => answer, awaitInvocation: (_, answer) => answer }',
+    'const delegated = delegateRuntime.invokeObserved({ owner: "packed-owner", scope: "packed-owner", role: "Engineer", charge: "work", estimate: null, batch: null, prepare: async () => "work", observed: true, isCancelled: () => false, noteDraft: true }, delegateEffects, reason => ({ kind: "refused", reason }))',
+    'await delegateSent',
+    'assert.equal((await delegated.admission).physical, "input")',
+    'assert.equal(await delegateRuntime.handleTurn({ session: "packed-child", root: "root", physical: "input", outcome: "completed", hasFailure: false, hasParts: true, naturalMaterial: "material", response: { text: "answer" } }, { readDelivery: () => null, noteAnswer() {}, captureTerminal: async () => ({ kind: "captured" }), retry: async () => ({ ok: false, error: "exhausted" }) }), true)',
+    'assert.deepEqual(await delegated.completion, { ok: true, value: { text: "answer" } })',
+    'assert.equal(delegateDisposals, 1)',
+    'delegateRuntime.clear()',
+    'const packedCapture = new TraceCapture(); let captureHistory = new TraceHistory("packed-capture"); const captureIdentities = []; const captureWrites = []',
+    'const captureStore = { read: () => ({ history: captureHistory, identities: captureIdentities }), writeBody: async body => { captureWrites.push(body); return { ok: true, value: { reference: "body", digest: "digest" } } }, append: async fact => { const next = captureHistory.appendPart({ ...fact.part, sequence: fact.sequence, bodyRef: fact.bodyRef, bodyDigest: fact.bodyDigest, descriptor: fact.part.key }); assert.equal(next.ok, true); captureHistory = next.value; captureIdentities.push({ key: fact.part.key, secondaryKey: null, compatibility: "same" }) } }',
+    'const capturePart = { key: "one", secondaryKey: null, compatibility: "same", exactKey: true, legacyKey: null, role: "user", kind: "text", toolName: null, body: "original\\0", metadata: null }',
+    'await Promise.all([packedCapture.run("session", () => packedCapture.captureParts(captureStore, [capturePart], "stable")), packedCapture.run("session", () => packedCapture.captureParts(captureStore, [capturePart], "stable"))])',
+    'assert.deepEqual(captureWrites, ["original\\0"])',
+    'assert.equal(captureHistory.headSequence(), 1n)',
     'const packedRouting = new ExecutionRouting({ scheduler: null })',
     'const packedAdmission = await packedRouting.acquire({ sessionId: "packed-session", physicalUserMessageId: "packed-input", role: "worker", participant: "worker", purpose: "normal", hostTarget: { model: "provider/model", reasoning: "normal" } })',
     'assert.equal(packedAdmission.kind, "Admitted")',
@@ -1235,6 +1277,7 @@ export async function runExternalConsumer({
       assert.equal(entries.materialError, null);
       assert.deepEqual(entries.serialOrder, ['first', 'second']);
       assert.equal(entries.serialResult, 2);
+      await import(pathToFileURL(path.join(pkgRoot, '.verify-fission-lifecycle.mjs')).href);
       assert.equal(entries.fileLockHeld, true);
       assert.equal(entries.fileLockReleased, true);
       assert.ok(entries.lockDependency.startsWith(fs.realpathSync(path.dirname(lifecycleDependency)) + path.sep), 'file-lock must resolve its shipped runtime dependency');
@@ -1242,6 +1285,7 @@ export async function runExternalConsumer({
       assert.equal(material.renderBody(entries.material), '# report\\n');
     } finally {
       fs.unlinkSync(entryProbe);
+      fs.unlinkSync(path.join(pkgRoot, '.verify-fission-lifecycle.mjs'));
     }
 
     assert.ok(fs.readFileSync(enLaw, 'utf8').trim().length > 0, 'en common law is empty');

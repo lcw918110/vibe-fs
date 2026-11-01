@@ -14,7 +14,7 @@
 /src/Wanxiangshu/Execution/Routing/ModelCapacity/**
 /src/Wanxiangshu/OpenCode/Host/ReliabilityDiagnostics.fs
 /src/Wanxiangshu/OpenCode/Host/ReliabilityDiagnosticsSurface.fs
-/src/Wanxiangshu/OpenCode/Host/HostMessageProjection.fs
+/wanxiangtong/opencode/provider-request/MessageProjection.fs
 /src/Wanxiangshu/OpenCode/Host/HostSignalBootstrap.fs
 /src/Wanxiangshu/OpenCode/Host/PluginHostInterop.fs
 /src/Wanxiangshu/OpenCode/Host/PluginHooksSurface.fs
@@ -26,7 +26,8 @@
 /src/Wanxiangshu/OpenCode/Plugin/PluginHostWiring.fs
 /src/Wanxiangshu/OpenCode/Plugin/PluginRecoveryWiring.fs
 /src/Wanxiangshu/OpenCode/Plugin/PluginSessionWiring.fs
-/src/Wanxiangshu/OpenCode/Plugin/PluginTransforms.fs
+/wanxiangtong/opencode/provider-request/RequestProjection.fs
+/src/Wanxiangshu/OpenCode/Plugin/PluginTransformComposition.fs
 /src/Wanxiangshu/OpenCode/Plugin/SpikePlugin.fs
 /src/Wanxiangshu/Execution/Session/ChatExecution/Admission.fs
 /src/Wanxiangshu/Execution/Session/ChatExecution/Acceptance.fs

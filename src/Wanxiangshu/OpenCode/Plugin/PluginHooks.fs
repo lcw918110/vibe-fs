@@ -106,12 +106,6 @@ module PluginHooks =
     [<Import("ProviderCalibration", "wanxiangli/provider-calibration")>]
     let private calibration: obj = jsNative
 
-    [<Import("requestLatencyDetector", "wanxiangli/degeneration")>]
-    let private requestLatencyDetector: obj = jsNative
-
-    [<Emit("performance.now()")>]
-    let private performanceNow () : float = jsNative
-
     [<Emit("Object.prototype.hasOwnProperty.call($0, $1)")>]
     let private hasOwnProperty (target: obj) (prop: string) : bool = jsNative
 
@@ -463,157 +457,14 @@ module PluginHooks =
             let eventPort = host.EventPort
             let chatParams = ChatParamsHook.createWith journal
 
-            // Latency watchdog: per-session request-latency state machine. The
-            // statistics live in the library singleton; every physical effect
-            // is a port. Now is the Node monotonic clock (ms); Schedule wraps
-            // the Node timer port's one-shot delay with a cancellation handle.
-            let latencyTimerPort = NodeTiming.nodeTimerPort ()
-            let latencyObservers = Dictionary<string, string * (unit -> unit)>()
-
-            let latencyPorts: LatencyWatchdogPorts =
-                { Now = performanceNow
-                  Schedule = fun milliseconds callback ->
-                      let handle = latencyTimerPort.Delay(int milliseconds)
-
-                      (task {
-                          do! handle.Delay
-                          callback ()
-                      })
-                      |> ignore<Task<unit>>
-
-                      { new IDisposable with
-                          member _.Dispose() = handle.Cancel() }
-                  Abort = fun sessionId ->
-                      task {
-                          let sid = SessionId.create sessionId
-                          // Recorded before the Host acts: its Aborted terminal
-                          // can arrive before this promise resolves.
-                          Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.record sid
-                          let! outcome = sessionPort.InterruptAttempt sid
-
-                          return
-                              match outcome with
-                              | Ok() -> true
-                              | Error _ ->
-                                  Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.unrecord sid
-                                  false
-                      }
-                  Continue = fun sessionId prompt accepted onLateRefused ->
-                      task {
-                          // Detached is an actual handoff, not an Await with an
-                          // artificial deadline. Physical acceptance owns the
-                          // continuation outcome through the observer callback.
-                          let registrations = ResizeArray<IDisposable>()
-                          let token = Guid.NewGuid().ToString("N")
-                          // DSL-MUTABLE: subscription — dispose this continuation's observers once
-                          let mutable released = false
-                          let release () =
-                              if not released then
-                                  released <- true
-                                  match latencyObservers.TryGetValue sessionId with
-                                  | true, (current, _) when current = token ->
-                                      latencyObservers.Remove sessionId |> ignore
-                                  | _ -> ()
-                                  for registration in registrations do
-                                      registration.Dispose()
-                          latencyObservers[sessionId] <- (token, release)
-
-                          let acceptance: Wanxiangshu.Foundation.HostSession.ContinuationAcceptanceObserver =
-                              { Notify = fun _ ->
-                                    release ()
-                                    accepted ()
-                                AttachDisposable = fun registration ->
-                                    if released then registration.Dispose()
-                                    else registrations.Add registration
-                                Budget = None }
-                          try
-                              let! sent =
-                                  HostSessionNudge.sendContinuationDetachedObservedResult
-                                      sessionPort
-                                      host.RootWorkspace
-                                      (SessionId.create sessionId)
-                                      prompt
-                                      PromptAuthority.ContinuationKind.ProviderRetryAttempt
-                                      None
-                                      journal
-                                      acceptance
-                                      (fun reason ->
-                                          release ()
-                                          onLateRefused reason)
-
-                              return
-                                  match sent with
-                                  | Ok _ -> ""
-                                  | Error reason ->
-                                      release ()
-                                      reason
-                          with error ->
-                              release ()
-                              return error.Message
-                      }
-                  DropObserver = fun sessionId ->
-                      match latencyObservers.TryGetValue sessionId with
-                      | true, (_, release) -> release ()
-                      | _ -> ()
-                  Return = fun sessionId reason ->
-                      let sid = SessionId.create sessionId
-                      let text = "degeneration continuation unavailable: " + reason
-                      // The active profile can close while the interrupt is in
-                      // flight. The parent must still hear Failed: an
-                      // authority-less session stop addresses its live run.
-                      let stop =
-                          if sessionPort.IsManagedChild sid then
-                              match HostSessionNudge.tryActiveProfile journal sid with
-                              | Some owner ->
-                                  Some(
-                                      Wanxiangshu.Foundation.TerminalSignal.TerminalStop.forAuthority
-                                          owner.AuthorityRootUserMessageId
-                                          text
-                                  )
-                              | None -> Some(Wanxiangshu.Foundation.TerminalSignal.TerminalStop.session text)
-                          else
-                              None
-                      match stop with
-                      | Some stop ->
-                          if not (eventPort.NotifyTerminal
-                                      sid
-                                      (Wanxiangshu.Foundation.TerminalSignal.TerminalOutcome.Failed stop)) then
-                              Diagnostic.emit
-                                  "latency-degeneration-return-unobserved"
-                                  [ "session_id", sessionId; "reason", reason ]
-                      | None ->
-                          Diagnostic.emit
-                              "latency-degeneration-return-unowned"
-                              [ "session_id", sessionId; "reason", reason ]
-                  Managed = fun sessionId ->
-                      let sid = SessionId.create sessionId
-                      sessionPort.IsManagedChild sid
-                      && (HostSessionNudge.tryActiveProfile journal sid |> Option.isSome)
-                  Text = fun sessionId ->
-                      ProviderProse.render
-                          (ProviderLanguageBinding.forSessionText sessionId)
-                          RuntimeNudge.LatencyDegeneration
-                          Map.empty
-                  // CTX-014 only admits whitelisted fields; a non-whitelisted
-                  // name makes Diagnostic.emit drop the whole record.
-                  Diagnostic = fun kind reason -> Diagnostic.emit kind [ "reason", reason ] }
-
-            let latencyWatchdog =
-                new LatencyWatchdog(
-                    latencyPorts,
-                    { new RequestLatencyDetector with
-                        member _.ThresholdMs sessionId =
-                            unbox<float> (requestLatencyDetector?ThresholdMs sessionId)
-
-                        member _.ObserveCompleted(sessionId, durationMs) =
-                            requestLatencyDetector?ObserveCompleted (sessionId, durationMs) |> ignore
-
-                        member _.ObserveCensored(sessionId, censoredMs) =
-                            requestLatencyDetector?ObserveCensored (sessionId, censoredMs) |> ignore
-
-                        member _.Forget sessionId =
-                            requestLatencyDetector?Forget sessionId |> ignore }
-                )
+            let activeCompactingSessions = System.Collections.Generic.HashSet<string>()
+            let requestLatency =
+                RequestLatency.create
+                    sessionPort
+                    host.RootWorkspace
+                    eventPort
+                    journal
+                    activeCompactingSessions.Contains
 
             // Scope retention is the only durable scope store: its annotation
             // stream replays on cold start.
@@ -702,8 +553,6 @@ module PluginHooks =
                                 (stagePath, draftPath))
                     | _ -> return None
                 }
-
-            let activeCompactingSessions = System.Collections.Generic.HashSet<string>()
 
             let sessionStringOf (target: obj) : string =
                 if isNull target || isNull target?sessionID then
@@ -1232,7 +1081,7 @@ module PluginHooks =
                     let toolName = toolField toolInput "tool"
                     // latency-degeneration [013]: the model request ended when
                     // it handed this tool over; tool execution is not latency.
-                    latencyWatchdog.ToolStarted sessionId
+                    requestLatency.ToolStarted sessionId
 
                     if PluginTransforms.negotiationIsTemporary sessionId then
                         PluginTransforms.negotiationRecordToolViolation sessionId
@@ -1569,65 +1418,9 @@ module PluginHooks =
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
                         activeCompactingSessions.Remove(SessionId.value sessionId) |> ignore
-                        latencyWatchdog.Cancel (SessionId.value sessionId)
-                        latencyWatchdog.ForgetDetector (SessionId.value sessionId)
+                        requestLatency.SessionDeleted (SessionId.value sessionId)
                         Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.forget sessionId)
-
-            /// The watchdog's boundaries use the exact provider-run identity:
-            /// the assistant message's own id, present on both the provider
-            /// start and the terminal event. The physical user message id
-            /// (assistant parentID) is shared by every provider step of the
-            /// same turn, so it cannot pair one terminal to one attempt; the
-            /// provider run can. Compaction runs are not measured. An idle
-            /// signal with a measurement still in hand means the completion
-            /// event is missing or the interrupt never settled.
-            let settleLatencyWatchdog raw =
-                match HostEventCodec.tryDecodeExactProviderStart raw with
-                | Some observation ->
-                    let sessionId = SessionId.value observation.SessionId
-
-                    if not (activeCompactingSessions.Contains sessionId) then
-                        latencyWatchdog.Begin(
-                            sessionId,
-                            Some(ProviderRunIdentity.value observation.ProviderRun)
-                        )
-                | None -> ()
-
-                // The model also finishes a request when it hands tools to
-                // the Host. Its timer must never cover execution of resetScope.
-                match HostEventCodec.tryDecodeProviderStepEnd raw with
-                | Some(sessionId, _, providerRun) ->
-                    match HostEventCodec.tryDecodeExactProviderTerminal raw with
-                    | Some observation ->
-                        match observation.Outcome with
-                        | Wanxiangshu.Execution.Session.ChatExecution.HostProviderTerminalOutcome.Completed _ ->
-                            latencyWatchdog.Complete(
-                                SessionId.value sessionId,
-                                Some(ProviderRunIdentity.value providerRun)
-                            )
-                        | Wanxiangshu.Execution.Session.ChatExecution.HostProviderTerminalOutcome.Cancelled ExecutionFailure.UserCancelled ->
-                            latencyWatchdog.OnProviderCancelled(
-                                SessionId.value sessionId,
-                                Some(ProviderRunIdentity.value providerRun)
-                            )
-                        | _ ->
-                            latencyWatchdog.Discard(
-                                SessionId.value sessionId,
-                                Some(ProviderRunIdentity.value providerRun)
-                            )
-                    | None ->
-                        // Tool-calls finishes this exact model request, not the Session.
-                        latencyWatchdog.CompleteStep(
-                            SessionId.value sessionId,
-                            Some(ProviderRunIdentity.value providerRun)
-                        )
-                | None -> ()
-
-                match HostEventCodec.tryDecode raw with
-                | Some(SessionIdle sessionId) ->
-                    latencyWatchdog.OnIdle(SessionId.value sessionId)
-                | _ -> ()
 
             let observeEvent raw =
                 task {
@@ -1635,7 +1428,7 @@ module PluginHooks =
                     recordProviderTokenUse raw
                     do! settleUserQuestion raw
                     do! settlePostS3Deliver raw
-                    settleLatencyWatchdog raw
+                    requestLatency.ObserveEvent raw
                     do! wired.ObserveEvent raw
                 }
 
@@ -1645,7 +1438,7 @@ module PluginHooks =
                 let disposeAll () =
                     task {
                         // Idempotent, never throws; cancels any armed timer.
-                        latencyWatchdog.Dispose()
+                        requestLatency.Dispose()
                         do! product.Dispose()
                         do! scope.DisposeAsync()
                     }
