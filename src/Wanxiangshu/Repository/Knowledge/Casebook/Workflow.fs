@@ -35,24 +35,13 @@ module CasebookWorkflow =
             | Error err -> return Error(CasebookMutationError.AppendFailure err)
         }
 
-
-    let private visibleCases (capacity: int) (state: CasebookProjection.State) : Map<string, Case> =
-        if capacity > 0 then
-            CasebookProjection.evict capacity state.Cases |> fst
-        else
-            state.Cases
-
     let fetchCase
         (store: IEventStore)
         (capacity: int)
         (identityOrSessionId: string)
         : Task<Result<Case option, string>> =
         task {
-            let cases =
-                match store.TryCurrent "Casebook" with
-                | None -> Map.empty
-                | Some current -> visibleCases capacity (unbox<CasebookProjection.State> current)
-
+            let cases = CasebookProjection.projectCases store capacity
             return Ok(Map.tryFind identityOrSessionId cases)
         }
 

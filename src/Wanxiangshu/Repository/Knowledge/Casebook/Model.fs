@@ -1,6 +1,5 @@
 namespace Wanxiangshu.Repository.Knowledge.Casebook
 
-open System
 open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Persistence.EventStore
@@ -15,29 +14,6 @@ type Observation =
     | FileRead of path: string * contentHash: string
     | GlobResult of pattern: string * paths: string list
     | GrepResult of pattern: string * matches: (string * int * string) list
-
-/// DSL-class: Vocabulary — normalized identity of an observation: same path +
-/// same content (or same result set) dedupe to one identity (CASE-003).
-type ObservationIdentity = private ObservationIdentity of string
-
-module ObservationIdentity =
-
-    let ofObservation (observation: Observation) : ObservationIdentity =
-        let raw =
-            match observation with
-            | Observation.FileRead(path, hash) -> "read:" + path + ":" + hash
-            | Observation.GlobResult(pattern, paths) ->
-                "glob:" + pattern + ":" + (paths |> List.sort |> String.concat ",")
-            | Observation.GrepResult(pattern, matches) ->
-                let flat =
-                    matches
-                    |> List.map (fun (path, index, text) -> path + "@" + string index + ":" + text)
-                    |> List.sort
-                    |> String.concat "|"
-
-                "grep:" + pattern + ":" + flat
-
-        ObservationIdentity raw
 
 /// DSL-class: DurableFact — CASE-002 / KR-002: minimal Case model with dual baselines.
 /// Identity is the stable logical case identity (scoped to invocation).
@@ -76,158 +52,127 @@ type ReplayResult =
     | Fresh
     | Stale
 
+module private CasebookValues =
+
+    let observationToNative (observation: Observation) : obj =
+        match observation with
+        | Observation.FileRead(path, contentHash) ->
+            createObj [ "kind" ==> "file-read"; "path" ==> path; "contentHash" ==> contentHash ]
+        | Observation.GlobResult(pattern, paths) ->
+            createObj [ "kind" ==> "glob-result"; "pattern" ==> pattern; "paths" ==> List.toArray paths ]
+        | Observation.GrepResult(pattern, matches) ->
+            createObj [ "kind" ==> "grep-result"; "pattern" ==> pattern; "matches" ==> List.toArray matches ]
+
+    let observationOfNative (value: obj) : Observation =
+        match unbox<string> value?kind with
+        | "file-read" -> Observation.FileRead(unbox value?path, unbox value?contentHash)
+        | "glob-result" ->
+            Observation.GlobResult(unbox value?pattern, unbox<string array> value?paths |> Array.toList)
+        | "grep-result" ->
+            Observation.GrepResult(
+                unbox value?pattern,
+                unbox<(string * int * string) array> value?matches |> Array.toList
+            )
+        | kind -> invalidOp $"unknown casebook observation kind: {kind}"
+
+    let observationsToNative (observations: Observation list) : obj array =
+        observations |> List.map observationToNative |> List.toArray
+
+    let observationsOfNative (values: obj array) : Observation list =
+        values |> Array.map observationOfNative |> Array.toList
+
+    let caseToNative (case: Case) : obj =
+        createObj
+            [ "identity" ==> case.Identity
+              "sourceTrace" ==> case.SourceTrace
+              "q" ==> case.Q
+              "a" ==> case.A
+              "relatedPaths" ==> List.toArray case.RelatedPaths
+              "completionFileState" ==> case.CompletionFileState
+              "maintenanceFileState" ==> case.MaintenanceFileState
+              "accessOrder" ==> case.AccessOrder
+              "observations" ==> observationsToNative case.Observations ]
+
+    let caseOfNative (value: obj) : Case =
+        { Identity = unbox value?identity
+          SourceTrace = unbox value?sourceTrace
+          Q = unbox value?q
+          A = unbox value?a
+          RelatedPaths = unbox<string array> value?relatedPaths |> Array.toList
+          CompletionFileState = unbox value?completionFileState
+          MaintenanceFileState = unbox value?maintenanceFileState
+          AccessOrder = unbox<int64> value?accessOrder
+          Observations = observationsOfNative (unbox value?observations) }
+
+    let eventToNative (event: CasebookEvent) : obj =
+        match event with
+        | CasebookEvent.CaseCaptured case ->
+            createObj [ "kind" ==> "captured"; "case" ==> caseToNative case ]
+        | CasebookEvent.CaseRefreshed(identity, q, a, maintenanceFileState, relatedPaths, observations) ->
+            createObj
+                [ "kind" ==> "refreshed"
+                  "identity" ==> identity
+                  "q" ==> q
+                  "a" ==> a
+                  "maintenanceFileState" ==> maintenanceFileState
+                  "relatedPaths" ==> List.toArray relatedPaths
+                  "observations" ==> observationsToNative observations ]
+        | CasebookEvent.CaseAccessed identity -> createObj [ "kind" ==> "accessed"; "identity" ==> identity ]
+        | CasebookEvent.CaseEvicted identity -> createObj [ "kind" ==> "evicted"; "identity" ==> identity ]
+
 module Observations =
 
-    /// CASE-003: normalize — dedupe by identity and fix a canonical order so
-    /// the same captured evidence always folds to the same Case bytes.
+    [<Import("normalizeObservations", "wanxiangli/casebook")>]
+    let private normalizeValues (items: obj array) : obj array = jsNative
+
+    [<Import("sameObservations", "wanxiangli/casebook")>]
+    let private sameValues (left: obj array) (right: obj array) : bool = jsNative
+
     let normalize (observations: Observation list) : Observation list =
         observations
-        |> List.map (fun o -> ObservationIdentity.ofObservation o, o)
-        |> List.sortBy (fun (identity, _) -> let (ObservationIdentity raw) = identity in raw)
-        |> List.distinctBy fst
-        |> List.map snd
+        |> CasebookValues.observationsToNative
+        |> normalizeValues
+        |> CasebookValues.observationsOfNative
 
-    /// CASE-003: replay classification — every stored observation must match
-    /// the replayed result set exactly (same normalized set).
     let classifyReplay (stored: Observation list) (replayed: Observation list) : ReplayResult =
-        let storedIds =
-            stored |> normalize |> List.map ObservationIdentity.ofObservation |> Set.ofList
-
-        let replayedIds =
-            replayed
-            |> normalize
-            |> List.map ObservationIdentity.ofObservation
-            |> Set.ofList
-
-        if storedIds = replayedIds then
+        if sameValues (CasebookValues.observationsToNative stored) (CasebookValues.observationsToNative replayed) then
             ReplayResult.Fresh
         else
             ReplayResult.Stale
 
-/// DSL-class: Decision — CASE-008: the CasebookProjection fold. Captured
-/// inserts/replaces a Case; Refreshed replaces Q/A/maintenance/related; Accessed
-/// bumps the derived access order; Evicted removes. Same-Case concurrent
-/// forks surface as DomainConflict at the EventStore layer and converge via
-/// later resolution/refresh/evict events — never via revision/wall_clock LWW.
+/// Converts decoded storage events and reads the immutable Current held by the Integrator.
 module CasebookProjection =
 
-    [<Import("casebookIndex", "wanxiangli/casebook")>]
-    let private casebookIndex: obj = jsNative
-
-    [<Import("CasebookIndexLaw", "wanxiangli/casebook")>]
-    let private casebookLawClass: obj = jsNative
+    [<Import("CasebookState", "wanxiangli/casebook")>]
+    let private casebookStateClass: obj = jsNative
 
     [<Emit("new $0()")>]
     let private construct (cls: obj) : obj = jsNative
 
-    let private casebookLaw: obj = construct casebookLawClass
+    type State = private State of obj
 
-    /// Incremental Current owned by the canonical Integrator. The access counter
-    /// is part of the derived state so boot replay and live integration use the
-    /// exact same single-event rule.
-    type State =
-        { AccessCounter: int64
-          Cases: Map<string, Case> }
+    let emptyState: State = State(construct casebookStateClass)
 
-    let emptyState: State =
-        { AccessCounter = 0L
-          Cases = Map.empty }
+    let apply (State state) (event: CasebookEvent) : State =
+        State(state?apply (CasebookValues.eventToNative event))
 
-    let empty: Map<string, Case> = emptyState.Cases
-
-    let private preferNonEmptyText (candidate: string) (fallback: string) : string =
-        if String.IsNullOrEmpty candidate then
-            fallback
-        else
-            candidate
-
-    let private preferNonEmptyList (candidate: 'a list) (fallback: 'a list) : 'a list =
-        if List.isEmpty candidate then fallback else candidate
-
-    let private refreshCase state identity q a maintenanceFileState relatedPaths observations =
-        match Map.tryFind identity state.Cases with
-        | Some existing ->
-            let updated =
-                { existing with
-                    Q = q
-                    A = a
-                    MaintenanceFileState = preferNonEmptyText maintenanceFileState existing.MaintenanceFileState
-                    RelatedPaths = preferNonEmptyList relatedPaths existing.RelatedPaths
-                    Observations = Observations.normalize observations
-                    AccessOrder = state.AccessCounter }
-
-            { AccessCounter = state.AccessCounter + 1L
-              Cases = Map.add identity updated state.Cases }
-        | None -> state
-
-    let private accessCase state identity =
-        match Map.tryFind identity state.Cases with
-        | Some existing ->
-            let touched =
-                { existing with
-                    AccessOrder = state.AccessCounter }
-
-            { AccessCounter = state.AccessCounter + 1L
-              Cases = Map.add identity touched state.Cases }
-        | None -> state
-
-    let apply (state: State) (event: CasebookEvent) : State =
-        match event with
-        | CasebookEvent.CaseCaptured case ->
-            let withAccess =
-                { case with
-                    Observations = Observations.normalize case.Observations
-                    AccessOrder = state.AccessCounter }
-
-            { AccessCounter = state.AccessCounter + 1L
-              Cases = Map.add case.Identity withAccess state.Cases }
-        | CasebookEvent.CaseRefreshed(identity, q, a, maintenanceFileState, relatedPaths, observations) ->
-            refreshCase state identity q a maintenanceFileState relatedPaths observations
-        | CasebookEvent.CaseAccessed identity -> accessCase state identity
-        | CasebookEvent.CaseEvicted identity ->
-            { state with
-                Cases = Map.remove identity state.Cases }
-
-    // No history-fold API by design. CanonicalIntegrator is the sole history
-    // enumerator and registers `apply` as this module's one-event oracle.
-
-    /// CASE-008: LRU eviction — keep the capacity most-recently-accessed
-    /// Cases; the evicted session ids are returned so the caller can append
-    /// Evicted facts (tombstones are events too). The victim choice is
-    /// wanxiangli/casebook `evictionVictims` (CUT-27); this only removes them.
-    /// 从事件存储投影并应用 LRU 淘汰后的案例表（无状态薄读取）。
-    let evict (capacity: int) (cases: Map<string, Case>) : Map<string, Case> * string list =
-        let victims =
-            cases
-            |> Map.toArray
-            |> Array.map (fun (sessionId, case) ->
-                createObj [ "sessionId" ==> sessionId; "accessOrder" ==> case.AccessOrder ])
-            |> fun items -> unbox<string array> (casebookLaw?evictionVictims (capacity, items))
-            |> Array.toList
-
-        let remaining = victims |> List.fold (fun acc id -> Map.remove id acc) cases
-        remaining, victims
-
-    /// CASE-008: LRU eviction — keep the capacity most-recently-accessed
-    /// Cases; the evicted session ids are returned so the caller can append
-    /// Evicted facts (tombstones are events too). The victim choice is
-    /// wanxiangli/casebook `evictionVictims` (CUT-27); this only removes them.
-    /// 从事件存储投影并应用 LRU 淘汰后的案例表（无状态薄读取）。
     let projectCases (store: IEventStore) (capacity: int) : Map<string, Case> =
         match store.TryCurrent "Casebook" with
         | None -> Map.empty
         | Some current ->
-            let state = unbox<State> current
-            evict capacity state.Cases |> fst
+            let (State state) = unbox<State> current
+            let visible: obj = state?visible capacity
 
-    /// 解析公开 shelfmark 到内部 Case（直读最新存储投影，不暴露 session key）。
+            unbox<obj array> visible?cases
+            |> Array.map (fun value ->
+                let case = CasebookValues.caseOfNative value
+                case.Identity, case)
+            |> Map.ofArray
+
     let resolve (store: IEventStore) (capacity: int) (shelfmark: string) : Result<Case option, string> =
-        let cases = projectCases store capacity
-        let ordered = cases |> Map.toArray |> Array.map snd
-
-        let indexCases =
-            ordered
-            |> Array.map (fun case -> createObj [ "sessionId" ==> case.Identity; "question" ==> case.Q ])
-
-        let position = unbox<int> (casebookIndex?locate (indexCases, shelfmark))
-        Ok(if position < 0 then None else Some ordered.[position])
+        match store.TryCurrent "Casebook" with
+        | None -> Ok None
+        | Some current ->
+            let (State state) = unbox<State> current
+            let value: obj = state?resolve (capacity, shelfmark)
+            Ok(if isNull value then None else Some(CasebookValues.caseOfNative value))
