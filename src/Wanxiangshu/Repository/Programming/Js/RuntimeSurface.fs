@@ -45,7 +45,7 @@ module JsRuntimeSurface =
                   JsCapability.Park ]
 
         let api =
-            JsToolsBindings.createApi allCapabilities root staging reads (JsToolsBindings.createLedger None) None None
+            JsToolsBindings.createApi allCapabilities root staging reads (JsAsIsLedger None) None None
 
         box (JsBindingsHandle(api, staging, reads))
 
@@ -58,7 +58,7 @@ module JsRuntimeSurface =
             permissionLabels |> Array.choose JsCapability.ofLabel |> Set.ofArray
 
         let api =
-            JsToolsBindings.createApi capabilities root staging reads (JsToolsBindings.createLedger None) None None
+            JsToolsBindings.createApi capabilities root staging reads (JsAsIsLedger None) None None
 
         box (JsBindingsHandle(api, staging, reads))
 

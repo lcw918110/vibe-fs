@@ -1,6 +1,7 @@
 namespace Wanxiangshu.Repository.Programming.Js
 
 open System.Threading.Tasks
+open Fable.Core
 open Thoth.Json
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -12,10 +13,75 @@ type IJsTransactionPersistence =
     abstract AppendPrepared: prepared: JsTransactionPrepared -> Task<Result<EventId, JsTransactionAppendFailure>>
     abstract AppendCommitted: transactionId: JsTransactionId -> Task<Result<EventId, JsTransactionAppendFailure>>
 
-/// 同一程序跨 park/unpark 持有的逐笔追加账本，由 workflow 在程序终局排空。
-type JsAsIsLedger =
-    { Persistence: IJsTransactionPersistence option
-      Appends: ResizeArray<Task<Result<EventId, JsTransactionAppendFailure>>> }
+module private JsLedgerTasks =
+    [<Emit("$0.catch(() => undefined)")>]
+    let observeRejection (_append: obj) : unit = jsNative
+
+    [<Emit("($0 != null && typeof $0[$1] === 'string' ? $0[$1] : '')")>]
+    let private textField (_error: obj) (_name: string) : string = jsNative
+
+    let private rejectedFailure error =
+        let code = textField error "code"
+        let reason = textField error "reason"
+        let message = textField error "message"
+
+        JsFailure.ofWire
+            (if code = "" then "PROGRAM_FAILED" else code)
+            (if reason <> "" then reason
+             elif message <> "" then message
+             else "operation failed")
+
+    let settle (pending: Task<Result<EventId, JsTransactionAppendFailure>>) : Task<Result<unit, JsFailure>> =
+        task {
+            try
+                let! appended = pending
+                return appended |> Result.map ignore |> Result.mapError JsFailure.TransactionPersistenceFailed
+            with error ->
+                return Error(rejectedFailure (box error))
+        }
+
+/// 同一程序跨 park/unpark 持有已发起的追加，终局等完后按发起顺序报告首次失败。
+[<Sealed>]
+type JsAsIsLedger(persistence: IJsTransactionPersistence option) =
+    let appends = ResizeArray<Task<Result<EventId, JsTransactionAppendFailure>>>()
+
+    let fire pending =
+        JsLedgerTasks.observeRejection (box pending)
+        appends.Add pending
+
+    member _.Prepared(root: string, mutation: JsStagedMutation) : JsTransactionId option =
+        match persistence with
+        | None -> None
+        | Some durable ->
+            let prepared =
+                { TransactionId = JsTransactionId.generate ()
+                  WorkspaceRoot = root
+                  Mutation = JsTransactionFacts.ofMutation mutation }
+
+            durable.AppendPrepared prepared |> fire
+            Some prepared.TransactionId
+
+    member _.Committed(transactionId: JsTransactionId option) : unit =
+        match persistence, transactionId with
+        | Some durable, Some transactionId -> durable.AppendCommitted transactionId |> fire
+        | _ -> ()
+
+    member _.Settle() : Task<Result<unit, JsFailure>> =
+        task {
+            let mutable firstFailure = None
+
+            for pending in appends do
+                let! appended = JsLedgerTasks.settle pending
+
+                match firstFailure, appended with
+                | None, Error failure -> firstFailure <- Some failure
+                | _ -> ()
+
+            return
+                match firstFailure with
+                | Some failure -> Error failure
+                | None -> Ok()
+        }
 
 /// Narrow durable audit capability for parked-site lifecycle transitions
 /// (PLAN S2 step 8 / algorithm H3). The audit stream is separate from the

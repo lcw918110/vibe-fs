@@ -247,42 +247,6 @@ module JsToolWorkflow =
             | JsStagedMutation.Create _
             | JsStagedMutation.Remove _ -> None)
 
-    let private mapPersistenceFailure
-        (operation: Task<Result<'a, JsTransactionAppendFailure>>)
-        : Task<Result<'a, JsFailure>> =
-        operation
-        |> TaskValue.map (Result.mapError JsFailure.TransactionPersistenceFailed)
-
-    /// Settle the H1 ledger the mutation members fired (PLAN algorithm H1):
-    /// await every Prepared/Committed append. The members fire Prepared at
-    /// call time (before the write lands) and Committed right after, at
-    /// per-mutation granularity with no aggregation; the physical EventStore
-    /// append chain settles within the same event-loop turn as the write. A
-    /// failed append fails the tool result with the stable
-    /// TRANSACTION_PREPARE_*/COMMIT_* codes while the landed as-is writes
-    /// stay reported, never rolled back ([013]).
-    let private recordFirstAppendFailure
-        (currentFailure: JsFailure option)
-        (appended: Result<'a, JsTransactionAppendFailure>)
-        =
-        match currentFailure, appended with
-        | None, Error failure -> Some(JsFailure.TransactionPersistenceFailed failure)
-        | _ -> currentFailure
-
-    let private settleLedger (ledger: JsAsIsLedger) : Task<Result<unit, JsFailure>> =
-        task {
-            // DSL-MUTABLE: algorithm-scratch — first append failure for the outcome
-            let mutable appendFailure = None
-
-            for pending in ledger.Appends do
-                let! appended = pending
-                appendFailure <- recordFirstAppendFailure appendFailure appended
-
-            match appendFailure with
-            | Some failure -> return Error failure
-            | None -> return Ok()
-        }
-
     let private invokeObservation observe readPaths effectPaths : Task<Result<unit, JsFailure>> =
         task {
             try
@@ -302,15 +266,6 @@ module JsToolWorkflow =
         | None -> Task.FromResult(Ok())
         | Some observe -> invokeObservation observe readPaths effectPaths
 
-
-    let private checkReadOnlyMutation
-        (hasMutationCapability: bool)
-        (mutations: JsStagedMutation list)
-        : JsFailure option =
-        if not hasMutationCapability && not (List.isEmpty mutations) then
-            Some JsFailure.ReadOnlyMutationRejected
-        else
-            None
 
     let conflictingInputReason (input: obj) =
         if validInput input then
@@ -453,7 +408,7 @@ module JsToolWorkflow =
         task {
             let staging = ResizeArray<JsStagedMutation>()
             let reads = ResizeArray<JsExplicitFileRead>()
-            let ledger = JsToolsBindings.createLedger persistence
+            let ledger = JsAsIsLedger persistence
             // DSL-MUTABLE: resource — 保存本次结算失败，供回执映射保留原始原因。
             let mutable settlementFailure: JsFailure option = None
 
@@ -552,7 +507,7 @@ module JsToolWorkflow =
                             (reads |> Seq.distinctBy (fun read -> read.Path) |> Seq.toList)
                             effectPaths
 
-                    let! appended = settleLedger ledger
+                    let! appended = ledger.Settle()
                     let failure = settlementResult outputBoundBytes receipt observed appended
                     settlementFailure <- failure
 

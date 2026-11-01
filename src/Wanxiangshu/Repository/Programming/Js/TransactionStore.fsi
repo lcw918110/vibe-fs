@@ -10,10 +10,13 @@ type IJsTransactionPersistence =
     abstract AppendPrepared: prepared: JsTransactionPrepared -> Task<Result<EventId, JsTransactionAppendFailure>>
     abstract AppendCommitted: transactionId: JsTransactionId -> Task<Result<EventId, JsTransactionAppendFailure>>
 
-/// 同一程序跨 park/unpark 持有的逐笔追加账本，由 workflow 在程序终局排空。
+/// 同一程序跨 park/unpark 持有已发起的追加，终局等完后按发起顺序报告首次失败。
+[<Sealed>]
 type JsAsIsLedger =
-    { Persistence: IJsTransactionPersistence option
-      Appends: ResizeArray<Task<Result<EventId, JsTransactionAppendFailure>>> }
+    new: persistence: IJsTransactionPersistence option -> JsAsIsLedger
+    member Prepared: root: string * mutation: JsStagedMutation -> JsTransactionId option
+    member Committed: transactionId: JsTransactionId option -> unit
+    member Settle: unit -> Task<Result<unit, JsFailure>>
 
 /// Narrow durable audit capability for parked-site lifecycle transitions.
 /// The audit stream is separate from the mutation-ledger stream.

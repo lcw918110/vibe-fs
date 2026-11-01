@@ -10,7 +10,6 @@ type JsDelegationHost =
       Review: obj -> obj -> Task<obj> } // (findings, note)
 
 module JsToolsBindings =
-    val createLedger: persistence: IJsTransactionPersistence option -> JsAsIsLedger
     val makeReviewMember: host: JsDelegationHost option -> (string * obj)
 
     val createApi:

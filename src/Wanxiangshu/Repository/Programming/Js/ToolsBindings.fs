@@ -33,47 +33,6 @@ module JsToolsBindings =
               "code" ==> JsFailure.code failure
               "reason" ==> JsFailure.reason failure ]
 
-    let createLedger (persistence: IJsTransactionPersistence option) : JsAsIsLedger =
-        { Persistence = persistence
-          Appends = ResizeArray() }
-
-    /// Observe a fired append so a rejected task never becomes an unhandled
-    /// rejection on a path that does not settle the ledger (a parked site
-    /// suspends before settlement).
-    [<Emit("$0.catch(() => undefined)")>]
-    let private observeRejection (append: obj) : obj = jsNative
-
-    /// H1: fire the Prepared append before the write lands. Returns the
-    /// transaction id so the matching Committed can be fired after the write;
-    /// a failed write leaves that Prepared as interrupt evidence ([015]).
-    let private firePrepared
-        (ledger: JsAsIsLedger)
-        (root: string)
-        (mutation: JsStagedMutation)
-        : JsTransactionId option =
-        match ledger.Persistence with
-        | None -> None
-        | Some durable ->
-            let prepared =
-                { TransactionId = JsTransactionId.generate ()
-                  WorkspaceRoot = root
-                  Mutation = JsTransactionFacts.ofMutation mutation }
-
-            let pending = durable.AppendPrepared prepared
-            observeRejection (box pending) |> ignore
-            ledger.Appends.Add pending
-            Some prepared.TransactionId
-
-    /// H1: fire the Committed append after the write landed.
-    let private fireCommitted (ledger: JsAsIsLedger) (transactionId: JsTransactionId option) : unit =
-        match ledger.Persistence, transactionId with
-        | Some durable, Some transactionId ->
-            let pending = durable.AppendCommitted transactionId
-            observeRejection (box pending) |> ignore
-            ledger.Appends.Add pending
-        | _ -> ()
-
-
     let private mutationOf (value: obj) =
         match string value?kind with
         | "rewrite" -> JsStagedMutation.Rewrite(string value?path, string value?originalText, string value?newText)
@@ -82,17 +41,22 @@ module JsToolsBindings =
         | "move" -> JsStagedMutation.Move(string value?path, string value?destination)
         | _ -> invalidArg "mutation" "unknown physical file effect"
 
-    let private files root (staging: ResizeArray<JsStagedMutation>) (reads: ResizeArray<JsExplicitFileRead>) ledger =
+    let private files
+        root
+        (staging: ResizeArray<JsStagedMutation>)
+        (reads: ResizeArray<JsExplicitFileRead>)
+        (ledger: JsAsIsLedger)
+        =
         fileSession (
             createObj
                 [ "root" ==> root
                   "before"
-                  ==> fun (value: obj) -> box (firePrepared ledger root (mutationOf value))
+                  ==> fun (value: obj) -> box (ledger.Prepared(root, mutationOf value))
                   "after"
                   ==> fun (value: obj) (token: obj) ->
                       let mutation = mutationOf value
                       staging.Add mutation
-                      fireCommitted ledger (unbox<JsTransactionId option> token)
+                      ledger.Committed(unbox<JsTransactionId option> token)
                   "read"
                   ==> fun (path: string) (text: string) -> reads.Add { Path = path; ResultBytes = text } ]
         )
