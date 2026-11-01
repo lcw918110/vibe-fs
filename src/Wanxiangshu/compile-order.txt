@@ -607,20 +607,8 @@ Participant/Provider/Attempt/Fallback/Evidence.fsi
 Participant/Provider/Attempt/Fallback/Evidence.fs
 Process/ProcessRequest.fsi
 Process/ProcessRequest.fs
-Process/LargeGate.fsi
-Process/LargeGate.fs
-Process/NodeProcessHost.fsi
-Process/NodeProcessHost.fs
-Process/NodeProcessWait.fsi
-Process/NodeProcessWait.fs
 Process/Spool.fsi
 Process/Spool.fs
-Process/ProcessOutput.fsi
-Process/ProcessOutput.fs
-Process/ProcessRunner.fsi
-Process/ProcessRunner.fs
-Process/LargeGateSurface.fsi
-Process/LargeGateSurface.fs
 Repository/Programming/Js/TransactionStore.fsi
 Repository/Programming/Js/TransactionStore.fs
 

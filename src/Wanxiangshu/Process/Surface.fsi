@@ -5,8 +5,6 @@ open Wanxiangshu.Execution.Delegation.Fork
 open Wanxiangshu.Execution.Session
 
 module ProcessSurface =
-    val killAckGraceMs: int
-
     val createVirtualTimer: unit -> obj
     val timerDelay: timer: obj -> milliseconds: int -> obj
     val timerAwait: handle: obj -> Task<unit>
@@ -25,10 +23,6 @@ module ProcessSurface =
     val clockSet: clock: obj -> iso: string -> unit
     val createNodeClock: unit -> obj
 
-    val effectiveDeadlineSeconds: runtimeSeconds: float -> hardLimitSeconds: float -> float
-    val outputThreshold: bytes: float -> float
-    val validateEstimate: runtimeSeconds: float -> outputBytes: float -> obj
-    val defaultHardLimitSeconds: float
     val renderDeadlineExpired: unit -> string
     val renderElapsed: language: string -> elapsedMilliseconds: float -> string
     val composeWithElapsed: tip: obj -> elapsed: obj -> estimate: obj -> guideline: string -> string
@@ -38,44 +32,6 @@ module ProcessSurface =
     val createSessionStartLedger: unit -> obj
     val appendSessionStart: ledger: obj -> sessionId: string -> startedAt: string -> unit
     val readSessionStart: ledger: obj -> sessionId: string -> obj
-
-    val command: fileName: string -> arguments: obj -> workingDirectory: obj -> stdin: obj -> obj
-    val commandView: value: obj -> obj
-    val estimate: runtimeSeconds: float -> outputBytes: float -> memory: string -> obj
-    val estimateView: value: obj -> obj
-    val context: workingDirectory: obj -> hardLimitMs: float -> obj
-    val contextView: value: obj -> obj
-
-    val createCancellationToken: cancelled: obj -> obj
-    val cancel: token: obj -> unit
-    val cancelToken: token: obj -> obj
-    val tokenView: token: obj -> obj
-    val registerCancellation: token: obj -> callback: obj -> obj
-
-    val outcomeView: outcome: obj -> obj
-    val resultView: result: obj -> obj
-
-    val runWithLauncher: launcher: obj -> command: obj -> estimate: obj -> context: obj -> token: obj -> Task<obj>
-
-    val runWithHost: command: obj -> estimate: obj -> context: obj -> token: obj -> Task<obj>
-    val run: command: obj -> estimate: obj -> context: obj -> token: obj -> Task<obj>
-
-    val childCreate: onKill: obj -> obj
-    val childExit: child: obj -> code: int -> unit
-    val childOnExit: child: obj -> callback: obj -> unit
-    val childView: child: obj -> obj
-    val waitOutcomeView: outcome: obj -> obj
-    val waitForExit: child: obj -> deadline: obj -> token: obj -> Task<obj>
-
-    val outputCreate: estimate: obj -> obj
-    val outputAddStdout: collector: obj -> bytes: obj -> unit
-    val outputAddStderr: collector: obj -> bytes: obj -> unit
-    val outputBuildResult: collector: obj -> exitCode: int -> obj
-    val outputView: collector: obj -> obj
-
-    val spoolChunkCount: bytes: float -> int
-    val spoolDelete: path: string -> unit
-    val spoolReadPath: path: string -> Task<obj array>
 
     val bytes: text: string -> obj
     val newId: unit -> obj
@@ -160,5 +116,3 @@ module ProcessSurface =
     val readPlanView: plan: ReadPlan -> obj
 
     val renderPtyCompletion: label: string -> _id: string -> outcome: string -> exitCode: int -> string
-
-    val runWithHostLauncher: host: obj -> command: obj -> estimate: obj -> context: obj -> token: obj -> Task<obj>

@@ -452,14 +452,6 @@ export const SURFACE_MANIFEST = [
   },
 
   {
-    module: 'Process/LargeGateSurface.js',
-    owner: 'process-execution',
-    laws: ['PROC-016'],
-    source: 'src/Wanxiangshu/Process/LargeGateSurface.fs',
-    representation: 'opaque-capability',
-    kind: 'resource',
-  },
-  {
     module: 'Repository/Knowledge/Casebook/Surface.js',
     owner: 'knowledge-reuse',
     laws: ['DURABLE-EVENTS-019', 'DURABLE-CONVERGENCE-007', 'KNOWLEDGE-REUSE-002', 'KNOWLEDGE-REUSE-003', 'KNOWLEDGE-REUSE-004', 'KNOWLEDGE-REUSE-007', 'KNOWLEDGE-REUSE-008', 'KNOWLEDGE-REUSE-010', 'KNOWLEDGE-REUSE-014', 'KNOWLEDGE-REUSE-016'],

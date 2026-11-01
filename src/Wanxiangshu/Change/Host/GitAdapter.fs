@@ -1,18 +1,50 @@
 namespace Wanxiangshu.Change.Host
 
 open System
-open System.Threading
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Git
 open Wanxiangshu.Process
 
 /// 宿主进程输出适配；候选准备由公开库负责。
 module OrchestratorGit =
 
-    let private estimate =
-        { EstimatedRuntime = RuntimeSeconds 30.0
-          EstimatedOutput = OutputBytes 65536L
-          EstimatedMemory = EstimatedMemory.Medium }
+    [<Import("runProcess", "wanxiangli/runtime")>]
+    let private runProcess (request: obj) : Task<obj> = jsNative
+
+    [<RequireQualifiedAccess>]
+    type private ProcessError =
+        | TimeoutExceeded of duration: TimeSpan
+        | SpawnFailed of reason: string
+        | ProcessCancelled of reason: string
+        | ExecutionFailed of reason: string
+
+    let private errorOf (value: obj) : ProcessError =
+        match unbox<string> value?kind with
+        | "TimeoutExceeded" -> ProcessError.TimeoutExceeded(TimeSpan.FromMilliseconds(unbox<float> value?durationMs))
+        | "SpawnFailed" -> ProcessError.SpawnFailed(unbox value?reason)
+        | "ProcessCancelled" -> ProcessError.ProcessCancelled(unbox value?reason)
+        | "ExecutionFailed" -> ProcessError.ExecutionFailed(unbox value?reason)
+        | kind -> invalidOp $"unknown process error kind: {kind}"
+
+    let private requestOf (cmd: Command) : obj =
+        let environment =
+            cmd.Environment
+            |> Option.map (fun values -> values |> Map.toSeq |> Seq.map (fun (name, value) -> name, box value) |> createObj)
+            |> Option.defaultValue null
+
+        createObj
+            [ "command"
+              ==> createObj
+                  [ "fileName" ==> cmd.FileName
+                    "args" ==> List.toArray cmd.Arguments
+                    "cwd" ==> Option.toObj cmd.WorkingDirectory
+                    "env" ==> environment
+                    "stdin" ==> Option.toObj cmd.Stdin ]
+              "estimate"
+              ==> createObj [ "runtimeSeconds" ==> 30.0; "outputBytes" ==> 65536L; "memory" ==> "medium" ]
+              "context" ==> createObj [ "hardLimitMs" ==> 3600000.0 ] ]
 
     /// spool 保存完整输出，读取后清理文件。
     let private readSpooled (path: string) : Task<string> =
@@ -26,18 +58,20 @@ module OrchestratorGit =
 
     let run (cmd: Command) : Task<int * string * string> =
         task {
-            let ctx =
-                { WorkingDirectory = cmd.WorkingDirectory
-                  HardLimit = ProcessEstimate.DefaultHardLimit }
+            let! result = runProcess (requestOf cmd)
 
-            let! res = ProcessRunner.run cmd estimate ctx CancellationToken.None
+            if not (unbox<bool> result?ok) then
+                return (1, "", sprintf "%A" (errorOf result?error))
+            else
+                let outcome: obj = result?value
+                let code: int = unbox outcome?exitCode
 
-            match res with
-            | Ok(ProcessOutcome.Completed(code, stdout, stderr, _)) -> return (code, stdout, stderr)
-            | Ok(ProcessOutcome.Spooled(code, path, _, _)) ->
-                let! stdout = readSpooled path
-                return (code, stdout, "")
-            | Error err -> return (1, "", sprintf "%A" err)
+                match unbox<string> outcome?kind with
+                | "Completed" -> return (code, unbox outcome?stdout, unbox outcome?stderr)
+                | "Spooled" ->
+                    let! stdout = readSpooled (unbox outcome?spoolPath)
+                    return (code, stdout, "")
+                | kind -> return invalidOp $"unknown process outcome kind: {kind}"
         }
 
     let finalizeWorktree

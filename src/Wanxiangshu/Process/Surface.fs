@@ -3,7 +3,6 @@ namespace Wanxiangshu.Process
 open System
 open System.Collections.Generic
 open System.Text
-open System.Threading
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
@@ -13,11 +12,8 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Participant.ManagedAgents
 
-/// JS-native time/process boundary. Clocks, timers and deadlines are opaque
-/// capabilities; estimates, elapsed text and validation results are plain data.
+/// JS-native time and PTY boundary. Clocks and timers are opaque capabilities.
 module ProcessSurface =
-
-    let killAckGraceMs = NodeProcessWait.KillAckGraceMs
 
     type private TimerPortHandle(port: VirtualTimerPort) =
         member _.Port = port
@@ -27,28 +23,6 @@ module ProcessSurface =
 
     type private SessionStartHandle(state: SessionStartedAtProjectionState) =
         member _.State = state
-
-    type private CommandHandle(command: Command) =
-        member _.Command = command
-
-    type private EstimateHandle(estimate: ProcessEstimate) =
-        member _.Estimate = estimate
-
-    type private ContextHandle(context: ProcessContext) =
-        member _.Context = context
-
-    type private CancellationHandle(source: CancellationTokenSource) =
-        member _.Source = source
-
-    type private RegistrationHandle(registration: CancellationTokenRegistration) =
-        member _.Registration = registration
-
-    type internal ChildHandle(child: NodeProcessHost.ChildProcess, killCount: unit -> int) =
-        member _.Child = child
-        member _.KillCount = killCount
-
-    type private OutputHandle(collector: ProcessOutput.OutputCollector) =
-        member _.Collector = collector
 
     type private PtyIdHandle(id: PtyId) =
         member _.Id = id
@@ -73,14 +47,8 @@ module ProcessSurface =
         member _.Command = command
         member _.Completion = completion
 
-    type private WaitDeadlineHandle(deadline: Deadline) =
-        member _.Deadline = deadline
-
     [<Emit("$0($1,$2)")>]
     let private apply2 (fn: obj) (first: obj) (second: obj) : obj = jsNative
-
-    [<Emit("$0($1,$2,$3)")>]
-    let private apply3 (fn: obj) (first: obj) (second: obj) (third: obj) : obj = jsNative
 
     [<Emit("Promise.resolve($0)")>]
     let private promiseOf (value: obj) : JS.Promise<obj> = jsNative
@@ -115,12 +83,6 @@ module ProcessSurface =
 
     let private optionString (value: obj) : string option =
         if isNullish value then None else Some(string value)
-
-    let private stringArrayOf (value: obj) : string array =
-        if isNullish value then
-            [||]
-        else
-            unbox<obj array> value |> Array.map string
 
     let private bytesOf (value: obj) : byte[] =
         if isNullish value then
@@ -195,40 +157,6 @@ module ProcessSurface =
 
     let createNodeClock () : obj = box (NodeTiming.nodeClockPort ())
 
-    let effectiveDeadlineSeconds (runtimeSeconds: float) (hardLimitSeconds: float) : float =
-        if
-            Double.IsNaN runtimeSeconds
-            || Double.IsInfinity runtimeSeconds
-            || runtimeSeconds <= 0.0
-        then
-            hardLimitSeconds
-        else
-            min runtimeSeconds hardLimitSeconds
-
-    let outputThreshold (bytes: float) : float =
-        if Double.IsNaN bytes || Double.IsInfinity bytes || bytes <= 0.0 then
-            0.0
-        else
-            Math.Floor bytes
-
-    let validateEstimate (runtimeSeconds: float) (outputBytes: float) : obj =
-        if
-            Double.IsNaN runtimeSeconds
-            || Double.IsInfinity runtimeSeconds
-            || runtimeSeconds <= 0.0
-        then
-            box
-                {| ok = false
-                   error = "deadline_seconds must be a finite positive number" |}
-        elif Double.IsNaN outputBytes || Double.IsInfinity outputBytes || outputBytes < 0.0 then
-            box
-                {| ok = false
-                   error = "output_budget_bytes must be non-negative" |}
-        else
-            box {| ok = true |}
-
-    let defaultHardLimitSeconds = 3600.0
-
     let renderDeadlineExpired () =
         "No return reached you before your waiting ended."
 
@@ -291,302 +219,6 @@ module ProcessSurface =
 
     let readSessionStart (ledger: obj) (sessionId: string) : obj =
         (ledger :?> SessionStartLedger).Read(sessionId)
-
-
-    let command (fileName: string) (arguments: obj) (workingDirectory: obj) (stdin: obj) : obj =
-        CommandHandle
-            { FileName = fileName
-              Arguments = stringArrayOf arguments |> Array.toList
-              WorkingDirectory = optionString workingDirectory
-              Environment = None
-              Stdin = optionString stdin
-              PtyOptions = None }
-        :> obj
-
-    let private commandOf (value: obj) = (value :?> CommandHandle).Command
-
-    let commandView (value: obj) : obj =
-        let command = commandOf value
-
-        box
-            {| fileName = command.FileName
-               arguments = command.Arguments |> List.toArray
-               workingDirectory = optionObj command.WorkingDirectory
-               stdin = optionObj command.Stdin |}
-
-    let estimate (runtimeSeconds: float) (outputBytes: float) (memory: string) : obj =
-        let memoryValue =
-            if memory.ToLowerInvariant() = "large" then
-                EstimatedMemory.Large
-            else
-                EstimatedMemory.Medium
-
-        EstimateHandle
-            { EstimatedRuntime = RuntimeSeconds runtimeSeconds
-              EstimatedOutput = OutputBytes(int64 outputBytes)
-              EstimatedMemory = memoryValue }
-        :> obj
-
-    let private estimateOf (value: obj) = (value :?> EstimateHandle).Estimate
-
-    let estimateView (value: obj) : obj =
-        let estimate = estimateOf value
-
-        let runtime =
-            match estimate.EstimatedRuntime with
-            | RuntimeSeconds seconds -> seconds
-
-        let output =
-            match estimate.EstimatedOutput with
-            | OutputBytes bytes -> float bytes
-
-        let memory =
-            match estimate.EstimatedMemory with
-            | EstimatedMemory.Large -> "large"
-            | EstimatedMemory.Medium -> "medium"
-
-        box
-            {| runtimeSeconds = runtime
-               outputBytes = output
-               memory = memory |}
-
-    let context (workingDirectory: obj) (hardLimitMs: float) : obj =
-        let limit =
-            if Double.IsNaN hardLimitMs || hardLimitMs <= 0.0 then
-                3600000.0
-            else
-                hardLimitMs
-
-        ContextHandle
-            { WorkingDirectory = optionString workingDirectory
-              HardLimit = TimeSpan.FromMilliseconds limit }
-        :> obj
-
-    let private contextOf (value: obj) = (value :?> ContextHandle).Context
-
-    let contextView (value: obj) : obj =
-        let context = contextOf value
-
-        box
-            {| workingDirectory = optionObj context.WorkingDirectory
-               hardLimitMs = context.HardLimit.TotalMilliseconds |}
-
-    let createCancellationToken (cancelled: obj) : obj =
-        let source = new CancellationTokenSource()
-
-        if not (isNullish cancelled) && unbox<bool> cancelled then
-            source.Cancel()
-
-        CancellationHandle source :> obj
-
-    let cancel (token: obj) : unit =
-        (token :?> CancellationHandle).Source.Cancel()
-
-    let cancelToken (token: obj) : obj = token
-
-    let tokenView (token: obj) : obj =
-        box {| cancelled = (token :?> CancellationHandle).Source.IsCancellationRequested |}
-
-    let registerCancellation (token: obj) (callback: obj) : obj =
-        let registration =
-            (token :?> CancellationHandle)
-                .Source.Token.Register(fun () -> call0 callback |> ignore)
-
-        RegistrationHandle registration :> obj
-
-
-    let private launcherResult (value: obj) : Task<int * byte[] * byte[]> =
-        task {
-            let! raw = unbox<Task<obj>> (promiseOf value)
-            let values = unbox<obj array> raw
-            return int (string values.[0]), bytesOf values.[1], bytesOf values.[2]
-        }
-
-    let private launchWithJs
-        (launcher: obj)
-        (command: Command)
-        (token: CancellationToken)
-        : Task<int * byte[] * byte[]> =
-        let register callback =
-            token.Register(fun () -> call0 callback |> ignore) |> ignore
-            null
-
-        let tokenObject =
-            box
-                {| cancelled = token.IsCancellationRequested
-                   register = register |}
-
-        launcherResult (apply2 launcher (commandView (CommandHandle command :> obj)) tokenObject)
-
-    let private errorView (error: ProcessError) : obj =
-        match error with
-        | ProcessError.TimeoutExceeded duration ->
-            box
-                {| kind = "TimeoutExceeded"
-                   durationMs = duration.TotalMilliseconds |}
-        | ProcessError.SpawnFailed reason ->
-            box
-                {| kind = "SpawnFailed"
-                   reason = reason |}
-        | ProcessError.ProcessCancelled reason ->
-            box
-                {| kind = "ProcessCancelled"
-                   reason = reason |}
-        | ProcessError.ExecutionFailed reason ->
-            box
-                {| kind = "ExecutionFailed"
-                   reason = reason |}
-
-    let outcomeView (outcome: obj) : obj =
-        match unbox<ProcessOutcome> outcome with
-        | ProcessOutcome.Completed(exitCode, stdout, stderr, spooled) ->
-            box
-                {| kind = "Completed"
-                   exitCode = exitCode
-                   stdout = stdout
-                   stderr = stderr
-                   spooled = spooled |}
-        | ProcessOutcome.Spooled(exitCode, path, bytes, chunks) ->
-            box
-                {| kind = "Spooled"
-                   exitCode = exitCode
-                   spoolPath = path
-                   totalBytes = float bytes
-                   chunkCount = chunks |}
-
-    let resultView (result: obj) : obj =
-        match unbox<Result<ProcessOutcome, ProcessError>> result with
-        | Ok outcome ->
-            box
-                {| ok = true
-                   value = outcomeView (box outcome) |}
-        | Error error ->
-            box
-                {| ok = false
-                   error = errorView error |}
-
-    let runWithLauncher (launcher: obj) (command: obj) (estimate: obj) (context: obj) (token: obj) : Task<obj> =
-        task {
-            let! result =
-                ProcessRunner.runWithLauncher
-                    (launchWithJs launcher)
-                    (commandOf command)
-                    (estimateOf estimate)
-                    (contextOf context)
-                    (token :?> CancellationHandle).Source.Token
-
-            return resultView (box result)
-        }
-
-    let runWithHost (command: obj) (estimate: obj) (context: obj) (token: obj) : Task<obj> =
-        task {
-            let! result =
-                ProcessRunner.run
-                    (commandOf command)
-                    (estimateOf estimate)
-                    (contextOf context)
-                    (token :?> CancellationHandle).Source.Token
-
-            return resultView (box result)
-        }
-
-    let run (command: obj) (estimate: obj) (context: obj) (token: obj) : Task<obj> =
-        runWithHost command estimate context token
-
-    let private childOf (value: obj) = (value :?> ChildHandle).Child
-
-    /// Create a child process handle driven externally (EXEC-011).
-    /// The exit source starts unresolved; childExit resolves it. Kill invokes
-    /// the supplied callback and tracks the call count. A host launcher that
-    /// manages its own process lifecycle uses this to construct the handle it
-    /// returns to runWithHostLauncher.
-    let childCreate (onKill: obj) : obj =
-        let exit = TaskCompletionSource<int>()
-        // DSL-MUTABLE: cancellation — child process exit flag.
-        let exited = ref false
-        let callbacks = ResizeArray<unit -> unit>()
-        // DSL-MUTABLE: resource — child kill count
-        let mutable killCount = 0
-
-        let kill () =
-            killCount <- killCount + 1
-
-            if not (isNullish onKill) then
-                call0 onKill |> ignore
-
-        ChildHandle(
-            { Process = null
-              Exit = exit
-              Kill = kill
-              Exited = exited
-              OnExited = callbacks },
-            (fun () -> killCount)
-        )
-        :> obj
-
-    let childExit (child: obj) (code: int) : unit =
-        let value = childOf child
-        value.Exited.Value <- true
-        value.Exit.SetResult code
-        NodeProcessHost.notifyExited value
-
-    let childOnExit (child: obj) (callback: obj) : unit =
-        childOf child
-        |> fun value -> value.OnExited.Add(fun () -> call0 callback |> ignore)
-
-    let childView (child: obj) : obj =
-        let value = childOf child
-
-        box
-            {| exited = value.Exited.Value
-               killCount = (child :?> ChildHandle).KillCount() |}
-
-    let waitOutcomeView (outcome: obj) : obj =
-        let value = unbox<NodeProcessWait.WaitOutcome> outcome
-
-        box
-            {| exitCode = value.ExitCode
-               timedOut = value.TimedOut |}
-
-    let waitForExit (child: obj) (deadline: obj) (token: obj) : Task<obj> =
-        task {
-            let! outcome =
-                NodeProcessWait.waitForExit
-                    (childOf child)
-                    (unbox<Deadline> deadline)
-                    (token :?> CancellationHandle).Source.Token
-
-            return waitOutcomeView (box outcome)
-        }
-
-    let outputCreate (estimate: obj) : obj =
-        OutputHandle(ProcessOutput.create (estimateOf estimate)) :> obj
-
-    let private outputOf (value: obj) = (value :?> OutputHandle).Collector
-
-    let outputAddStdout (collector: obj) (bytes: obj) : unit =
-        ProcessOutput.addStdout (outputOf collector) (bytesOf bytes)
-
-    let outputAddStderr (collector: obj) (bytes: obj) : unit =
-        ProcessOutput.addStderr (outputOf collector) (bytesOf bytes)
-
-    let outputBuildResult (collector: obj) (exitCode: int) : obj =
-        match ProcessOutput.buildResult (outputOf collector) exitCode with
-        | Ok outcome -> outcomeView (box outcome)
-        | Error error -> errorView error
-
-    let outputView (collector: obj) : obj =
-        let value = outputOf collector
-
-        box
-            {| bytesObserved = float (ProcessOutput.bytesObserved value)
-               outputLimit = float (ProcessOutput.outputLimit value)
-               spooled = ProcessOutput.spooled value
-               bytesHeld = float (ProcessOutput.bytesHeld value) |}
-
-    let spoolChunkCount (bytes: float) : int = Spool.chunkCount (int64 bytes)
-
-    let spoolDelete (path: string) : unit = Spool.delete path
 
 
     let bytes (text: string) : obj = Pty.bytes text |> bytesView
@@ -1008,19 +640,6 @@ module ProcessSurface =
         let exitTcs = TaskCompletionSource<unit>()
         PtySupervisor.attach (supervisorOf supervisor) (ptyPortOf port) (ptyIdOf id) term exitTcs
 
-    let spoolReadPath (path: string) : Task<obj array> =
-        // DSL-MUTABLE: algorithm-scratch — spool chunk accumulator
-        let chunks = ResizeArray<obj>()
-
-        task {
-            do!
-                Spool.readChunks path (fun bytes ->
-                    chunks.Add(bytesView bytes)
-                    Task.FromResult<unit>(()))
-
-            return chunks.ToArray()
-        }
-
     let abortParent (parentId: string) : unit = Pty.abortParent parentId
 
     let readPlanView (plan: ReadPlan) : obj =
@@ -1074,62 +693,3 @@ module ProcessSurface =
 
     let renderPtyCompletion (label: string) (_id: string) (outcome: string) (exitCode: int) : string =
         sprintf "# %s has %s.\nexit_code = %d" label outcome exitCode
-
-    let runWithHostLauncher (host: obj) (command: obj) (estimate: obj) (context: obj) (token: obj) : Task<obj> =
-        let hostSpawn
-            (cmd: Command)
-            (ctx: ProcessContext)
-            (_onStdout: byte[] -> unit)
-            (_onStderr: byte[] -> unit)
-            (parentToken: CancellationToken)
-            : Task<Result<NodeProcessHost.ChildProcess, string>> =
-            task {
-                let register callback =
-                    parentToken.Register(fun () -> call0 callback |> ignore) |> ignore
-                    null
-
-                let tokenView =
-                    box
-                        {| cancelled = parentToken.IsCancellationRequested
-                           register = register |}
-
-                let! raw =
-                    unbox<Task<obj>> (
-                        promiseOf (
-                            apply3
-                                host
-                                (commandView (CommandHandle cmd :> obj))
-                                (contextView (ContextHandle ctx :> obj))
-                                tokenView
-                        )
-                    )
-
-                if isNullish raw then
-                    return Error "host launcher returned no child"
-                elif not (isNullish (property raw "ok")) && not (unbox<bool> (property raw "ok")) then
-                    return Error(string (property raw "error"))
-                else
-                    let candidate =
-                        if raw :? ChildHandle then
-                            raw
-                        elif not (isNullish (property raw "value")) then
-                            property raw "value"
-                        else
-                            raw
-
-                    match candidate with
-                    | :? ChildHandle as child -> return Ok child.Child
-                    | _ -> return Error "host launcher returned an invalid child"
-            }
-
-        task {
-            let! result =
-                ProcessRunner.runWithHost
-                    hostSpawn
-                    (commandOf command)
-                    (estimateOf estimate)
-                    (contextOf context)
-                    (token :?> CancellationHandle).Source.Token
-
-            return resultView (box result)
-        }

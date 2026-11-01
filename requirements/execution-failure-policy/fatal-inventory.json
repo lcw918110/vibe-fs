@@ -674,22 +674,6 @@
       "notes": "wanxiang-hook.mjs CLI failure emits an error code — the git hook deliverer must report failure via nonzero code; dead-process exit is host-owned, not an asset-level fatal."
     },
     {
-      "id": "X01",
-      "ownerRequirement": "process-execution",
-      "sourceSymbol": "Process/NodeProcessHost.fs :: killProcessGroup (process group SIGKILL of a managed child)",
-      "operation": "n/a — managed-child kill, not a self fatal",
-      "triggerBranch": "Explicit child-process-group termination (negative pid SIGKILL, fallback child.kill)",
-      "inputSource": "n/a",
-      "exactIdentity": "n/a",
-      "phase": "n/a",
-      "assertedInvariant": "n/a",
-      "commitDisposition": "n/a — kills a MANAGED child process, never the current process. Explicitly NOT a request fatal (proposal Appendix C). Inventoried here only so the gate's process.kill scanner does not misfire on it: the gate allowlists kills whose target is provably not process.pid,",
-      "scopeOfEffect": "Managed child process group,",
-      "evidenceType": "ExcludedWithEvidence: Emit text shows process.kill(-$0.pid...) / $0.kill(...) on the child handle — target is never self. Same ledger class as X02-X06,",
-      "formalTestId": null,
-      "status": "ExcludedWithEvidence"
-    },
-    {
       "id": "X02",
       "ownerRequirement": "process-execution",
       "sourceSymbol": "Process/PtySupervisor.fs :: killProcessTree (managed PTY kill)",

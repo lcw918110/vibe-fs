@@ -7,24 +7,11 @@
     <WanxiangshuOwnerLocalityKind>composition</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-taskresult.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-async-support.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.time-capability.process-node-timing-adapter.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.time-capability.process-deadline-contract.fsproj"/>
     <Compile Include="Process/ProcessRequest.fsi"/>
     <Compile Include="Process/ProcessRequest.fs"/>
-    <Compile Include="Process/LargeGate.fsi"/>
-    <Compile Include="Process/LargeGate.fs"/>
-    <Compile Include="Process/NodeProcessHost.fsi"/>
-    <Compile Include="Process/NodeProcessHost.fs"/>
-    <Compile Include="Process/NodeProcessWait.fsi"/>
-    <Compile Include="Process/NodeProcessWait.fs"/>
     <Compile Include="Process/Spool.fsi"/>
     <Compile Include="Process/Spool.fs"/>
-    <Compile Include="Process/ProcessOutput.fsi"/>
-    <Compile Include="Process/ProcessOutput.fs"/>
-    <Compile Include="Process/ProcessRunner.fsi"/>
-    <Compile Include="Process/ProcessRunner.fs"/>
     <Compile Include="Process/PtyTypes.fsi"/>
     <Compile Include="Process/PtyTypes.fs"/>
     <Compile Include="Process/PtySession.fsi"/>

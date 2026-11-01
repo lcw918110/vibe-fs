@@ -496,7 +496,7 @@ module OrchestratorHostSurface =
         }
 
     /// The same finalization sequence through the production Git runner (real
-    /// `git` via ProcessRunner and the output spool), not a JavaScript port.
+    /// `git` via runtime.runProcess and the output spool), not a JavaScript port.
     let finalizeWorktreeWithGit (managerId: string) (worktree: string) : Task<obj> =
         task {
             let! result = OrchestratorGit.finalizeWorktree OrchestratorGit.run managerId worktree

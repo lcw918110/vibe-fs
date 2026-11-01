@@ -95,8 +95,6 @@ test('WHAT[host-boundary-026] host session contract compiles independently witho
   }
 
   const forbiddenProcessRuntime = [
-    'Process/ProcessRunner.fs',
-    'Process/NodeProcessHost.fs',
     'Process/ProcessRequest.fs',
     'Process/JsSandbox.fs',
     'OpenCode/Tools/PtyTool.fs',
