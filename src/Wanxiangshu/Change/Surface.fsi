@@ -52,12 +52,6 @@ module ChangeSurface =
 
     val gitRebase: git: obj -> path: string -> targetRef: string -> Task<obj>
 
-    val gitRebaseContinue: git: obj -> Task<obj>
-
-    val gitStageAll: git: obj -> Task<obj>
-
-    val gitCandidateCommit: git: obj -> msg: string -> Task<obj>
-
     val gitFfMerge:
         git: obj -> path: string -> targetRef: string -> expectedHead: string -> pinnedCandidate: string -> Task<obj>
 

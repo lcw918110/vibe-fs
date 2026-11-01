@@ -21,10 +21,9 @@ module ChangeSurface =
     type private ProjectionHandle(projection: OrchestratorProjection) =
         member _.Projection = projection
 
-    type private GitHandle(port: GitPort, repo: string, runner: Command -> Task<int * string * string>) =
+    type private GitHandle(port: GitPort, repo: string) =
         member _.Port = port
         member _.repo = repo
-        member _.Runner = runner
 
     type private WorktreeHandle(resource: WorktreeResource) =
         member _.Resource = resource
@@ -1533,7 +1532,7 @@ module ChangeSurface =
     let createGit (repo: string) (runner: obj) : obj =
         let r = invokeRunner runner
         let port = GitOperations.createWithRepo repo r
-        GitHandle(port, repo, r) :> obj
+        GitHandle(port, repo) :> obj
 
     let private resultObject (result: Result<'T, string>) (valueOf: 'T -> obj) : obj =
         match result with
@@ -1562,27 +1561,6 @@ module ChangeSurface =
         task {
             let! result = (git :?> GitHandle).Port.Rebase (WorktreePath.create path) (TargetRef.create targetRef)
             return resultObject result (fun _ -> null)
-        }
-
-    let gitRebaseContinue (git: obj) : Task<obj> =
-        task {
-            let handle = git :?> GitHandle
-            let! res = GitOperations.continueRebase handle.Runner handle.repo
-            return resultObject res (fun _ -> null)
-        }
-
-    let gitStageAll (git: obj) : Task<obj> =
-        task {
-            let handle = git :?> GitHandle
-            let! res = GitOperations.stageAll handle.Runner handle.repo
-            return resultObject res (fun _ -> null)
-        }
-
-    let gitCandidateCommit (git: obj) (msg: string) : Task<obj> =
-        task {
-            let handle = git :?> GitHandle
-            let! res = GitOperations.candidateCommit handle.Runner handle.repo msg
-            return resultObject res (fun _ -> null)
         }
 
     let gitFfMerge
