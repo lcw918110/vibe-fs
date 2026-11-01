@@ -656,26 +656,40 @@ module PluginHooks =
                 let directory = joinPath root "wanxiangshu"
                 mkdirSync directory (createObj [ "recursive" ==> true ])
                 let target = joinPath directory "scope-retention.sqlite"
-                let makeJournal = Func<string, obj>(fun _session ->
-                    let loader = createRequire moduleUrl
-                    let sqlite = requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
-                    let connection =
-                        if runningOnBun () then createNew sqlite?Database target
-                        else createNew sqlite?DatabaseSync target
-                    try createNew retentionJournalConstructor connection
-                    with _ ->
-                        connection?close() |> ignore
-                        reraise ())
+
+                let makeJournal =
+                    Func<string, obj>(fun _session ->
+                        let loader = createRequire moduleUrl
+
+                        let sqlite =
+                            requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
+
+                        let connection =
+                            if runningOnBun () then
+                                createNew sqlite?Database target
+                            else
+                                createNew sqlite?DatabaseSync target
+
+                        try
+                            createNew retentionJournalConstructor connection
+                        with _ ->
+                            connection?close () |> ignore
+                            reraise ())
+
                 retentionJournalFactory <- Some(box makeJournal)
-                scopeRetention?configureJournal(makeJournal) |> ignore
+                scopeRetention?configureJournal (makeJournal) |> ignore
             | None ->
-                let unavailable = Func<string, obj>(fun _ -> failwith "ScopeRetention requires a verified durable workspace")
-                scopeRetention?configureJournal(unavailable) |> ignore
+                let unavailable =
+                    Func<string, obj>(fun _ -> failwith "ScopeRetention requires a verified durable workspace")
+
+                scopeRetention?configureJournal (unavailable) |> ignore
 
             let scopeEpoch (sessionId: string) : string =
                 journal
                 |> Option.bind (fun durable ->
-                    AgentProjection.tryFind (SessionId.create sessionId) (AgentJournal.snapshot durable).AgentProjections)
+                    AgentProjection.tryFind
+                        (SessionId.create sessionId)
+                        (AgentJournal.snapshot durable).AgentProjections)
                 |> Option.bind (fun session -> session.PrefixEpoch)
                 |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
                 |> Option.defaultValue "0"
@@ -683,9 +697,10 @@ module PluginHooks =
             let bindRetentionJournal (sessionId: string) =
                 if not (String.IsNullOrWhiteSpace sessionId) then
                     match retentionJournalFactory with
-                    | Some factory -> scopeRetention?bindSessionJournal(sessionId, factory) |> ignore
-                    | None -> scopeRetention?unbindSessionJournal(sessionId) |> ignore
-                    scopeRetention?ensureEpoch(sessionId, scopeEpoch sessionId) |> ignore
+                    | Some factory -> scopeRetention?bindSessionJournal (sessionId, factory) |> ignore
+                    | None -> scopeRetention?unbindSessionJournal (sessionId) |> ignore
+
+                    scopeRetention?ensureEpoch (sessionId, scopeEpoch sessionId) |> ignore
 
             let roleFor (sessionId: SessionId) =
                 journal
@@ -1295,8 +1310,7 @@ module PluginHooks =
                         && (String.IsNullOrWhiteSpace sessionId
                             || not (sessionPort.IsManagedChild(SessionId.create sessionId)))
                     then
-                        invalidOp
-                            "negotiate is only available in delegated child sessions, not user-facing sessions."
+                        invalidOp "negotiate is only available in delegated child sessions, not user-facing sessions."
 
                     // capability-enforcement-002/007: a Host-declared external
                     // (MCP) tool holds no office capability, so it is advertised
@@ -1632,15 +1646,15 @@ module PluginHooks =
                     HostEventEnvelope.trySessionId raw
                     |> Option.iter (fun sessionId ->
                         Surface.clearSessionState (SessionId.value sessionId)
-                        scopeProgress?clear(SessionId.value sessionId) |> ignore
-                        scopeRetention?clear(SessionId.value sessionId) |> ignore
-                        scopeRetention?unbindSessionJournal(SessionId.value sessionId) |> ignore
-                        calibration?clearSession(SessionId.value sessionId) |> ignore
+                        scopeProgress?clear (SessionId.value sessionId) |> ignore
+                        scopeRetention?clear (SessionId.value sessionId) |> ignore
+                        scopeRetention?unbindSessionJournal (SessionId.value sessionId) |> ignore
+                        calibration?clearSession (SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
                         activeCompactingSessions.Remove(SessionId.value sessionId) |> ignore
-                        latencyWatchdog.Cancel (SessionId.value sessionId)
-                        latencyWatchdog.ForgetDetector (SessionId.value sessionId)
+                        latencyWatchdog.Cancel(SessionId.value sessionId)
+                        latencyWatchdog.ForgetDetector(SessionId.value sessionId)
                         Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.forget sessionId)
 
