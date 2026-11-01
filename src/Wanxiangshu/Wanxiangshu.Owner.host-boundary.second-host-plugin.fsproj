@@ -29,6 +29,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.planning.mission-planning-eventstore.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.digest.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.runtime-platform.language.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.time-capability.process-deadline-contract.fsproj"/>
     <Compile Include="Host/SecondHost/HostPlugin.fsi"/>
     <Compile Include="Host/SecondHost/HostPlugin.fs"/>
   </ItemGroup>

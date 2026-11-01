@@ -96,24 +96,7 @@
       "evidenceType": "Call-graph reachability: production uses confirmed at RunLifecycle.sendAgentOwnerRootWithJournal (DispatchSessionPort.ofSessionPort sessions), SyncDelegate Dependencies default wiring, and SessionNudge toDispatchPort sites. Whether a live caller ever invokes the member with a fatal operation remains Open — the interface is a capability, each invocation is caller-owned,",
       "formalTestId": "requirements/dispatch-protocol/tests/014.test.mjs",
       "status": "FixedWithRegression",
-      "notes": "DispatchSessionPort ReportFatalDiagnostic deleted: exactly one transport-verdict rail is SettleDetachedSend."
-    },
-    {
-      "id": "F07",
-      "ownerRequirement": "dispatch-protocol",
-      "sourceSymbol": "Interaction/Dispatch/Send.fs :: PromptDispatcher.Runtime.SettleDetachedSend (DetachedSendVerdict rail replaces fatal)",
-      "operation": "detached-prompt-observer-failed (delivered to reportF; OutcomeUnknown rail emits detached-prompt-outcome-unknown; Refused emits detached-prompt-abandon-uncommitted)",
-      "triggerBranch": "A Detached caller already received its PromptKey (with durable local invocation receipt) and the late sendTask settles Retryable/Fatal/AcceptanceUnknown or throws. classifyDetachedOutcome maps all three non-success outcomes + exceptions to Error,",
-      "inputSource": "Background Host send task observed after caller return (SDK promise, HTTP response). Exact PromptKey + sessionId known,",
-      "exactIdentity": "Exact PromptKey + sessionId in the fatal payload (session_id=..., result=...),",
-      "phase": "Detached post-return observation (post-Submitted local receipt; physical acceptance unknown),",
-      "assertedInvariant": "Once a Detached caller has returned, a late non-success is an acceptance-unknown invariant: the caller cannot safely retract success or decide whether resending duplicates a physical message,",
-      "commitDisposition": "Submitted (local invocation receipt) was durable BEFORE the Detached caller returned; that receipt is the pre-fuse settlement evidence. No resend, no PhysicalAccepted write from the late outcome. onFailure callback (if any) runs before the trip,",
-      "scopeOfEffect": "Whole current process; Unknown acceptance outcome stays pending for durable/Host-evidence reconciliation by recovery (PROMPT-011),",
-      "evidenceType": "Owner slice (DetachedDispatch) owns the typed-evidence migration + late-result contract tests per proposal W4,",
-      "formalTestId": "requirements/dispatch-protocol/tests/014.test.mjs",
-      "status": "FixedWithRegression",
-      "notes": "Detached dispatch observer now delivers typed DetachedSendVerdict back to the dispatch owner; Abandon/SendFailed paths remain in Runtime.SettleDetachedSend."
+      "notes": "DispatchSessionPort no longer exposes ReportFatalDiagnostic. DispatchAttempt in wanxiangli/dispatch coordinates transport settlement; DispatchSessionPort supplies sending and terminal subscription."
     },
     {
       "id": "F08",
@@ -124,13 +107,13 @@
       "inputSource": "Continuation/nudge repair sends via toDispatchPort at SessionNudge.fs use sites (idle-gate repair, interaction repair, nudge/AABB sends),",
       "exactIdentity": "None enforced at this layer,",
       "phase": "Continuation/repair send phase,",
-      "assertedInvariant": "Nudge send observer no longer reaches a raw fatal: dispatch is owned by SettleDetachedSend",
+      "assertedInvariant": "Nudge send observation does not invoke a fatal handler; DispatchAttempt coordinates the send outcome.",
       "commitDisposition": "Immediate trip; settlement is caller-owned,",
       "scopeOfEffect": "Whole current process,",
       "evidenceType": "Same as F05/F06: member liveness confirmed (6 production call sites construct the port); per-invocation settlement proof is caller-owned and Open,",
       "formalTestId": "requirements/dispatch-protocol/tests/014.test.mjs",
       "status": "FixedWithRegression",
-      "notes": "SessionNudge no longer carries ReportFatalDiagnostic — dispatch side is handled by the typed SettleDetachedSend rail."
+      "notes": "SessionNudge no longer carries ReportFatalDiagnostic. DispatchAttempt in wanxiangli/dispatch owns late transport settlement; SessionNudge retains its caller-specific adaptation."
     },
     {
       "id": "F09",
@@ -726,13 +709,13 @@
       "ownerRequirement": "dispatch-protocol",
       "sourceSymbol": "Foundation/Outcome.fs :: Outcome.SendOutcome.Fatal case + Change/Host/Surface.fs sendOutcome wildcard arm",
       "operation": "n/a — send-outcome union case, not a process fatal by itself",
-      "triggerBranch": "Change/Host/Surface.sendOutcome maps an unknown wire kind to SendOutcome.Fatal(reason); PluginHostWiring + BookkeeperSurface consume it as an ordinary Error (no FatalProcess call); PromptDispatcherSend folds Retryable|Fatal send errors into abandonment. ONLY the detached observer (F07) escalates a Fatal outcome to a process fuse — the case itself is consumer-dependent,",
+      "triggerBranch": "Send.fs maps host outcomes for DispatchAttempt. Retryable and Fatal are ordinary send refusals; AcceptanceUnknown keeps the exact claim pending. Neither classification terminates the process.",
       "inputSource": "n/a",
       "exactIdentity": "n/a",
       "phase": "n/a",
       "assertedInvariant": "n/a",
-      "commitDisposition": "n/a — whether this case kills the process is decided per consumer (F07 detached path fuses; await paths abandon). Allowlisted by the gate (SendOutcome-shape, not process control). The F07 row carries the real fuse proof duty,",
-      "scopeOfEffect": "Consumer-dependent (see F07),",
+      "commitDisposition": "DispatchAttempt follows the existing Abandon handling for a confirmed refusal; an unknown outcome neither abandons nor resends. Late detached results use the existing settlement, notification and diagnostic callbacks.",
+      "scopeOfEffect": "The exact prompt claim and its caller; no process-wide termination.",
       "evidenceType": "ExcludedWithEvidence: DU case + wildcard decode arm; no process.kill/exit/trip/fatal call at these sites,",
       "formalTestId": null,
       "status": "ExcludedWithEvidence"

@@ -140,6 +140,5 @@ module PromptDispatcher =
                 bool
 
         member internal Metadata: key: PromptKey -> origin: string -> logicalRunId: LogicalRunId option -> obj
-        member internal SubscribeNoOp: port: IDispatchSessionPort -> sessionId: SessionId -> IDisposable
 
     val forPrompts: journal: IPromptJournal -> Runtime
