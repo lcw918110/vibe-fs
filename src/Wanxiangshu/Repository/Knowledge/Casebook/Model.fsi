@@ -48,6 +48,13 @@ type ReplayResult =
     | Fresh
     | Stale
 
+module internal CasebookValues =
+
+    val observationsToNative: observations: Observation list -> obj array
+    val observationsOfNative: values: obj array -> Observation list
+    val caseToNative: case: Case -> obj
+    val caseOfNative: value: obj -> Case
+
 module Observations =
 
     /// CASE-003: normalize — dedupe by identity and fix a canonical order so
@@ -68,6 +75,8 @@ module CasebookProjection =
 
     /// CASE-008: apply one CasebookEvent to the projection state.
     val apply: state: State -> event: CasebookEvent -> State
+
+    val internal currentNative: store: IEventStore -> obj
 
     /// Reads the cases visible at the requested capacity without appending events.
     val projectCases: store: IEventStore -> capacity: int -> Map<string, Case>

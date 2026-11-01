@@ -52,7 +52,7 @@ type ReplayResult =
     | Fresh
     | Stale
 
-module private CasebookValues =
+module internal CasebookValues =
 
     let observationToNative (observation: Observation) : obj =
         match observation with
@@ -155,6 +155,14 @@ module CasebookProjection =
 
     let apply (State state) (event: CasebookEvent) : State =
         State(state?apply (CasebookValues.eventToNative event))
+
+    let internal currentNative (store: IEventStore) : obj =
+        let (State state) =
+            match store.TryCurrent "Casebook" with
+            | None -> emptyState
+            | Some current -> unbox<State> current
+
+        state
 
     let projectCases (store: IEventStore) (capacity: int) : Map<string, Case> =
         match store.TryCurrent "Casebook" with

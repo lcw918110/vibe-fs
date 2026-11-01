@@ -1239,8 +1239,6 @@ Execution/Delegation/Handle/JournalSurface.fsi
 Execution/Delegation/Handle/JournalSurface.fs
 Repository/Knowledge/Casebook/SettlementOwner.fsi
 Repository/Knowledge/Casebook/SettlementOwner.fs
-Repository/Knowledge/Casebook/Bookkeeper.fsi
-Repository/Knowledge/Casebook/Bookkeeper.fs
 Repository/Knowledge/Casebook/BookkeeperRefreshSurface.fsi
 Repository/Knowledge/Casebook/BookkeeperRefreshSurface.fs
 Repository/Knowledge/Casebook/BookkeeperSurface.fsi

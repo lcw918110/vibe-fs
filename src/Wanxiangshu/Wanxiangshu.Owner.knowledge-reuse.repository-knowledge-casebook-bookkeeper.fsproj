@@ -8,15 +8,10 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
-    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.durable-events.persistence-eventstore-storetypes.fsproj"/>
-
-    <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-taskresult.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-model.fsproj"/>
     <Compile Include="Repository/Knowledge/Casebook/SettlementOwner.fsi"/>
     <Compile Include="Repository/Knowledge/Casebook/SettlementOwner.fs"/>
-    <Compile Include="Repository/Knowledge/Casebook/Bookkeeper.fsi"/>
-    <Compile Include="Repository/Knowledge/Casebook/Bookkeeper.fs"/>
     <Compile Include="Repository/Knowledge/Casebook/Lifecycle.fsi"/>
     <Compile Include="Repository/Knowledge/Casebook/Lifecycle.fs"/>
   </ItemGroup>
