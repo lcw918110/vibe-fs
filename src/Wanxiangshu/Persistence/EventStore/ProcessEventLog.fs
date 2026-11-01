@@ -7,20 +7,15 @@ open Fable.Core.JsInterop
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation.Identity
 
-/// durable-events-004/005/010/017.
-/// Runtime truth is deliberately boring: one process owns one append-only NDJSON
-/// file under the project's .Herdchestra state root. Git object plumbing is not a
-/// dependency of this module and therefore cannot leak into the local append path.
-type ProcessEventLog =
-    private
-        { CommonDir: string
-          WriterId: string
-          SegmentCap: int
-          // DSL-MUTABLE: resource — the events-directory file name this writer
-          // currently appends to (a durable-events-005 segment name, or the
-          // legacy suffixless name until materialization reorganizes it). A
-          // vanished target re-enumerates the series on the next append.
-          mutable CurrentFile: string }
+/// writer 的状态和物理追加由公开库对象独占。
+[<Sealed>]
+type ProcessEventLog internal (writer: obj) =
+    member internal _.Writer = writer
+
+type private NativeSegmentedWriter =
+    abstract writerId: string
+    abstract filePath: unit -> string
+    abstract append: text: string -> obj
 
 type StoreFileGate internal (lease: obj) =
     member _.Release() : Task<unit> = lease?release ()
@@ -298,12 +293,11 @@ module ProcessEventLog =
         else
             unbox<int> parsed?ordinal
 
-    let private safeWriterId (writerId: string) =
-        match unbox<string> (segmentLaw?writerIdFault writerId) with
-        | null -> writerId
-        | "required" -> invalidArg "writerId" "WriterId is required"
-        | "pathSegment" -> invalidArg "writerId" "WriterId must be one path segment"
-        | _ -> invalidArg "writerId" "WriterId must not end with a hyphen and four digits"
+    [<Import("SegmentedWriter", "wanxiangli/segmented-writer")>]
+    let private writerClass: obj = jsNative
+
+    [<Emit("new $0($1)")>]
+    let private constructWriter (_constructor: obj) (_options: obj) : obj = jsNative
 
     let createWithSegmentCap (commonDir: string) (writerId: string) (segmentCap: int) : ProcessEventLog =
         if String.IsNullOrWhiteSpace commonDir then
@@ -315,49 +309,31 @@ module ProcessEventLog =
         then
             invalidArg "commonDir" "runtime persistence cannot be placed inside .git"
 
-        if segmentCap <= 0 then
-            invalidArg "segmentCap" "segment cap must be positive"
-
-        let writer = safeWriterId writerId
-
-        { CommonDir = commonDir
-          WriterId = writer
-          SegmentCap = segmentCap
-          CurrentFile = segmentFileOf writer 0 }
+        ProcessEventLog(
+            constructWriter
+                writerClass
+                (box
+                    {| directory = fun () -> eventsDirectory commonDir
+                       writerId = writerId
+                       segmentCap = segmentCap |})
+        )
 
     let create (commonDir: string) (writerId: string) : ProcessEventLog =
         createWithSegmentCap commonDir writerId DefaultSegmentCapBytes
 
-    let writerId (log: ProcessEventLog) = log.WriterId
+    let private writerOf (log: ProcessEventLog) : NativeSegmentedWriter = unbox log.Writer
 
-    let private fileOf (log: ProcessEventLog) (fileName: string) =
-        join2 (eventsDirectory log.CommonDir) fileName
+    let writerId (log: ProcessEventLog) = (writerOf log).writerId
 
     /// The file this writer currently appends to: a durable-events-005
     /// segment, or the legacy suffixless file while it awaits reorganization.
-    let filePath (log: ProcessEventLog) = fileOf log log.CurrentFile
+    let filePath (log: ProcessEventLog) = (writerOf log).filePath ()
 
     let private tryAppendFault phase action =
         try
             Ok(action ())
         with cause ->
             Error { Phase = phase; Cause = cause }
-
-    let private closeAfterBarrier fd barrier =
-        let closed = tryAppendFault AppendPhase.DurabilityClose (fun () -> closeSync fd)
-
-        match barrier, closed with
-        | Ok(), Ok() -> Ok PhysicalAppendCompletion.AppendDurable
-        | Error primary, Ok() -> Error(PhysicalAppendFailure.AfterAppend(primary, []))
-        | Ok(), Error primary -> Error(PhysicalAppendFailure.AfterAppend(primary, []))
-        | Error primary, Error cleanup -> Error(PhysicalAppendFailure.AfterAppend(primary, [ cleanup ]))
-
-    let private appendDurabilityBarrier path =
-        match tryAppendFault AppendPhase.DurabilityOpen (fun () -> openSync path "r+") with
-        | Error primary -> Error(PhysicalAppendFailure.AfterAppend(primary, []))
-        | Ok fd ->
-            tryAppendFault AppendPhase.DurabilityBarrier (fun () -> fsyncSync fd)
-            |> closeAfterBarrier fd
 
     let private durabilityBarrier path =
         let fd = openSync path "r+"
@@ -379,79 +355,39 @@ module ProcessEventLog =
             unbox<string array> (segmentLaw?seriesOf (writerId, readdirSync directory))
             |> Array.toList
 
-    let private fallbackTargetOf (commonDir: string) (writerId: string) : string =
-        if existsSync (join2 (eventsDirectory commonDir) (legacyFileOf writerId)) then
-            legacyFileOf writerId
-        else
-            segmentFileOf writerId 0
+    let private physicalFault (value: obj) : AppendFault =
+        let phase: string = value?phase
 
-    let private highestSeriesFileOf (commonDir: string) (writerId: string) : string =
-        match seriesFilesOf commonDir writerId |> List.rev with
-        | latest :: _ -> latest
-        | [] -> fallbackTargetOf commonDir writerId
-
-    /// durable-events-005: resolve the file this append targets. The cached
-    /// current file is probed with one stat; a vanished target
-    /// (reorganization or import replaced the physical layout) re-enumerates
-    /// the series. A legacy suffixless file is extended in place — append
-    /// never reorganizes; materialization owns that transition.
-    let private resolveAppendTarget (log: ProcessEventLog) : string =
-        let cached = fileOf log log.CurrentFile
-
-        if existsSync cached then
-            cached
-        else
-            log.CurrentFile <- highestSeriesFileOf log.CommonDir log.WriterId
-            fileOf log log.CurrentFile
-
-    /// durable-events-005: roll to the next ordinal when the current segment
-    /// is non-empty and would exceed the cap with this append. An empty
-    /// segment always accepts the batch; a batch larger than the cap
-    /// occupies its own segment; a legacy file is never rolled here.
-    let private segmentSizeOf (path: string) : int =
-        if existsSync path then statSync path |> statSize else 0
-
-    let private nextOrdinalOf (currentFile: string) : int =
-        let ordinal = ordinalOfSegmentFileName currentFile + 1
-
-        if ordinal > 9999 then
-            invalidArg "writerId" "segment ordinal exhausted the four-digit space"
-
-        ordinal
-
-    let private rollSegmentIfNeeded (log: ProcessEventLog) (textBytes: int) (path: string) : string =
-        let size = segmentSizeOf path
-
-        if size > 0 && size + textBytes > log.SegmentCap then
-            log.CurrentFile <- segmentFileOf log.WriterId (nextOrdinalOf log.CurrentFile)
-            fileOf log log.CurrentFile
-        else
-            path
-
-    let private rollIfNeeded (log: ProcessEventLog) (textBytes: int) (path: string) : string =
-        if log.CurrentFile = legacyFileOf log.WriterId then
-            path
-        else
-            rollSegmentIfNeeded log textBytes path
-
-    let private appendBytes text path =
-        match tryAppendFault AppendPhase.PhysicalAppend (fun () -> AppendAllText path text "utf8") with
-        | Error primary -> Error(PhysicalAppendFailure.AfterAppend(primary, []))
-        | Ok() -> appendDurabilityBarrier path
+        { Phase =
+            match phase with
+            | "before-append" -> AppendPhase.BeforePhysicalAppend
+            | "append" -> AppendPhase.PhysicalAppend
+            | "open" -> AppendPhase.DurabilityOpen
+            | "fsync" -> AppendPhase.DurabilityBarrier
+            | "close" -> AppendPhase.DurabilityClose
+            | other -> invalidOp (sprintf "unknown writer phase: %s" other)
+          Cause = unbox<exn> value?cause }
 
     let private appendEncoded (log: ProcessEventLog) text =
-        match
-            tryAppendFault AppendPhase.BeforePhysicalAppend (fun () -> ensureDirectory (eventsDirectory log.CommonDir))
-        with
-        | Error primary -> Error(PhysicalAppendFailure.BeforeAppend primary)
-        | Ok() ->
-            let resolveTarget () =
-                let target = resolveAppendTarget log
-                rollIfNeeded log (byteLengthUtf8 text) target
+        let outcome = (writerOf log).append text
 
-            match tryAppendFault AppendPhase.BeforePhysicalAppend resolveTarget with
-            | Error primary -> Error(PhysicalAppendFailure.BeforeAppend primary)
-            | Ok path -> appendBytes text path
+        if outcome?ok then
+            let completion: string = outcome?completion
+
+            match completion with
+            | "no-append" -> Ok PhysicalAppendCompletion.NoAppend
+            | "durable" -> Ok PhysicalAppendCompletion.AppendDurable
+            | other -> invalidOp (sprintf "unknown writer completion: %s" other)
+        else
+            let primary = physicalFault outcome?primary
+            let kind: string = outcome?kind
+
+            match kind with
+            | "before-append" -> Error(PhysicalAppendFailure.BeforeAppend primary)
+            | "after-append" ->
+                let cleanup = unbox<obj array> outcome?cleanupFailures |> Array.map physicalFault |> Array.toList
+                Error(PhysicalAppendFailure.AfterAppend(primary, cleanup))
+            | other -> invalidOp (sprintf "unknown writer failure: %s" other)
 
     /// One semantic append = one sequence of complete canonical JSON+LF lines.
     /// Existing bytes are never read or rewritten.
