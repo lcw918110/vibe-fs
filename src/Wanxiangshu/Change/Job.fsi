@@ -15,9 +15,7 @@ type ManagerJob =
 
     member Handle: OrchestratorHandle
 
-/// Completion mailbox for published verdicts. It only stores the final
-/// OrchestratorVerdict after FF; the publish program runs as an owned task.
-/// EXEC-019: FIFO batch drain, MaxJoinBatch ceiling.
+/// 工作终局结果的主体类型和诊断适配；队列、活动计数和等待者归 result-mailbox。
 type VerdictMailbox =
     new: observer: IWaitObserver -> VerdictMailbox
     member StartJob: unit -> unit

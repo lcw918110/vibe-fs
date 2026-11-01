@@ -117,6 +117,8 @@ module ChangeSurface =
 
     val fireVerdictInterrupt: handle: obj -> reason: string -> unit
 
+    val rejectVerdictInterrupt: handle: obj -> error: obj -> unit
+
     val verdictMailboxJoinAvailable: mailbox: obj -> maxCount: int -> interrupt: obj -> Task<obj>
 
     val verdictMaxBatch: unit -> int

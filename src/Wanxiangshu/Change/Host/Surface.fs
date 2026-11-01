@@ -435,6 +435,66 @@ module OrchestratorHostSurface =
                 | Error error -> box {| ok = false; error = error |}
         }
 
+    let private verdictObject verdict =
+        match verdict with
+        | OrchestratorVerdict.Published(jobId, head) ->
+            box
+                {| kind = "Published"
+                   jobId = ManagerJobId.value jobId
+                   detail = CommitHash.value head |}
+        | OrchestratorVerdict.PublishedPendingCleanup(jobId, head, error) ->
+            box
+                {| kind = "PublishedPendingCleanup"
+                   jobId = ManagerJobId.value jobId
+                   detail = sprintf "Published %s; cleanup pending: %s" (CommitHash.value head) error |}
+        | OrchestratorVerdict.Cancelled jobId ->
+            box
+                {| kind = "Cancelled"
+                   jobId = ManagerJobId.value jobId
+                   detail = "cancelled" |}
+        | OrchestratorVerdict.RejectedDirty reason ->
+            box
+                {| kind = "RejectedDirty"
+                   jobId = ""
+                   detail = reason |}
+        | OrchestratorVerdict.IntegrationFailed(jobId, error) ->
+            box
+                {| kind = "IntegrationFailed"
+                   jobId = ManagerJobId.value jobId
+                   detail = error |}
+        | OrchestratorVerdict.Empty ->
+            box
+                {| kind = "Empty"
+                   jobId = ""
+                   detail = "" |}
+
+    let joinPublishedAvailable (handle: obj) (maxCount: int) (interrupt: obj) : Task<obj> =
+        task {
+            let! result =
+                (handle :?> HostHandle)
+                    .Host.JoinPublishedAvailable(maxCount, unbox<Task<JoinInterruptReason>> interrupt)
+
+            return
+                match result with
+                | Error error -> box {| ok = false; error = error |}
+                | Ok(ResultsAvailable batch) ->
+                    box
+                        {| ok = true
+                           kind = "ResultsAvailable"
+                           verdicts = NonEmptyBatch.toList batch |> List.map verdictObject |> List.toArray |}
+                | Ok(Interrupted reason) ->
+                    let name =
+                        match reason with
+                        | JoinInterruptReason.UserMessageArrived -> "UserMessageArrived"
+                        | JoinInterruptReason.DeadlineExpired -> "DeadlineExpired"
+                        | JoinInterruptReason.OperatorAbort -> "OperatorAbort"
+
+                    box
+                        {| ok = true
+                           kind = "Interrupted"
+                           reason = name |}
+        }
+
     /// The same finalization sequence through the production Git runner (real
     /// `git` via ProcessRunner and the output spool), not a JavaScript port.
     let finalizeWorktreeWithGit (managerId: string) (worktree: string) : Task<obj> =

@@ -1802,6 +1802,9 @@ module ChangeSurface =
         AsyncSupport.trySetResult (handle :?> VerdictInterruptHandle).Source (verdictInterruptOf reason)
         |> ignore
 
+    let rejectVerdictInterrupt (handle: obj) (error: obj) : unit =
+        (handle :?> VerdictInterruptHandle).Source.SetException(unbox<exn> error)
+
     let verdictMailboxJoinAvailable (mailbox: obj) (maxCount: int) (interrupt: obj) : Task<obj> =
         task {
             let! outcome =
