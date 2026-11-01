@@ -10,6 +10,30 @@ open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Git
 open Wanxiangshu.Persistence.Journal
 
+module internal ManagerWorktreePolicy =
+    let private shortBranch (reference: string) =
+        let prefix = "refs/heads/"
+        if reference.StartsWith(prefix, System.StringComparison.Ordinal) then reference.Substring prefix.Length
+        else reference
+
+    let managerBranchOf (jobId: string) = "manager/" + jobId
+
+    let staleWorktrees (entries: (string * string option) list) (owned: string list) =
+        let owners = Set.ofList owned
+        entries
+        |> List.choose (fun (path, branch) ->
+            match branch with
+            | Some reference ->
+                let name = shortBranch reference
+                if name.StartsWith("manager/", System.StringComparison.Ordinal) && not (Set.contains name owners) then
+                    Some path
+                else None
+            | None -> None)
+
+    let staleBranches (branches: string list) (owned: string list) =
+        let owners = Set.ofList owned
+        branches |> List.filter (fun reference -> not (Set.contains (shortBranch reference) owners))
+
 module private OrchestratorRuntimeDecisions =
     /// Durable terminal fact closes the job permanently (GLORY-068).
     let requireActiveJob (record: ManagerJobProjection) : Result<ManagerJobProjection, string> =
@@ -142,7 +166,7 @@ type Orchestrator
             let path = defaultArg worktreePath (defaultWorktreePath jobId)
             // PERSIST-009: effect identity is deterministic before git runs.
             let identity =
-                GitPorcelain.managerBranchOf (ManagerJobId.value jobId)
+                ManagerWorktreePolicy.managerBranchOf (ManagerJobId.value jobId)
                 |> WorktreeIdentity.create
 
             let requestFact =

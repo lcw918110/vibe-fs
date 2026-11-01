@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { withDispatch, dispatch, journal } from './support/dispatch.mjs'
-import { GitWorktrees } from 'wanxiangli/git-worktrees'
+import { GitWorktrees } from 'wanxiangli/git'
 
 test('WHAT[effect-accounting-003] physical send sees its exact intent already recoverable from the production journal', async () => {
   await withDispatch(async ({ open, send }) => {

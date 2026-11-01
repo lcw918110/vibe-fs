@@ -11,7 +11,7 @@ import { join } from 'node:path'
 
 import * as hostSurface from '../../../../dist/Change/Host/Surface.js'
 import * as journalSurface from '../../../../dist/Persistence/Journal/Surface.js'
-import { GitWorktrees } from 'wanxiangli/git-worktrees'
+import { GitWorktrees } from 'wanxiangli/git'
 
 export const fakeGitPort = (behaviour = {}) => ({
   Worktrees: new GitWorktrees('/repo', async ({ args }) => {

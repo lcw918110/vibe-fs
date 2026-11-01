@@ -21,7 +21,7 @@ type private NativePublication =
 /// 只转换主体身份、结果和命令载体；物理发布顺序由库负责。
 module GitOperations =
 
-    [<Import("GitPublication", "wanxiangli/git-publication")>]
+    [<Import("GitPublication", "wanxiangli/git")>]
     let private constructor: obj = jsNative
 
     [<Emit("new $0($1, $2)")>]

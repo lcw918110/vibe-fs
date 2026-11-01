@@ -1,6 +1,6 @@
 import test from 'node:test'
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
-import { GitWorktrees } from 'wanxiangli/git-worktrees'
+import { GitWorktrees } from 'wanxiangli/git'
 
 {
 const { default: assert } = await import("node:assert/strict");

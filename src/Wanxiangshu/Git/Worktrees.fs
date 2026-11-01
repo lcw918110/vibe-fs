@@ -22,7 +22,7 @@ type private NativeWorktrees =
     abstract deleteBranch: identity: string -> Task<obj>
 
 module private WorktreeInterop =
-    [<Import("GitWorktrees", "wanxiangli/git-worktrees")>]
+    [<Import("GitWorktrees", "wanxiangli/git")>]
     let constructor: obj = jsNative
 
     [<Emit("new $0($1, $2)")>]

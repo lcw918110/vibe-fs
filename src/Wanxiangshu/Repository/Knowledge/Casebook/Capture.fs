@@ -134,7 +134,7 @@ module CasebookCapture =
     let caseIdentityForInvocation (sessionId: string) (invocationId: string) : string =
         sprintf "%s:%s" sessionId invocationId
 
-    /// knowledge-reuse-014: head/tail truncation is wanxiangli/casebook-maintenance `truncate`.
+    /// knowledge-reuse-014: head/tail truncation is FileDiff.truncate.
     let truncateDiffForBudget (diff: string) (budget: int) : obj = maintenanceLaw?truncate (diff, budget)
 
     [<Import("FileBaseline", "wanxiangli/file-baseline")>]

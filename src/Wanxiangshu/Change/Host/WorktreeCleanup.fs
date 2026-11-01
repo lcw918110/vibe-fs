@@ -59,18 +59,13 @@ module OrchestratorSweep =
             | Error error -> return Error(sprintf "cannot list manager branches for cleanup: %s" error)
             | Ok branches ->
                 let stale =
-                    GitPorcelain.staleBranches (branches |> List.map WorktreeIdentity.value) owned
+                    ManagerWorktreePolicy.staleBranches (branches |> List.map WorktreeIdentity.value) owned
                     |> List.map WorktreeIdentity.create
 
                 return! deleteBranches git stale
         }
 
-    /// Which worktrees and branches are stale is wanxiangli/git-porcelain's
-    /// `staleWorktrees` / `staleBranches` (CUT-23 ②): only manager branches whose
-    /// short name no active job owns, compared whole — the MAIN working tree
-    /// (`branch refs/heads/main`) and detached worktrees are never ours to remove
-    /// (measured on Host 1.18.9: removing the main tree killed every orchestrator
-    /// canary in init). This module only performs the removals, in order.
+    /// 产品策略按完整短分支名决定陈旧项；Git 对象只执行按序清理。
     let private removeStaleWorktrees
         (git: GitPort)
         (owned: string list)
@@ -78,7 +73,7 @@ module OrchestratorSweep =
         : Task<Result<unit, string>> =
         task {
             let stale =
-                GitPorcelain.staleWorktrees
+                ManagerWorktreePolicy.staleWorktrees
                     (entries
                      |> List.map (fun (path, identity) ->
                          WorktreePath.value path, identity |> Option.map WorktreeIdentity.value))

@@ -1613,7 +1613,7 @@ module ChangeSurface =
         task {
             let! result =
                 (git :?> GitHandle).Port.Worktrees.Create(
-                    GitPorcelain.managerBranchOf job |> WorktreeIdentity.create,
+                    ManagerWorktreePolicy.managerBranchOf job |> WorktreeIdentity.create,
                     WorktreePath.create path,
                     TargetRef.create sourceRef)
 
@@ -1633,7 +1633,7 @@ module ChangeSurface =
         }
 
     let worktreeIdentityOf (job: string) : string =
-        GitPorcelain.managerBranchOf job
+        ManagerWorktreePolicy.managerBranchOf job
 
     let gitListWorktrees (git: obj) : Task<obj> =
         task {
@@ -1663,7 +1663,7 @@ module ChangeSurface =
         task {
             let! result =
                 (git :?> GitHandle).Port.Worktrees.Create(
-                    GitPorcelain.managerBranchOf job |> WorktreeIdentity.create,
+                    ManagerWorktreePolicy.managerBranchOf job |> WorktreeIdentity.create,
                     WorktreePath.create path,
                     TargetRef.create sourceRef
                 )
