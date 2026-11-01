@@ -877,7 +877,6 @@ OpenCode/Host/QuiescenceSurface.fsi
 OpenCode/Host/QuiescenceSurface.fs
 Execution/Delegation/SyncDelegate/Wait.fsi
 Execution/Delegation/SyncDelegate/Wait.fs
-Execution/Delegation/SyncDelegate/Store.fsi
 Execution/Delegation/SyncDelegate/Store.fs
 Execution/Delegation/SyncDelegate/Workflow.fsi
 Execution/Delegation/SyncDelegate/Workflow.fs
