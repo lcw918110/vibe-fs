@@ -40,7 +40,6 @@ module ProcessEventLog =
     val append:
         log: ProcessEventLog -> events: EventEnvelope list -> Result<PhysicalAppendCompletion, PhysicalAppendFailure>
 
-    val readLastCompleteLine: path: string -> Result<string option, string>
     val writerPhysicalMetadata: commonDir: string -> WriterPhysicalMetadata list
 
     /// durable-events-006/013/017: deterministic inventory of every writer file

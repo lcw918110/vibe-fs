@@ -7,12 +7,6 @@ open Fable.Core.JsInterop
 [<RequireQualifiedAccess>]
 module RetentionSurface =
 
-    let readLastCompleteLine (path: string) : string =
-        match ProcessEventLog.readLastCompleteLine path with
-        | Ok(Some line) -> line
-        | Ok None -> null
-        | Error error -> failwith error
-
     let retainedWriterIdsAt (stateRoot: string) (nowMs: float) : string[] =
         match ProcessEventLog.readStreamsAt stateRoot nowMs with
         | Ok streams -> streams |> List.map fst |> List.toArray

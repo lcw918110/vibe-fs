@@ -4,7 +4,6 @@ open System
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
-open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation.Identity
 
 /// writer 的状态和物理追加由公开库对象独占。
@@ -16,6 +15,11 @@ type private NativeSegmentedWriter =
     abstract writerId: string
     abstract filePath: unit -> string
     abstract append: text: string -> obj
+
+type private NativeSegmentedReader =
+    abstract readStreams: directory: (unit -> string) * nowMs: float -> obj
+    abstract writerPhysicalMetadata: directory: (unit -> string) -> obj array
+    abstract physicalInventory: directory: (unit -> string) -> string
 
 type StoreFileGate internal (lease: obj) =
     member _.Release() : Task<unit> = lease?release ()
@@ -54,26 +58,17 @@ module ProcessEventLog =
     [<Import("writeFileSync", "node:fs")>]
     let private writeTextFileSync (path: string) (content: string) (encoding: string) : unit = jsNative
 
-    [<Import("writeFileSync", "node:fs")>]
-    let private writeBytesFileSync (path: string) (content: byte[]) : unit = jsNative
-
     [<Import("appendFileSync", "node:fs")>]
     let private AppendAllText (path: string) (content: string) (encoding: string) : unit = jsNative
 
     [<Import("readFileSync", "node:fs")>]
     let private readBytesFileSync (path: string) : byte[] = jsNative
 
-    [<Import("readFileSync", "node:fs")>]
-    let private readTextFileSync (path: string) (encoding: string) : string = jsNative
-
     [<Import("readdirSync", "node:fs")>]
     let private readdirSync (path: string) : string[] = jsNative
 
     [<Import("statSync", "node:fs")>]
     let private statSync (path: string) : obj = jsNative
-
-    [<Import("readSync", "node:fs")>]
-    let private readSync (fd: int) (buffer: byte[]) (offset: int) (length: int) (position: int) : int = jsNative
 
     [<Import("unlinkSync", "node:fs")>]
     let private unlinkSync (path: string) : unit = jsNative
@@ -99,9 +94,6 @@ module ProcessEventLog =
     [<Emit("$0.update($1)")>]
     let private hashUpdate (hash: obj) (content: byte[]) : obj = jsNative
 
-    [<Emit("[$0.dev, $0.ino, $0.mode, $0.size, $0.mtimeMs, $0.ctimeMs].join(':')")>]
-    let private statIdentity (stat: obj) : string = jsNative
-
     [<Emit("$0.mtimeMs")>]
     let private statMtimeMs (stat: obj) : float = jsNative
 
@@ -114,12 +106,6 @@ module ProcessEventLog =
 
     [<Emit("$0.size")>]
     let private statSize (stat: obj) : int = jsNative
-
-    [<Emit("$0.dev")>]
-    let private statDev (stat: obj) : float = jsNative
-
-    [<Emit("$0.ino")>]
-    let private statIno (stat: obj) : float = jsNative
 
     [<Emit("$0.digest('hex')")>]
     let private hashHex (hash: obj) : string = jsNative
@@ -163,21 +149,13 @@ module ProcessEventLog =
           FileNames: string list
           LastActivityMs: float }
 
-    /// durable-convergence-011: the whole-writer UTC calendar-day retention
-    /// rule has one owner, wanxiangli/retention (CUT-19). This log only supplies
-    /// the cut-off instant and each writer's activity; it never decides the day
-    /// arithmetic itself. A non-finite instant is rejected, never treated as
-    /// expired.
-    [<Import("WriterRetention", "wanxiangli/retention")>]
-    let private retentionClass: obj = jsNative
-
     [<Emit("new $0()")>]
-    let private constructRetention (cls: obj) : obj = jsNative
+    let private construct (_class: obj) : obj = jsNative
 
-    let private retention: obj = constructRetention retentionClass
+    [<Import("SegmentedReader", "wanxiangli/segments")>]
+    let private readerClass: obj = jsNative
 
-    let isWriterActiveAt (nowMs: float) (lastActivityMs: float) : bool =
-        unbox<bool> (retention?isRetained (nowMs, lastActivityMs))
+    let private reader: NativeSegmentedReader = construct readerClass |> unbox
 
     /// Typed physical diagnosis: the store lock stayed contended past the
     /// acquisition budget. It carries no history meaning.
@@ -275,7 +253,7 @@ module ProcessEventLog =
     [<Import("WriterSegments", "wanxiangli/segments")>]
     let private segmentsClass: obj = jsNative
 
-    let private segmentLaw: obj = constructRetention segmentsClass
+    let private segmentLaw: obj = construct segmentsClass
 
     /// Throws instead of spelling a five-digit name that would read back as
     /// another writer.
@@ -406,379 +384,16 @@ module ProcessEventLog =
         | Ok "" -> Ok PhysicalAppendCompletion.NoAppend
         | Ok text -> appendEncoded log text
 
-    /// durable-events-005/014: writer stream framing (non-empty text ends in LF, no
-    /// empty interior line) and per-line canonical decode are wanxiangli/segments
-    /// `decodeStream` (CUT-19-a); this keeps only the StorageInvalid projection.
-    let decodeWriterText (label: string) (text: string) : Result<EventEnvelope list, StorageInvalid> =
-        let outcome: obj = segmentLaw?decodeStream (label, text)
-
-        if unbox<bool> outcome?ok then
-            Ok(
-                unbox<obj array> outcome?events
-                |> Array.map CanonicalEventCodec.ofLibraryEvent
-                |> Array.toList
-            )
-        else
-            Error(CanonicalEventCodec.invalidOfLibraryError outcome?error)
-
-    let decodeWriterBytes (label: string) (bytes: byte[]) : Result<EventEnvelope list, StorageInvalid> =
-        CanonicalEventCodec.tryDecodeUtf8Text bytes
-        |> Result.bind (decodeWriterText label)
-
-    let private decodeFile (path: string) : Result<EventEnvelope list, StorageInvalid> =
-        decodeWriterBytes path (readBytesFileSync path)
-
-    type private WriterDecodeCacheEntry =
-        { Dev: float
-          Ino: float
-          StatIdentity: string
-          ByteLength: int
-          Events: EventEnvelope list }
-
-    /// durable-events-014/017: a process-local decoded-prefix cache. A writer file
-    /// is append-only and owned by one process (durable-events-005), so a decode
-    /// for an exact (dev, ino, length) is reused verbatim, and a same-inode
-    /// extension decodes only the appended complete lines. The cache is never a
-    /// second authority: every entry comes from the canonical decoder, and the
-    /// Integrator still derives Current from the returned envelopes.
-    // DSL-MUTABLE: resource — process-local decoded writer prefix keyed by path.
-    let private writerDecodeCache =
-        System.Collections.Generic.Dictionary<string, WriterDecodeCacheEntry>()
-
-    let private pruneDecodeCache () =
-        writerDecodeCache.Keys
-        |> Seq.filter (fun path -> not (existsSync path))
-        |> Seq.toList
-        |> List.iter (fun path -> writerDecodeCache.Remove path |> ignore)
-
-    let private storeDecodeCache path dev ino identity size events =
-        writerDecodeCache.[path] <-
-            { Dev = dev
-              Ino = ino
-              StatIdentity = identity
-              ByteLength = size
-              Events = events }
-
-    let private lastIndexOfLf (buffer: byte[]) count =
-        buffer
-        |> Array.take count
-        |> Array.tryFindIndexBack ((=) 10uy)
-        |> Option.defaultValue -1
-
-    let private readRequiredChunk fd bytes offset count position =
-        let read = readSync fd bytes offset count position
-
-        if read <= 0 then
-            failwith "unexpected EOF while reading writer tail"
-        else
-            read
-
-    let private readExactAt fd position length =
-        let bytes = Array.zeroCreate<byte> length
-        // DSL-MUTABLE: algorithm-scratch — bytes already filled by positional reads.
-        let mutable filled = 0
-
-        while filled < length do
-            filled <- filled + readRequiredChunk fd bytes filled (length - filled) (position + filled)
-
-        bytes
-
-    type private TailLine = { Start: int; Text: string }
-
-    type private ReverseBlock =
-        | LocatedLineStart of int
-        | ContinueBefore of int
-
-    let private scanReverseBlock fd blockSize cursor =
-        let start = max 0 (cursor - blockSize)
-        let length = cursor - start
-
-        let delimiter =
-            readExactAt fd start length |> fun buffer -> lastIndexOfLf buffer length
-
-        if delimiter >= 0 then
-            ReverseBlock.LocatedLineStart(start + delimiter + 1)
-        elif start = 0 then
-            ReverseBlock.LocatedLineStart 0
-        else
-            ReverseBlock.ContinueBefore start
-
-    let private locateLineStart fd lineEnd =
-        let blockSize = 4096
-        // DSL-MUTABLE: algorithm-scratch — reverse pread search carries only the next byte boundary.
-        let mutable search = ReverseBlock.ContinueBefore lineEnd
-
-        let isSearching () =
-            match search with
-            | ReverseBlock.ContinueBefore _ -> true
-            | ReverseBlock.LocatedLineStart _ -> false
-
-        let advance () =
-            let cursor =
-                match search with
-                | ReverseBlock.ContinueBefore value -> value
-                | ReverseBlock.LocatedLineStart value -> value
-
-            search <- scanReverseBlock fd blockSize cursor
-
-        while isSearching () do
-            advance ()
-
-        match search with
-        | ReverseBlock.LocatedLineStart lineStart -> lineStart
-        | ReverseBlock.ContinueBefore _ -> lineEnd
-
-    let private readTailLine fd path lineEnd lineStart =
-        let length = lineEnd - lineStart
-
-        if length <= 0 then
-            Error(sprintf "writer file contains empty final line: %s" path)
-        else
-            readExactAt fd lineStart length
-            |> CanonicalEventCodec.tryDecodeUtf8Text
-            |> Result.mapError (fun _ -> sprintf "writer file contains invalid UTF-8: %s" path)
-            |> Result.map (fun text -> { Start = lineStart; Text = text })
-
-    let private readCompleteLineBefore fd path lineEnd : Result<TailLine, string> =
-        if lineEnd <= 0 then
-            Error(sprintf "writer file contains empty final line: %s" path)
-        else
-            locateLineStart fd lineEnd |> readTailLine fd path lineEnd
-
-    let private tryPhysical action onError =
-        try
-            action ()
-        with ex ->
-            onError ex
-
-    let private withReadFd path onError action =
-        let fd = openSync path "r"
-
-        try
-            tryPhysical (fun () -> action fd) onError
-        finally
-            closeSync fd
-
-    /// durable-events-014/017: decode a writer through the process-local prefix
-    /// cache. An exact (dev, ino, mode, size, mtime, ctime) hit reuses the decoded
-    /// envelopes verbatim; a same-inode extension decodes only the appended
-    /// complete lines; any other change (truncation, replacement, rewrite) falls
-    /// back to the canonical full decode. The cache never becomes a second
-    /// authority: entries only ever hold canonical decoder output, and a miss or
-    /// changed stat always re-reads the file.
-    let private decodeFileCached (path: string) : Result<EventEnvelope list, StorageInvalid> =
-        let stat = statSync path
-        let dev = statDev stat
-        let ino = statIno stat
-        let identity = statIdentity stat
-        let size = statSize stat
-
-        let fullDecode () =
-            decodeFile path
-            |> Result.map (fun events ->
-                storeDecodeCache path dev ino identity size events
-                events)
-
-        let incrementalDecode (cached: WriterDecodeCacheEntry) =
-            result {
-                let! bytes =
-                    withReadFd
-                        path
-                        (fun ex -> Error(StorageInvalid.NonCanonical(sprintf "writer read failed: %s" ex.Message)))
-                        (fun fd -> Ok(readExactAt fd cached.ByteLength (size - cached.ByteLength)))
-
-                let! text = CanonicalEventCodec.tryDecodeUtf8Text bytes
-                let! appendedEvents = decodeWriterText path text
-                let events = cached.Events @ appendedEvents
-                storeDecodeCache path dev ino identity size events
-                return events
-            }
-
-        match writerDecodeCache.TryGetValue path with
-        | true, cached when cached.StatIdentity = identity -> Ok cached.Events
-        | true, cached when cached.Dev = dev && cached.Ino = ino && cached.ByteLength < size -> incrementalDecode cached
-        | _ -> fullDecode ()
-
-    let private nonEmptyFileSize path =
-        let exists = existsSync path
-        let size = if exists then statSync path |> statSize else 0
-
-        match exists, size with
-        | false, _
-        | true, 0 -> None
-        | true, value -> Some value
-
-    let private readLastLineFromFd path size fd =
-        let trailing = readExactAt fd (size - 1) 1
-
-        if trailing.[0] <> 10uy then
-            Error(sprintf "writer file has incomplete trailing line: %s" path)
-        else
-            readCompleteLineBefore fd path (size - 1)
-            |> Result.map (fun line -> Some line.Text)
-
-    /// Exact O(last-line-bytes) NDJSON tail lookup. The scan searches raw LF bytes
-    /// backwards with positional reads; UTF-8 boundaries do not matter because an
-    /// unescaped LF cannot occur inside a valid JSON string.
-    let readLastCompleteLine (path: string) : Result<string option, string> =
-        nonEmptyFileSize path
-        |> Option.map (fun size -> withReadFd path (fun ex -> Error ex.Message) (readLastLineFromFd path size))
-        |> Option.defaultValue (Ok None)
-
-    [<Emit("({ [Symbol.iterator]() { return { next: $0 } } })")>]
-    let private iterableOfNext (next: unit -> obj) : obj = jsNative
-
-    /// Where the reverse line reader stands: the open file and the LF that ends
-    /// the next line to supply, or not yet inside a file.
-    type private TailCursor =
-        | BetweenFiles
-        | InsideFile of fd: int * path: string * lineEnd: int
-
-    /// durable-convergence-011: which tail line speaks for a writer's activity
-    /// (a Journal `ObservedAt`, walking back past `ProjectionCutTail` lines,
-    /// across segment seams; anything else means no durable activity) is
-    /// wanxiangli/retention `lastActivity` (CUT-19). This log only supplies
-    /// complete lines newest first, lazily, reading O(line bytes) per pull, and
-    /// stops supplying where the physical read can no longer speak: an empty
-    /// file, an incomplete trailing line, an empty or non-UTF-8 line, or a read
-    /// failure. Only when no durable activity exists does the producer-side
-    /// file mtime speak, and the newest file wins.
-    let private writerActivityOf (paths: string list) : float =
-        // DSL-MUTABLE: resource — read fds opened lazily for this one lookup; all closed below.
-        let opened = ResizeArray<int>()
-        // DSL-MUTABLE: algorithm-scratch — remaining files, newest first.
-        let mutable files = List.rev paths
-        // DSL-MUTABLE: algorithm-scratch — reverse line cursor.
-        let mutable cursor = TailCursor.BetweenFiles
-        // DSL-MUTABLE: algorithm-scratch — once the physical read stops speaking it never resumes.
-        let mutable stopped = false
-
-        let stop () =
-            stopped <- true
-            None
-
-        let enterSizedFile path size =
-            let fd = openSync path "r"
-            opened.Add fd
-
-            let endsWithLf =
-                tryPhysical (fun () -> (readExactAt fd (size - 1) 1).[0] = 10uy) (fun _ -> false)
-
-            if endsWithLf then
-                cursor <- TailCursor.InsideFile(fd, path, size - 1)
-                Some()
-            else
-                stop ()
-
-        let enterFile path =
-            match nonEmptyFileSize path with
-            | None -> stop ()
-            | Some size -> enterSizedFile path size
-
-        let enterNextFile () =
-            match files with
-            | [] -> stop ()
-            | path :: rest ->
-                files <- rest
-                enterFile path
-
-        let cursorBefore fd path (lineStart: int) =
-            if lineStart > 0 then
-                TailCursor.InsideFile(fd, path, lineStart - 1)
-            else
-                TailCursor.BetweenFiles
-
-        let readLineBefore fd path lineEnd : string option =
-            match tryPhysical (fun () -> readCompleteLineBefore fd path lineEnd) (fun ex -> Error ex.Message) with
-            | Error _ -> stop ()
-            | Ok line ->
-                cursor <- cursorBefore fd path line.Start
-                Some line.Text
-
-        let rec pull () : string option =
-            match stopped, cursor with
-            | true, _ -> None
-            | false, TailCursor.BetweenFiles -> enterNextFile () |> Option.bind pull
-            | false, TailCursor.InsideFile(fd, path, lineEnd) -> readLineBefore fd path lineEnd
-
-        let next () : obj =
-            match pull () with
-            | Some line -> createObj [ "done" ==> false; "value" ==> line ]
-            | None -> createObj [ "done" ==> true ]
-
-        let verdict: obj =
-            try
-                retention?lastActivity (iterableOfNext next)
-            finally
-                opened |> Seq.iter (fun fd -> closeSync fd)
-
-        if isNull verdict then
-            paths |> List.map (fun path -> statSync path |> fileActivityMs) |> List.max
-        else
-            unbox<float> verdict
-
-    /// durable-events-005/014: one writer's physical files grouped by
-    /// WriterId (wanxiangli/segments `groupWriterFiles`). A tail `-dddd` name
-    /// joins its prefix's segment series only when the ordinals are
-    /// contiguous from 0000; otherwise the file is a legacy suffixless single
-    /// file under its full stem. A legacy file and its segment series may
-    /// coexist only as an interrupted reorganization or import intermediate.
-    type private WriterFileGroup =
-        { WriterId: string
-          FileNames: string list }
-
-    let private writerFileGroups (commonDir: string) : WriterFileGroup list =
-        let directory = eventsDirectory commonDir
-
-        if not (existsSync directory) then
-            []
-        else
-            unbox<obj array> (segmentLaw?groupWriterFiles (readdirSync directory))
-            |> Array.toList
-            |> List.map (fun group ->
-                { WriterId = unbox<string> group?writerId
-                  FileNames = unbox<string array> group?fileNames |> Array.toList })
-
     let writerPhysicalMetadata (commonDir: string) : WriterPhysicalMetadata list =
-        writerFileGroups commonDir
-        |> List.map (fun group ->
-            let paths =
-                group.FileNames |> List.map (fun name -> join2 (eventsDirectory commonDir) name)
+        reader.writerPhysicalMetadata (fun () -> eventsDirectory commonDir)
+        |> Array.map (fun value ->
+            { WriterId = unbox<string> value?writerId
+              FileNames = unbox<string array> value?fileNames |> Array.toList
+              LastActivityMs = unbox<float> value?lastActivityMs })
+        |> Array.toList
 
-            { WriterId = group.WriterId
-              FileNames = group.FileNames
-              LastActivityMs = writerActivityOf paths })
-
-    /// durable-events-006/013/017: cheap physical freshness witness for the
-    /// append boundary. It names every retained writer file and its canonical
-    /// file identity (dev/ino/mode/size/mtime/ctime) without reading a byte of
-    /// historical content. Every append and retention rewrite takes the
-    /// cross-process store lock, so an unchanged witness proves this process's
-    /// Current already contains every committed line; a changed witness only
-    /// forces a reload and never authorizes skipping one. This is a physical
-    /// hint, not durable or domain state and not a second authority.
     let physicalInventory (commonDir: string) : string =
-        try
-            writerFileGroups commonDir
-            |> List.sortBy (fun group -> group.WriterId)
-            |> List.map (fun group ->
-                let files =
-                    group.FileNames
-                    |> List.sort
-                    |> List.map (fun name ->
-                        let path = join2 (eventsDirectory commonDir) name
-
-                        if existsSync path then
-                            name + "=" + statIdentity (statSync path)
-                        else
-                            name + "=missing")
-                    |> String.concat ","
-
-                group.WriterId + "[" + files + "]")
-            |> String.concat ";"
-        with _ ->
-            // An unreadable inventory must never look like a stable one.
-            "inventory-unavailable"
+        reader.physicalInventory (fun () -> eventsDirectory commonDir)
 
     let private setWriterActivity path activityMs =
         let seconds = activityMs / 1000.0
@@ -797,48 +412,6 @@ module ProcessEventLog =
              unbox<int> result?copiedLines
          else
              0)
-
-    /// durable-events-005: the authoritative file list of one writer's
-    /// logical stream. A coexisting legacy file and segment series is only a
-    /// legal intermediate of an interrupted reorganization, import, or
-    /// version transition: a byte-prefix relation keeps the longer form, and
-    /// the line-continuation form reads as the series followed by the legacy
-    /// lines. The read layer never touches disk here; materialization owns
-    /// the physical convergence. Anything else is physical corruption.
-    let private coexistingFormsOf
-        (directory: string)
-        (writerId: string)
-        (legacyFile: string)
-        (segments: string list)
-        : Result<(string * int) list, string> =
-        let legacyBytes = readBytesFileSync (join2 directory legacyFile)
-
-        let segmentBytes =
-            segments
-            |> List.map (fun name -> readBytesFileSync (join2 directory name))
-            |> Array.concat
-
-        match coexistenceOf legacyBytes segmentBytes with
-        | "series", _ -> Ok(segments |> List.map (fun name -> name, 0))
-        | "legacy", _ -> Ok [ legacyFile, 0 ]
-        | "continuation", copied -> Ok((segments |> List.map (fun name -> name, 0)) @ [ legacyFile, copied ])
-        | _ -> Error(sprintf "writer files diverged: %s" writerId)
-
-    let private logicalStreamFiles (commonDir: string) (group: WriterFileGroup) : Result<(string * int) list, string> =
-        let layout: obj =
-            segmentLaw?streamLayout (
-                createObj [ "writerId" ==> group.WriterId; "fileNames" ==> List.toArray group.FileNames ]
-            )
-
-        let segmentNames () =
-            unbox<string array> layout?segments |> Array.toList
-
-        match unbox<string> layout?kind with
-        | "segments" -> Ok(segmentNames () |> List.map (fun name -> name, 0))
-        | "legacy" -> Ok [ unbox<string> layout?legacy, 0 ]
-        | "coexisting" ->
-            coexistingFormsOf (eventsDirectory commonDir) group.WriterId (unbox<string> layout?legacy) (segmentNames ())
-        | _ -> Error(sprintf "multiple legacy files for one writer: %s" group.WriterId)
 
     /// durable-events-005: split canonical text into segment-sized chunks at
     /// line boundaries. A single line larger than the cap occupies its own
@@ -929,24 +502,6 @@ module ProcessEventLog =
             durabilityBarrier path)
 
         names
-
-    let private decodeWriterFiles
-        (commonDir: string)
-        (group: WriterFileGroup)
-        : Result<EventEnvelope list, StorageInvalid> =
-        result {
-            let! files =
-                logicalStreamFiles commonDir group
-                |> Result.mapError StorageInvalid.NonCanonical
-
-            let! decoded =
-                files
-                |> List.traverseResultM (fun (name, copied) ->
-                    decodeFileCached (join2 (eventsDirectory commonDir) name)
-                    |> Result.map (List.skip copied))
-
-            return List.concat decoded
-        }
 
     let private reorganizeLegacy (commonDir: string) (writerId: string) : Result<unit, string> =
         let directory = eventsDirectory commonDir
@@ -1087,23 +642,19 @@ module ProcessEventLog =
     /// Integrator still owns cross-stream ordering and interpretation. Segments
     /// aggregate into one stream before k-way merge (durable-events-014).
     let readStreamsAt (commonDir: string) (nowMs: float) : Result<(string * EventEnvelope list) list, StorageInvalid> =
-        pruneDecodeCache ()
-
-        let rec read remaining acc =
-            result {
-                match remaining with
-                | [] -> return List.rev acc
-                | group :: tail ->
-                    let! events = decodeWriterFiles commonDir group
-                    return! read tail ((group.WriterId, events) :: acc)
-            }
-
-        writerPhysicalMetadata commonDir
-        |> List.filter (fun writer -> isWriterActiveAt nowMs writer.LastActivityMs)
-        |> List.map (fun writer ->
-            { WriterId = writer.WriterId
-              FileNames = writer.FileNames })
-        |> fun groups -> read groups []
+        let outcome = reader.readStreams((fun () -> eventsDirectory commonDir), nowMs)
+        if unbox<bool> outcome?ok then
+            unbox<obj array> outcome?streams
+            |> Array.map (fun stream ->
+                let events =
+                    unbox<obj array> stream?events
+                    |> Array.map CanonicalEventCodec.ofLibraryEvent
+                    |> Array.toList
+                unbox<string> stream?writerId, events)
+            |> Array.toList
+            |> Ok
+        else
+            Error(CanonicalEventCodec.invalidOfLibraryError outcome?error)
 
     let readStreams (commonDir: string) : Result<(string * EventEnvelope list) list, StorageInvalid> =
         readStreamsAt commonDir (currentTimeMs ())
