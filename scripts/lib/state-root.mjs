@@ -15,7 +15,7 @@ function execGitWorktreeList(directory) {
       encoding: 'utf8', env: { ...process.env, LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0' },
     }, (error, stdout, stderr) => {
       resolve({
-        error: error && !error.code && typeof error.status !== 'number' ? error : null,
+        error: error && typeof error.code !== 'number' && typeof error.status !== 'number' ? error : null,
         status: error ? (typeof error.code === 'number' ? error.code : (typeof error.status === 'number' ? error.status : null)) : 0,
         stdout: stdout || '',
         stderr: stderr || '',
