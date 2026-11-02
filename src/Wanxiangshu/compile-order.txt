@@ -621,6 +621,7 @@ Process/PtyBackend.fsi
 Process/PtyBackend.fs
 Process/PtyApi.fsi
 Process/PtyApi.fs
+Git/Worktrees.fsi
 Git/Worktrees.fs
 Change/Types.fsi
 Change/Types.fs
@@ -667,8 +668,6 @@ Change/Runtime.fsi
 Change/Runtime.fs
 Git/Operations.fsi
 Git/Operations.fs
-Change/Surface.fsi
-Change/Surface.fs
 Context/Companion/Model.fsi
 Context/Companion/Model.fs
 Context/Companion/Runtime.fsi
@@ -871,6 +870,7 @@ OpenCode/Host/QuiescenceSurface.fsi
 OpenCode/Host/QuiescenceSurface.fs
 Execution/Delegation/SyncDelegate/Wait.fsi
 Execution/Delegation/SyncDelegate/Wait.fs
+Execution/Delegation/SyncDelegate/Store.fsi
 Execution/Delegation/SyncDelegate/Store.fs
 Execution/Delegation/SyncDelegate/Workflow.fsi
 Execution/Delegation/SyncDelegate/Workflow.fs
@@ -1085,6 +1085,8 @@ Persistence/EventStore/CanonicalIntegrator.fsi
 Persistence/EventStore/CanonicalIntegrator.fs
 Persistence/Journal/Surface.fsi
 Persistence/Journal/Surface.fs
+Change/Surface.fsi
+Change/Surface.fs
 Mission/Work/DeliveryFlow.fsi
 Mission/Work/DeliveryFlow.fs
 Mission/Lifecycle/Surface.fsi

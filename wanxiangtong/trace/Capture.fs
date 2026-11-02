@@ -133,7 +133,7 @@ module XTraceCapture =
 
     [<AllowNullLiteral>]
     type private CaptureOwner =
-        abstract run<'T>: string * Func<Task<'T>> -> Task<'T>
+        abstract run<'T> : string * Func<Task<'T>> -> Task<'T>
         abstract receipt: WanxiangliTrace.History * WanxiangliTrace.History -> obj
         abstract captureOpening: CaptureStore * string * string array -> Task<unit>
         abstract captureTerminalText: CaptureStore * string * string * string -> Task<obj>
@@ -157,12 +157,18 @@ module XTraceCapture =
     [<Emit("JSON.stringify($0)")>]
     let private identityKey (_parts: obj array) : string = jsNative
 
-    let private optionalKey value unwrap = value |> Option.map (unwrap >> box) |> Option.defaultValue null
+    let private optionalKey value unwrap =
+        value |> Option.map (unwrap >> box) |> Option.defaultValue null
 
     let private secondaryKey hostPart callId run =
-        hostPart |> Option.map (fun host ->
-            identityKey [| box (HostToolPartId.value host); optionalKey callId ToolCallId.value; optionalKey run ProviderRunIdentity.value |])
-        |> Option.map box |> Option.defaultValue null
+        hostPart
+        |> Option.map (fun host ->
+            identityKey
+                [| box (HostToolPartId.value host)
+                   optionalKey callId ToolCallId.value
+                   optionalKey run ProviderRunIdentity.value |])
+        |> Option.map box
+        |> Option.defaultValue null
 
     let private compatibilityKey run kind toolName callId hostPart digest =
         identityKey
@@ -176,22 +182,43 @@ module XTraceCapture =
     let private capturedIdentity (part: XTracePartRef) =
         createObj
             [ "key" ==> part.Provenance
-              "secondaryKey" ==> secondaryKey part.HostToolPartId part.ToolCallId part.ProviderRun
-              "compatibility" ==> compatibilityKey part.ProviderRun part.Kind part.ToolName part.ToolCallId part.HostToolPartId (BlobDigest.value part.TextDigest) ]
+              "secondaryKey"
+              ==> secondaryKey part.HostToolPartId part.ToolCallId part.ProviderRun
+              "compatibility"
+              ==> compatibilityKey
+                      part.ProviderRun
+                      part.Kind
+                      part.ToolName
+                      part.ToolCallId
+                      part.HostToolPartId
+                      (BlobDigest.value part.TextDigest) ]
 
     let private captureStore (durable: AgentJournal) (sessionId: SessionId) =
         { new CaptureStore with
             member _.read() =
                 let state = xTraceOf durable sessionId
-                createObj [ "history" ==> XTraceProjection.history state; "identities" ==> (XTraceProjection.parts state |> List.map capturedIdentity |> List.toArray) ]
+
+                createObj
+                    [ "history" ==> XTraceProjection.history state
+                      "identities"
+                      ==> (XTraceProjection.parts state |> List.map capturedIdentity |> List.toArray) ]
+
             member _.writeBody body =
                 task {
                     let! result = durable.WriteBlob body
+
                     return
                         match result with
-                        | Ok blob -> createObj [ "ok" ==> true; "value" ==> createObj [ "reference" ==> BlobRef.value blob.BlobRef; "digest" ==> BlobDigest.value blob.BlobDigest ] ]
+                        | Ok blob ->
+                            createObj
+                                [ "ok" ==> true
+                                  "value"
+                                  ==> createObj
+                                          [ "reference" ==> BlobRef.value blob.BlobRef
+                                            "digest" ==> BlobDigest.value blob.BlobDigest ] ]
                         | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
                 }
+
             member _.append event =
                 match unbox<string> event?kind with
                 | "opening" ->
@@ -203,6 +230,7 @@ module XTraceCapture =
                     |> appendFact durable sessionId None
                 | "terminal" ->
                     let run = ProviderRunIdentity.create (unbox<string> event?providerRun)
+
                     CompanionFact.TerminalOutputCaptured
                         {| SessionId = sessionId
                            TextRef = BlobRef.create (unbox<string> event?bodyRef)
@@ -213,6 +241,7 @@ module XTraceCapture =
                     let part: obj = event?part
                     let metadata = unbox<CaptureMetadata> part?metadata
                     let toolName: obj = part?toolName
+
                     CompanionFact.XTracePartAppended
                         {| SessionId = sessionId
                            CursorSequence = unbox<int64> event?sequence
@@ -220,7 +249,11 @@ module XTraceCapture =
                            Turn = metadata.Turn
                            PartIndex = metadata.PartIndex
                            Kind = unbox<string> part?kind
-                           ToolName = if isNull toolName then None else Some(unbox<string> toolName)
+                           ToolName =
+                            if isNull toolName then
+                                None
+                            else
+                                Some(unbox<string> toolName)
                            TextRef = BlobRef.create (unbox<string> event?bodyRef)
                            TextDigest = BlobDigest.create (unbox<string> event?bodyDigest)
                            Provenance = metadata.Provenance
@@ -233,7 +266,12 @@ module XTraceCapture =
     let private captureResult (pending: Task<obj>) : Task<Result<unit, string>> =
         task {
             let! result = pending
-            return if unbox<bool> result?ok then Ok() else Error(unbox<string> result?error)
+
+            return
+                if unbox<bool> result?ok then
+                    Ok()
+                else
+                    Error(unbox<string> result?error)
         }
 
     let private requireBlobWritten (context: string) (result: Result<'a, string>) : 'a =
@@ -248,7 +286,7 @@ module XTraceCapture =
         (assignmentText: string)
         (authoritativeRequirements: string list)
         : Task<unit> =
-        captures.captureOpening(captureStore durable sessionId, assignmentText, List.toArray authoritativeRequirements)
+        captures.captureOpening (captureStore durable sessionId, assignmentText, List.toArray authoritativeRequirements)
 
     /// COMPANION-003: capture the opening task verbatim. Idempotent — a session
     /// with an opening already captured is left alone (PERSIST-010), which makes
@@ -273,8 +311,21 @@ module XTraceCapture =
         (providerRun: ProviderRunIdentity)
         : Task<unit> =
         task {
-            let digest = if String.IsNullOrWhiteSpace text then "" else HostDigest.sha256Hex text
-            let! result = captures.captureTerminalText(captureStore durable sessionId, ProviderRunIdentity.value providerRun, text, digest) |> captureResult
+            let digest =
+                if String.IsNullOrWhiteSpace text then
+                    ""
+                else
+                    HostDigest.sha256Hex text
+
+            let! result =
+                captures.captureTerminalText (
+                    captureStore durable sessionId,
+                    ProviderRunIdentity.value providerRun,
+                    text,
+                    digest
+                )
+                |> captureResult
+
             return requireBlobWritten "XTrace terminal blob write failed" result
         }
 
@@ -301,7 +352,12 @@ module XTraceCapture =
         (textDigest: BlobDigest)
         (providerRun: ProviderRunIdentity)
         : Task<unit> =
-        captures.captureTerminalReference(captureStore durable sessionId, ProviderRunIdentity.value providerRun, BlobRef.value textRef, BlobDigest.value textDigest)
+        captures.captureTerminalReference (
+            captureStore durable sessionId,
+            ProviderRunIdentity.value providerRun,
+            BlobRef.value textRef,
+            BlobDigest.value textDigest
+        )
 
     /// COMPANION-003 / EXEC-009: capture the terminal output verbatim as the
     /// XTrace's last segment. Idempotent replay (same text) is a no-op;
@@ -394,6 +450,7 @@ module XTraceCapture =
 
     let private capturePart (work: PartCaptureWork) =
         let kind, toolName, body = partShape work.Source.Part
+
         let metadata: CaptureMetadata =
             { Provenance = work.Provenance
               Turn = work.TurnIndex
@@ -401,12 +458,21 @@ module XTraceCapture =
               ProviderRun = work.Message.ProviderRun
               ToolCallId = work.Source.ToolCallId
               HostToolPartId = work.Source.HostToolPartId }
+
         createObj
             [ "key" ==> work.Provenance
               "exactKey" ==> Option.isSome work.Source.HostPartId
-              "secondaryKey" ==> secondaryKey work.Source.HostToolPartId work.Source.ToolCallId work.Message.ProviderRun
+              "secondaryKey"
+              ==> secondaryKey work.Source.HostToolPartId work.Source.ToolCallId work.Message.ProviderRun
               "legacyKey" ==> (work.LegacyStableProvenance |> Option.toObj)
-              "compatibility" ==> compatibilityKey work.Message.ProviderRun kind toolName work.Source.ToolCallId work.Source.HostToolPartId (HostDigest.sha256Hex body)
+              "compatibility"
+              ==> compatibilityKey
+                      work.Message.ProviderRun
+                      kind
+                      toolName
+                      work.Source.ToolCallId
+                      work.Source.HostToolPartId
+                      (HostDigest.sha256Hex body)
               "role" ==> work.Message.Role
               "kind" ==> kind
               "toolName" ==> Option.toObj toolName
@@ -420,8 +486,16 @@ module XTraceCapture =
         : Task<XTraceProjectionState option> =
         task {
             let generation = captureGeneration durable sessionId
-            let works = enumeratePositionalCaptureWork generation messages |> List.map capturePart |> List.toArray
-            let! result = captures.captureParts(captureStore durable sessionId, works, "positional") |> captureResult
+
+            let works =
+                enumeratePositionalCaptureWork generation messages
+                |> List.map capturePart
+                |> List.toArray
+
+            let! result =
+                captures.captureParts (captureStore durable sessionId, works, "positional")
+                |> captureResult
+
             requireBlobWritten "XTrace part blob write failed" result
             return Some(xTraceOf durable sessionId)
         }
@@ -517,9 +591,21 @@ module XTraceCapture =
         taskResult {
             do! validateStableCapturePrerequisites (Some durable) sessionId messageIds messages
             let generation = captureGeneration durable sessionId
-            let works = enumerateStableCaptureWork generation messageIds messages |> List.map capturePart |> List.toArray
-            let! result = captures.captureParts(captureStore durable sessionId, works, "stable") |> captureResult |> TaskResultCE.ofTask
-            do! result |> Result.mapError (fun error -> "XTrace part blob write failed: " + error)
+
+            let works =
+                enumerateStableCaptureWork generation messageIds messages
+                |> List.map capturePart
+                |> List.toArray
+
+            let! result =
+                captures.captureParts (captureStore durable sessionId, works, "stable")
+                |> captureResult
+                |> TaskResultCE.ofTask
+
+            do!
+                result
+                |> Result.mapError (fun error -> "XTrace part blob write failed: " + error)
+
             return Some(xTraceOf durable sessionId)
         }
 
@@ -553,6 +639,7 @@ module XTraceCapture =
             let generation = captureGeneration durable sessionId
             let provenance = sprintf "g:%d/last_words" generation
             let turn, partIndex = lastWordsPlacement existing
+
             let metadata: CaptureMetadata =
                 { Provenance = provenance
                   Turn = turn
@@ -560,8 +647,22 @@ module XTraceCapture =
                   ProviderRun = Some providerRun
                   ToolCallId = None
                   HostToolPartId = None }
-            let part = createObj [ "key" ==> provenance; "role" ==> "assistant"; "kind" ==> "text"; "toolName" ==> null; "metadata" ==> metadata ]
-            do! captures.captureReference(captureStore durable sessionId, part, BlobRef.value textRef, BlobDigest.value textDigest)
+
+            let part =
+                createObj
+                    [ "key" ==> provenance
+                      "role" ==> "assistant"
+                      "kind" ==> "text"
+                      "toolName" ==> null
+                      "metadata" ==> metadata ]
+
+            do!
+                captures.captureReference (
+                    captureStore durable sessionId,
+                    part,
+                    BlobRef.value textRef,
+                    BlobDigest.value textDigest
+                )
         }
 
     /// Write last_words as a normal assistant text part so the session's own
@@ -739,7 +840,9 @@ module XTraceCapture =
         (before: XTraceProjectionState)
         (after: XTraceProjectionState)
         : XTraceCaptureReceipt =
-        let receipt = captures.receipt(XTraceProjection.history before, XTraceProjection.history after)
+        let receipt =
+            captures.receipt (XTraceProjection.history before, XTraceProjection.history after)
+
         { PreviousHead = XTraceCursor.create (unbox<int64> receipt?previousHead)
           CurrentHead = XTraceCursor.create (unbox<int64> receipt?currentHead)
           CapturedPartCount = unbox<int> receipt?capturedPartCount
@@ -769,7 +872,7 @@ module XTraceCapture =
         }
 
     let private serializeCapture (sessionId: SessionId) (capture: unit -> Task<'T>) : Task<'T> =
-        captures.run(SessionId.value sessionId, Func<Task<'T>>(capture))
+        captures.run (SessionId.value sessionId, Func<Task<'T>>(capture))
 
     let private captureUnitWithReceipt
         (journal: AgentJournal option)

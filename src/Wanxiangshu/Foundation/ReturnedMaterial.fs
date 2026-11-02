@@ -23,20 +23,26 @@ module ReturnedMaterial =
     [<Import("fullText", "wanxiangli/returned-material")>]
     let private fullTextLibrary (encoded: string) : string = jsNative
 
-    let encode body carry = encodeLibrary (List.toArray body) (List.toArray carry)
+    let encode body carry =
+        encodeLibrary (List.toArray body) (List.toArray carry)
+
     let body encoded = bodyLibrary encoded |> Array.toList
     let carry encoded = carryLibrary encoded |> Array.toList
     let entries encoded = entriesLibrary encoded
     let fullText encoded = fullTextLibrary encoded
+
     let validate encoded =
         match validationError encoded with
         | null -> Ok()
         | error -> Error error
 
-    let carryData encoded = carry encoded |> LlmFacing.Data.textTables "returned"
+    let carryData encoded =
+        carry encoded |> LlmFacing.Data.textTables "returned"
+
     let render encoded =
         LlmFacing.instructions (body encoded)
         |> LlmFacing.withData (carryData encoded)
         |> LlmFacing.render
 
-    let renderBody encoded = LlmFacing.instructions (body encoded) |> LlmFacing.render
+    let renderBody encoded =
+        LlmFacing.instructions (body encoded) |> LlmFacing.render

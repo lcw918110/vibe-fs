@@ -54,7 +54,7 @@ import {
 } from './e2e/support/manager-tool-surface-evidence.mjs'
 
 test('WHAT[verification-system-014] the Long Stroke entry satisfies the watchdog-feed guard', () => {
-  // VERIFICATION-SYSTEM-014 requires the Layer 4 Long Stroke environment to be driven
+  // verification-system-014 requires the Layer 4 Long Stroke environment to be driven
   // by exactly one sole E2E entry executing under a single process lifecycle.
   const here = fileURLToPath(import.meta.url)
   const entryPath = here

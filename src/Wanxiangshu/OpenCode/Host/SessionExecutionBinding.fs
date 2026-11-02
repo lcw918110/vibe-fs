@@ -71,7 +71,8 @@ module SessionExecutionBinding =
                 || (ModelRouting.tryContinuationInput
                         { SessionId = evidence.SessionId
                           PhysicalUserMessageId = evidence.PhysicalUserMessageId }
-                    |> Option.exists (fun retained -> (ModelRouting.executionAdmissionIdentity retained).PhysicalUserMessageId = previous)))
+                    |> Option.exists (fun retained ->
+                        (ModelRouting.executionAdmissionIdentity retained).PhysicalUserMessageId = previous)))
             && prior.acceptedEvidence.LogicalRunId = evidence.LogicalRunId
             && prior.acceptedEvidence.AuthorityRootUserMessageId = evidence.AuthorityRootUserMessageId
             && prior.acceptedEvidence.IdentitySeed = evidence.IdentitySeed

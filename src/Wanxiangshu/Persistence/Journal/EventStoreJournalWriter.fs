@@ -202,14 +202,18 @@ module private JournalWriterValues =
             | AppendError.NoNewWriteReleaseFailed _ -> "NoNewWriteReleaseFailed", []
             | AppendError.AppendFailed reason -> "AppendFailed", [ "reason" ==> reason ]
             | AppendError.SemanticCut value -> "SemanticCut", [ "cut" ==> cut value ]
+
         createObj ([ "kind" ==> kind; "original" ==> error ] @ fields)
 
     let errorFromNative (value: obj) : AppendError =
         let original: obj = value?original
-        if not (isNull original) then unbox original
+
+        if not (isNull original) then
+            unbox original
         elif unbox<string> value?kind = "SemanticCut" then
             AppendError.SemanticCut(unbox<SemanticCut> value?cut?original)
-        else invalidOp "A journal storage failure must retain its original value"
+        else
+            invalidOp "A journal storage failure must retain its original value"
 
     let receipt (value: AppendReceipt) =
         createObj [ "cuts" ==> (value.Cuts |> List.map cut |> List.toArray) ]
@@ -225,36 +229,45 @@ module private JournalWriterValues =
                   Error = errorFromNative value?error }
         | kind -> invalidOp ("Unknown journal writer availability: " + kind)
 
+    let private unknownOutcome eventId error =
+        match errorFromNative error with
+        | AppendError.CommitUnknown evidence -> CommitUnknown(eventId, StoreAppendUnknown evidence)
+        | _ -> invalidOp "A journal unknown result must retain its storage uncertainty"
+
+    let private releaseOutcome eventId error =
+        match errorFromNative error with
+        | AppendError.NoNewWriteReleaseFailed evidence -> CommitResult.NoNewWriteReleaseFailed(eventId, evidence)
+        | _ -> invalidOp "A journal release result must retain its storage failure"
+
     let outcome (value: obj) : CommitResult<Envelope> =
         let eventId = EventId.create (unbox<string> value?eventId)
+
         match unbox<string> value?kind with
         | "Committed" -> Committed(unbox<Envelope> value?envelope)
         | "Rejected" -> Rejected(eventId, unbox<string> value?reason)
         | "NotAttempted" -> NotAttempted(eventId, unavailable value?unavailable)
-        | "CommitUnknown" ->
-            match errorFromNative value?error with
-            | AppendError.CommitUnknown evidence -> CommitUnknown(eventId, StoreAppendUnknown evidence)
-            | _ -> invalidOp "A journal unknown result must retain its storage uncertainty"
-        | "NoNewWriteReleaseFailed" ->
-            match errorFromNative value?error with
-            | AppendError.NoNewWriteReleaseFailed evidence -> CommitResult.NoNewWriteReleaseFailed(eventId, evidence)
-            | _ -> invalidOp "A journal release result must retain its storage failure"
+        | "CommitUnknown" -> unknownOutcome eventId value?error
+        | "NoNewWriteReleaseFailed" -> releaseOutcome eventId value?error
         | kind -> invalidOp ("Unknown journal writer result: " + kind)
+
+    let private initializationFailure error =
+        match errorFromNative error with
+        | AppendError.CommitUnknown evidence when not (List.isEmpty evidence.Prepared.Cuts) ->
+            FatalProcess.trip
+                "runtime-started-semantic-cut"
+                (sprintf
+                    "semantic cut append settled unknown at %A: %s"
+                    evidence.Primary.Phase
+                    evidence.Primary.Cause.Message)
+        | _ -> ()
 
     let onSettlement (notice: obj) =
         match unbox<string> notice?kind with
         | "initialization-cut" ->
-            FatalProcess.trip "runtime-started-semantic-cut" ("RuntimeStarted semantic cut: " + unbox<string> notice?cut?reason)
-        | "initialization-error" ->
-            match errorFromNative notice?error with
-            | AppendError.CommitUnknown evidence when not (List.isEmpty evidence.Prepared.Cuts) ->
-                FatalProcess.trip
-                    "runtime-started-semantic-cut"
-                    (sprintf
-                        "semantic cut append settled unknown at %A: %s"
-                        evidence.Primary.Phase
-                        evidence.Primary.Cause.Message)
-            | _ -> ()
+            FatalProcess.trip
+                "runtime-started-semantic-cut"
+                ("RuntimeStarted semantic cut: " + unbox<string> notice?cut?reason)
+        | "initialization-error" -> initializationFailure notice?error
         | kind -> invalidOp ("Unknown journal initialization settlement: " + kind)
 
 /// 保留事实、父依赖与 Blob 适配，写入寿命由库持有。
@@ -262,33 +275,36 @@ module private JournalWriterValues =
 type EventStoreJournalWriter private (runtimeId: RuntimeId, init: Envelope, blobWriter: IBlobWriter, store: IEventStore)
     =
     let writer =
-        JournalWriterValues.create
-            (createObj
-                [ "initialization" ==>
-                      createObj [ "eventId" ==> EventId.value init.EventId; "envelope" ==> init ]
+        JournalWriterValues.create (
+            createObj
+                [ "initialization"
+                  ==> createObj [ "eventId" ==> EventId.value init.EventId; "envelope" ==> init ]
                   "newEventId" ==> Func<string>(fun () -> Guid.NewGuid().ToString("N"))
                   "now" ==> Func<obj>(fun () -> box DateTimeOffset.UtcNow)
-                  "makeEnvelope" ==>
-                      Func<obj, obj>(fun input ->
-                          let stream, providerRun, fact = unbox<StreamId * ProviderRunIdentity option * Fact> input?request
-                          box
-                              { RuntimeId = runtimeId
-                                LocalSeq = LocalSeq.create (unbox<int64> input?sequence)
-                                ObservedAt = unbox<DateTimeOffset> input?observedAt
-                                EventId = EventId.create (unbox<string> input?eventId)
-                                Stream = stream
-                                ProviderRun = providerRun
-                                Fact = fact })
-                  "commitEnvelope" ==>
-                      Func<obj, Task<obj>>(fun envelope ->
-                          task {
-                              match! EventStoreJournalWriter.commitEnvelope store (unbox<Envelope> envelope) with
-                              | Ok receipt ->
-                                  return createObj [ "ok" ==> true; "value" ==> JournalWriterValues.receipt receipt ]
-                              | Error error ->
-                                  return createObj [ "ok" ==> false; "error" ==> JournalWriterValues.errorToNative error ]
-                          })
-                  "onSettlement" ==> Action<obj>(JournalWriterValues.onSettlement) ])
+                  "makeEnvelope"
+                  ==> Func<obj, obj>(fun input ->
+                      let stream, providerRun, fact =
+                          unbox<StreamId * ProviderRunIdentity option * Fact> input?request
+
+                      box
+                          { RuntimeId = runtimeId
+                            LocalSeq = LocalSeq.create (unbox<int64> input?sequence)
+                            ObservedAt = unbox<DateTimeOffset> input?observedAt
+                            EventId = EventId.create (unbox<string> input?eventId)
+                            Stream = stream
+                            ProviderRun = providerRun
+                            Fact = fact })
+                  "commitEnvelope"
+                  ==> Func<obj, Task<obj>>(fun envelope ->
+                      task {
+                          match! EventStoreJournalWriter.commitEnvelope store (unbox<Envelope> envelope) with
+                          | Ok receipt ->
+                              return createObj [ "ok" ==> true; "value" ==> JournalWriterValues.receipt receipt ]
+                          | Error error ->
+                              return createObj [ "ok" ==> false; "error" ==> JournalWriterValues.errorToNative error ]
+                      })
+                  "onSettlement" ==> Action<obj>(JournalWriterValues.onSettlement) ]
+        )
 
     member _.RuntimeId = runtimeId
     member _.BlobWriter = blobWriter
@@ -387,6 +403,7 @@ type EventStoreJournalWriter private (runtimeId: RuntimeId, init: Envelope, blob
         (fact: Fact)
         : Task<CommitResult<Envelope>> =
         let running = JournalWriterValues.append writer (box (stream, providerRun, fact))
+
         task {
             let! value = running
             return JournalWriterValues.outcome value

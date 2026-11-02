@@ -72,9 +72,9 @@ type AttachmentLeaseRegistry() =
     member _.Sessions: obj = sessions
 
     member _.TryFindByChild(child: SessionId) : (SessionId * AttachmentKind) list =
-        let items: obj array = store?tryFindByChild(SessionId.value child)
+        let items: obj array = store?tryFindByChild (SessionId.value child)
         decodeOwnerPairs items
 
     member _.Snapshot() : (SessionId * AttachmentKind) list =
-        let items: obj array = store?snapshot()
+        let items: obj array = store?snapshot ()
         decodeOwnerPairs items

@@ -197,7 +197,9 @@ module BookkeeperRuntime =
 
                 match PromptAuthority.validateInheritedIdentitySeedAgainstActiveOwner activeOwner identitySeed with
                 | Error rejection ->
-                    createObj [ "ok" ==> false; "error" ==> sprintf "bookkeeper identity seed rejected: %A" rejection ]
+                    createObj
+                        [ "ok" ==> false
+                          "error" ==> sprintf "bookkeeper identity seed rejected: %A" rejection ]
                 | Ok participantIdentity ->
                     let promptText =
                         Decisions.envelope kind (SessionId.value ownerSessionId) q a observations extraTranscript
@@ -206,8 +208,8 @@ module BookkeeperRuntime =
                         [ "ok" ==> true
                           "value"
                           ==> createObj
-                              [ "agent" ==> ParticipantIdentity.selectedAgent participantIdentity
-                                "text" ==> promptText ] ]
+                                  [ "agent" ==> ParticipantIdentity.selectedAgent participantIdentity
+                                    "text" ==> promptText ] ]
 
             let send (childId: string) (agent: string) (text: string) =
                 task {
@@ -220,7 +222,8 @@ module BookkeeperRuntime =
                   "subscribe"
                   ==> Func<string, (obj -> unit), (unit -> unit)>(fun childId complete -> subscribe childId complete)
                   "prepare" ==> prepare
-                  "send" ==> Func<string, string, string, Task<obj>>(fun childId agent text -> send childId agent text)
+                  "send"
+                  ==> Func<string, string, string, Task<obj>>(fun childId agent text -> send childId agent text)
                   "abort" ==> (SessionId.create >> runtime.Port.AbortSession) ]
 
         let activeOwnerProfile (runtime: Runtime) (ownerSessionId: SessionId) =
@@ -255,7 +258,9 @@ module BookkeeperRuntime =
                               "question" ==> q
                               "answer" ==> a ]
 
-                    let effects = create runtime identitySeed txId kind ownerSessionId q a observations extraTranscript
+                    let effects =
+                        create runtime identitySeed txId kind ownerSessionId q a observations extraTranscript
+
                     let! result = unbox<Task<obj>> (transactions?run (request, effects))
 
                     if unbox<bool> result?ok then
@@ -282,8 +287,7 @@ module BookkeeperRuntime =
     let bindSession (sessionId: string) (txId: string) (ownerSessionId: string) : unit =
         bookkeeperLedger?bind (sessionId, txId, ownerSessionId)
 
-    let unbindSession (sessionId: string) : unit =
-        bookkeeperLedger?unbind (sessionId)
+    let unbindSession (sessionId: string) : unit = bookkeeperLedger?unbind (sessionId)
 
     let tryConsumePromptAuthorization
         (sessionId: SessionId)
@@ -318,6 +322,7 @@ module BookkeeperRuntime =
         : Task<Result<string * string, string>> =
         task {
             let activeRuntime = lock runtimeGate (fun () -> runtime)
+
             match activeRuntime with
             | None -> return Error "bookkeeper runtime unavailable"
             | Some active ->

@@ -108,10 +108,12 @@ module ProcessEventLog =
     let internal translateCause (cause: exn) : exn =
         if isAcquireTimeout cause then
             StoreLockAcquireTimeout(unbox<int> cause?attempts, unbox<float> cause?waitedMs)
-        else cause
+        else
+            cause
 
     let internal appendFaultValue (value: obj) : AppendFault =
         let phase: string = value?phase
+
         { Phase =
             match phase with
             | "GateAcquire" -> AppendPhase.GateAcquire
@@ -126,7 +128,11 @@ module ProcessEventLog =
             | other -> invalidOp (sprintf "unknown local append phase: %s" other)
           Cause =
             let cause = unbox<exn> value?cause
-            if phase = "GateAcquire" then translateCause cause else cause }
+
+            if phase = "GateAcquire" then
+                translateCause cause
+            else
+                cause }
 
     let acquireStoreLock (commonDir: string) : Task<StoreFileGate> =
         task {
@@ -140,6 +146,7 @@ module ProcessEventLog =
     let withStoreLock (commonDir: string) (work: unit -> Task<'T>) : Task<'T> =
         task {
             let! gate = acquireStoreLock commonDir
+
             try
                 let! result = work ()
                 do! gate.Release()
@@ -154,38 +161,53 @@ module ProcessEventLog =
 
     let createWithSegmentCap (commonDir: string) (writerId: string) (segmentCap: int) : ProcessEventLog =
         validateWriterRoot commonDir
+
         ProcessEventLog(
-            createLocalWriter
-                (createObj
+            createLocalWriter (
+                createObj
                     [ "directory" ==> Func<string>(fun () -> eventsDirectory commonDir)
                       "writerId" ==> writerId
-                      "segmentCap" ==> segmentCap ])
+                      "segmentCap" ==> segmentCap ]
+            )
         )
 
     let create (commonDir: string) (writerId: string) : ProcessEventLog =
         createWithSegmentCap commonDir writerId DefaultSegmentCapBytes
 
-    let writerId (log: ProcessEventLog) = (unbox<NativeSegmentedWriter> log.Writer).writerId
-    let filePath (log: ProcessEventLog) = (unbox<NativeSegmentedWriter> log.Writer).filePath ()
+    let writerId (log: ProcessEventLog) =
+        (unbox<NativeSegmentedWriter> log.Writer).writerId
+
+    let filePath (log: ProcessEventLog) =
+        (unbox<NativeSegmentedWriter> log.Writer).filePath ()
+
+    let private appendCompletion (outcome: obj) =
+        match unbox<string> outcome?completion with
+        | "no-append" -> Ok PhysicalAppendCompletion.NoAppend
+        | "durable" -> Ok PhysicalAppendCompletion.AppendDurable
+        | value -> invalidOp ("unknown writer completion: " + value)
+
+    let private appendFailure (outcome: obj) =
+        let primary = appendFaultValue outcome?primary
+
+        match unbox<string> outcome?kind with
+        | "before-append" -> Error(PhysicalAppendFailure.BeforeAppend primary)
+        | "after-append" ->
+            let cleanup =
+                unbox<obj array> outcome?cleanupFailures
+                |> Array.map appendFaultValue
+                |> Array.toList
+
+            Error(PhysicalAppendFailure.AfterAppend(primary, cleanup))
+        | value -> invalidOp ("unknown writer failure: " + value)
 
     let append (log: ProcessEventLog) (events: EventEnvelope list) =
         let outcome =
             appendLocalEvents log.Writer (events |> List.map CanonicalEventCodec.toLibraryEvent |> List.toArray)
+
         if unbox<bool> outcome?ok then
-            match unbox<string> outcome?completion with
-            | "no-append" -> Ok PhysicalAppendCompletion.NoAppend
-            | "durable" -> Ok PhysicalAppendCompletion.AppendDurable
-            | value -> invalidOp ("unknown writer completion: " + value)
+            appendCompletion outcome
         else
-            let primary = appendFaultValue outcome?primary
-            match unbox<string> outcome?kind with
-            | "before-append" -> Error(PhysicalAppendFailure.BeforeAppend primary)
-            | "after-append" ->
-                let cleanup =
-                    unbox<obj array> outcome?cleanupFailures
-                    |> Array.map appendFaultValue |> Array.toList
-                Error(PhysicalAppendFailure.AfterAppend(primary, cleanup))
-            | value -> invalidOp ("unknown writer failure: " + value)
+            appendFailure outcome
 
     let writerPhysicalMetadata (commonDir: string) : WriterPhysicalMetadata list =
         localWriterMetadata (Func<string>(fun () -> eventsDirectory commonDir))
@@ -198,20 +220,29 @@ module ProcessEventLog =
     let internal convergeWriterFiles commonDir writerId segmentCap : Result<unit, string> =
         let outcome =
             convergeLocalWriter (Func<string>(fun () -> eventsDirectory commonDir)) writerId segmentCap
-        if unbox<bool> outcome?ok then Ok()
-        else Error(unbox<string> outcome?reason)
+
+        if unbox<bool> outcome?ok then
+            Ok()
+        else
+            Error(unbox<string> outcome?reason)
 
     let readStreamsAt (commonDir: string) (nowMs: float) : Result<(string * EventEnvelope list) list, StorageInvalid> =
-        let outcome = readLocalStreams (Func<string>(fun () -> eventsDirectory commonDir)) nowMs
+        let outcome =
+            readLocalStreams (Func<string>(fun () -> eventsDirectory commonDir)) nowMs
+
         if unbox<bool> outcome?ok then
             unbox<obj array> outcome?streams
             |> Array.map (fun stream ->
                 let events =
                     unbox<obj array> stream?events
-                    |> Array.map CanonicalEventCodec.ofLibraryEvent |> Array.toList
+                    |> Array.map CanonicalEventCodec.ofLibraryEvent
+                    |> Array.toList
+
                 unbox<string> stream?writerId, events)
-            |> Array.toList |> Ok
-        else Error(CanonicalEventCodec.invalidOfLibraryError outcome?error)
+            |> Array.toList
+            |> Ok
+        else
+            Error(CanonicalEventCodec.invalidOfLibraryError outcome?error)
 
     let readStreams (commonDir: string) : Result<(string * EventEnvelope list) list, StorageInvalid> =
         readStreamsAt commonDir (currentTimeMs ())

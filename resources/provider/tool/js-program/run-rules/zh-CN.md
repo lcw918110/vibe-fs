@@ -10,8 +10,8 @@ call 等待期间暂停扣减纯 JS 执行预算，回到模型代码后续用�
 
 控制其他程序时提交新命名程序，并在顶层提供 intent。按权限使用 unpark(name,value?)、signal(name,signal)、send(name,input) 或 abandon(name)。被唤醒目标共用控制请求已有期限。到期时控制者与活动目标一同暂停；恢复控制者只推进自身，要继续目标就显式 unpark 其名字。回执保留目标名字和状态。
 
-只有显式 park（含 where 歧义）接收 value；恢复 call 得到原命令真实 CallResult。signal/send 不恢复目标；信号发出不等于退出，输入被接受不证明已经处理。
+只有显式 park（含 where 歧义）接收 value；恢复 call 得到原命令真实 CallResult。signal/send 不恢复目标；信号发出不等于退出，输入被接受不等于已经处理。
 
-abandon 请求取消和清理。确认资源结清后才报告 abandoned，未完成或强制清理按事实报告。正常展开时运行原生 finally，强制终止不能证明其运行。已落盘写入保留。
+abandon 请求取消和清理。确认资源结清后才报告 abandoned，未完成或强制清理按事实报告。正常展开时运行原生 finally，强制终止不说明它运行过。已落盘写入保留。
 
-暂停 delta 是新增输出，不消费最终 CallResult。保留真实退出码或信号、留存输出及明确截断。效果未知的操作不重跑。程序 return、命令 exit、工具响应和 Work 生命周期决定分别成立。
+暂停 delta 是新增输出，不消费最终 CallResult。保留真实退出码或信号、留存输出及明确截断。效果未知的操作不重跑。程序 return、命令 exit、工具响应和 Work 生命周期决定各自成立。

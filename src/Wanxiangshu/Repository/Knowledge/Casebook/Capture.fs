@@ -58,7 +58,10 @@ type AccessTracker() =
     member _.recordMove(source: string, destination: string) : unit = inner.RecordMove(source, destination)
     member _.recordGrep(pattern: string, path: string) : unit = inner.RecordGrep(pattern, path)
     member _.recordGlob(pattern: string) : unit = inner.RecordGlob(pattern)
-    member _.recordAttemptedMutation(path: string, committed: bool) : unit = inner.RecordAttemptedMutation(path, committed)
+
+    member _.recordAttemptedMutation(path: string, committed: bool) : unit =
+        inner.RecordAttemptedMutation(path, committed)
+
     member _.getRelatedPaths() : string array = inner.GetRelatedPaths()
 
     member _.RecordRead(path: string, contentHash: string) : unit = inner.RecordRead(path, contentHash)
@@ -68,7 +71,10 @@ type AccessTracker() =
     member _.RecordMove(source: string, destination: string) : unit = inner.RecordMove(source, destination)
     member _.RecordGrep(pattern: string, path: string) : unit = inner.RecordGrep(pattern, path)
     member _.RecordGlob(pattern: string) : unit = inner.RecordGlob(pattern)
-    member _.RecordAttemptedMutation(path: string, committed: bool) : unit = inner.RecordAttemptedMutation(path, committed)
+
+    member _.RecordAttemptedMutation(path: string, committed: bool) : unit =
+        inner.RecordAttemptedMutation(path, committed)
+
     member _.GetRelatedPaths() : string list = inner.GetRelatedPaths() |> Array.toList
 
 type private NativeFileBaseline =
@@ -148,14 +154,22 @@ module CasebookCapture =
             task {
                 match! store.ReadPayload(PayloadRef.create reference) with
                 | Error error -> return box {| ok = false; error = error |}
-                | Ok bytes -> return box {| ok = true; value = Option.toObj bytes |}
+                | Ok bytes ->
+                    return
+                        box
+                            {| ok = true
+                               value = Option.toObj bytes |}
             }
 
         let write (bytes: byte[]) =
             task {
                 match! store.WritePayload bytes with
                 | Error error -> return box {| ok = false; error = error |}
-                | Ok reference -> return box {| ok = true; value = PayloadRef.value reference |}
+                | Ok reference ->
+                    return
+                        box
+                            {| ok = true
+                               value = PayloadRef.value reference |}
             }
 
         constructBaseline
@@ -165,7 +179,10 @@ module CasebookCapture =
                    payloads = {| read = read; write = write |} |})
 
     let private result (decode: obj -> 'T) (value: obj) : Result<'T, string> =
-        if value?ok then Ok(decode value?value) else Error(value?error)
+        if value?ok then
+            Ok(decode value?value)
+        else
+            Error(value?error)
 
     let freezeCompletionState
         (store: IEventStore)

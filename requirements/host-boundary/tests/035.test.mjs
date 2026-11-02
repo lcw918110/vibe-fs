@@ -1,4 +1,4 @@
-// WHAT[host-boundary-035] gate ⑬ (O-3): the omp entry module holds no product decision —
+// WHAT[host-boundary-035]: the omp entry module holds no product decision —
 // every forbidden class (prose, product import, decision control flow, mutable state,
 // decision vocabulary, product resource lookup, runtime product lookup) is rejected on a
 // planted violation, and the real entry module and its interface are accepted.
@@ -16,12 +16,86 @@ const REPO = join(ROOT, '../../..')
 const GATE = join(REPO, 'scripts/checks/omp-entry-decision-gate.mjs')
 const {
   analyzeEntryModule,
-  analyzeEntrySource,
   locateEntryModule,
-  selfTest,
-  PLANTED_VIOLATIONS,
   ENTRY_FOLDER,
 } = await import(GATE)
+
+// One planted violation per forbidden class. The gate keeps no copy of these:
+// a counterexample belongs to the test that asserts it.
+const PLANTED_VIOLATIONS = [
+  {
+    code: 'omp-entry-prose',
+    label: 'rendered prose',
+    source: [
+      'namespace Wanxiangshu.Composition.Omp',
+      'module OmpExtension =',
+      '    [<ExportDefault>]',
+      '    let refuse (pi: obj) = "This turn is not admitted, please retry later."',
+    ].join('\n'),
+  },
+  {
+    code: 'omp-entry-product-import',
+    label: 'product import',
+    source: [
+      'namespace Wanxiangshu.Composition.Omp',
+      'open Wanxiangshu.Interaction.Admission',
+      'module OmpExtension =',
+      '    [<ExportDefault>]',
+      '    let decide = ChatAdmissionIntent.decide',
+    ].join('\n'),
+  },
+  {
+    code: 'omp-entry-decision-control-flow',
+    label: 'admission branch',
+    source: [
+      'namespace Wanxiangshu.Composition.Omp',
+      'module OmpExtension =',
+      '    [<ExportDefault>]',
+      '    let decide admitted = if admitted then 1 else 0',
+    ].join('\n'),
+  },
+  {
+    code: 'omp-entry-decision-state',
+    label: 'mutable state',
+    source: [
+      'namespace Wanxiangshu.Composition.Omp',
+      'module OmpExtension =',
+      '    [<ExportDefault>]',
+      '    let mutable admitted = 0',
+    ].join('\n'),
+  },
+  {
+    code: 'omp-entry-decision-vocabulary',
+    label: 'retry/budget decision',
+    source: [
+      'namespace Wanxiangshu.Composition.Omp',
+      'module OmpExtension =',
+      '    [<ExportDefault>]',
+      '    let budget = 3',
+    ].join('\n'),
+  },
+  {
+    code: 'omp-entry-resource-lookup',
+    label: 'product resource lookup',
+    source: [
+      'namespace Wanxiangshu.Composition.Omp',
+      'open Wanxiangshu.Resources',
+      'module OmpExtension =',
+      '    [<ExportDefault>]',
+      '    let prompt = PromptCatalog.lookup "admission"',
+    ].join('\n'),
+  },
+  {
+    code: 'omp-entry-reflection',
+    label: 'runtime product lookup',
+    source: [
+      'namespace Wanxiangshu.Composition.Omp',
+      'module OmpExtension =',
+      '    [<ExportDefault>]',
+      '    let product = Assembly.Load "Wanxiangshu"',
+    ].join('\n'),
+  },
+]
 
 /** Materialize a planted entry module under a scratch repository root. */
 const plantedRoot = (source) => {
@@ -85,18 +159,6 @@ test('WHAT[host-boundary-035] the gate refuses to pass when the entry module or 
     assert.equal(issues[0].code, 'omp-entry-missing')
   } finally {
     rmSync(root, { recursive: true, force: true })
-  }
-})
-
-test('WHAT[host-boundary-035] the gate self-test proves every planted class and accepts the real module', () => {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'omp-entry-gate-self-'))
-  try {
-    const result = selfTest({ root: REPO, tmpDir })
-    assert.deepEqual(result.failures, [])
-    assert.equal(result.ok, true)
-    assert.ok(result.lines.some((line) => line.includes('real entry module -> PASS (accepted)')))
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true })
   }
 })
 
@@ -179,7 +241,7 @@ test('WHAT[host-boundary-035] a fixture-bound entry that never reaches the compi
   const fixtureBound = [
     'namespace Wanxiangshu.Composition.Omp',
     'module OmpExtension =',
-    '    // wires the skeleton from proposals/host-neutral-interface/adapters/omp/adapter.ts',
+    '    // wires a fixture skeleton instead of the compiled product',
     "    let plugin = import ('../fixtures/fixture.js')",
     '    [<ExportDefault>]',
     '    let defaultExport (pi: obj) : unit = ()',

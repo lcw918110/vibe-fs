@@ -322,20 +322,29 @@ type PtyPort(?exitListener: PtyExitEvent -> unit, ?handler: PtyBackendHandler) a
     member this.ClosePty(id: PtyId, ?graceMs: int) : Task<unit> =
         let grace = max 0 (defaultArg graceMs PtyOutcome.termToKillGraceMs)
 
-        task {
-            let isLive = lock gate (fun () -> active.ContainsKey id)
+        let requireTermination (termination: Task<Result<unit, string>>) =
+            task {
+                let! result = termination
 
-            if isLive then
-                let clock = NodeTiming.nodeClockPort ()
-                let deadline = clock.UtcNow().AddMilliseconds(float grace)
-                let termination = requestTerminate id
+                return
+                    result
+                    |> Result.defaultWith (fun reason -> raise (InvalidOperationException(reason)))
+            }
+
+        let awaitTermination termination =
+            task {
                 let! answered = NodeTiming.raceExit (termination :> Task) grace
 
                 if answered then
-                    match! termination with
-                    | Error reason -> return raise (InvalidOperationException(reason))
-                    | Ok() -> ()
+                    do! requireTermination termination
+            }
 
+        let closeLive () =
+            task {
+                let clock = NodeTiming.nodeClockPort ()
+                let deadline = clock.UtcNow().AddMilliseconds(float grace)
+                let termination = requestTerminate id
+                do! awaitTermination termination
                 let exitTaskOpt = lock gate (fun () -> PtyPortSupport.findExitTask exitTasks id)
 
                 let remaining =
@@ -343,6 +352,13 @@ type PtyPort(?exitListener: PtyExitEvent -> unit, ?handler: PtyBackendHandler) a
 
                 do! PtyPortSupport.awaitRegisteredExit handler exitTaskOpt remaining id
                 lock gate (fun () -> exitTasks.Remove id |> ignore)
+            }
+
+        task {
+            let isLive = lock gate (fun () -> active.ContainsKey id)
+
+            if isLive then
+                do! closeLive ()
         }
 
     /// Async owner cleanup: for each active id, send TERM (requestTerminate),

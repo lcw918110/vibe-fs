@@ -43,7 +43,9 @@ module internal WanxiangliTrace =
     val semanticFromNative: part: obj -> SemanticPart
     val itemFromNative: provenanceOf: (obj -> string) -> item: obj -> XTraceItem
     val materializeItemsInRange: range: XTraceRange -> items: XTraceItem list -> XTraceItem list
-    val inspectItemsBridge: traceId: string -> openingText: string option -> range: XTraceRange -> items: XTraceItem list -> obj
+
+    val inspectItemsBridge:
+        traceId: string -> openingText: string option -> range: XTraceRange -> items: XTraceItem list -> obj
 
 [<RequireQualifiedAccess>]
 module XTrace =

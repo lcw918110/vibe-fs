@@ -51,16 +51,31 @@ module LlmFacing =
 
     let private library = construct libraryClass
     let empty = library.empty ()
-    let instructions texts = library.instructions (List.toArray texts)
+
+    let instructions texts =
+        library.instructions (List.toArray texts)
+
     let instruction text = library.instruction text
     let instructionsOnly document = library.instructionsOnly document
-    let withInstructions texts document = library.withInstructions (List.toArray texts, document)
-    let withInstruction text document = library.withInstruction (text, document)
-    let withData blocks document = library.withData (List.toArray blocks, document)
-    let combine documents = library.combine (List.toArray documents)
+
+    let withInstructions texts document =
+        library.withInstructions (List.toArray texts, document)
+
+    let withInstruction text document =
+        library.withInstruction (text, document)
+
+    let withData blocks document =
+        library.withData (List.toArray blocks, document)
+
+    let combine documents =
+        library.combine (List.toArray documents)
+
     let render document = library.render document
     let renderInstruction text = library.renderInstruction text
-    let renderInstructions texts = library.renderInstructions (List.toArray texts)
+
+    let renderInstructions texts =
+        library.renderInstructions (List.toArray texts)
+
     let normalizeNewlines text = library.normalizeNewlines text
     let byteCount text = library.byteCount text
 
@@ -69,8 +84,13 @@ module LlmFacing =
         type Value = DataTypes.Value
         type Field = DataTypes.Field
         let ofJs (value: obj) : Value = library.ofJs value
-        let structuredValue value = library.structuredValue value |> List.ofArray
-        let rootStructuredValue value = library.rootStructuredValue value |> List.ofArray
+
+        let structuredValue value =
+            library.structuredValue value |> List.ofArray
+
+        let rootStructuredValue value =
+            library.rootStructuredValue value |> List.ofArray
+
         let stringField name value = library.stringField (name, value)
         let intField name value = library.intField (name, value)
         let int64Field name value = library.int64Field (name, value)
@@ -80,6 +100,12 @@ module LlmFacing =
         let int64Member name value = library.int64Member (name, value)
         let floatMember name value = library.floatMember (name, value)
         let boolMember name value = library.boolMember (name, value)
-        let table name fields = library.table (name, List.toArray fields)
-        let tableArray name fields = library.tableArray (name, List.toArray fields)
-        let textTables name texts = library.textTables (name, List.toArray texts) |> List.ofArray
+
+        let table name fields =
+            library.table (name, List.toArray fields)
+
+        let tableArray name fields =
+            library.tableArray (name, List.toArray fields)
+
+        let textTables name texts =
+            library.textTables (name, List.toArray texts) |> List.ofArray

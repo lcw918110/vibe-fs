@@ -116,3 +116,11 @@ module ChangeSurface =
     val verdictMailboxJoinAvailable: mailbox: obj -> maxCount: int -> interrupt: obj -> Task<obj>
 
     val verdictMaxBatch: unit -> int
+    val managerBranchOf: job: string -> string
+    val staleManagerWorktrees: entries: obj array -> owned: string array -> string array
+    val staleManagerBranches: branches: string array -> owned: string array -> string array
+    val lifecycleJob: journal: Wanxiangshu.Persistence.Journal.JournalHandle -> id: string -> obj
+    val createLifecycle: journal: Wanxiangshu.Persistence.Journal.JournalHandle -> options: obj -> obj
+    val startLifecycle: runtime: obj -> id: string -> agent: string -> prompt: string -> path: string -> Task<obj>
+    val recoverLifecycle: runtime: obj -> job: obj -> unit
+    val collectLifecycle: runtime: obj -> Task<obj>

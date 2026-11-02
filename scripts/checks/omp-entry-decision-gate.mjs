@@ -1,44 +1,16 @@
 #!/usr/bin/env node
-// Gate ⑬ (O-3): the omp entry module must hold no product decision.
+// omp entry gate: the omp entry module must hold no product decision.
 //
-// Rule O-3 (root `AGENTS.md`,
-// "Decided rules") fixes the omp entry module:
+// The entry module is the single file under `src/Wanxiangshu/Composition/Omp/`
+// that carries `[<ExportDefault>]`, plus the `.fsi` beside it. It is wiring:
+// it receives the compiled product as a plain `IHostPlugin` value and calls
+// `activateOnOmp`. It holds no admission, retry, budget, prose or state, it
+// imports no product module, and it never looks product symbols up at runtime.
 //
-//   "The omp entry module is hand-written and product-free, and the Fable-built
-//    product is passed in as a plain `IHostPlugin` value (no reflection, no
-//    dynamic import of product internals)."
-//
-//   "The module contains wiring only: it builds the child-session seam, calls
-//    `activateOnOmp`, and holds no product decision (no admission rule, no
-//    retry, no budget, no prose, no state)."
-//
-//   "it never reflects over it, never imports product internals, and never
-//    looks up product symbols at runtime."
-//
-//   Acceptance criterion 5: "A review rule (gate) rejects any product decision
-//    appearing in the entry module: the entry module contains no
-//    admission/refusal/retry/budget/prose logic and imports no product module.
-//    No such gate exists today — `cut36-omp-2` must add it as part of this
-//    rule's implementation."
-//
-// DESIGN.md §1 rule 3 is the same prohibition in the product's own words: "An
-// adapter may **not**: choose a model, admit/deny a turn or tool, decide
-// retry/abort, compute budgets, render product prose, or keep product state
-// (journals, ledgers, leases)."
-//
-// SCOPE. This gate reads ONLY the omp entry module and its interface, i.e. the
-// single file under `src/Wanxiangshu/Composition/Omp/` that carries the
-// `[<ExportDefault>]` attribute, plus the `.fsi` beside it. It never scans
-// another lane's files; the OpenCode lane's own `[<ExportDefault>]` site is
-// out of scope by construction.
-//
-// The gate fails closed: a missing entry module, an ambiguous
-// `[<ExportDefault>]` site inside the omp composition folder, or a detector
-// that no longer catches its own planted violation is an issue, never a
-// silent pass.
+// This gate reads only those two files, never another lane's. A missing entry
+// module or an ambiguous `[<ExportDefault>]` site is an issue, not a pass.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -380,174 +352,16 @@ export function analyzeEntryModule(root) {
   return issues
 }
 
-/**
- * A planted violation that the detector must catch, per forbidden class.
- * The self-test proves each class is non-vacuous.
- */
-export const PLANTED_VIOLATIONS = [
-  {
-    code: 'omp-entry-prose',
-    label: 'rendered prose',
-    source: [
-      'namespace Wanxiangshu.Composition.Omp',
-      'module OmpExtension =',
-      '    [<ExportDefault>]',
-      '    let refuse (pi: obj) = "This turn is not admitted, please retry later."',
-    ].join('\n'),
-  },
-  {
-    code: 'omp-entry-product-import',
-    label: 'product import',
-    source: [
-      'namespace Wanxiangshu.Composition.Omp',
-      'open Wanxiangshu.Interaction.Admission',
-      'module OmpExtension =',
-      '    [<ExportDefault>]',
-      '    let decide = ChatAdmissionIntent.decide',
-    ].join('\n'),
-  },
-  {
-    code: 'omp-entry-decision-control-flow',
-    label: 'admission branch',
-    source: [
-      'namespace Wanxiangshu.Composition.Omp',
-      'module OmpExtension =',
-      '    [<ExportDefault>]',
-      '    let decide admitted = if admitted then 1 else 0',
-    ].join('\n'),
-  },
-  {
-    code: 'omp-entry-decision-state',
-    label: 'mutable state',
-    source: [
-      'namespace Wanxiangshu.Composition.Omp',
-      'module OmpExtension =',
-      '    [<ExportDefault>]',
-      '    let mutable admitted = 0',
-    ].join('\n'),
-  },
-  {
-    code: 'omp-entry-decision-vocabulary',
-    label: 'retry/budget decision',
-    source: [
-      'namespace Wanxiangshu.Composition.Omp',
-      'module OmpExtension =',
-      '    [<ExportDefault>]',
-      '    let budget = 3',
-    ].join('\n'),
-  },
-  {
-    code: 'omp-entry-resource-lookup',
-    label: 'product resource lookup',
-    source: [
-      'namespace Wanxiangshu.Composition.Omp',
-      'open Wanxiangshu.Resources',
-      'module OmpExtension =',
-      '    [<ExportDefault>]',
-      '    let prompt = PromptCatalog.lookup "admission"',
-    ].join('\n'),
-  },
-  {
-    code: 'omp-entry-reflection',
-    label: 'runtime product lookup',
-    source: [
-      'namespace Wanxiangshu.Composition.Omp',
-      'module OmpExtension =',
-      '    [<ExportDefault>]',
-      '    let product = Assembly.Load "Wanxiangshu"',
-    ].join('\n'),
-  },
-]
-
-/**
- * Self-test: prove the detector still fails on a planted violation of every
- * forbidden class and still passes on the real entry module.
- *
- * The planted file is written under `tmpDir` so the proof never touches the
- * working tree.
- *
- * @param {{root: string, tmpDir: string}} options
- * @returns {{ok: boolean, lines: string[], failures: string[]}}
- */
-export function selfTest({ root, tmpDir }) {
-  const lines = []
-  const failures = []
-  const folder = join(tmpDir, 'planted', ENTRY_FOLDER)
-  mkdirSync(folder, { recursive: true })
-
-  const real = locateEntryModule(root)
-  if (!real.ok) {
-    return { ok: false, lines: [`self-test: cannot locate the real entry module: ${real.reason}`], failures: [real.reason] }
-  }
-
-  lines.push(`self-test: real entry module ${relative(root, real.implementation).replaceAll('\\', '/')}`)
-
-  for (const planted of PLANTED_VIOLATIONS) {
-    const plantedRoot = join(tmpDir, 'planted')
-    const plantedFile = join(folder, 'OmpExtension.fs')
-    writeFileSync(plantedFile, `${planted.source}\n`)
-    const issues = analyzeEntryModule(plantedRoot)
-    const codes = issues.map((issue) => issue.code)
-    const caught = codes.includes(planted.code)
-    if (!caught) failures.push(`planted '${planted.label}' was not caught by ${planted.code}`)
-    lines.push(
-      `self-test: planted '${planted.label}' -> ${caught ? 'FAIL (rejected)' : 'PASS (NOT rejected)'}` +
-        `${issues.length ? ` [${[...new Set(codes)].join(', ')}]` : ''}`,
-    )
-    rmIfPresent(plantedFile)
-  }
-
-  const realIssues = analyzeEntryModule(root)
-  const realOk = realIssues.length === 0
-  if (!realOk) failures.push(`the real entry module was rejected: ${realIssues.map((i) => i.message).join('; ')}`)
-  lines.push(`self-test: real entry module -> ${realOk ? 'PASS (accepted)' : 'FAIL (rejected)'}`)
-
-  return { ok: failures.length === 0, lines, failures }
-}
-
-const rmIfPresent = (path) => {
-  if (existsSync(path)) rmSync(path, { recursive: true, force: true })
-}
-
 /** The check entry point used by `scripts/check.mjs`. */
 export function check(context) {
   const root = context?.root ?? repositoryRoot
-  const issues = analyzeEntryModule(root)
-  // The planted proof always runs against the real tree, so a fixture run
-  // (e.g. `--root <scratch>`) still proves the detectors are non-vacuous.
-  // It runs in a scratch folder outside the working tree.
-  const scratch = join(process.env.TMPDIR && process.env.TMPDIR.trim() !== '' ? process.env.TMPDIR : tmpdir(), 'omp-entry-decision-gate-self-test')
-  const selfTestResult = selfTest({ root: repositoryRoot, tmpDir: scratch })
-  rmIfPresent(scratch)
-  if (!selfTestResult.ok) {
-    issues.push({
-      code: 'omp-entry-self-test',
-      message: `the gate's own planted-violation proof failed: ${selfTestResult.failures.join('; ')}`,
-    })
-  }
-  return { issues }
+  return { issues: analyzeEntryModule(root) }
 }
 
-/** Standalone CLI. `--self-test` prints the planted proof only. */
+/** Standalone CLI. `--root <dir>` checks that repository instead of this one. */
 export function runCli(argv = process.argv.slice(2)) {
   const rootIndex = argv.indexOf('--root')
   const root = rootIndex >= 0 && argv[rootIndex + 1] ? resolve(argv[rootIndex + 1]) : repositoryRoot
-  if (argv.includes('--self-test')) {
-    const tmpDir = process.env.TMPDIR && process.env.TMPDIR.trim() !== ''
-      ? join(process.env.TMPDIR, 'omp-entry-decision-gate-self-test')
-      : join(tmpdir(), 'omp-entry-decision-gate-self-test')
-    mkdirSync(tmpDir, { recursive: true })
-    const result = selfTest({ root, tmpDir })
-    for (const line of result.lines) console.log(line)
-    if (!result.ok) {
-      console.error('omp-entry-decision-gate self-test FAILED:')
-      for (const failure of result.failures) console.error(`  - ${failure}`)
-      return 1
-    }
-    console.log('omp-entry-decision-gate self-test OK')
-    return 0
-  }
-
   const { issues } = check({ root })
   if (issues.length > 0) {
     console.error('omp-entry-decision-gate FAILED:')

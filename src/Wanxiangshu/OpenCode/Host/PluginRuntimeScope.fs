@@ -136,32 +136,29 @@ type PluginRuntimeScope
     /// Register load-phase recovery work started by a durability activator so the
     /// first admission can await it (crash-reconciliation-020 ordering: the void
     /// settlement must land before the next handoff reads the durable authority).
+    /// A tracked task may fault: the awaiter then sees the settlement's real
+    /// failure instead of a silent success.
     member _.TrackDurabilityActivation(work: Task) : unit =
-        lock durabilityActivationGate (fun () ->
-            durabilityActivationWorks <- work :: durabilityActivationWorks)
+        lock durabilityActivationGate (fun () -> durabilityActivationWorks <- work :: durabilityActivationWorks)
         ()
 
     /// Await every durability-activation recovery work registered so far. The
-    /// tracked tasks never fault (failures are captured into the background
-    /// failure slot), so awaiting cannot throw.
+    /// tracked tasks may fault; a faulting settlement propagates to this
+    /// awaiter — the honest answer for the handoff that was about to read the
+    /// journal past an unsettled barrier.
     member _.AwaitDurabilityActivation() : Task =
-        let pending =
-            lock durabilityActivationGate (fun () -> durabilityActivationWorks)
+        let pending = lock durabilityActivationGate (fun () -> durabilityActivationWorks)
 
         task {
-            if pending.Length > 0 then
-                for work in pending do
-                    do! work
+            for work in pending do
+                do! work
 
+            if pending.Length > 0 then
                 lock durabilityActivationGate (fun () ->
                     durabilityActivationWorks <-
                         durabilityActivationWorks
                         |> List.filter (fun work ->
-                            not (
-                                List.exists (fun awaited ->
-                                    obj.ReferenceEquals(work, awaited))
-                                    pending
-                            )))
+                            not (List.exists (fun awaited -> obj.ReferenceEquals(work, awaited)) pending)))
         }
         :> Task
 
@@ -200,6 +197,23 @@ type PluginRuntimeScope
     member _.DrainChatRecovery(sessionId: SessionId) : Task =
         match chatRecoveryRuntime with
         | Some runtime -> runtime.Drain sessionId
+        | None -> Task.FromResult(()) :> Task
+
+    /// The session ids whose chat executions still owe a load-phase reload
+    /// decision (unsettled, or capacity held/unknown). Empty without a
+    /// recovery runtime.
+    member _.PendingChatRecoverySessions() : SessionId list =
+        match chatRecoveryRuntime with
+        | Some runtime -> runtime.SessionsPendingReload()
+        | None -> []
+
+    /// Start or join THIS session's load-phase reload sweep (crash-reconciliation-023):
+    /// the session's own leftover executions, resources and unknowns settle before
+    /// its admission proceeds, while every other session's recovery runs in the
+    /// background and never blocks this call.
+    member _.ReloadChatSession(sessionId: SessionId) : Task =
+        match chatRecoveryRuntime with
+        | Some runtime -> runtime.ReloadSession sessionId
         | None -> Task.FromResult(()) :> Task
 
     member _.SyncDelegateRuntime = syncDelegateRuntime
@@ -249,22 +263,22 @@ type PluginRuntimeScope
 
     member _.TrackReconcileShutdown(stopAndDrain: unit -> Task) = reconcileShutdown <- Some stopAndDrain
 
-    /// RunBackground variant that returns the observed task so a durability
-    /// activator can register it for admission awaiting.
-    member _.RunBackgroundTracked(start: unit -> Task) : Task =
-        ownedWork.background (Func<Task>(start))
+    member _.RunBackground(start: unit -> Task) : unit =
+        ownedWork.background (Func<Task>(start)) |> ignore
 
-    member this.RunBackground(start: unit -> Task) : unit =
-        this.RunBackgroundTracked start |> ignore
-
-    member _.RunOwnedWork(start: unit -> Task) : Task =
-        ownedWork.run (Func<Task>(start))
+    member _.RunOwnedWork(start: unit -> Task) : Task = ownedWork.run (Func<Task>(start))
 
     member private _.StopOwnedWorkAndDrain() : Task<exn option> =
         let waiting = ownedWork.close ()
+
         task {
             let! result = waiting
-            return if unbox<bool> result?ok then None else Some(unbox<exn> result?error)
+
+            return
+                if unbox<bool> result?ok then
+                    None
+                else
+                    Some(unbox<exn> result?error)
         }
 
     member _.AttachSharedTerminal(key: string option, port: ISessionTerminalSource option) =

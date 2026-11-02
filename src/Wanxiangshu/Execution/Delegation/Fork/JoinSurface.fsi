@@ -6,6 +6,16 @@ open System.Threading.Tasks
 
 [<RequireQualifiedAccess>]
 module JoinSurface =
+    val returnedMaterialView: encoded: string -> obj
+
+    val completionMaterialRoundTrip:
+        session: string ->
+        report: string ->
+        material: string array ->
+        sha256: (string -> string) ->
+        completedAt: System.DateTimeOffset ->
+            Task<obj>
+
     val renderBatch: languageName: string -> items: obj array -> string
     val renderInterrupted: languageName: string -> reason: string -> string
     val createVisibleInputRegistry: unit -> obj

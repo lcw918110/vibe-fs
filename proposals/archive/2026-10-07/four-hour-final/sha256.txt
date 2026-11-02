@@ -1,3 +1,0 @@
-402fa884b6d268e2ff44d5b65f2ab0ebcb3972f9bc3bb772955144994e02e36b  proposals/archive/2026-10-07/four-hour-final/build.log
-13102b31960c9f37ec82f52183e77c8ca5ca3d544cd1b0d8f7308050c247b27d  proposals/archive/2026-10-07/four-hour-final/fresh.json
-a51b0f66eed0ae69447498962fe8429fc982fd9f1e231e3521d0575421f30bbd  proposals/archive/2026-10-07/four-hour-final/receipt.txt

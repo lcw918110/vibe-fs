@@ -14,6 +14,9 @@ open Wanxiangshu.Interaction.Dispatch
 
 module SessionSnapshotPort =
 
+    [<Emit("fetch($0, $1)")>]
+    let private jsFetch (url: string) (init: obj) : Task<obj> = jsNative
+
     let private readString (value: obj) =
         if isNull value then
             None
@@ -728,9 +731,6 @@ module SessionSnapshotPort =
             else
                 baseUrl
 
-        [<Emit("fetch($0, $1)")>]
-        let jsFetch (url: string) (init: obj) : Task<obj> = jsNative
-
         /// A response body, parsed when it can be parsed.
         let tryParse (text: string) : obj =
             try
@@ -921,9 +921,6 @@ module SessionSnapshotPort =
                 baseUrl.Substring(0, baseUrl.Length - 1)
             else
                 baseUrl
-
-        [<Emit("fetch($0, $1)")>]
-        let jsFetch (url: string) (init: obj) : Task<obj> = jsNative
 
         interface ISessionSnapshotPort with
             member _.GetMessages(sessionId) =

@@ -42,12 +42,14 @@ module CasebookServiceBinding =
 
     let drainCollector (collector: obj) (identity: string) : Observation list =
         let items: obj array = collector?Drain identity
+
         items
         |> Array.toList
         |> List.map (fun item -> Observation.FileRead(string item?path, string item?contentHash))
 
     let private drain identity =
-        drainCollector observationCollector identity |> CasebookValues.observationsToNative
+        drainCollector observationCollector identity
+        |> CasebookValues.observationsToNative
 
     [<Import("cleanupCasebookDraft", "wanxiangli/casebook")>]
     let private cleanup (_drafts: obj) (_drain: string -> obj array) (_identity: string) : unit = jsNative
@@ -59,8 +61,7 @@ module CasebookServiceBinding =
         | Ok value -> createObj [ "ok" ==> true; "value" ==> encode value ]
         | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
 
-    let private appendResult result : obj =
-        nativeResult (fun _ -> ()) result
+    let private appendResult result : obj = nativeResult (fun _ -> ()) result
 
     let private storePort (store: IEventStore) =
         let current () =
@@ -122,7 +123,8 @@ module CasebookServiceBinding =
 
         createObj
             [ "capture" ==> capture
-              "compare" ==> Func<string array, string, Task<obj>>(fun paths baseline -> compare paths baseline) ]
+              "compare"
+              ==> Func<string array, string, Task<obj>>(fun paths baseline -> compare paths baseline) ]
 
     let private runBookkeeper (request: obj) =
         task {
@@ -141,7 +143,10 @@ module CasebookServiceBinding =
                     (CasebookValues.observationsOfNative (unbox request?observations))
                     (Option.ofObj (unbox<string> request?transcript))
 
-            return nativeResult (fun (question, answer) -> createObj [ "question" ==> question; "answer" ==> answer ]) result
+            return
+                nativeResult
+                    (fun (question, answer) -> createObj [ "question" ==> question; "answer" ==> answer ])
+                    result
         }
 
     [<Import("CasebookService", "wanxiangli/casebook")>]
@@ -157,18 +162,12 @@ module CasebookServiceBinding =
         (_bookkeeper: obj -> Task<obj>)
         (_drain: string -> obj array)
         (_enabled: unit -> bool)
-        : obj = jsNative
+        : obj =
+        jsNative
 
     let private create root store =
-        construct
-            serviceClass
-            drafts
-            index
-            (storePort store)
-            (baselinePort store root)
-            runBookkeeper
-            drain
-            (fun () -> CasebookFeature.isEnabled root)
+        construct serviceClass drafts index (storePort store) (baselinePort store root) runBookkeeper drain (fun () ->
+            CasebookFeature.isEnabled root)
 
     [<Import("archiveCase", "wanxiangli/casebook")>]
     let private archive (_store: obj) (_case: obj) : Task<obj> = jsNative
@@ -191,7 +190,10 @@ module CasebookServiceBinding =
         | kind -> invalidOp $"unknown casebook mutation error kind: {kind}"
 
     let private mutationResult decode (result: obj) =
-        if result?ok then Ok(decode result?value) else Error(mutationError result?error)
+        if result?ok then
+            Ok(decode result?value)
+        else
+            Error(mutationError result?error)
 
     let private settlement (result: obj) =
         let identity: string = result?identity

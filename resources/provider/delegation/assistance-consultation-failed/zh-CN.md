@@ -1,1 +1,1 @@
-独立 consultation 没有产出可用建议。继续你原来的 charge；这不是 provider failure，也不改变 fallback 状态。
+独立咨询没有给出可用的建议。继续原来的任务；这不是 provider 故障，也不改变回退状态。

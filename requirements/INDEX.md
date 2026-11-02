@@ -1,84 +1,54 @@
 # 规范包索引 (Package Index)
 
-当前索引收录 **48 个活跃功能说明包**与 **1 个历史包**（`epistemic-reasoning`；`institutional-learning` 已整包退役）。
-包的划分服务于理解总流程中的各个子领域，不是官僚条款，亦不作为 AI 验收法庭的依据。
+包清单只用于浏览与分组，不是条款、不是进度表，也不是包发现依据：包的边界就是 `requirements/` 下的目录本身。新增或删除包时顺手更新本表即可，漏改不会让检查变红，也不会让谁做不成事。
 
-## 1. 规范与消融 (Requirement & Ablation)
 | Package | 说明 |
 |---|---|
-| `requirement-system` | 说明书组织规则与包结构约定。 |
-| `verification-system` | [测试规则](verification-system/AXIOMS.md)：测试编写、优化与分层调度。 |
-| `feature-ablation` | 模块开关与消融机制。 |
-| `js-semantic-surface` | JS 语义入口契约。 |
-
-## 2. 流程与时间 (Programming & Causality)
-| Package | 说明 |
-|---|---|
-| `structured-workflow` | 普通代码流程表达，避免自建执行器。 |
-| `time-capability` | 物理时间与显式等待时限。 |
-| `causal-wait` | 结构化因果等待与诊断。 |
-
-## 3. 会话与宿主 (Session & Host)
-| Package | 说明 |
-|---|---|
-| `session-ontology` | 会话分类、所有权与拓扑正交。 |
-| `managed-session-lifecycle` | 托管会话生命周期与收束。 |
-| `host-boundary` | 宿主交互边界与物理能力隔离。 |
-
-## 4. 参与者与权限 (Participant & Capability)
-| Package | 说明 |
-|---|---|
-| `participant-identity` | 身份定义：名分、人格与物理绑定分离。 |
-| `execution-model-routing` | 调度器根据角色与负载分派模型。 |
-| `office-capability` | 职位边界与后果权限。 |
-| `capability-enforcement` | 工具面与运行时门禁一致性。 |
-| `participant-horizon` | 上下文视界与最小必要事实。 |
-| `cognitive-environment` | 长期背景与执行状态隔离。 |
-| `cognitive-workspace` | 负向边界说明（旧画板已退役）。 |
-| `attention-regulation` | 注意力调节说明（聚焦 assume）。 |
-| `action-affordance` | 决策动作与参数语义。 |
-| `provider-language` | 单会话语言固定与协议标识符约定。 |
-| `provider-projection` | 语义意图到模型呈现的投影。 |
-
-## 5. 交互与持久化 (Interaction & Durability)
-| Package | 说明 |
-|---|---|
-| `concern-routing` | 交互边界说明（旧邮箱已退役）。 |
-| `interaction-authority` | 逻辑交互的权限与因果推进。 |
-| `managed-chat-execution` | 消息级物理执行与状态。 |
-| `dispatch-protocol` | 消息派发与幂等性保障。 |
-| `durable-events` | 事件日志持久化与重放底座。 |
-| `effect-accounting` | 外部副作用三态记账。 |
-| `durable-convergence` | 状态收敛法则。 |
-
-## 6. 协作与执行 (Work & Execution)
-| Package | 说明 |
-|---|---|
-| `delegation` | 任务派工与责任移交。 |
-| `intra-participant-parallelism` | Fission 同一参与者多路并发与收敛。 |
-| `process-execution` | 外部进程执行与时限管理。 |
-| `change-integration` | 代码提交与集成短门。 |
-
-## 7. 连续性与恢复 (Continuity & Recovery)
-| Package | 说明 |
-|---|---|
-| `semantic-trace` | 原始交互轨迹留痕。 |
-| `context-compression` | 上下文重置与压缩机制。 |
-| `prefix-stability` | 前缀逐字节稳定性保障。 |
-| `execution-failure-policy` | 失败分类与应对策略。 |
-| `provider-attempt-recovery` | 模型调用异常时的换绑与恢复。 |
-| `latency-degeneration` | 请求耗时监测、中断与同会话续行。 |
-| `host-provider-failure-ownership` | 接管宿主失败，统一恢复所有权。 |
-| `crash-reconciliation` | 进程崩溃现场恢复与状态调和。 |
-
-## 8. 任务与编程面 (Work & Programming)
-| Package | 说明 |
-|---|---|
-| `obligation-ledger` | 编程面待办管理约定。 |
-| `work` | 任务阶段接力、长程连续性与验收收尾。 |
-| `repository-investigation` | 本地事实调查纪律。 |
-| `knowledge-reuse` | 案例经验参考与复用。 |
-| `repository-programming` | JS 编程面核心操作规范。 |
-| `sphinx-v2` | Sphinx 结构化问答与 MCP 适配。 |
-| `distribution` | 安装包分发与依赖闭合。 |
-| `epistemic-reasoning` | （历史包）旧认识论内核，已被 sphinx-v2 替代。 |
+| `requirement-system` | 本目录的组织规则。 |
+| `verification-system` | [测试规则](verification-system/AXIOMS.md)：怎样写、跑、报告。 |
+| `feature-ablation` | 模块开关与消融节点。 |
+| `js-semantic-surface` | 测试访问产品的 JS 语义边界。 |
+| `structured-workflow` | 业务流程用普通代码控制流表达。 |
+| `time-capability` | 时间与时限能力。 |
+| `causal-wait` | 结构化等待与诊断。 |
+| `session-ontology` | 会话类别、所有权与身份。 |
+| `managed-session-lifecycle` | 托管子会话的创建、复用、取消与收束。 |
+| `host-boundary` | 宿主交互边界与物理能力。 |
+| `participant-identity` | 名分、人格与物理执行绑定分离。 |
+| `execution-model-routing` | 模型调度与容量。 |
+| `office-capability` | 角色权能与后果权限。 |
+| `capability-enforcement` | 模型可见工具与运行时权限一致。 |
+| `participant-horizon` | 视界：只传会改变行动的上下文。 |
+| `cognitive-environment` | 长期背景与瞬时执行隔离。 |
+| `cognitive-workspace` | 已退役画板的负向边界。 |
+| `attention-regulation` | 注意力调节边界。 |
+| `action-affordance` | 动作与参数语义。 |
+| `provider-language` | 单会话语言固定与协议标识符。 |
+| `provider-projection` | 语义意图向模型视角的投影。 |
+| `concern-routing` | 交互路由边界。 |
+| `interaction-authority` | 交互权限与逻辑任期。 |
+| `managed-chat-execution` | 单条物理消息的受理与终态。 |
+| `dispatch-protocol` | 消息派发与幂等。 |
+| `durable-events` | 事件追加与重放底座。 |
+| `effect-accounting` | 外部副作用分型记账。 |
+| `durable-convergence` | 按因果收敛，不靠时钟裁决。 |
+| `delegation` | 委托：fork / resume / commission。 |
+| `intra-participant-parallelism` | Fission：同一参与者多路并发与收敛。 |
+| `process-execution` | 外部进程与终端。 |
+| `change-integration` | 工作树改动集成与提交。 |
+| `semantic-trace` | 原始语义轨迹。 |
+| `context-compression` | 上下文重置与压缩边界。 |
+| `prefix-stability` | 前缀逐字节稳定。 |
+| `execution-failure-policy` | 失败分类与处置。 |
+| `provider-attempt-recovery` | 模型调用失败后的换绑与重试。 |
+| `latency-degeneration` | 耗时监测、中断与续行。 |
+| `host-provider-failure-ownership` | 宿主失败的所有权。 |
+| `crash-reconciliation` | 崩溃后的重放与调和。 |
+| `obligation-ledger` | 待办的消极边界。 |
+| `work` | Work / Review 生命周期与长程连续。 |
+| `repository-investigation` | 本地事实调查。 |
+| `knowledge-reuse` | 案例复用。 |
+| `repository-programming` | JS 编程面。 |
+| `sphinx-v2` | Sphinx 结构化问答。 |
+| `distribution` | 安装包与产物完整性。 |
+| `epistemic-reasoning` | 历史：旧认识论内核，已被 `sphinx-v2` 取代；不是现行条款。 |

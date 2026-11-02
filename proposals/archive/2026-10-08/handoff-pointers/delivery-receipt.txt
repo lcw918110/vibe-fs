@@ -1,5 +1,0 @@
-Final handoff-pointer consistency, 2026-10-08 Singapore
-Baseline3dbd93265; documentation only. A1 and Host/verification current pointer now agrees with master plan: K1-A -> K1-F first; D0-R separate chain and J3 full atomic window. Historical next statements remain explicitly historical; completed finite packages are not re-claimed.
-No implementation, requirement, test, budget or source change. Full source check previously passed on gen313 identical code.
-Frozen document diff/staged-document-input.patch.txt; Fable gen314175 surfaces/835 linked modules, freshness pass. JS002/requirement017 formal23pass/0fail/0skip/0TODO,2/2,exit0. No broader suite rerun/acceptance claimed.
-Original finite suites, mutation-red/restore-green, local Host023/large-selection failures, official4fd300s failure and remaining boundaries stay in original records. New K1-A/F/D0-R plans have not been executed.

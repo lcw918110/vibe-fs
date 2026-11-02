@@ -1,7 +1,0 @@
-D0-P final delivery, 2026-10-07, base523d41de4.
-gen301: finite direct scope61/61,377pass0fail4skip33TODO,exit1 pending only; outer41061 accepted71.037ms. Native new prerequisite1pass0fail0skip0TODO,exit0,5910.435625ms.
-gen302: final prose/manifest refresh build exit0; exact metadata2/2,23pass0fail0skip0TODO,exit0,8.83s wall12.83s test; outer42981 accepted89.673ms. Does not rerun or supersede195-file input failures.
-Full Fable175 registered surfaces835 modules, canonical compile-order and full static check pass; local Fantomas pass. No dotnet build used.
-gen300 inventory omission was fixed, not a product behavior red. gen300 Host023 FAIL and gen301 Host023 FAIL plus155/195 verdict-silence interruption/owned capture ps ETIMEDOUT remain unresolved evidence, not hidden or downgraded. Global gen301 broad counts unknown.
-One original assembly/Scope; actual Manager/Engineer admission, provider/terminal payload+digest and production draft prerequisite only. Public tool natural entry, actual deletion/Bookkeeper/Capture/dispose wait, all identity outcomes, installed Host, whole022 and full CI are not accepted.
-All raw records and manifests in this directory are bound by SHA256SUMS.txt. Later doc changes require their own freshness/gates.

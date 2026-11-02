@@ -28,25 +28,40 @@ module GuidelineProjection =
 
     let private pairOf (entry: obj) : PairProgrammingGuideline =
         let callGap, resultGap = unbox<TranscriptGap * TranscriptGap> entry?metadata
+
         { Ordinal = entry?ordinal
           CallId = ToolCallId.create entry?callId
           MarkerText = entry?markerText
           CallGap = callGap
           ResultGap = resultGap }
 
-    let pairs state = unbox<obj array> (state.History?history ()) |> Array.map pairOf |> Array.toList
-    let visiblePairs state = unbox<obj array> (state.History?visible ()) |> Array.map pairOf |> Array.toList
-    let nextOrdinal state : int64 = state.History?nextOrdinal ()
-    let visibleFromOrdinal state : int64 = state.History?visibleFromOrdinal ()
-    let callIds state : string array = state.History?callIds ()
-    let placementCount state : int = state.History?placementCount ()
-    let applyReanchor state = { History = state.History?reanchor () }
-    let restoreVisibilityFloor (floor: int64) state = { History = state.History?restoreVisibilityFloor (floor) }
+    let pairs state =
+        unbox<obj array> (state.History?history()) |> Array.map pairOf |> Array.toList
 
-    let private gapKey = function
+    let visiblePairs state =
+        unbox<obj array> (state.History?visible()) |> Array.map pairOf |> Array.toList
+
+    let nextOrdinal state : int64 = state.History?nextOrdinal()
+    let visibleFromOrdinal state : int64 = state.History?visibleFromOrdinal()
+    let callIds state : string array = state.History?callIds()
+    let placementCount state : int = state.History?placementCount()
+    let applyReanchor state = { History = state.History?reanchor() }
+
+    let restoreVisibilityFloor (floor: int64) state =
+        { History = state.History?restoreVisibilityFloor(floor) }
+
+    let private gapKey =
+        function
         | TranscriptGap.Start -> "s"
         | TranscriptGap.Before address -> "b:" + TranscriptMessageAddress.value address
         | TranscriptGap.After address -> "a:" + TranscriptMessageAddress.value address
+
+    let private rejection callGap resultGap (error: obj) =
+        match unbox<string> error?kind with
+        | "NonSequentialOrdinal" -> Error(GuidelineFoldRejection.NonSequentialOrdinal(error?expected, error?actual))
+        | "DuplicateCallId" -> Error(GuidelineFoldRejection.DuplicateCallId error?callId)
+        | "DuplicatePlacement" -> Error(GuidelineFoldRejection.DuplicatePlacement(callGap, resultGap))
+        | kind -> invalidOp ("wanxiangli/pair-hint returned an unknown history rejection: " + kind)
 
     let apply (ordinal: int64) callId (markerText: string) callGap resultGap state =
         let entry =
@@ -56,13 +71,10 @@ module GuidelineProjection =
                   "markerText" ==> markerText
                   "placementKey" ==> (gapKey callGap + "|" + gapKey resultGap)
                   "metadata" ==> box (callGap, resultGap) ]
-        let result: obj = state.History?append (entry)
 
-        if unbox<bool> result?ok then Ok { History = result?value }
+        let result: obj = state.History?append(entry)
+
+        if unbox<bool> result?ok then
+            Ok { History = result?value }
         else
-            let error: obj = result?error
-            match unbox<string> error?kind with
-            | "NonSequentialOrdinal" -> Error(GuidelineFoldRejection.NonSequentialOrdinal(error?expected, error?actual))
-            | "DuplicateCallId" -> Error(GuidelineFoldRejection.DuplicateCallId error?callId)
-            | "DuplicatePlacement" -> Error(GuidelineFoldRejection.DuplicatePlacement(callGap, resultGap))
-            | kind -> invalidOp ("wanxiangli/pair-hint returned an unknown history rejection: " + kind)
+            rejection callGap resultGap result?error

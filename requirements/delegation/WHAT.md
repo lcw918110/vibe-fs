@@ -48,7 +48,7 @@ fork 成功只表示该 Byname 已承接 charge。续做按 Byname 找到既有 
 
 ## [011] 普通完成结束同步批次
 
-不设独立 return 工具或双重 await。被委托方的普通 Assistant completion（自然停机，无未决工具调用）结束批次，由宿主交回该终态轮次的 assistant 散文（渲染为 `# ...` 注释），不捕获被委托方的完整 post-scope 视图。
+不设独立 return 工具或双重 await。被委托方的普通 Assistant completion（自然停机，无未决工具调用）结束批次，由宿主交回该终态轮次的 assistant 散文（渲染为 `# ...` 注释），不捕获被委托方的完整 post-scope 视图。交回的散文只取该终态轮次的正文文本（assistant `text` part）；思考（reasoning/thinking）与工具调用、工具结果一律不随交接，也不以会话级文本冒充正文。
 
 ## [012] Canonical 正文与 sibling 引用
 
@@ -118,19 +118,19 @@ terminal 只有属于该 work unit 实际接受的 Authority Root/provider execu
 
 run-scoped Completed/Failed/Aborted 均须保留因果身份；只有 session-wide 物理故障可无 Authority Root。sticky terminal、旧 run 或旧 cache 不得结算新 work unit，订阅后的到达时序不能代替身份。
 
-## [026] Effect truth 单向前进
+## [026] Effect 事实单向前进
 
 新 assignment 以 direct F# CE 表达。同步为 `dispatch → await own completion`；异步 fork/resume 同步确认接收方的身份校验与持久接收，随后异步工作，不在 invocation 内等待 child 完成。发送前 claim 复用 PromptAuthority 事实，不另持久化程序状态。
 
-仅 exact `AcceptedAssignment` 可宣告已承接，并发布为 join 可等待的运行任务；Submitted transport receipt 不足以证明接收。确定未发送或已拒绝时，返回调用失败并释放预留，不遗留运行中任务。
+仅 exact `AcceptedAssignment` 可宣告已承接，并发布为 join 可等待的运行任务；Submitted transport receipt 不算已接收。确定未发送或已拒绝时，返回调用失败并释放预留，不遗留运行中任务。
 
-acceptance unknown 或确认超时时，保留 durable Pending 与原 PromptKey，不伪造失败、不自动重发；返回明确的 `DispatchUncertain`，说明可能已接受、不要重复委托，且不得发布为 join 等待任务。已经发生的 effect 不得被后置失败否认为“未放置”。
+acceptance unknown 或确认超时时，保留 durable Pending 与原 PromptKey，不伪造失败、不自动重发；返回明确的 `DispatchUncertain`，说明可能已接受、不要重复委托，且不得发布为 join 等待任务。已经发生的 effect 不能被后置失败说成「未放置」。
 
-Join 只等待当前进程真正在跑或已产生可 join 结果的工作：真实 Host agent 运行经 `PendingRuns`/`PendingCompletionCount`/`PtyRuns` 可见，可 join 的 durable handle 经 journal 投影可见。重启后按 durable handle 重新收养的**空闲伴随句柄**（如 Manager 的 `devops`）只注册其身份、不代表有在跑任务，不得让 Join 误判为有工作而无限等待；无 journal 的纯 PTY 模式才以进程内 active run 计数作为 agent 工作信号。已作废的工作不是"在跑"，join 无须为它等待：它以 `voided` 报告一次后即从名册退役；仍可能交付的未交付工作才是 join 可以等待的那种在跑。
+Join 只等待当前进程真正在跑或已产生可 join 结果的工作：真实 Host agent 运行经 `PendingRuns`/`PendingCompletionCount`/`PtyRuns` 可见，可 join 的 durable handle 经 journal 投影可见。重启后按 durable handle 重新收养的**空闲伴随句柄**（如 Manager 的 `devops`）只注册其身份、不代表有在跑任务，不能让 Join 误判为有工作而无限等待；无 journal 的纯 PTY 模式才以进程内 active run 计数作为 agent 工作信号。已作废的工作不是在跑，join 不必为它等待：它以 `voided` 报告一次后即从名册退役；仍可能交付的未交付工作才是 join 可以等待的那种在跑。
 
 ## [027] Busy nudge 不承载新 assignment
 
-同一 logical route 同时至多一个 active work unit。对忙碌 participant 调用 `resume` 时，charge 作为 `BusyAgentNudge` 追加到既有 LogicalRun，以 `steer` 立刻进入运行中会话的下一模型步骤，供子代理及时纠偏；宿主不得自行多发一个 `AbortSession`。SDK 因 steer 导致旧 attempt 切换时，以确切 Provider 终态与随后新尝试的证据区分正常切换与无故中断。Engineer 与固定 DevOps 均允许此行为；保留原 work 的 Root、身份与完成订阅，不创建新 assignment，不因提示文本与旧 charge 相同而假装发送成功。
+同一 logical route 同时至多一个 active work unit。对忙碌 participant 调用 `resume` 时，charge 作为 `BusyAgentNudge` 追加到既有 LogicalRun，以 `steer` 立刻进入运行中会话的下一模型步骤，供子代理及时纠偏；宿主不得自行多发一个 `AbortSession`。SDK 因 steer 导致旧 attempt 切换时，以确切 Provider 终态与随后新尝试的证据区分正常切换与无故中断。Engineer 与固定 DevOps 均允许此行为；保留原 work 的 Root、身份与完成订阅，不创建新 assignment，不因提示文本与旧 charge 相同就当成发送成功。
 
 忙碌提示只包含本次追加指令，不再夹带调用方任何 post-scope 历史；它不改写既有 work，也不新建 assignment。已有真实回复后的可选 `negotiate` 不抑制正常 `resetScope`。
 
@@ -165,7 +165,7 @@ Engineer 完成工作或到达需 Manager 决定的边界即返回，不自行�
 子代理（Engineer、DevOps）以带有效正文且没有未决工具调用的自然停机作为完成依据。当子代理自然停机时，宿主把该终态轮次的 assistant 散文（正文散文、空 carry）原子结算为 `completed` 终态并发布给父会话的 `join`，在 join 边界渲染为 `# ...` 注释；不捕获子代理完整的 post-scope LLM 可见视图，也不返回 `[[session]]` 表。
 
 - 允许后果：子代理正常结束输出时，终态为 `completed`，父方收到的完成材料就是该子代理的末轮 assistant 散文，以 `# ...` 注释呈现，不承载子代理的完整视图；
-- 禁止后果：严禁要求子代理调用交付工具；不得向已停止输出的子代理发送完成催促（nudge）；不得因子代理没有特定的交付调用而扣留完成或报告未完成；
+- 禁止后果：不要求子代理调用交付工具；不向已停止输出的子代理发完成催促（nudge）；也不因子代理没有特定的交付调用而扣留完成或报告未完成；
 - 边界：Manager / Plan 的生命周期由 review（见 work [025]–[026]）处理，不经过父 join；本条只约束有 handle 链接的子会话。
 
 
@@ -173,7 +173,7 @@ Engineer 完成工作或到达需 Manager 决定的边界即返回，不自行�
 
 父→子首 prompt 的当前任务与当前 RootRequirements 以顶层 `# ...` 指令行渲染，任务正文恰好呈现一次，**不再生成任何 `content`、`context` 或 `attached_view` 数据字段**；子→父自然停机报告仍由 assistant 散文与允许的返回 carry 独立呈现，两方向不得混淆。
 
-受委托的新工作先接收**当前指令**，接收方必须首次调用单参数 `negotiate(questions: string)`，鼓励把相关的多个问题集中问出；工具调用立刻返回「已接受发送」的回执，不等待委托者回答。问题在委托者上下文上的临时、不开副作用的模型回合里解答，答复可能迟到数轮。在首次 `negotiate` 调用被受理之前，会话处于协商 pending 状态。**在 pending 期间，时序与预算完全冻结**：请求副本不呈现 `\0\uFEFF[Remaining turnBudget: N]` 预算后缀、物理回合不递减 `turnBudget`、初始化时序不前进、弱提醒保持关闭；操作员消息、**每一个新首次呈现的非 scope.kind=resetScope 注解结果**与 **assistant tool part** 均在请求副本中持续携带 `NegotiateReminder` 的 MUST 提醒（同一呈现身份只写一次并逐字重放，不再整体抑制工具结果提示）；普通工作工具调用不被阻断，但 `resetScope` 自身执行自拒且不得提交 `ScopeReanchored`。**negotiate 受理即完成**：首次有效调用被宿主受理（返回回执）时 pending 立即解除，时序继续，可立即走 `scope.kind=resetScope`；不管、也不等答复 steer，答复迟到或投递失败都不重新上锁，也不再催促 negotiate。首次受理之后可随时再次 `negotiate`，但属于普通追问，不会重新进入 pending 状态，亦不会抑制或重启已激活的 `resetScope`。
+受委托的新工作先接收**当前指令**，接收方必须首次调用单参数 `negotiate(questions: string)`，鼓励把相关的多个问题集中问出；工具调用立刻返回「已接受发送」的回执，不等委托者回答。问题在委托者上下文上的临时、不开副作用的模型回合里解答，答复可能迟到数轮。在首次 `negotiate` 调用被受理之前，会话处于协商 pending 状态。在 pending 期间，时序与预算冻结：请求副本不呈现 `\0\uFEFF[Remaining turnBudget: N]` 预算后缀、物理回合不递减 `turnBudget`、初始化时序不前进、弱提醒保持关闭；操作员消息、**每一个新首次呈现的非 scope.kind=resetScope 注解结果**与 **assistant tool part** 均在请求副本中持续携带 `NegotiateReminder` 的 MUST 提醒（同一呈现身份只写一次并逐字重放，不再整体抑制工具结果提示）；普通工作工具调用不被阻断，但 `resetScope` 自身执行自拒且不得提交 `ScopeReanchored`。**negotiate 受理即完成**：首次有效调用被宿主受理（返回回执）时 pending 立即解除，时序继续，可立即走 `scope.kind=resetScope`；不管、也不等答复 steer，答复迟到或投递失败都不重新上锁，也不再催促 negotiate。首次受理之后可随时再次 `negotiate`，但属于普通追问，不会重新进入 pending 状态，亦不会抑制或重启已激活的 `resetScope`。
 
 **与跨 Scope 回问的对称性与交叉引用**：本协商 pending 状态与 `context-compression` [044] 中定义的跨 Scope 回问（`askPreviousScope`）pending 机制共用完全相同的底层 `PairHint` 呈现路径与时序冻结规则（请求副本不呈现预算后缀、不递减、弱提示关闭、每个新首次呈现的工具结果及 assistant part 持续携带 MUST 提醒且逐字重放、普通工具不被拦、`resetScope` 自身自拒）；两者解除条件相同：首问有效调用的 receipt 经宿主受理后即刻解除 pending 并恢复时序；协商即告完成，不等待答复。若取得答复，可能随后作为 steer 补到，只是内容，不是门禁，也不作送达承诺。
 
@@ -183,10 +183,10 @@ OpenCode 暂时建立一个作为接收方子会话的临时孙会话，Host 中
 
 澄清回合不派生孙会话或空会话投影，而是直接调用委托者 `ExtensionContext.runEphemeralTurn` 原生单轮边转（闭包持有 delegator 真实会话、模型与上下文历史），省略 `tools: false` 以保留原生工具目录（保持请求中的 native tool catalog，真实 provider 侧 prompt cache 命中未验证；SDK 原生剥离 toolCall 且绝不执行工具）。遇到空白回复或工具调用尝试则带入前序历史进行有界重新提示。
 - 回答交付经由中立域缝 `INegotiationTransport.DeliverAndObserve` 派发：在接收方子会话写入 PromptKey 关联项（`pi.appendEntry("wxs.prompt-key", ...)`）。
-- 交付实体观测：在发送前通过 `session.subscribe` 挂载事件监听器，观测接收方实体通道产生的 `message_end`（role="user" 且包含收据标识文本），观测到实体着陆后再行调用 `Surface.confirmNegotiationSteer` 结算该答复回执（门禁早在受理时已解除）；等待过程跨越 `turn_end`（因 steer 交付可能在后续轮次或空闲时落地，仅在会话遭遇 `agent_end` 或关闭且未观测到收据时判定失败）。严禁伪造 metadata 并在 entries 轮询。
+- 交付实体观测：在发送前通过 `session.subscribe` 挂载事件监听器，观测接收方实体通道产生的 `message_end`（role="user" 且包含收据标识文本），观测到实体着陆后再行调用 `Surface.confirmNegotiationSteer` 结算该答复回执（门禁早在受理时已解除）；等待过程跨越 `turn_end`（因 steer 交付可能在后续轮次或空闲时落地，仅在会话遭遇 `agent_end` 或关闭且未观测到收据时判定失败）。不伪造 metadata，也不靠 entries 轮询。
 - 根会话防护：在 `before_provider_request` 钩子中对根会话/非受管会话执行浅拷贝并自 `tools` 列表过滤掉 `negotiate` 工具；在 `tool_call` 拦截阶段对于未受管会话硬拦截拒绝。
 
-`Detached` 回执仅证明本次调用已提交持久发送，**不等于真实回答已抵达子会话**；只有 Dispatcher 的 `PhysicalAccepted` 观察者在真实物理用户消息被接纳后，按接收方、回执、委派代际确认，才结算该答复回执。首次 `resetScope` 的门禁只看 negotiate 是否受理，与答复是否送达无关。伪造的 part.metadata 或出站 provider 文本不能结算回执。不得把「工具已发送」或临时会话已创建等同于答复已送达。
+`Detached` 回执只说明本次调用已提交持久发送，**不等于真实回答已抵达子会话**；只有 Dispatcher 的 `PhysicalAccepted` 观察者在真实物理用户消息被接纳后，按接收方、回执与委派代际确认，才结算答复回执。首次 `resetScope` 的门禁只看 negotiate 是否受理，与答复是否送达无关。伪造的 part.metadata 或出站 provider 文本不能结算回执；「工具已发送」或临时会话已创建也不等于答复已送达。
 
 **user-facing session 不提供协商工具。** 在 OpenCode 的 `chat.message` 钩子里，凡 `IsManagedChild = false` 的根会话，其真实 `UserMessage.tools.negotiate` 必须显式为 `false`，因此工具不进入该次 LLM 请求可用列表；`tool.execute.before` 仍必须对根会话伪造的协商调用硬拒绝。受委托子会话必须保留工具。本判定按真实物理会话父子身份，**不能按 Manager / Engineer 等角色统一禁用**，以免误杀同角色子代理的首次协商。
 
@@ -197,13 +197,13 @@ Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话�
 
 普通 Busy steer 不伪装成 `wanxiangshu_consultation_steer=true`，咨询消息仍单独按最近一轮 assistant 已完成且无工具调用的判据裁决，不限定为咨询发起回合；degeneration 的 `ProviderRetryAttempt` 也不改变。SDK 入队确认不等于模型消费，物理接纳与 PromptKey 恢复仍按原合同处理。
 
-现场依据：2026-10-27 09:54–09:55 UTC 的 `.Herdchestra/wanxiangshu/events/4e175784b9dc41548b338edc175b87bf-0000.ndjson` 显示重锚前后有 BusyAgentNudge 与 Terminal(Cancelled)，但单凭这些事件不能证明是谁调用了中断，也不能反推出应该排队。用户明确要求父方指导及时纠偏。验收：`requirements/execution-model-routing/tests/009.test.mjs` 检验 SDK Busy 的 body／顶层都明确 steer，咨询与 ProviderRetry 独立；`requirements/delegation/tests/036.test.mjs` 经真实 Manager `fork`／`resume` 验证原会话 PromptKey、立即 steer 且发送端未另调 AbortSession。
+测试：`requirements/execution-model-routing/tests/009.test.mjs` 核对 SDK Busy 的 body 与顶层都写 steer，咨询与 ProviderRetry 独立；`requirements/delegation/tests/036.test.mjs` 经真实 Manager `fork`／`resume` 核对原会话 PromptKey、立即 steer 且发送端未另调 AbortSession。
 
 ## [037] 咨询停机只读原始历史，不得误停已消费答复的活循环
 
 `askPreviousScope`／`negotiate` 答复的迟到停机（[021]）只在进入普通 transform 各阶段之前、对 Host 交来的未投影消息历史裁决一次。投影之后的出站副本不得再拿来裁决：已提交的 `resetScope` 会退休最新 reset 之前的普通工具 part 与思考；`resetScope` 自身及 `assume`／`negotiate`／`askPreviousScope` 的调用照常保留，但答复之前那条只调普通工具（如 `todowrite`）的 assistant 回合在 OpenCode 副本里只剩 `step-start`／`step-finish` 空壳，仍带 `time.completed`，于是看起来像“已完成且无工具调用”。旧判据只看答复**之前**最近的 assistant，从不看答复之后的回合，所以随后那条保留下来的 `resetScope` 也救不了它。答复之后已有 assistant 回合时，答复已在活循环里被消费，本次请求是普通续跑，同样不得中断。
 
-现场依据：2026-10-28 00:11:47 UTC，Engineer `ses_e80299a17ffe…` 接到前一 Scope 答复后继续工作并走 `scope.kind=resetScope`；下一步开始 48 ms 后被插件 `session.abort`（opencode.log `message=cancel`），此后再无消息，Manager join 一直等待。opencode.log 在 2026-10-27/28 共 11 例相同形态（紧接 `resetScope`、最后一条 user 为 `wanxiangshu_consultation_steer` 答复、之后零消息）。旧实现在各阶段之后对投影副本第二次调用 `StopCompletedContinuation`，且只看答复之前的 assistant：该会话原始尾部为 `askPreviousScope` → `todowrite` → 答复 → `todowrite` → `resetScope`，原始历史判定看到 `todowrite` 不停；投影后同一回合只剩空壳，第二次判定命中“已完成且无工具”而停机。验收：`requirements/delegation/tests/037.test.mjs`——答复后已有回合（含随后 `resetScope`）不发 AbortSession；完成且无工具的回合之后才落地的答复仍停机。
+测试：`requirements/delegation/tests/037.test.mjs`。
 
 
 ## [038] prose 收尾报告之后不得再调用 resetScope
@@ -212,7 +212,7 @@ Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话�
 
 模型侧必须明说，三处中英文一致：`delegation/fork-child-base`（收尾报告是最后一个动作，之后即使有 steer 要求也不调 `resetScope`）；`host/scope-steer/reset-due`（估计为 0 的强 steer 在 ResetDue 存续期间每次出站请求都会追加，收尾后到达的续跑请求——如迟到咨询答复——同样带上它，硬规则写明收尾后不调、直接自然结束）；`scope.kind=resetScope` 注解描述。
 
-现场关联：[037] 的 11 例都是答复落地后紧接 `resetScope` 再被误停；判停已改为只读原始历史，本条从源头不再诱导收尾后的重置。验收：`requirements/delegation/tests/038.test.mjs`。
+[037] 的 11 例都是答复落地后紧接 `resetScope` 再被误停；判停改为只读原始历史后，本条从源头不再诱导收尾后的重置。测试：`requirements/delegation/tests/038.test.mjs`。
 
 ## [039] 迟到咨询停机后，本次运行以被保留的收尾报告结算
 
@@ -220,7 +220,7 @@ Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话�
 
 规则：停机在中断前登记被停的答复（`CompletedContinuationStops`）。reconcile 遇到“最新 assistant 是 abort、其 parent 是已登记的被停答复”时，本次运行的结算对象是该答复之前、本运行物理输入之后那条已完成的收尾回合（按它自己的物理输入构造），走普通完成路径（交付见证、XTrace 捕获、终态发布）。这不是回退到历史 assistant：停机本身就是“报告之后的一切不属于本运行”的登记事实；未登记的 abort（操作员取消、退化打断等）照旧是观察。
 
-现场依据：2026-10-28 Manager `ses_e7fff8f2fffe…`（“大重构指南实施”），join 自 01:11:09 UTC 起挂住。Engineer `review-admission`（`ses_e7fff5477ffe…`）收尾报告 01:08:44–01:10:54，答复 01:09:58 排队，01:10:54 `loop step=21` 后 7 ms `cancel`；DevOps `devops`（`ses_e7fff48b5ffe…`）收尾报告 01:16:27–01:17:09，答复 01:16:50 排队，01:17:09.537 `loop step=20`、.544 `cancel`、.570 才记到报告的 ChatExecution Completed。两者都无 `TerminalOutputCaptured`、无 `HandleWorkCompleted`；同一会话里没有排队答复的 `review-continuation` 正常结算。验收：`requirements/delegation/tests/039.test.mjs`（未修复时 report 终态永不发布，修复后 `CompletedAwaitingJoin` 且 join 拿到报告正文）。
+测试：`requirements/delegation/tests/039.test.mjs`。
 
 ## [040] 空的已完成回合不是收尾报告；迟到咨询停机不得吊销自己造成的静默
 
@@ -228,16 +228,18 @@ Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话�
 
 停机自己造成的 abort（答复已登记在 `CompletedContinuationStops`）不是操作员取消：其 Cancelled 终态不得 `RevokeCurrentAttempt`。否则会话静默状态停在 Revoked，之后每个 idle 铸出的许可都被 `TryConsume` 拒收，被保留回合所需的 missing-final-report 修复只能以 `SupersededBeforePhysicalSend` 放弃，再无任何东西唤醒子代理，`HandleWorkCompleted` 永不写入，父方 join 永远等待。
 
-现场依据：2026-10-28 Manager `ses_e7ed7cdb2ffe…`（“指南.txt 重构指南实施”），join 自 07:05:34 UTC 起挂住，唯一未归的句柄 Engineer `esb1t2`（控制路径，`ses_e7ed78478ffe…`）。回合 `msg_1812ab6c7…` 06:20:22–06:25:13 `finish=length` 且无正文；答复 `msg_1812b4ec9…` 06:21:01 排队；06:25:13.138 `loop step=17`、.144 `cancel`、.165 ChatExecution Completed、.191 答复 Cancelled(PreProvider)、.200/.223 两次 InteractionRepair(missing-final-report) Claimed 后即 Abandoned(SupersededBeforePhysicalSend)，此后该会话再无事实。验收：`requirements/delegation/tests/040.test.mjs`（未修复时答复被停、`abortedIds=[child]`；修复后不停）。
+测试：`requirements/delegation/tests/040.test.mjs`。
 
 ## [041] 长程角色不因迟到咨询而停
 
 Manager、Orchestrator、Plan 负责长程工作。它们无工具调用的自然 stop 不是收尾，只要工作未结束就该被 nudge 续上。[021]／[037]／[039] 的迟到咨询停机只适用于以 prose 收尾的角色（Engineer、DevOps 等）；会话角色是长程角色时，排队的 `negotiate`／`askPreviousScope` 答复按普通工作放行，它本身就是续上工作的 nudge，不得 `AbortSession`，不得登记 `CompletedContinuationStops`。角色取答复消息或其前一条 assistant 的 `agent`（缺时取 `mode`）。
 
-现场依据：2026-10-28 Manager `ses_e7ed7cdb2ffe…`（“指南.txt 重构指南实施”）10:56:42 UTC 以 prose、无工具调用结束回合 `msg_18227b36a…`（finish=stop）；同刻代理答复 `msg_18227b433…` 作为咨询 steer 落地；10:56:51 `loop step=4` 后 13 ms `cancel`，`msg_18227d63d…` 为 `MessageAbortedError`。Manager 就此停住，直到 11:00:36 负责人再发消息。验收：`requirements/delegation/tests/041.test.mjs`（未修复时 manager／orchestrator／plan 的答复被停、`abortedIds=[sid]`；修复后不停；engineer 照旧停）。
+测试：`requirements/delegation/tests/041.test.mjs`。
 
 ## [042] 重启恢复以持久 Accepted 的物理消息定 Root
 
-重启恢复的终态 assistant 只回答它自己的物理父消息；最后一条 user 消息可能是重试的新物理消息，其物理 ID 不是 Authority Root。恢复必须按 `assistant.ParentId` 的精确物理消息读取持久 `ChatExecution.Accepted`，用该记录同时查询交付见证并编码完成体；不得把物理 ID 提升为 Root。Accepted 与 `assistant.ParentId` 必须精确相符，且其 Root 必须对应该 handle／child 的 canonical admitted work；任一缺失或不相符时只作为观察（`Unreadable`，恢复等待），不得猜测 Root 或补造完成。已存在 `HandleWorkCompleted` 的 durable 终态不经过该快照路径，重启后仍按原工作正常 join，且不得重复写入完成。
+重启恢复的终态 assistant 只回答它自己的物理父消息；最后一条 user 消息可能是重试的新物理消息，其物理 ID 不是 Authority Root。恢复必须按 `assistant.ParentId` 的精确物理消息读取持久 `ChatExecution.Accepted`，用该记录同时查询交付见证并编码完成体；不得把物理 ID 提升为 Root。Accepted 与 `assistant.ParentId` 必须精确相符，且其 Root 必须对应该 handle／child 的 canonical admitted work；任一缺失或不相符时只作为观察（`Unreadable`，恢复等待），不得猜测 Root 或补造完成。已存在 `HandleWorkCompleted` 的 durable 终态不经过该快照路径，重启后仍按原工作正常 join，且不重复写入完成。
+
+测试：`requirements/delegation/tests/042.test.mjs`。重试用例在旧实现下把重试物理 ID 当 Root，交付见证与 canonical work 都不匹配、恢复失败；修复后以原 Root 结算并 join 到重试回合的散文。已完成工作用例确认重启恢复不要求 Accepted、不重复写入完成，join 仍返回材料。缺失 Accepted 用例确认恢复只观察为 `RecoveryIncomplete`，不查询交付见证、不写完成，工作保持 Active。
 
 验收：`requirements/delegation/tests/042.test.mjs`（重试用例在旧实现下把重试物理 ID 当 Root，交付见证查询与 canonical work 均不匹配，恢复失败；修复后以原 Root 结算并 join 到重试回合的散文。已完成工作用例验证重启恢复不要求 Accepted、不重复写入完成，join 仍返回材料。缺失 Accepted 用例验证恢复只观察为 `RecoveryIncomplete`、不查询交付见证、不写完成，工作保持 Active）。

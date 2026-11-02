@@ -4,6 +4,14 @@ open System.Threading.Tasks
 open Wanxiangshu.Persistence.Journal
 
 module JournalSurface =
+    val drainWhere:
+        handle: JournalHandle ->
+        parent: string ->
+        maxCount: int ->
+        completedAt: string ->
+        accept: (obj -> bool) ->
+            Task<obj>
+
     val recordAbandon:
         handle: JournalHandle ->
         parent: string ->

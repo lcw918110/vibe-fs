@@ -35,7 +35,11 @@ module private JsLedgerTasks =
         task {
             try
                 let! appended = pending
-                return appended |> Result.map ignore |> Result.mapError JsFailure.TransactionPersistenceFailed
+
+                return
+                    appended
+                    |> Result.map ignore
+                    |> Result.mapError JsFailure.TransactionPersistenceFailed
             with error ->
                 return Error(rejectedFailure (box error))
         }
@@ -70,12 +74,15 @@ type JsAsIsLedger(persistence: IJsTransactionPersistence option) =
         task {
             let mutable firstFailure = None
 
-            for pending in appends do
-                let! appended = JsLedgerTasks.settle pending
-
+            let remember appended =
                 match firstFailure, appended with
                 | None, Error failure -> firstFailure <- Some failure
                 | _ -> ()
+
+            for pending in appends do
+                let! appended = JsLedgerTasks.settle pending
+
+                remember appended
 
             return
                 match firstFailure with

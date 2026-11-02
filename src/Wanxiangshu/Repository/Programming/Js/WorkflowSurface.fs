@@ -3,6 +3,8 @@ namespace Wanxiangshu.Repository.Programming.Js
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
+open Wanxiangshu.Foundation.Identity
+open Wanxiangshu.Persistence.EventStore
 
 /// Opaque workflow outcome. The semantic observation functions expose the
 /// commit report and failure algebra without leaking JsToolOutcome's union.
@@ -44,19 +46,13 @@ module JsWorkflowSurface =
         (deadlineMs: int)
         (deadlineEpochMs: int64)
         (outputBoundBytes: int)
-        (store: obj)
+        (persistence: IJsTransactionPersistence option)
         (fileAccessObservation: JsToolWorkflow.FileAccessObservation option)
         : Task<obj> =
         task {
             match JsGeneratorSurface.typedRole role language with
             | None -> return null
             | Some surface ->
-                let persistence =
-                    if isNull store then
-                        None
-                    else
-                        Some(JsTransactionSurface.persistenceOf store)
-
                 let! outcome =
                     match fileAccessObservation with
                     | None ->
@@ -94,7 +90,72 @@ module JsWorkflowSurface =
         (outputBoundBytes: int)
         (store: obj)
         : Task<obj> =
-        runWithObservation workspaceRoot role language program deadlineMs deadlineEpochMs outputBoundBytes store None
+        let persistence =
+            if isNull store then
+                None
+            else
+                Some(JsTransactionSurface.persistenceOf store)
+
+        runWithObservation
+            workspaceRoot
+            role
+            language
+            program
+            deadlineMs
+            deadlineEpochMs
+            outputBoundBytes
+            persistence
+            None
+
+    let runWithRecord
+        workspaceRoot
+        role
+        language
+        program
+        deadlineMs
+        deadlineEpochMs
+        outputBoundBytes
+        (record: string -> string -> Task<obj>)
+        : Task<obj> =
+        let append phase transactionId =
+            task {
+                let phaseName =
+                    match phase with
+                    | JsTransactionAppendPhase.Prepared -> "Prepared"
+                    | JsTransactionAppendPhase.Committed -> "Committed"
+
+                let! reply = record phaseName (JsTransactionId.value transactionId)
+                let eventId = EventId.create (unbox<string> reply?eventId)
+
+                return
+                    if unbox<bool> reply?ok then
+                        Ok eventId
+                    else
+                        Error
+                            { Phase = phase
+                              TransactionId = transactionId
+                              EventId = eventId
+                              Error = AppendError.AppendFailed(unbox<string> reply?error) }
+            }
+
+        let persistence =
+            { new IJsTransactionPersistence with
+                member _.AppendPrepared prepared =
+                    append JsTransactionAppendPhase.Prepared prepared.TransactionId
+
+                member _.AppendCommitted transactionId =
+                    append JsTransactionAppendPhase.Committed transactionId }
+
+        runWithObservation
+            workspaceRoot
+            role
+            language
+            program
+            deadlineMs
+            deadlineEpochMs
+            outputBoundBytes
+            (Some persistence)
+            None
 
     /// Execute the exact named-program input { name, program, intent }.
     /// Lifecycle control uses members inside another named program.
@@ -168,7 +229,10 @@ module JsWorkflowSurface =
             deadlineMs
             deadlineEpochMs
             outputBoundBytes
-            store
+            (if isNull store then
+                 None
+             else
+                 Some(JsTransactionSurface.persistenceOf store))
             (Some(observationOf fileAccessObservation))
 
     let caseName (value: obj) : string =

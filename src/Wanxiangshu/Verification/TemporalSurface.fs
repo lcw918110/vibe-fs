@@ -831,7 +831,28 @@ module TemporalSurface =
         (unbox<PluginRuntimeScope> value).RunOwnedWork work
 
     let backgroundPluginWork (value: obj) (work: unit -> Task) : Task =
-        (unbox<PluginRuntimeScope> value).RunBackgroundTracked work
+        let scope = unbox<PluginRuntimeScope> value
+
+        let completed =
+            TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+
+        let mutable admitted = false
+
+        scope.RunBackground(fun () ->
+            admitted <- true
+
+            task {
+                try
+                    do! work ()
+                finally
+                    AsyncSupport.trySetResult completed () |> ignore
+            }
+            :> Task)
+
+        if admitted then
+            completed.Task :> Task
+        else
+            AsyncSupport.completedTask ()
 
     let disposePluginWorkScope (value: obj) : Task =
         (unbox<PluginRuntimeScope> value).DisposeAsync()

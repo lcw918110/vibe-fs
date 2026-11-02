@@ -122,7 +122,7 @@ review 是唯一的生命周期入口。updates 是 `{ key, value | null }` 数�
 
 持久提交结果只按 wanxiangli journal 的 Committed、Replayed、Conflict、NotWritten、Unknown 解释；Observed 是 Work 的无新事实观察，不是假 durable append。接力的退休、屏障、后任与提示必须位于同一个规范 record，恢复不接受半对。
 
-- 允许后果：Committed 才证明本次新 record 已落地；Replayed 证明同 requestId 的同一 record 已存在；NotWritten 证明本次没有提交；Unknown 保持未知并要求重开 journal/组合后核对。Relayed 恢复到后任，并补齐尚未确认的继任提示。Advanced 恢复到同一任期的下一里程碑。Completed 恢复到已完成，并补齐尚未确认的停止。Launched 恢复到同一预留，不另开 Manager。
+- 允许后果：Committed 表示本次新 record 已落地；Replayed 表示同 requestId 的同一 record 已存在；NotWritten 表示本次没有提交；Unknown 保持未知并要求重开 journal/组合后核对。Relayed 恢复到后任，并补齐尚未确认的继任提示。Advanced 恢复到同一任期的下一里程碑。Completed 恢复到已完成，并补齐尚未确认的停止。Launched 恢复到同一预留，不另开 Manager。
 - 禁止后果：不得继续把旧 AppendNotAttempted/CommitUnknown 名称当现行结果。不得把只有 IncumbencyRetired(Relayed) 的篡改 record 修补为合法后任，不得靠裁掉坏字节、补换行或猜身份恢复。完整 record 本身不依赖 NDJSON 结尾换行。
 - 失败后果：规范 JSON、字段、摘要、事件对或状态跃迁任一损坏时整条 work 历史拒绝；保留原始存储证据，不跳过坏 record。
 
@@ -219,11 +219,11 @@ Plan 的里程碑单向前进：事实与取舍、理解与路径、流程与伪
 
 - 允许后果：启动的持久顺序是预留、创建 Session、绑定 Session ID、发送底稿全文、确认真实受理。每次有效调用各预留一次。结案先提交 IncumbencyRetired 与 StopObliged，再请求停止当前 Provider attempt。停止请求与观察到停止成功是两件事实。
 - 禁止后果：创建结果未知时不得发送底稿，也不得另开 Manager。不得把一次启动写成待执行退休。收尾仍有真实资源阻塞时不得结案。`execSessionId` 不得进入 provider 可见面。
-- 失败后果：预留提交失败为零启动。明确 NotStarted 可以追加拒绝事实，待执行保持可再次启动。结果未知则保留原预留。不得用抛异常本身证明外部效果没有发生。
+- 失败后果：预留提交失败为零启动。明确 NotStarted 可以追加拒绝事实，待执行保持可再次启动。结果未知则保留原预留。不能凭抛异常本身断定外部效果没有发生。
 
 ## [027] 长程任务禁止静默停止
 
-Manager、Orchestrator 与 Plan 的目标义务独立于物理回合：空 stop、合格收尾散文或进度小结均不证明目标完成；Manager 与 Plan 严禁静默停止。作为对等收敛规则，子代理角色（Engineer、DevOps）豁免催促（nudge）并允许自然停机（context-compression [037]），其自然停机只交回末轮 assistant 散文（渲染为 `# ...` 注释）。
+Manager、Orchestrator 与 Plan 的目标义务独立于物理回合：空 stop、合格收尾散文或进度小结都不代表目标完成；Manager 与 Plan 严禁静默停止。作为对等收敛规则，子代理角色（Engineer、DevOps）豁免催促（nudge）并允许自然停机（context-compression [037]），其自然停机只交回末轮 assistant 散文（渲染为 `# ...` 注释）。
 
 - 允许后果：对非豁免角色（Manager、Orchestrator、Plan），没有有效交接/完成事实，也没有 [049] 的用户等待时，新的自然停机必须在真实 idle 许可上得到同运行 nudge：提示指出尚未解除的任务义务与下一步；Manager 保留当前评审/工作/收尾提示，并说明 `join` 可以临时等待后台工作；Orchestrator 保留委任与接续职责；Plan 提醒 `devops` 与 `review` 的职责；空账 review 是等待用户的入口。Engineer 与 DevOps 彻底免除 nudge 催促，允许在工作完成后自然停机并交回成果。internal 末梢 Bookkeeper 沿专用提交事实收敛，不承担结案义务。
 - 禁止后果：不得先发布 Completed 或关闭逻辑运行，再尝试催促；不得以无后台句柄、有正式文本或缺工作投影当作目标已完成。相同终态重复通知幂等，后续新的偷停仍须提醒，不因之前已经 nudge 过一次而永久静默。无 idle 许可时等待真实闲置，不抢占正在运行的工具。严禁对 Engineer 或 DevOps 发送完成催促 nudge。
@@ -343,8 +343,8 @@ Plan 与 Manager 的评审都是同一个 review。updates 按键覆盖、新增
 
 - 允许后果：只有首次 Committed 的 DeliveryRequested 才创建会话一次。顺序是持久预留、创建 Session、持久绑定 Session ID、发送底稿全文、确认真实受理。底稿字节在发送前再核对。受理写成 DeliveryAdmitted，不写成 Plan 退休。
 - 允许后果：底稿即这次 review 的 note。`review` 工具的 `note` 参数与编程面 `this.review(findings, note)` 的第二参是同一份 note，原样成为 Manager 的会话标题与发送的底稿；编程面缺省或空白时读取规范路径上已保存的底稿全文，缺失或为空则在创建会话前拒绝。非字符串 note 在写入前拒绝，不预留、不启动。
-- 禁止后果：Replayed、Observed、Unknown、NotWritten 与 Conflict 不得再次创建。创建结果未知时不得发送底稿。不得摘要或改写底稿。execSessionId 不得进入 provider 可见面。不得用异常本身证明没有启动。
-- 失败后果：确切的创建前拒绝写 DeliveryRejected。无法证明是否承接时保留原预留，恢复只观察该 operation。待执行保持可再次接受另一个有效调用。
+- 禁止后果：Replayed、Observed、Unknown、NotWritten 与 Conflict 不得再次创建。创建结果未知时不得发送底稿。不得摘要或改写底稿。execSessionId 不得进入 provider 可见面。不能凭异常本身断定没有启动。
+- 失败后果：确切的创建前拒绝写 DeliveryRejected。无法确认是否承接时保留原预留，恢复只观察该 operation。待执行保持可再次接受另一个有效调用。
 
 ## [040] 唯一活跃任期
 
@@ -374,7 +374,7 @@ provider 上下文由物理历史、用户原文与显式资源构成。后任�
 
 work host 观察 durable 执行结果时原样保留调用方传入的 requestId，replay 沿用原 id，不铸造替代。物理启动只对 committed 的 DeliveryRequested 为真；Committed 的其它 kind、Replayed、Unknown、NotWritten 与 Conflict 一律不得启动。work journal 固定位于 `<主工作树>/.Herdchestra/wanxiangshu/work.sqlite`，不在事件流目录内。
 
-Manager 开立的 root 取 Git 证明的当前工作树根目录，不取插件进入时的任意子目录。同一工作树的多个入口必须指向同一 root；不同 linked worktree 即使共用 git-common-dir，也不能因此冒充同一工作根。无法确认工作树根时拒绝开立，不以路径猜测替代。
+Manager 开立的 root 取 Git 确认的当前工作树根目录，不取插件进入时的任意子目录。同一工作树的多个入口必须指向同一 root；不同 linked worktree 即使共用 git-common-dir，也不能因此冒充同一工作根。无法确认工作树根时拒绝开立，不以路径猜测替代。
 
 ## [047] lifecycle SQLite 宿主边界
 
@@ -416,7 +416,7 @@ Plan 的编程面（`todowrite-for-plan`）携带 `js.ask(question)`：程序内
 
 初任空账的 review 不得写成 Reviewed，也不得推进里程碑。问句是「我需要干什么？」。连续三次空账、三次真实答复，产生三次询问、零次 Reviewed、零次接力。答复之后仍是同一任期。第一次非空账才进入工作期。问询失败时不得假装 Reviewed，也不得伪造用户答复。
 
-证明：`wanxiangli/src/lifecycle/tests/002.test.mjs` 核对三次询问与同一任期。宿主物理 park 仍按 [049] 取证。
+测试：`wanxiangli/src/lifecycle/tests/002.test.mjs` 核对三次询问与同一任期。宿主物理 park 仍按 [049] 观察。
 
 ## [052] Manager 交付之后的正常新循环与末任收尾
 
@@ -424,4 +424,4 @@ Plan 的编程面（`todowrite-for-plan`）携带 `js.ask(question)`：程序内
 
 工作期的 Manager 不因某次空账获得或失去资格。任期仍活跃、且没有真实资源阻塞时，Fork、Resume、Join 与后续 review 保持可用。收尾仍有真实阻塞时不得结案。已完成后再 review 拒绝。
 
-证明：`wanxiangli/src/lifecycle/tests/006.test.mjs` 与 `tests/007.test.mjs` 核对阻塞、结案与一次操作员重开。
+测试：`wanxiangli/src/lifecycle/tests/006.test.mjs` 与 `tests/007.test.mjs` 核对阻塞、结案与一次操作员重开。

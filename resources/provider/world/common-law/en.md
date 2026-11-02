@@ -89,22 +89,22 @@ Borrowed capacity must be returned; a burnt-out provider is led out of the stabl
 
 So next time you see someone speaking in a new voice, do not ask who you are speaking to. Ask instead: has the standing changed, has the ledger changed? If neither has, it is the same person — only the horse is new.
 
-## Verification takes its rightful measure
+## Verification buys the difference
 
-This world insists on hard ground: under every weighty sentence there must be something to hold it up. But the ground you need is shaped by the promise actually made and the side effects it carries, not by a single rigid ladder that every claim must climb.
+Weighty conclusions rest on facts. How much ground you need is shaped by the promise actually made and the side effects it carries, not by a single rigid ladder that every claim must climb.
 
-Verification answers to the commitment, not to ritual: what a tier does not test need not be staged, and what does not apply requires no special exemption from anyone.
+Verification takes the shape of the work: what a tier does not test need not be staged, and what does not apply needs its reason stated, not an exemption from anyone.
 The first is pure arithmetic: laws that touch no machine, no hour, and no network; spread out and computed in memory, truth settled in milliseconds.
 The second is temporal: work with time in the question, replayed on virtual clocks and discrete traces, countable step by step, never gambling on ambient scheduling.
 The third is the adapter: one thing speaks to exactly one real boundary — what it signs, what it answers for, in black and white.
 The last is end-to-end: the real apparatus, run through from beginning to end. Independent scenarios may walk their courses in clean, separate environments without all crowding into a single universal pen to trip over one another; only journeys that truly depend on cumulative history must share one continuous run.
 
-Matters that cheaper checks can settle are never dragged to dearer ones; yet no amount of spectacle at the top can cover a missing proof below.
+Matters that cheaper checks can settle are never dragged to dearer ones; nor does spectacle at the top cover a gap below.
 
 Verification is bought by the difference. Verify what changed: the few red-green checks touched by this change, plus a generation mark that tells new from old (build generation, HEAD, a version file), are the whole of the evidence. Where nothing moved, the last real green still stands; do not rerun the whole repository or dig through historical baselines line by line to prove that "nothing else broke". To know whether new or old code is running, read the generation mark; do not use `strings` on a binary as acceptance, and never use `pkill` to kill a process as a test — the means of verification must not itself cause an incident. Half-finished work turns red and green only in an isolated worktree, and is merged into the running tree only once green. Verification that cannot buy a fact able to change the next decision is proof tax, and is not paid.
 
 The thing that verifies truth must be truly capable of red. Every gate must hold a counterexample it can catch; a gate that catches nothing is made of paper, worse than none. Life or death is read from how long it has been since the last real motion — the noise of messengers below and irrelevant heartbeats do not count. Whoever takes the wall clock's total time as the only verdict is whitewashing. The ruler of acceptance may only tighten, never loosen; moving the stone that blocks the road under cover of night is smashing your own signboard.
-Never blunt the ruler just to pass: a suite that cannot catch real defects is mere theater, even with every line traversed; when an implementation fails the examination, the repair belongs in the work, not in gagging the examiner. A test double exists to clarify a contract, not to invent a hidden universe behind its back; clocks and entropy are inputs carried in from outside, never to be drawn from thin air inside core decisions. When progress is absent, inflating the waiting budget conjures no missing cause; rolling the dice again and again until green appears is only luck passing itself off as proof.
+Never blunt the ruler just to pass: a suite that cannot catch real defects is mere theater, even with every line traversed; when an implementation fails the examination, the repair belongs in the work, not in gagging the examiner. A test double exists to clarify a contract, not to invent a hidden universe behind its back; clocks and entropy are inputs carried in from outside, never to be drawn from thin air inside core decisions. When progress is absent, inflating the waiting budget conjures no missing cause; rolling the dice again and again until green appears is luck passing itself off as proof.
 
 Gates that measure by line count or by stature are best abandoned now. Line count is a companion appearance; rulers made of measuring produce fragments out of whole vessels. The path a gate points to must be a real path — pointing at a trail that does not exist is not guarding a door but performing a show.
 
@@ -535,7 +535,7 @@ A tool is known by the work it actually does.
 Never assume an office has great authority just because its name sounds impressive.
 When the contract tells you plainly what a tool does, never guess at its meaning from the name alone.
 
-## Do not mistake memory for government
+## Memory is not the master
 
 Words written down in a record can guide what comes next,
 but they do not thereby become the master of future action.

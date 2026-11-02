@@ -18,7 +18,7 @@
 
 ## [003] 取消独立 Y 轴与 200 KiB Blogger delta 合同
 
-系统不再设独立的 Y 轴、Blogger、Chronicle、200 KiB delta 切块或 `MemoryPreamble` / `FrozenRecordPrefix` 物化管线。上下文的清理边界完全由模型在任意工具上标注 `scope.kind=resetScope`（见 [033]）决定；无独立 reset 宿主工具；最新一次 reset 之后的活跃 scope 原样保留，不另设独立的 Y 物化覆盖证明。
+系统不再设独立的 Y 轴、Blogger、Chronicle、200 KiB delta 切块或 `MemoryPreamble` / `FrozenRecordPrefix` 物化管线。上下文的清理边界完全由模型在任意工具上标注 `scope.kind=resetScope`（见 [033]）决定；无独立 reset 宿主工具；最新一次 reset 之后的活跃 scope 原样保留，不另设独立的 Y 物化覆盖机制。
 
 ## [004] 输出预算属 provider
 
@@ -105,7 +105,7 @@ OpenCode 和 OMP 只能按照同一 PairHint 中立过滤计划物理投影；�
 
 子代理会话与生命周期管理实行完成机制与工具分立：
 
-1. **子代理自然停机完成**：Engineer 与 DevOps 完成工作后以有正文且无未决工具调用的自然终态交回材料；宿主在观察到子代理自然停机后，把该终态轮次的 assistant 散文（正文散文、空 carry）作为完成材料交回给父会话的 `join`，并在父方边界渲染为 `# ...` 注释。宿主不捕获子代理完整的 post-scope LLM 可见消息视图，返回材料里也绝不出现 `[[session]]` 表。
+1. **子代理自然停机完成**：Engineer 与 DevOps 完成工作后以有正文且无未决工具调用的自然终态交回材料；宿主在观察到子代理自然停机后，把该终态轮次的 assistant 散文（正文散文、空 carry）作为完成材料交回给父会话的 `join`，并在父方边界渲染为 `# ...` 注释。交回的散文只取该终态轮次的正文文本（assistant `text` part），不取会话级文本：思考与工具调用、工具结果均不随交接。宿主不捕获子代理完整的 post-scope LLM 可见消息视图，返回材料里也绝不出现 `[[session]]` 表。
 2. **空终止必须继续**：Engineer 与 DevOps 可以凭有效正文自然停机；如果没有正文也没有工具调用，则与所有角色一样触发当前任务 nudge，且不设置最大次数。
 3. **生命周期入口只有 review**：Plan 与 Manager 的退休、接力、晋级、结案和重开只通过 `review` 进入 Work。材料交还使用独立的 `wxs_deliver`，它不驱动任期事实，也不挂接上下文或材料选择数组。
 
@@ -166,7 +166,7 @@ askPreviousScope(
 
 系统为委托首轮协商（`negotiate`，见 `delegation` [034]）与跨 Scope 首次回问（`askPreviousScope`，见 [042]）建立对称的 pending 机制。两者共用完全相同的 pending 状态生命周期与呈现路径，仅在咨询类型（kind）、提醒文案、目标来源及解除条件上保持必要区分。
 
-1. **唯一所有权归属**：`wanxiangli/pair-hint`（PairHint）中的 `ScopeSession` 是首问 pending、历史过滤及临时会话投影的**唯一程序所有者**；预算计算仅由 `wanxiangli/scope-progress` 负责。宿主不设第二份状态机或并发权威；OpenCode 与 OMP 适配器仅消费 PairHint 计算出的中立计划并热修正请求副本。
+1. **唯一所有权归属**：`wanxiangli/pair-hint`（PairHint）中的 `ScopeSession` 是首问 pending、历史过滤及临时会话投影的**唯一所有者**；预算计算仅由 `wanxiangli/scope-progress` 负责。宿主不设第二份状态机；OpenCode 与 OMP 适配器仅消费 PairHint 计算出的中立计划并热修正请求副本。
 2. **提示词与时序驱动而非 Tool Gate**：首问义务通过提示词与时序约束强制执行，严禁设立全局工具拦截门禁（Tool Gate）。在 pending 期间，模型调用任何普通工作工具（如代码修改、文件读写、只读查询等）均正常执行并产生业务效果，宿主绝对不得在 `tool.execute.before` 因首问未完成而阻断普通工具执行。
 3. **持续 MUST 只通过独立强 Steer**：在 pending 未解除的每一次正常 Provider 请求，系统都另行生成一条 `attribution: agent`、`steering: true`、`strong: true` 的独立 user 载体消息。其内容由 PairHint 当前 `negotiate` 或 `askPreviousScope` pending 决定；未问就每次继续提醒。工具结果、assistant tool part、旧 reset 结果及操作员原文不承载这段提醒，也不因 pending 改写其原始或已冻结内容。该合成 steer 不冒充操作员，也不使预算作废。
 4. **时序与预算完全冻结**：在 pending 期间，会话时序严密冻结：
@@ -191,21 +191,21 @@ askPreviousScope(
 
 `wanxiangli/pair-hint` 按工具调用身份保留 `assume`、`negotiate`、`askPreviousScope` / `askPrevious`，以及带 `scope.kind=resetScope` 的调用及结果（旧工具名 `resetScope` 只读兼容）。无论位于最新 reset 前多少代、与普通调用共处一个 assistant 多 part 批次、或结果独立成消息，均精确保留。对其它工具仍严格裁剪；不保留无对应调用 ID 的伪结果或其相邻普通调用。OpenCode 与 OMP 只能投影该中立过滤计划，不能按英文工具名重复维护自己的历史保留清单。
 
-证明：`wanxiangli/src/pair-hint/tests/011.test.mjs`、Host 已注册请求副本与多次 reset 前缀稳定性反例。
+测试：`wanxiangli/src/pair-hint/tests/011.test.mjs`、Host 已注册请求副本与多次 reset 前缀稳定性反例。
 
 ## [047] 已落地的跨 Scope 回问与真实可证范围
 
 OpenCode 物理实现已通过 Host `resetScope` 先写完整已捕获 system/messages/model/variant 的内容地址 blob、durable `ScopeReanchored` 与独立的 `ScopeQuestionAsked(session, targetEpoch, actualToolCallId, sha256(questions))` 事实。Host 接受首次 `askPreviousScope(questions)` 必须先确证已归档源且 digest 正确、目标 epoch 仍有效；同一事实身份重放（含清除内存缓存）不再重复旧模型调用，异问题复用 callId 拒绝。旧 Scope 经与 `negotiate` 共用的短命只读 SDK session 在真正发问时从唯一最新 transform 输入投影给 Provider，真实 tool schema 保持不变而工具执行前阻断，回答沿同一有物理落地观察的 PromptDispatcher steer 路径送达。临时旧模型仅可提供当时上下文的新推理，不能复活隐藏思考。临时咨询的 Provider 模型与 `negotiate` 一致取来源 Session 的**当前**模型；归档 model 仅在尚未观察到当前模型时兜底，陈旧上游（已不可用的旧 provider）不得拖死回问。临时咨询投影的是旧 Scope 的**等效视图**——resetScope 时封存、旧 Scope 实际发出且已在其窗内的 provider 视图（归档 blob 的 messages），不是最后一次 reset 之前的原始 Host 历史（它随历代 Scope 累积，可远超窗口）。临时咨询的视图不可被 Host 压缩：Host 若对临时会话发起 compaction，即为该视图超出当前模型窗口的观察事实，咨询就此结束（不自动续轮、中止临时会话），向调用方回报失败，不得 overflow↔compaction 空转。
 
-上述并不表示设计稿全部实施：**锁定的 OpenCode V1 插件接口 1.18.29 的 archive 仍明确 `toolsCaptured=false`**：该版本 `chat.params` 只有参数和 model，`experimental.chat.messages.transform` 只有 messages，system transform 只有 system，`tool.definition` 仅逐项暴露描述和 schema，没有携带同一 Provider 请求的完整工具目录；所以没有证据证明工具目录与真实 provider-run ID 在同一出站请求上因果匹配；OpenCode 只可在确证 system/messages/model/variant 可靠时归档。OMP 则通过实际注册的 `before_provider_request` 对**同一 Provider 请求**捕获完整原生 payload（system/messages/model 和原始工具目录），并明确存储 `toolsCaptured=true`；成功 ScopeReanchored 后已消费的旧快照不得再被下一 epoch 的 reset 重用。进程异常时尚无独立的在途旧模型任务恢复与精确物理模型缓存命中率证据；重复 receipt 保证不再次推理，但也可能留下已受理而无实际回问的新结果，必须如实报告。
+上述并不表示设计稿全部实施：**锁定的 OpenCode V1 插件接口 1.18.29 的 archive 仍明确 `toolsCaptured=false`**：该版本 `chat.params` 只有参数和 model，`experimental.chat.messages.transform` 只有 messages，system transform 只有 system，`tool.definition` 仅逐项暴露描述和 schema，没有携带同一 Provider 请求的完整工具目录；所以无法确认工具目录与真实 provider-run ID 在同一出站请求上因果匹配；OpenCode 只可在确证 system/messages/model/variant 可靠时归档。OMP 则通过实际注册的 `before_provider_request` 对**同一 Provider 请求**捕获完整原生 payload（system/messages/model 和原始工具目录），并明确存储 `toolsCaptured=true`；成功 ScopeReanchored 后已消费的旧快照不得再被下一 epoch 的 reset 重用。进程异常时尚无独立的在途旧模型任务恢复与精确物理模型缓存命中率证据；重复 receipt 保证不再次推理，但也可能留下已受理而无实际回问的新结果，必须如实报告。
 
 OMP **已真实实现并在本地 OMP SDK + SSE 假 Provider 验证**原生旧请求回放：从实际 `before_provider_request` 提取同一请求的 model/system/messages/tools，在 reset durable blob 和 `ScopeReanchored` 后由新模型真实调用 `askPreviousScope(questions)`，以 target epoch/toolCallId/digest 的 `ScopeQuestionAsked` 幂等登记。受理后经与 `negotiate` 共用的 `runEphemeralConsultation` 原生短命回合，在其真正的 `before_provider_request` 钩子识别短命标记、匹配当前实际 provider/model，并在真正临时 Provider 出站时从**当前最近一次 transform** 获取原生 model/system/tool schema、按最近 reset 边界重构前任消息，追加当前问题；租约只保留源 Session、marker、真实旧模型身份，不冻结完整 NativePayload。只有真实命中过这次替换、同一 target epoch 仍有效且旧模型返回普通文本时才投递 `attribution=agent` 的物理 steer；真实 `message_start` 观察到同 session/receipt/epoch 的代理消息后才确认 PhysicalAccepted。同一 callId 的串行和并发重放均禁止第二次旧模型请求，PairHint 物理确认后不删除原问题身份且 session_shutdown 取消所有未完成旧 Provider lease；当前会话模型不匹配会在真正 Provider 出站前拒绝回放，绝不凭当前上下文生成伪旧我答复。没有完整旧档案、模型或原生 side-turn 能力时只可记录问询并返回 `answerDelivered=false`，不得伪造已调用旧模型。
 
-证明：`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `WHAT[context-compression-047]`，`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `WHAT[context-compression-048]` 和 `[049]`（真注册 hook、短命 Provider 替换、工具目录、型号失配、跨重置旧快照拒绝、steer），以及 `requirements/host-boundary/tests/omp-negotiate-physical.test.mjs` 的 opt-in OMP SDK + 本地 SSE 网络请求 canary（完整原文前缀、工具目录、agent-attributed 消息、同 callId 物理请求至多一次）。本地假 Provider 不是商业 Provider 缓存命中证明。
+测试：`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `WHAT[context-compression-047]`，`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `WHAT[context-compression-048]` 和 `[049]`（真注册 hook、短命 Provider 替换、工具目录、型号失配、跨重置旧快照拒绝、steer），以及 `requirements/host-boundary/tests/omp-negotiate-physical.test.mjs` 的 opt-in OMP SDK + 本地 SSE 网络请求 canary（完整原文前缀、工具目录、agent-attributed 消息、同 callId 物理请求至多一次）。本地假 Provider 不代表商业 Provider 的缓存命中。
 
 ## [048] 未交付旧模型回复时的回执状态
 
-`ScopeQuestionAsked` 只证明模型主动提交的问题及 Host 对其接纳已持久，绝不等于旧 Provider 已收到、答复已生成、stale 判断已通过、steer 已排队或真实模型已消费。任何缺后续事实的受理回执必须报告为 pending/unknown，而不是 Answered。OpenCode 与 OMP 都已在其真实物理宿主上观察过旧模型答案送达；但外部 Provider 无幂等键时，网络错误或崩溃产生的 Unknown 效果不能严格保证「调用了一次且只有一次」；已经记录的 receipt 不得盲目重新计费。已受理而没有发送、没有答复或没有实际消费的情形必须保持明确未知状态。
+`ScopeQuestionAsked` 只说明模型主动提交的问题及 Host 对其接纳已持久，绝不等于旧 Provider 已收到、答复已生成、stale 判断已通过、steer 已排队或真实模型已消费。任何缺后续事实的受理回执必须报告为 pending/unknown，而不是 Answered。OpenCode 与 OMP 都已在其真实物理宿主上观察过旧模型答案送达；但外部 Provider 无幂等键时，网络错误或崩溃产生的 Unknown 效果不能严格保证「调用了一次且只有一次」；已经记录的 receipt 不得盲目重新计费。已受理而没有发送、没有答复或没有实际消费的情形必须保持明确未知状态。
 
 
 ## [050] 首次进度估计、真实后续消息与首次不回问
@@ -214,23 +214,23 @@ OMP **已真实实现并在本地 OMP SDK + SSE 假 Provider 验证**原生旧�
 
 第一次成功 `resetScope` 建立第一个显式重锚，不要求 `askPreviousScope`；第二次及以后才有前任真实工作 Scope 与首问义务。pending 通过单独强 steer 呈现，不硬阻断普通工具。工具结果无旧预算倒计时后缀。
 
-证明：`wanxiangli/src/pair-hint/tests/014.test.mjs`、`wanxiangli/src/scope-progress/tests/001.test.mjs` 以及双宿主 `context-compression-050` 实体重锚 canary。`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `scope-progress-016` 和 `017` 在 Node/Bun 验证同回合聚合、零预算与原生 shutdown/cold restart；此内部每回合运行 ID 是 SDK turn 边界的 best-effort 事实，不假装所有供应商都有可回放 responseId。
+测试：`wanxiangli/src/pair-hint/tests/014.test.mjs`、`wanxiangli/src/scope-progress/tests/001.test.mjs` 以及双宿主 `context-compression-050` 实体重锚 canary。`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `scope-progress-016` 和 `017` 在 Node/Bun 验证同回合聚合、零预算与原生 shutdown/cold restart；此内部每回合运行 ID 是 SDK turn 边界的 best-effort 事实，不假装所有供应商都有可回放 responseId。
 
 ## [051] 冷恢复没有进度证据时建立首次计费估计，而不是编造旧预算
 
-即使历史里有 `resetScope`，当前进程仍不能从默认 0 猜测已提交的剩余计费估计。`wanxiangli/scope-progress` 现在可通过真实 SQLite 计费事实（逐 toolCall 的 `Recorded`、经 CAS 一次提交的 `Settled`）按原 Session/Scope 重建上个付费回合估计、最小值、`ResetDue` 以及未结算 Provider 回合。OpenCode 启动时接入持久 Journal 工厂；清空内存后按 SQLite 恢复计费余额，并存工作区的 Session 不会串写。没有任何能证明该 Scope 的计费事实时仍必须 `known=false`，下一次正常工作请求催 `scope.kind=resetScope` 建立 retention 基线；不能伪造 `[Remaining turnBudget: 0]`、不触发零预算弱提醒，也不能仅因冷恢复要求 `scope.kind=resetScope`。只有 SQLite 已确认的零估计锁存才允许继续催真实重锚。
+即使历史里有 `resetScope`，当前进程仍不能从默认 0 猜测已提交的剩余计费估计。`wanxiangli/scope-progress` 现在可通过真实 SQLite 计费事实（逐 toolCall 的 `Recorded`、经 CAS 一次提交的 `Settled`）按原 Session/Scope 重建上个付费回合估计、最小值、`ResetDue` 以及未结算 Provider 回合。OpenCode 启动时接入持久 Journal 工厂；清空内存后按 SQLite 恢复计费余额，并存工作区的 Session 不会串写。没有该 Scope 的计费事实时仍必须 `known=false`，下一次正常工作请求催 `scope.kind=resetScope` 建立 retention 基线；不能伪造 `[Remaining turnBudget: 0]`、不触发零预算弱提醒，也不能仅因冷恢复要求 `scope.kind=resetScope`。只有 SQLite 已确认的零估计锁存才允许继续催真实重锚。
 
-证明：`wanxiangli/src/pair-hint/tests/015.test.mjs`、`scope-progress/tests/001.test.mjs`、`scope-progress/tests/007–008.test.mjs` 的真实 SQLite/SIGKILL/CAS 恢复，以及 `requirements/host-boundary/tests/scope-hni-physical.test.mjs` 中的 `context-compression-051`。
+测试：`wanxiangli/src/pair-hint/tests/015.test.mjs`、`scope-progress/tests/001.test.mjs`、`scope-progress/tests/007–008.test.mjs` 的真实 SQLite/SIGKILL/CAS 恢复，以及 `requirements/host-boundary/tests/scope-hni-physical.test.mjs` 中的 `context-compression-051`。
 
 ## [052] 单个真实 Provider 回合只计费一次并取最小实数估计
 
 同一个真实 Provider 回合里多次调用 `todowrite`，只按该回合结一次账，取所有报告的 `min(`remainingScopeTurnsEstimate`（已退役估计字段；现行用 retention）)`；现行不再要求 `remainingScopeTurnsEstimate`；本条仅描述已退役计费包行为。回合识别以宿主真实回合边界为准，不因某个工具先完成就先扣一次。
 
-证明：`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `context-compression-052`（真实注册工具、真实 `chat.params` 结算、`2.5` 物理接受）与 `wanxiangli/src/scope-progress/tests/001.test.mjs` 的多报告取最小用例。
+测试：`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `context-compression-052`（真实注册工具、真实 `chat.params` 结算、`2.5` 物理接受）与 `wanxiangli/src/scope-progress/tests/001.test.mjs` 的多报告取最小用例。
 
 
 ## [053] 已结束 Scope 的 thinking 随该 Scope 退役
 
 最新 `resetScope` 之前的 assistant thinking/reasoning 属于已结束的 Scope，和普通旧工具过程一起从发往模型的请求副本中移除；assistant 正文、真人 operator 消息、`resetScope` 与关键咨询工具的成对调用结果仍按 [046] 保留。最新 reset 之后的消息，thinking 照旧完整保留。两种宿主都必须从中立计划拿到 part 类别，不得把 reasoning 折成无类别对象后按“非工具 part”一律保留。
 
-证明：`wanxiangli/src/pair-hint/tests/016.test.mjs` 的裁剪与活 Scope 保留两个用例；`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `context-compression-053` 经真实注册的 OpenCode transform 与 OMP `before_provider_request` 断言旧 thinking 不出现在请求副本、原始消息对象与持久历史保持原样。
+测试：`wanxiangli/src/pair-hint/tests/016.test.mjs` 的裁剪与活 Scope 保留两个用例；`requirements/host-boundary/tests/scope-hni-physical.test.mjs` 的 `context-compression-053` 经真实注册的 OpenCode transform 与 OMP `before_provider_request` 断言旧 thinking 不出现在请求副本、原始消息对象与持久历史保持原样。

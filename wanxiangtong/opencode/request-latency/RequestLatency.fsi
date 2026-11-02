@@ -20,4 +20,5 @@ module RequestLatency =
         rootWorkspace: IRootWorkspaceReader ->
         eventPort: IEventObservationPort ->
         journal: AgentJournal option ->
-        isCompacting: (string -> bool) -> OpenCodeRequestLatency
+        isCompacting: (string -> bool) ->
+            OpenCodeRequestLatency

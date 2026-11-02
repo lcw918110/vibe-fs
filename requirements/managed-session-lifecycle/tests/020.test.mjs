@@ -1,5 +1,6 @@
 import test from 'node:test'
-import * as runtimePath from '../../../dist/Persistence/Journal/RuntimePath.js'
+import { JournalSurface_stateRoot as stateRoot } from '../../../dist/Persistence/Journal/Surface.js'
+const runtimePath = { stateRoot }
 
 process.env.WANXIANGSHU_NO_FATAL_EXIT = '1'
 

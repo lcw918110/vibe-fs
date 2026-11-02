@@ -10,8 +10,8 @@ Expiry during drain pauses before command startup. Earlier operations may settle
 
 Control another program from a new named program with its own top-level intent. Use unpark(name,value?), signal(name,signal), send(name,input), or abandon(name) as authorized. Every resumed target shares the control request's existing deadline. At expiry, controller and active targets pause. Resuming the controller advances only the controller; explicitly unpark each target to continue it. Keep target name and state in its receipt.
 
-Only explicit park, including where ambiguity, receives value. A resumed call receives its original real CallResult. signal and send do not resume the target. A sent signal is not an exit receipt; accepted input is not proof of processing.
+Only explicit park, including where ambiguity, receives value. A resumed call receives its original real CallResult. signal and send do not resume the target. A sent signal is not an exit receipt; accepted input does not mean it was processed.
 
-abandon requests cancellation and cleanup. Report abandoned only after resource settlement; report incomplete or forced cleanup as observed. Native finally runs when normal unwinding is possible; forced termination cannot prove it ran. Applied writes remain.
+abandon requests cancellation and cleanup. Report abandoned only after resource settlement; report incomplete or forced cleanup as observed. Native finally runs when normal unwinding is possible; forced termination does not mean it ran. Applied writes remain.
 
-Pause delta contains new output and does not consume final CallResult. Preserve actual exit code or signal, retained output and explicit truncation. Do not rerun an operation whose effects are unknown. Program return, command exit, tool response and Work lifecycle decisions remain separate facts.
+Pause delta contains new output and does not consume final CallResult. Preserve the actual exit code or signal, retained output and explicit truncation. Do not rerun an operation whose effects are unknown. Program return, command exit, tool response and Work lifecycle decisions remain separate facts.

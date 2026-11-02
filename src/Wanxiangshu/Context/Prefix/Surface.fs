@@ -44,17 +44,23 @@ module PrefixSurface =
             |> Set.ofArray
 
     let private stateOfJs (value: obj) : ActivePrefixEpoch =
-        PrefixEpochProjection.ofGeneration
-            (createObj
+        PrefixEpochProjection.ofGeneration (
+            createObj
                 [ "epoch" ==> int64Value value?epoch
-                  "compactionRuns" ==> (runsOfJs value?reanchoredRuns |> Set.toArray |> Array.map ProviderRunIdentity.value)
+                  "compactionRuns"
+                  ==> (runsOfJs value?reanchoredRuns
+                       |> Set.toArray
+                       |> Array.map ProviderRunIdentity.value)
                   "tenures" ==> (tenuresOfJs value?reanchoredTenures |> Set.toArray)
-                  "scopes" ==> (scopesOfJs value?reanchoredScopes |> Set.toArray) ])
+                  "scopes" ==> (scopesOfJs value?reanchoredScopes |> Set.toArray) ]
+        )
 
     let private stateToJs (state: ActivePrefixEpoch) : obj =
         box
             {| epoch = PrefixEpochId.value (PrefixEpochProjection.epochId state)
-               reanchoredRuns = PrefixEpochProjection.reanchoredRuns state |> Array.map ProviderRunIdentity.value
+               reanchoredRuns =
+                PrefixEpochProjection.reanchoredRuns state
+                |> Array.map ProviderRunIdentity.value
                reanchoredTenures = PrefixEpochProjection.reanchoredTenures state
                reanchoredScopes = PrefixEpochProjection.reanchoredScopes state |}
 
@@ -146,7 +152,8 @@ module PrefixSurface =
         stateOfJs state |> PrefixEpochProjection.reanchoredScopes
 
     let reanchoredRuns (state: obj) : string array =
-        stateOfJs state |> PrefixEpochProjection.reanchoredRuns
+        stateOfJs state
+        |> PrefixEpochProjection.reanchoredRuns
         |> Array.map ProviderRunIdentity.value
 
     let isReanchored (run: string) (state: obj) : bool =

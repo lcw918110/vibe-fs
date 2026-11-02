@@ -76,7 +76,9 @@ type CompanionLeaseRuntime(sessions: ISessionHostPort, registry: AttachmentLease
                                 Directory = Option.ofObj (unbox<string> request?directory) }
                           )
 
-                      return created |> AttachmentLeaseCore.resultToNative (fun child -> box (SessionId.value child))
+                      return
+                          created
+                          |> AttachmentLeaseCore.resultToNative (fun child -> box (SessionId.value child))
                   })
               "abort"
               ==> Func<obj, Task<obj>>(fun request ->
@@ -109,7 +111,11 @@ type CompanionLeaseRuntime(sessions: ISessionHostPort, registry: AttachmentLease
 
                   match unbox<string> request?rejection with
                   | "Conflicting" ->
-                      sprintf "Conflicting %s recovery for %s: child %s has a different agent or title" kind owner child
+                      sprintf
+                          "Conflicting %s recovery for %s: child %s has a different agent or title"
+                          kind
+                          owner
+                          child
                   | "Ambiguous" -> sprintf "Ambiguous %s recovery for %s: duplicate child id %s" kind owner child
                   | other -> invalidOp ("wanxiangli/attachment-lease returned an unknown rejection: " + other)) ]
 
@@ -132,15 +138,20 @@ type CompanionLeaseRuntime(sessions: ISessionHostPort, registry: AttachmentLease
                   "agent" ==> spec.Agent
                   "title" ==> spec.Title
                   "directory" ==> AttachmentLeaseCore.optionalText spec.Directory
-                  "restoreHint" ==> (spec.RestoredSessionId |> Option.map SessionId.value |> AttachmentLeaseCore.optionalText) ]
+                  "restoreHint"
+                  ==> (spec.RestoredSessionId
+                       |> Option.map SessionId.value
+                       |> AttachmentLeaseCore.optionalText) ]
 
         task {
-            let! result = unbox<Task<obj>> (attached?ensureAssociated(request, operations spec))
+            let! result = unbox<Task<obj>> (attached?ensureAssociated (request, operations spec))
             return AttachmentLeaseCore.resultFromNative leaseValue result
         }
 
     member _.Retire(owner: SessionId, spec: SatelliteSpec) : Task<Result<unit, string>> =
         task {
-            let! result = unbox<Task<obj>> (attached?retireAssociated(SessionId.value owner, selfKind, operations spec))
+            let! result =
+                unbox<Task<obj>> (attached?retireAssociated (SessionId.value owner, selfKind, operations spec))
+
             return AttachmentLeaseCore.resultFromNative ignore result
         }

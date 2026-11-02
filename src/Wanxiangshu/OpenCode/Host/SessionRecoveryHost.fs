@@ -65,6 +65,18 @@ type SessionRecoveryHost
         | ChatExecutionRecoveryLifecycleEvent.ProviderStartBoundaryRejected(key, _) -> Some key
         | _ -> None
 
+    /// The reload-sweep selection: every execution without a durable terminal
+    /// disposition, plus terminal executions whose exact capacity is still held
+    /// or unknown (the only leftovers a boot-time reload can still decide).
+    let pendingSweepStates (projection: ChatExecutionProjectionState) =
+        ChatExecutionProjection.current projection
+        |> List.filter (fun state ->
+            state.terminalDisposition.IsNone
+            || (match ModelRouting.observePhysicalResource state.key with
+                | PhysicalResourceObservation.ResourceHeld _
+                | PhysicalResourceObservation.ResourceUnknown _ -> true
+                | _ -> false))
+
     let statesFor (event: ChatExecutionRecoveryLifecycleEvent) =
         let projection = (AgentJournal.snapshot journal).AgentProjections.ChatExecutions
 
@@ -83,17 +95,27 @@ type SessionRecoveryHost
                 state.key.SessionId = sessionId
                 && state.startedEvidence.IsNone
                 && state.terminalDisposition.IsNone)
+        | ChatExecutionRecoveryLifecycleEvent.DurabilityActivated
+        | ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded
+        | ChatExecutionRecoveryLifecycleEvent.CapacityProjectionReplayed -> pendingSweepStates projection
         | _ ->
             eventKey event
             |> Option.map (fun key -> ChatExecutionProjection.byKey key projection |> Option.toList)
-            |> Option.defaultWith (fun () ->
-                ChatExecutionProjection.current projection
-                |> List.filter (fun state ->
-                    state.terminalDisposition.IsNone
-                    || match ModelRouting.observePhysicalResource state.key with
-                       | PhysicalResourceObservation.ResourceHeld _
-                       | PhysicalResourceObservation.ResourceUnknown _ -> true
-                       | _ -> false))
+            |> Option.defaultWith (fun () -> pendingSweepStates projection)
+
+    /// One transcript read per session per sweep. Every sweep gets its own
+    /// memo: a later signal must observe fresh Host material, never an earlier
+    /// sweep's cached answer.
+    let memoizedTranscript () =
+        let messages = Dictionary<SessionId, _>()
+
+        fun sessionId ->
+            match messages.TryGetValue sessionId with
+            | true, result -> result
+            | false, _ ->
+                let result = transcript.Messages sessionId
+                messages.[sessionId] <- result
+                result
 
     let classifyProviderSnapshot (state: ChatExecutionState) (messages: TranscriptMessage list) =
         let matches =
@@ -129,8 +151,7 @@ type SessionRecoveryHost
             Task.FromResult(ProviderPhysicalObservation.ProviderTerminal(started, disposition))
         | ChatExecutionRecoveryLifecycleEvent.SessionDeleted _ ->
             Task.FromResult(ProviderPhysicalObservation.ProviderAbsent state.key)
-        | _ when state.terminalDisposition.IsSome ->
-            Task.FromResult(ProviderPhysicalObservation.ReceiptMissing)
+        | _ when state.terminalDisposition.IsSome -> Task.FromResult(ProviderPhysicalObservation.ReceiptMissing)
         | _ -> providerFromTranscript messagesFor state
 
     let lifecycleCancellation (event: ChatExecutionRecoveryLifecycleEvent) =
@@ -504,16 +525,80 @@ type SessionRecoveryHost
         | ChatExecutionRecoveryLifecycleEvent.SessionSuperseded _ -> settleOwnedSupersession state
         | _ -> recoverState messagesFor event state :> Task
 
+    let reloadGate = obj ()
+    // DSL-MUTABLE: resource — per-session single-flight load-reload sweep tasks.
+    let sessionReloads = Dictionary<string, Task>()
+
+    /// The boot-time (`PluginRuntimeReloaded`) reload sweep for ONE session,
+    /// exactly the work the process-wide signal runs for it: every
+    /// pending-sweep state decides from fresh Host material with the plain
+    /// non-settling resume port (manual intervention, durable persist, or exact
+    /// release — never a fabricated terminal), and the drain pulses afterwards.
+    /// The sweep chains on the journal recovery barrier so the load-phase void
+    /// settlement (crash-reconciliation-020) stays the first durable action.
+    let reloadSessionWork (sessionId: SessionId) =
+        task {
+            do! journal.RunOrAwaitRecovery()
+
+            let messagesFor = memoizedTranscript ()
+
+            let states =
+                statesFor ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded
+                |> List.filter (fun state -> state.key.SessionId = sessionId)
+
+            for state in states do
+                do! recoverState messagesFor ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded state
+
+            pulseDrain sessionId
+        }
+
+    let removeFailedReload key work =
+        lock reloadGate (fun () ->
+            match sessionReloads.TryGetValue key with
+            | true, registered when obj.ReferenceEquals(registered, work) -> sessionReloads.Remove key |> ignore
+            | _ -> ())
+
+    let startReload key sessionId =
+        let mutable work: Task = null
+
+        work <-
+            (task {
+                try
+                    do! reloadSessionWork sessionId
+                with error ->
+                    removeFailedReload key work
+                    raise error
+            }
+            :> Task)
+
+        sessionReloads.[key] <- work
+        work
+
+    /// Start or join THIS session's load-phase reload sweep. The session's own
+    /// leftover executions (resources, unknowns, settlements) are decided before
+    /// its next admission proceeds, while every other session's sweep — however
+    /// slow its Host answers — runs in the background and never blocks it.
+    /// A faulting sweep is propagated to its awaiter and cleared, so a later
+    /// caller starts a fresh sweep instead of re-observing a stale failure;
+    /// states are re-read fresh, so the retry decides only what is still owed.
+    member _.ReloadSession(sessionId: SessionId) : Task =
+        let key = SessionId.value sessionId
+
+        lock reloadGate (fun () ->
+            match sessionReloads.TryGetValue key with
+            | true, work -> work
+            | false, _ -> startReload key sessionId)
+
+    /// The session ids that still owe a load-phase reload decision — the same
+    /// set the process-wide sweep would visit, one id per session.
+    member _.SessionsPendingReload() : SessionId list =
+        statesFor ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded
+        |> List.map (fun state -> state.key.SessionId)
+        |> List.distinct
+
     member _.Signal(event: ChatExecutionRecoveryLifecycleEvent) : Task =
         task {
-            let messages = Dictionary<SessionId, _>()
-            let messagesFor sessionId =
-                match messages.TryGetValue sessionId with
-                | true, result -> result
-                | false, _ ->
-                    let result = transcript.Messages sessionId
-                    messages.[sessionId] <- result
-                    result
+            let messagesFor = memoizedTranscript ()
 
             let statesToRecover =
                 match event with
@@ -548,6 +633,33 @@ type SessionRecoveryHost
 
             for key in keys do
                 do! this.Signal(eventOf key)
+
+            // The release below is owned by session-cancellation settlement
+            // only. A session-scoped non-cancellation signal (an idle sweep) has
+            // no settlement verdict and its retentions are live continuation
+            // obligations — they must never be cancelled here.
+            let cancelling =
+                keys |> List.exists (fun key -> lifecycleCancellation (eventOf key))
+
+            // managed-session-lifecycle-030: a session-scoped settlement (the
+            // logical cancel / delete drain the Host awaits) has settled every
+            // key of this session above, so the session's retained continuation
+            // inputs are dead obligations: the executions they could continue
+            // are terminal, and no future signal of this session will release
+            // them. Without releasing them here the exact credit of a terminal
+            // execution stays HeldForInput forever — observePhysicalResource
+            // keeps reporting ResourceHeld, sessionDrained never becomes true,
+            // and the cancel path's DrainChatRecovery (and the first admission
+            // that shares its pipeline) waits forever. This is the [027]
+            // discipline on the cancel settlement: cancel only this session's
+            // retentions, replay the delayed exact return, then pulse the drain.
+            // An unsettled execution (non-terminal or manual intervention)
+            // still blocks the drain exactly as before, and no terminal is
+            // invented: a cancelled session is not a failed one.
+            if cancelling then
+                ModelRouting.cancelRetainedInputsForSession sessionId
+
+            pulseDrain sessionId
         }
         :> Task
 

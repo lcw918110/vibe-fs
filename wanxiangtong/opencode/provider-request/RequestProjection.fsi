@@ -76,4 +76,5 @@ module PluginTransforms =
         outObj: obj ->
             Task<unit>
 
-    val createWithCaps: caps: NormalTransformCapabilities -> branches: TransformBranchCapabilities -> (obj -> obj -> Task<unit>)
+    val createWithCaps:
+        caps: NormalTransformCapabilities -> branches: TransformBranchCapabilities -> (obj -> obj -> Task<unit>)

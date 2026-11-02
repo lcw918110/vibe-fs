@@ -1,2 +1,0 @@
-41089 49251 41089 Ss         00:01 /bin/zsh -c cp /private/tmp/vibe-fs-d0p-formal-final.log proposals/archive/2026-10-07/baselines/session-delete-d0p/formal-gen301-silence-failure.txt\012ps -eo pid,ppid,pgid,stat,etime,command | rg '38640|40688|opencode|wxs.*child|normal-exit-residual' > /private/tmp/vibe-fs-d0p-after-silence-processes.txt
-41098 41089 41089 R          00:01 rg 38640|40688|opencode|wxs.*child|normal-exit-residual

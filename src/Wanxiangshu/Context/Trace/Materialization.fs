@@ -57,6 +57,7 @@ module XTraceMaterialization =
         Func<string, Task<obj>>(fun reference ->
             task {
                 let! result = journal.Writer.BlobWriter.Read(BlobRef.create reference)
+
                 return
                     match result with
                     | Ok body -> createObj [ "ok" ==> true; "value" ==> body ]
@@ -66,9 +67,12 @@ module XTraceMaterialization =
     let private readResult (pending: Task<obj>) : Task<Result<obj array, string>> =
         task {
             let! result = pending
+
             return
-                if unbox<bool> result?ok then Ok(unbox<obj array> result?value)
-                else Error(unbox<string> result?error)
+                if unbox<bool> result?ok then
+                    Ok(unbox<obj array> result?value)
+                else
+                    Error(unbox<string> result?error)
         }
 
     let private readTurn
@@ -86,11 +90,13 @@ module XTraceMaterialization =
                 |> Option.defaultValue "user"
 
             let! items =
-                history.read(ordered |> List.map XTraceProjection.nativePart |> List.toArray, readBody journal)
+                history.read (ordered |> List.map XTraceProjection.nativePart |> List.toArray, readBody journal)
                 |> readResult
 
             let semanticParts =
-                items |> Array.map (fun item -> WanxiangliTrace.semanticFromNative item?part) |> Array.toList
+                items
+                |> Array.map (fun item -> WanxiangliTrace.semanticFromNative item?part)
+                |> Array.toList
 
             return
                 { ProviderProjection.SemanticMessage.Role = role
@@ -105,7 +111,10 @@ module XTraceMaterialization =
         taskResult {
             let turns = parts |> List.groupBy (fun part -> part.Turn) |> List.sortBy fst
 
-            let! messages = turns |> TaskResultList.traverseM (readTurn journal (XTraceProjection.history xTrace))
+            let! messages =
+                turns
+                |> TaskResultList.traverseM (readTurn journal (XTraceProjection.history xTrace))
+
             return { empty with Messages = messages }
         }
 
@@ -138,12 +147,16 @@ module XTraceMaterialization =
         : Task<Result<XTraceItem list, string>> =
         task {
             let! resolved =
-                (XTraceProjection.history xTrace).materialize(WanxiangliTrace.rangeObject range, readBody journal)
+                (XTraceProjection.history xTrace)
+                    .materialize (WanxiangliTrace.rangeObject range, readBody journal)
                 |> readResult
 
             return
                 resolved
-                |> Result.map (Array.map (WanxiangliTrace.itemFromNative XTraceProjection.provenanceFromMetadata) >> Array.toList)
+                |> Result.map (
+                    Array.map (WanxiangliTrace.itemFromNative XTraceProjection.provenanceFromMetadata)
+                    >> Array.toList
+                )
         }
 
     let renderRange

@@ -177,7 +177,7 @@ module ChildRecovery =
     /// RecoveryInFlight avoids dsl-ownership behaviour-bool tokens (*Pending/*Running).
     [<RequireQualifiedAccess>]
     type HostObservation =
-        
+
         | ParentCancelled
         | DeadlineExceeded
         | HostSessionGone
@@ -260,7 +260,7 @@ module ChildRecovery =
 
     let private observationName (observation: HostObservation) =
         match observation with
-        
+
         | HostObservation.ParentCancelled -> "ParentCancelled"
         | HostObservation.DeadlineExceeded -> "DeadlineExceeded"
         | HostObservation.HostSessionGone -> "HostSessionGone"

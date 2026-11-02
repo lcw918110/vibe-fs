@@ -121,7 +121,12 @@ module OpenCodePortAdapter =
 
     /// HOST-037: OpenCode's session status map lists only non-idle sessions.
     let private runnerBusyIn (statuses: obj) (sessionId: SessionId) =
-        let status = if isNull statuses then null else statuses?(SessionId.value sessionId)
+        let status =
+            if isNull statuses then
+                null
+            else
+                statuses?(SessionId.value sessionId)
+
         not (isNull status) && string status?``type`` <> "idle"
 
     [<Emit("fetch($0, $1)")>]
@@ -167,7 +172,8 @@ module OpenCodePortAdapter =
                         match opts.Metadata with
                         | Some metadata when
                             emitJsExpr (metadata, PromptMetadataCodec.OriginField) "$0?.[$1] === 'BusyAgentNudge'"
-                            -> [ "delivery", box "steer" ]
+                            ->
+                            [ "delivery", box "steer" ]
                         | _ -> []
 
                     let bodyFields =
@@ -346,10 +352,13 @@ module OpenCodePortAdapter =
                         else
                             let directoryFields =
                                 match directory |> Option.orElse workspaceDirectory with
-                                | Some dir -> [ "query", box (createObj [ "directory", box dir ]); "directory", box dir ]
+                                | Some dir ->
+                                    [ "query", box (createObj [ "directory", box dir ]); "directory", box dir ]
                                 | None -> []
 
-                            let payload = createObj ([ "headers", box (headersObj directory) ] @ directoryFields)
+                            let payload =
+                                createObj ([ "headers", box (headersObj directory) ] @ directoryFields)
+
                             let! res = unbox<Task<obj>> (statusFn?call (sessObj, payload))
 
                             if not (isNull res) && not (isNull res?error) then

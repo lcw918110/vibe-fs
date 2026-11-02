@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // verify.mjs — the fixed verification pipeline. `format-build-test` is the developer
-// entry; `verify:release` adds release-only proofs (compiler-boundary canary,
-// repo-wide envelope oracle, Long Stroke, real package) after the shared
-// format/check/build/unit phases.
+// entry: format, static checks, build, unit and integration. `verify:release` runs
+// the same phases and then the two checks that need a real build: the Long Stroke
+// (one live host process) and the real npm package (pack, unpack, import from
+// outside the repo). Both stop the run at the first failure.
 
 import { spawn } from 'node:child_process'
 import os from 'node:os'

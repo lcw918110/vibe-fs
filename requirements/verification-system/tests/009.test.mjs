@@ -1,5 +1,5 @@
 import test from 'node:test'
-import { testDeclarations } from '../../requirement-system/tests/support/structure.mjs'
+import { testDeclarations } from './support/test-declarations.mjs'
 
 {
 const { default: assert } = await import("node:assert/strict");
@@ -277,6 +277,7 @@ test('WHAT[verification-system-009] every wired gate path exists and every gate 
     'js-surface-gate.mjs',
     'js-surface-manifest.mjs',
     'llm-facing-format-gate.mjs',
+    'shard-edge-audit.mjs',
   ])
 
   const wiredBasenames = new Set(checks.map((p) => basename(p)))

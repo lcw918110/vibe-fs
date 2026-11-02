@@ -12,8 +12,9 @@
 // 对照传递闭包输出「源码引用了符号但其 shard 闭包不含定义所在 shard」
 // 的疑似缺边清单。纯文本扫描，不引入 FCS、不启动编译器（WHAT-018）。
 //
-// 这是审计工具，不是构建兜底：不进构建路径、不改闭包。清单是排查起点
-// 不是结论；误报可接受，漏报尽量少（宁可多报）。
+// 这是审计工具，不是构建兜底：不进构建路径、不改闭包、不进 check.mjs。
+// 清单是排查起点不是结论；误报可接受，漏报尽量少（宁可多报）。手动运行：
+//   node scripts/checks/shard-edge-audit.mjs [--json] [--strict] [--shard <片段>]
 //
 // 置信度分级：
 //   high   — open 命名空间 / 全限定引用 / 词法可见的模块前缀引用，其全部
@@ -56,13 +57,13 @@
 //   - module 与 type 同名时按 module 规则优先，可能错报置信度级别；
 //   - 同名 module 在文件作用域内确实可见、但实际解析到别处（如本地 let 遮蔽）。
 
-import { join, resolve } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { createCheckContext } from '../lib/check-context.mjs'
+import { readFileSync } from 'node:fs'
+import { readCompileShardInventory } from '../lib/compile-shards.mjs'
 import { maskFSharpTrivia } from '../lib/fsharp-source.mjs'
 
-const here = join(fileURLToPath(new URL('.', import.meta.url)))
-const repositoryRoot = join(here, '..', '..')
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 const UPPER_IDENT = /^[A-Z][A-Za-z0-9_']*/
 const isUpperIdent = (name) => UPPER_IDENT.test(name)
@@ -244,7 +245,7 @@ export function auditShard(inventory, projectPath, index, readText) {
     })
   }
 
-  const repoFile = (absolute) => absolute.slice(repositoryRoot.length + 1)
+  const repoFile = (absolute) => relative(repositoryRoot, absolute).replace(/\\/g, '/')
 
   const missingFrom = (defining) => [...defining].filter((shard) => !closure.has(shard))
 
@@ -394,48 +395,13 @@ const formatFinding = (finding) => {
   return `[${finding.confidence}] ${finding.shard} -> ${[...finding.missingShards].map((shard) => shard.replace(/^.*\//, '')).join(', ')}: ${finding.kind} '${finding.symbol}' (${evidence})`
 }
 
-const toIssue = (finding) => {
-  const first = finding.evidence[0]
-  return {
-    path: finding.shard,
-    line: first ? first.line : undefined,
-    code: 'shard-edge-missing',
-    message: `${finding.kind} '${finding.symbol}' (${finding.confidence}) references shards outside the ProjectReference closure: ${finding.missingShards.join(', ')}. Evidence: ${finding.evidence.map((spot) => `${spot.file}:${spot.line}`).join(', ')}`,
-  }
-}
-
-/**
- * check.mjs 门禁入口。默认「报告不失败」：清单打印到 stderr，issues 为空，
- * 先观察规模。设 SHARD_EDGE_AUDIT_STRICT=1 升级硬门禁（issues 非空即失败）。
- * 升级硬门禁前须按 verification-system-004 补受控反例回归测试。
- */
-export async function check(ctx) {
-  const inventory = ctx.compileInventory()
-  const findings = auditAllShards(inventory, (absolute) => ctx.readText(absolute))
-
-  if (findings.length === 0) return { issues: [] }
-
-  if (process.env.SHARD_EDGE_AUDIT_STRICT) {
-    return { issues: findings.map(toIssue) }
-  }
-
-  const high = findings.filter((f) => f.confidence === 'high')
-  const medium = findings.filter((f) => f.confidence === 'medium')
-  const low = findings.filter((f) => f.confidence === 'low')
-  console.error(`shard-edge-audit (report-only): ${findings.length} finding(s) [high=${high.length} medium=${medium.length} low=${low.length}]`)
-  console.error('  Set SHARD_EDGE_AUDIT_STRICT=1 to make this gate fail. Findings:')
-  for (const finding of findings) console.error(`  ${formatFinding(finding)}`)
-  return { issues: [] }
-}
-
 export async function main(argv = process.argv.slice(2)) {
   const json = argv.includes('--json')
   const strict = argv.includes('--strict')
   const shardFilter = argv.includes('--shard') ? argv[argv.indexOf('--shard') + 1] : null
 
-  const ctx = createCheckContext({ root: repositoryRoot })
-  const inventory = ctx.compileInventory()
-  let findings = auditAllShards(inventory, (absolute) => ctx.readText(absolute))
+  const inventory = readCompileShardInventory()
+  let findings = auditAllShards(inventory, (absolute) => readFileSync(absolute, 'utf8'))
   if (shardFilter) findings = findings.filter((f) => f.shard.includes(shardFilter))
 
   if (json) {

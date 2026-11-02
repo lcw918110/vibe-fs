@@ -131,6 +131,41 @@ module Surface =
             {| phase = phaseToJs fault.Phase
                cause = fault.Cause |}
 
+    let createPhysicalWriter (stateRoot: string, writerId: string) : obj =
+        box (ProcessEventLog.create stateRoot writerId)
+
+    let physicalWriterPath (writer: obj) =
+        ProcessEventLog.filePath (unbox<ProcessEventLog> writer)
+
+    let appendPhysicalWriter (writer: obj, events: obj array) : obj =
+        let requested = events |> Array.map eventOfJs |> Array.toList
+
+        match ProcessEventLog.append (unbox<ProcessEventLog> writer) requested with
+        | Ok ProcessEventLog.PhysicalAppendCompletion.AppendDurable ->
+            box
+                {| ok = true
+                   completion = "AppendDurable" |}
+        | Ok ProcessEventLog.PhysicalAppendCompletion.NoAppend -> box {| ok = true; completion = "NoAppend" |}
+        | Error(ProcessEventLog.PhysicalAppendFailure.BeforeAppend fault) ->
+            box
+                {| ok = false
+                   kind = "BeforeAppend"
+                   fault = faultToJs fault |}
+        | Error(ProcessEventLog.PhysicalAppendFailure.AfterAppend(primary, cleanup)) ->
+            box
+                {| ok = false
+                   kind = "AfterAppend"
+                   fault = faultToJs primary
+                   cleanup = cleanup |> List.map faultToJs |> List.toArray |}
+
+    let acquirePhysicalStoreLock (stateRoot: string) : Task<obj> =
+        task {
+            let! held = ProcessEventLog.acquireStoreLock stateRoot
+            return box held
+        }
+
+    let releasePhysicalStoreLock (held: obj) : Task<unit> = (unbox<StoreFileGate> held).Release()
+
     let private rejectionToJs rejection : obj =
         match rejection with
         | AppendPreWriteRejection.StorageInvalid invalid ->

@@ -1,2 +1,0 @@
-0f50609cd7ed5575badc9fb33d87b1c40dec98529554abfcf98568456449bf31  scripts/lib/test-surface-scan.mjs
-9ba9d20cfffbc8181b269a701fe8c2db99b36ad3907ea0ec90fcc7afe7e891c4  requirements/js-semantic-surface/tests/002.test.mjs

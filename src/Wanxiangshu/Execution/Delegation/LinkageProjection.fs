@@ -77,63 +77,118 @@ module AdmittedWork =
     let logicalRunId (AdmittedWork(_, run)) = run
 
 module private HandleValues =
-    let handle = function
+    let handle =
+        function
         | HandleId.Agent id -> createObj [ "kind" ==> 0; "id" ==> AgentHandleId.value id ]
         | HandleId.Pty id -> createObj [ "kind" ==> 1; "id" ==> PtyHandleId.value id ]
         | HandleId.ManagerJob id -> createObj [ "kind" ==> 2; "id" ==> ManagerJobId.value id ]
+
     let handleOf (raw: obj) =
         let id: string = raw?id
+
         match unbox<int> raw?kind with
         | 0 -> HandleId.Agent(AgentHandleId.create id)
         | 1 -> HandleId.Pty(PtyHandleId.create id)
         | _ -> HandleId.ManagerJob(ManagerJobId.create id)
-    let optional mapping value = value |> Option.map mapping |> Option.map box |> Option.defaultValue null
-    let option mapping (value: obj) = if isNull value then None else Some(mapping (unbox<string> value))
-    let work (value: HandleWorkId) = createObj [ "handle" ==> handle value.Handle; "child" ==> SessionId.value value.ChildSessionId; "root" ==> AuthorityRootUserMessageId.value value.AuthorityRoot ]
-    let workOf (raw: obj) : HandleWorkId = { Handle = handleOf raw?handle; ChildSessionId = SessionId.create raw?child; AuthorityRoot = AuthorityRootUserMessageId.create raw?root }
-    let completion (value: HandleCompletion) = createObj [ "kind" ==> string value.Kind; "reference" ==> optional BlobRef.value value.CompletionRef; "digest" ==> optional BlobDigest.value value.CompletionDigest ]
+
+    let optional mapping value =
+        value |> Option.map mapping |> Option.map box |> Option.defaultValue null
+
+    let option mapping (value: obj) =
+        if isNull value then
+            None
+        else
+            Some(mapping (unbox<string> value))
+
+    let work (value: HandleWorkId) =
+        createObj
+            [ "handle" ==> handle value.Handle
+              "child" ==> SessionId.value value.ChildSessionId
+              "root" ==> AuthorityRootUserMessageId.value value.AuthorityRoot ]
+
+    let workOf (raw: obj) : HandleWorkId =
+        { Handle = handleOf raw?handle
+          ChildSessionId = SessionId.create raw?child
+          AuthorityRoot = AuthorityRootUserMessageId.create raw?root }
+
+    let completion (value: HandleCompletion) =
+        createObj
+            [ "kind" ==> string value.Kind
+              "reference" ==> optional BlobRef.value value.CompletionRef
+              "digest" ==> optional BlobDigest.value value.CompletionDigest ]
+
     let completionOf (raw: obj) =
-        { Kind = match unbox<string> raw?kind with | "Terminal" -> HandleCompletionKind.Terminal | "SendFailure" -> HandleCompletionKind.SendFailure | _ -> HandleCompletionKind.Cancelled
+        { Kind =
+            match unbox<string> raw?kind with
+            | "Terminal" -> HandleCompletionKind.Terminal
+            | "SendFailure" -> HandleCompletionKind.SendFailure
+            | _ -> HandleCompletionKind.Cancelled
           CompletionRef = option BlobRef.create raw?reference
           CompletionDigest = option BlobDigest.create raw?digest }
-    let reasonOf = function
+
+    let reasonOf =
+        function
         | "ParentCancelled" -> HandleAbandonReason.ParentCancelled
         | "DeadlineExceeded" -> HandleAbandonReason.DeadlineExceeded
         | "HostSessionGone" -> HandleAbandonReason.HostSessionGone
         | _ -> HandleAbandonReason.Voided
+
     let lifecycle (raw: obj) =
         match unbox<string> raw?phase with
         | "Active" -> Active
         | "CompletedAwaitingJoin" -> CompletedAwaitingJoin(completionOf raw?completion)
         | "Abandoned" -> Abandoned(reasonOf raw?reason)
         | _ -> Retired
-    let cellOption (raw: obj) = if isNull raw then None else Some(completionOf raw)
+
+    let cellOption (raw: obj) =
+        if isNull raw then None else Some(completionOf raw)
+
     let record (raw: obj) : HandleRecord =
         { Handle = handleOf raw?handle
           ChildSessionId = SessionId.create raw?child
           TargetAgent = raw?target
           Byname = raw?byname
           CanonicalRole = Roles.tryParseRole raw?role |> Option.get
-          Ownership = if unbox<bool> raw?parentVisible then HandleOwnership.DurableParentHandle else HandleOwnership.HostOwnedHidden
+          Ownership =
+            if unbox<bool> raw?parentVisible then
+                HandleOwnership.DurableParentHandle
+            else
+                HandleOwnership.HostOwnedHidden
           Lifecycle = lifecycle raw
           CreationOrder = raw?creationOrder
           LastCompletion = cellOption raw?lastCompletion
           Work = if isNull raw?work then None else Some(workOf raw?work) }
+
     let workRecord (raw: obj) : HandleWork =
         { Work = workOf raw?work
           LogicalRunId = LogicalRunId.create raw?logicalRun
           Lifecycle = lifecycle raw
           LastCompletion = cellOption raw?lastCompletion
           ConsumptionId = option id raw?consumptionId }
-    let records (raw: obj) = (unbox<obj array> raw) |> Array.map record |> Array.toList
+
+    let records (raw: obj) =
+        (unbox<obj array> raw) |> Array.map record |> Array.toList
 
 /// Typed read views are made on demand; the immutable library history is the only owner.
 [<Sealed>]
 type AgentLinkageProjection internal (history: obj) =
     member internal _.Native = history
-    member _.Handles = (unbox<obj array> (history?bindings())) |> Array.map (fun raw -> let record = HandleValues.record raw in record.Handle, record) |> Map.ofArray
-    member _.Works = (unbox<obj array> (history?works())) |> Array.map (fun raw -> let record = HandleValues.workRecord raw in record.Work, record) |> Map.ofArray
-    member _.LegacyWorkHandles = (unbox<obj array> (history?legacyHandles())) |> Array.map HandleValues.handleOf |> Set.ofArray
+
+    member _.Handles =
+        (unbox<obj array> (history?bindings ()))
+        |> Array.map (fun raw -> let record = HandleValues.record raw in record.Handle, record)
+        |> Map.ofArray
+
+    member _.Works =
+        (unbox<obj array> (history?works ()))
+        |> Array.map (fun raw -> let record = HandleValues.workRecord raw in record.Work, record)
+        |> Map.ofArray
+
+    member _.LegacyWorkHandles =
+        (unbox<obj array> (history?legacyHandles ()))
+        |> Array.map HandleValues.handleOf
+        |> Set.ofArray
+
     member _.NextCreationOrder: int = history?nextCreationOrder
 
 type HandleTransitionRejection =
@@ -151,10 +206,15 @@ type HandleTransitionRejection =
 module HandleProjection =
     [<Import("HandleHistory", "wanxiangli/handle-lifecycle")>]
     let private historyClass: obj = jsNative
+
     let empty = AgentLinkageProjection(createNew historyClass ())
     let native (current: AgentLinkageProjection) = current.Native
-    let filterBindings (accept: HandleRecord -> bool) (current: AgentLinkageProjection) = AgentLinkageProjection(current.Native?filterBindings(fun raw -> accept (HandleValues.record raw)))
-    let private rejection = function
+
+    let filterBindings (accept: HandleRecord -> bool) (current: AgentLinkageProjection) =
+        AgentLinkageProjection(current.Native?filterBindings(fun raw -> accept (HandleValues.record raw)))
+
+    let private rejection =
+        function
         | "UnknownHandle" -> UnknownHandle
         | "HandleIdentityConflict" -> HandleIdentityConflict
         | "HandleIsRetired" -> HandleIsRetired
@@ -166,58 +226,220 @@ module HandleProjection =
         | "ConsumptionMismatch" -> ConsumptionMismatch
         | "LegacyWorkAmbiguous" -> LegacyWorkAmbiguous
         | other -> invalidOp ("Unknown handle rejection: " + other)
+
     let private result (raw: obj) =
-        if unbox<bool> raw?ok then Ok(AgentLinkageProjection raw?value)
-        else Error(rejection raw?error)
-    let linkNamed handle childSessionId (targetAgent: string) (byname: string) role ownership (current: AgentLinkageProjection) =
-        current.Native?link(createObj [ "handle" ==> HandleValues.handle handle; "child" ==> SessionId.value childSessionId; "target" ==> targetAgent; "byname" ==> byname; "role" ==> Roles.roleLabel role; "parentVisible" ==> (ownership = HandleOwnership.DurableParentHandle) ]) |> result
-    let link handle childSessionId targetAgent role ownership current = linkNamed handle childSessionId targetAgent targetAgent role ownership current
+        if unbox<bool> raw?ok then
+            Ok(AgentLinkageProjection raw?value)
+        else
+            Error(rejection raw?error)
+
+    let linkNamed
+        handle
+        childSessionId
+        (targetAgent: string)
+        (byname: string)
+        role
+        ownership
+        (current: AgentLinkageProjection)
+        =
+        current.Native?link(
+            createObj
+                [ "handle" ==> HandleValues.handle handle
+                  "child" ==> SessionId.value childSessionId
+                  "target" ==> targetAgent
+                  "byname" ==> byname
+                  "role" ==> Roles.roleLabel role
+                  "parentVisible" ==> (ownership = HandleOwnership.DurableParentHandle) ]
+        )
+        |> result
+
+    let link handle childSessionId targetAgent role ownership current =
+        linkNamed handle childSessionId targetAgent targetAgent role ownership current
+
     let private transition event handle fields (current: AgentLinkageProjection) =
-        current.Native?transition(createObj ([ "event" ==> event; "handle" ==> HandleValues.handle handle ] @ fields)) |> result
-    let complete handle completion current = transition "complete" handle [ "completion" ==> HandleValues.completion completion ] current
-    let abandon handle (reason: HandleAbandonReason) current = transition "abandon" handle [ "reason" ==> string reason ] current
+        current.Native?transition(createObj ([ "event" ==> event; "handle" ==> HandleValues.handle handle ] @ fields))
+        |> result
+
+    let complete handle completion current =
+        transition "complete" handle [ "completion" ==> HandleValues.completion completion ] current
+
+    let abandon handle (reason: HandleAbandonReason) current =
+        transition "abandon" handle [ "reason" ==> string reason ] current
+
     let retire handle current = transition "retire" handle [] current
+
     let rejectFalseCompletion handle expectedRef expectedDigest (current: AgentLinkageProjection) =
         let binding: obj = current.Native?binding(HandleValues.handle handle)
-        let kind: obj = if isNull binding || isNull binding?completion then box "Terminal" else binding?completion?kind
-        transition "rejectFalseCompletion" handle [ "completion" ==> createObj [ "kind" ==> kind; "reference" ==> BlobRef.value expectedRef; "digest" ==> BlobDigest.value expectedDigest ] ] current
-    let admitWork parentId handle (authority: PromptAuthority.PromptAuthorityProjection) (current: AgentLinkageProjection) =
+
+        let kind: obj =
+            if isNull binding || isNull binding?completion then
+                box "Terminal"
+            else
+                binding?completion?kind
+
+        transition
+            "rejectFalseCompletion"
+            handle
+            [ "completion"
+              ==> createObj
+                      [ "kind" ==> kind
+                        "reference" ==> BlobRef.value expectedRef
+                        "digest" ==> BlobDigest.value expectedDigest ] ]
+            current
+
+    let admitWork
+        parentId
+        handle
+        (authority: PromptAuthority.PromptAuthorityProjection)
+        (current: AgentLinkageProjection)
+        =
         let profile, landing =
             match authority.ActiveLogicalRun with
             | None -> null, null
             | Some profile ->
-                let physical = PhysicalUserMessageId.create (AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
-                let owner = PromptAuthority.identitySeedOwner profile.IdentitySeed |> Option.map (fun (owner, _, _) -> SessionId.value owner) |> Option.toObj
-                let identity value: string = emitJsExpr value "JSON.stringify($0)"
-                let raw = createObj [ "child" ==> SessionId.value profile.SessionId; "role" ==> Roles.roleLabel profile.CanonicalRole; "target" ==> profile.SelectedAgent; "root" ==> AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId; "logicalRun" ==> LogicalRunId.value profile.LogicalRunId; "identity" ==> identity profile.IdentitySeed; "owner" ==> owner ]
-                let landing = Map.tryFind physical authority.PhysicalLandings |> Option.map (fun accepted -> createObj [ "child" ==> SessionId.value accepted.SessionId; "identity" ==> identity accepted.IdentitySeed; "ownerRoot" ==> (accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot PromptAuthority.RootAuthorityKind.AgentOwnerRoot) ]) |> Option.toObj
+                let physical =
+                    PhysicalUserMessageId.create (AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId)
+
+                let owner =
+                    PromptAuthority.identitySeedOwner profile.IdentitySeed
+                    |> Option.map (fun (owner, _, _) -> SessionId.value owner)
+                    |> Option.toObj
+
+                let identity value : string = emitJsExpr value "JSON.stringify($0)"
+
+                let raw =
+                    createObj
+                        [ "child" ==> SessionId.value profile.SessionId
+                          "role" ==> Roles.roleLabel profile.CanonicalRole
+                          "target" ==> profile.SelectedAgent
+                          "root" ==> AuthorityRootUserMessageId.value profile.AuthorityRootUserMessageId
+                          "logicalRun" ==> LogicalRunId.value profile.LogicalRunId
+                          "identity" ==> identity profile.IdentitySeed
+                          "owner" ==> owner ]
+
+                let landing =
+                    Map.tryFind physical authority.PhysicalLandings
+                    |> Option.map (fun accepted ->
+                        createObj
+                            [ "child" ==> SessionId.value accepted.SessionId
+                              "identity" ==> identity accepted.IdentitySeed
+                              "ownerRoot"
+                              ==> (accepted.Origin = PromptAuthority.PromptOrigin.AuthorityRoot
+                                  PromptAuthority.RootAuthorityKind.AgentOwnerRoot) ])
+                    |> Option.toObj
+
                 raw, landing
-        current.Native?admit(createObj [ "parent" ==> SessionId.value parentId; "handle" ==> HandleValues.handle handle; "profile" ==> profile; "landing" ==> landing ]) |> result
+
+        current.Native?admit(
+            createObj
+                [ "parent" ==> SessionId.value parentId
+                  "handle" ==> HandleValues.handle handle
+                  "profile" ==> profile
+                  "landing" ==> landing ]
+        )
+        |> result
+
     let tryWork work (current: AgentLinkageProjection) =
         let raw: obj = current.Native?work(HandleValues.work work)
-        if isNull raw then None else Some(HandleValues.workRecord raw)
+
+        if isNull raw then
+            None
+        else
+            Some(HandleValues.workRecord raw)
+
     let tryAdmittedWork work (current: AgentLinkageProjection) =
         let raw: obj = current.Native?admitted(HandleValues.work work)
-        if unbox<bool> raw?ok then Ok(AdmittedWork(work, LogicalRunId.create raw?value?logicalRun)) else Error(rejection raw?error)
-    let private transitionWork event work fields (current: AgentLinkageProjection) = current.Native?transitionWork(createObj ([ "event" ==> event; "work" ==> HandleValues.work work ] @ fields)) |> result
-    let completeWork work completion current = transitionWork "complete" work [ "completion" ==> HandleValues.completion completion ] current
-    let abandonWork work (reason: HandleAbandonReason) current = transitionWork "abandon" work [ "reason" ==> string reason ] current
+
+        if unbox<bool> raw?ok then
+            Ok(AdmittedWork(work, LogicalRunId.create raw?value?logicalRun))
+        else
+            Error(rejection raw?error)
+
+    let private transitionWork event work fields (current: AgentLinkageProjection) =
+        current.Native?transitionWork(createObj ([ "event" ==> event; "work" ==> HandleValues.work work ] @ fields))
+        |> result
+
+    let completeWork work completion current =
+        transitionWork "complete" work [ "completion" ==> HandleValues.completion completion ] current
+
+    let abandonWork work (reason: HandleAbandonReason) current =
+        transitionWork "abandon" work [ "reason" ==> string reason ] current
+
     let voidWork work current = transitionWork "void" work [] current
-    let consumeWork work (consumptionId: string) expected current = transitionWork "consume" work [ "consumptionId" ==> consumptionId; "completion" ==> HandleValues.completion expected ] current
-    let workBindings (current: AgentLinkageProjection) = HandleValues.records (current.Native?workBindings())
-    let private recordOption (raw: obj) = if isNull raw then None else Some(HandleValues.record raw)
-    let tryBinding handle (current: AgentLinkageProjection) = current.Native?binding(HandleValues.handle handle) |> recordOption
-    let tryFind handle (current: AgentLinkageProjection) = current.Native?summary(HandleValues.handle handle) |> recordOption
-    let isRetired handle current = tryBinding handle current |> Option.exists (fun record -> record.Lifecycle = Retired)
-    let isAbandoned handle current = tryBinding handle current |> Option.exists (fun record -> match record.Lifecycle with | Abandoned _ -> true | _ -> false)
-    let private summary current (binding: HandleRecord) = tryFind binding.Handle current |> Option.defaultValue binding
-    let private recordsWhere predicate (current: AgentLinkageProjection) = HandleValues.records (current.Native?summaries()) |> List.filter predicate
-    let private parentVisible (record: HandleRecord) = record.Ownership = HandleOwnership.DurableParentHandle
-    let tryFindByByname (byname: string) (current: AgentLinkageProjection) = current.Native?byname(byname, true) |> recordOption
-    let tryFindBindingByByname (byname: string) (current: AgentLinkageProjection) = current.Native?byname(byname, false) |> recordOption
-    let auditListable (current: AgentLinkageProjection) = current.Handles |> Map.toList |> List.map snd |> List.filter (fun record -> parentVisible record && match record.Lifecycle with | Active | CompletedAwaitingJoin _ -> true | _ -> false)
-    let auditActiveHandles (current: AgentLinkageProjection) = current.Handles |> Map.toList |> List.map snd |> List.filter (fun record -> parentVisible record && record.Lifecycle = Active)
-    let listable current = recordsWhere (fun record -> record.Work.IsSome && parentVisible record && match record.Lifecycle with | Active | CompletedAwaitingJoin _ -> true | _ -> false) current
+
+    let consumeWork work (consumptionId: string) expected current =
+        transitionWork
+            "consume"
+            work
+            [ "consumptionId" ==> consumptionId
+              "completion" ==> HandleValues.completion expected ]
+            current
+
+    let workBindings (current: AgentLinkageProjection) =
+        HandleValues.records (current.Native?workBindings())
+
+    let private recordOption (raw: obj) =
+        if isNull raw then None else Some(HandleValues.record raw)
+
+    let tryBinding handle (current: AgentLinkageProjection) =
+        current.Native?binding(HandleValues.handle handle) |> recordOption
+
+    let tryFind handle (current: AgentLinkageProjection) =
+        current.Native?summary(HandleValues.handle handle) |> recordOption
+
+    let isRetired handle current =
+        tryBinding handle current
+        |> Option.exists (fun record -> record.Lifecycle = Retired)
+
+    let isAbandoned handle current =
+        tryBinding handle current
+        |> Option.exists (fun record ->
+            match record.Lifecycle with
+            | Abandoned _ -> true
+            | _ -> false)
+
+    let private summary current (binding: HandleRecord) =
+        tryFind binding.Handle current |> Option.defaultValue binding
+
+    let private recordsWhere predicate (current: AgentLinkageProjection) =
+        HandleValues.records (current.Native?summaries()) |> List.filter predicate
+
+    let private parentVisible (record: HandleRecord) =
+        record.Ownership = HandleOwnership.DurableParentHandle
+
+    let tryFindByByname (byname: string) (current: AgentLinkageProjection) =
+        current.Native?byname(byname, true) |> recordOption
+
+    let tryFindBindingByByname (byname: string) (current: AgentLinkageProjection) =
+        current.Native?byname(byname, false) |> recordOption
+
+    let auditListable (current: AgentLinkageProjection) =
+        current.Handles
+        |> Map.toList
+        |> List.map snd
+        |> List.filter (fun record ->
+            parentVisible record
+            && match record.Lifecycle with
+               | Active
+               | CompletedAwaitingJoin _ -> true
+               | _ -> false)
+
+    let auditActiveHandles (current: AgentLinkageProjection) =
+        current.Handles
+        |> Map.toList
+        |> List.map snd
+        |> List.filter (fun record -> parentVisible record && record.Lifecycle = Active)
+
+    let listable current =
+        recordsWhere
+            (fun record ->
+                record.Work.IsSome
+                && parentVisible record
+                && match record.Lifecycle with
+                   | Active
+                   | CompletedAwaitingJoin _ -> true
+                   | _ -> false)
+            current
 
     let private isIdleFixedDevOpsBinding (record: HandleRecord) =
         record.Work.IsNone
@@ -331,6 +553,7 @@ module HandleProjection =
     let reasonOf (value: string) : HandleAbandonReason = HandleValues.reasonOf value
     let recordOf (value: obj) : HandleRecord = HandleValues.record value
     let rejectionOf (value: string) : HandleTransitionRejection = rejection value
+
     let recordValue (record: HandleRecord) =
         let phase, reason, cell =
             match record.Lifecycle with
@@ -338,4 +561,18 @@ module HandleProjection =
             | CompletedAwaitingJoin cell -> "CompletedAwaitingJoin", null, HandleValues.completion cell
             | Abandoned reason -> "Abandoned", box (string reason), null
             | Retired -> "Retired", null, null
-        createObj [ "handle" ==> HandleValues.handle record.Handle; "child" ==> SessionId.value record.ChildSessionId; "target" ==> record.TargetAgent; "byname" ==> record.Byname; "role" ==> Roles.roleLabel record.CanonicalRole; "parentVisible" ==> (record.Ownership = HandleOwnership.DurableParentHandle); "creationOrder" ==> record.CreationOrder; "phase" ==> phase; "reason" ==> reason; "completion" ==> cell; "lastCompletion" ==> HandleValues.optional HandleValues.completion record.LastCompletion; "work" ==> HandleValues.optional HandleValues.work record.Work ]
+
+        createObj
+            [ "handle" ==> HandleValues.handle record.Handle
+              "child" ==> SessionId.value record.ChildSessionId
+              "target" ==> record.TargetAgent
+              "byname" ==> record.Byname
+              "role" ==> Roles.roleLabel record.CanonicalRole
+              "parentVisible" ==> (record.Ownership = HandleOwnership.DurableParentHandle)
+              "creationOrder" ==> record.CreationOrder
+              "phase" ==> phase
+              "reason" ==> reason
+              "completion" ==> cell
+              "lastCompletion"
+              ==> HandleValues.optional HandleValues.completion record.LastCompletion
+              "work" ==> HandleValues.optional HandleValues.work record.Work ]

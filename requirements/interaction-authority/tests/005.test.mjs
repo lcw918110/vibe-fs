@@ -9,7 +9,7 @@ const { default: test } = await import("node:test");
 const authority = await import("../../../dist/Interaction/Authority/RuntimeSurface.js");
 const dispatch = await import("../../../dist/Interaction/Dispatch/DispatchSurface.js");
 const journal = await import("../../../dist/Persistence/Journal/Surface.js");
-const runtimePath = await import("../../../dist/Persistence/Journal/RuntimePath.js");
+const runtimePath = { stateRoot: journal.JournalSurface_stateRoot };
 const lifecycle = await import("../../../dist/Mission/Lifecycle/Surface.js");
 const { withSharedJournal } = await import("./support/authority.mjs");
 

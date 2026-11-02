@@ -17,6 +17,11 @@ type OpenCodeCompaction =
     member FinishTemporary: session: string -> unit
     member ForgetSession: session: string -> unit
     member TryConsumeHistoryBypass: input: obj * output: obj -> bool
-    member OnCompacting: product: ICompactionGate * isTemporary: (string -> bool) * client: obj * input: obj * output: obj -> Task<unit>
-    member OnAutoContinue: product: ICompactionGate * isTemporary: (string -> bool) * input: obj * output: obj -> Task<unit>
+
+    member OnCompacting:
+        product: ICompactionGate * isTemporary: (string -> bool) * client: obj * input: obj * output: obj -> Task<unit>
+
+    member OnAutoContinue:
+        product: ICompactionGate * isTemporary: (string -> bool) * input: obj * output: obj -> Task<unit>
+
     member ObserveSnapshot: session: SessionId * messages: SessionMessage list -> Task

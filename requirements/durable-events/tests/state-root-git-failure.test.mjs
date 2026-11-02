@@ -4,12 +4,12 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { stateRoot } from '../../../scripts/lib/state-root.mjs'
-import * as runtimePath from '../../../dist/Persistence/Journal/RuntimePath.js'
+import { JournalSurface_stateRoot as locateStateRoot, JournalSurface_stateRootSync as locateStateRootSync } from '../../../dist/Persistence/Journal/Surface.js'
 
 for (const [entry, locate] of [
   ['diagnostics', workspace => stateRoot(workspace)],
-  ['async runtime', workspace => runtimePath.stateRoot(workspace)],
-  ['sync runtime', async workspace => runtimePath.stateRootSync(workspace)],
+  ['async runtime', workspace => locateStateRoot(workspace)],
+  ['sync runtime', async workspace => locateStateRootSync(workspace)],
 ]) {
   test(`strict ${entry} state lookup propagates a Git permission failure without choosing a fallback`, async () => {
     const root = mkdtempSync(join(tmpdir(), 'state-root-git-failure-'))

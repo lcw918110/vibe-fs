@@ -538,7 +538,11 @@ module internal ChatAdmissionTransaction =
                 with error ->
                     Error error
           Commit = ModelRouting.commitExecutionAdmission
-          ReleaseBeforeProvider = fun lease -> ModelRouting.releaseExecutionAdmissionBeforeProvider lease (ModelRouting.executionAdmissionIdentity lease)
+          ReleaseBeforeProvider =
+            fun lease ->
+                ModelRouting.releaseExecutionAdmissionBeforeProvider
+                    lease
+                    (ModelRouting.executionAdmissionIdentity lease)
           SettlePreProvider = PreProviderSettlement.settle journal
           ReadExact =
             fun key ->

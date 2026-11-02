@@ -555,3 +555,10 @@ module SessionRecoveryHostSurface =
     /// SignalChatRecoverySession through — settling every key of the session.
     let signalSessionCancelled (handle: RecoveryHostHandle) (sessionId: string) : Task =
         handle.Host.SignalSession(SessionId.create sessionId, ChatExecutionRecoveryLifecycleEvent.SessionCancelled)
+
+    /// managed-session-lifecycle-030: the production drain await — the same
+    /// SessionRecoveryHost.Drain the cancel path (`drainTermination`) and the
+    /// delete chain await — so a regression can observe the drain convergence
+    /// of a session-scoped settlement directly.
+    let drainSession (handle: RecoveryHostHandle) (sessionId: string) : Task =
+        handle.Host.Drain(SessionId.create sessionId)

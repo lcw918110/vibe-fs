@@ -5,7 +5,9 @@ open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 
-type XTraceProjectionState = private { History: WanxiangliTrace.History }
+type XTraceProjectionState =
+    private
+        { History: WanxiangliTrace.History }
 
 type internal XTracePartRef =
     { Cursor: XTraceCursor
@@ -69,10 +71,18 @@ module XTraceProjection =
     let empty = { History = WanxiangliTrace.createHistory "xtrace-projection" }
     let internal history (state: XTraceProjectionState) = state.History
 
-    let internal provenanceFromMetadata (metadata: obj) = (unbox<HostPartMetadata> metadata).Provenance
+    let internal provenanceFromMetadata (metadata: obj) =
+        (unbox<HostPartMetadata> metadata).Provenance
 
     let private descriptor role provenance kind toolName textRef textDigest =
-        sprintf "%s|%s|%s|%s|%s|%s" role provenance kind (Option.defaultValue "" toolName) (BlobRef.value textRef) (BlobDigest.value textDigest)
+        sprintf
+            "%s|%s|%s|%s|%s|%s"
+            role
+            provenance
+            kind
+            (Option.defaultValue "" toolName)
+            (BlobRef.value textRef)
+            (BlobDigest.value textDigest)
 
     let private partFromNative (entry: obj) : XTracePartRef =
         let metadata = unbox<HostPartMetadata> entry?metadata
@@ -85,7 +95,11 @@ module XTraceProjection =
           Turn = metadata.Turn
           PartIndex = metadata.PartIndex
           Kind = unbox<string> entry?kind
-          ToolName = if isNull toolName then None else Some(unbox<string> toolName)
+          ToolName =
+            if isNull toolName then
+                None
+            else
+                Some(unbox<string> toolName)
           ProviderRun = metadata.ProviderRun
           ToolCallId = metadata.ToolCallId
           HostToolPartId = metadata.HostToolPartId
@@ -109,7 +123,8 @@ module XTraceProjection =
               "toolName" ==> (part.ToolName |> Option.map box |> Option.defaultValue null)
               "bodyRef" ==> BlobRef.value part.TextRef
               "bodyDigest" ==> BlobDigest.value part.TextDigest
-              "descriptor" ==> descriptor part.Role part.Provenance part.Kind part.ToolName part.TextRef part.TextDigest
+              "descriptor"
+              ==> descriptor part.Role part.Provenance part.Kind part.ToolName part.TextRef part.TextDigest
               "metadata" ==> metadata ]
 
     let private terminalFromNative (entry: obj) : XTraceTerminalRef =
@@ -119,12 +134,17 @@ module XTraceProjection =
           Frontier = XTraceCursor.create (unbox<int64> entry?frontier) }
 
     let private terminalOption (value: obj) =
-        if isNull value then None else Some(terminalFromNative value)
+        if isNull value then
+            None
+        else
+            Some(terminalFromNative value)
 
-    let internal parts (state: XTraceProjectionState) = state.History.entries () |> Array.map partFromNative |> Array.toList
+    let internal parts (state: XTraceProjectionState) =
+        state.History.entries () |> Array.map partFromNative |> Array.toList
+
     let internal partCount (state: XTraceProjectionState) = state.History.entries().Length
     let internal terminalCount (state: XTraceProjectionState) = state.History.terminals().Length
-    let internal openingCaptured (state: XTraceProjectionState) = not (isNull (state.History.opening()))
+    let internal openingCaptured (state: XTraceProjectionState) = not (isNull (state.History.opening ()))
 
     let private semanticPartView (part: XTracePartRef) : XTraceSemanticPartView =
         { Cursor = part.Cursor
@@ -150,7 +170,8 @@ module XTraceProjection =
     let openingEvidence (state: XTraceProjectionState) : XTraceOpeningEvidence option =
         let opening = state.History.opening ()
 
-        if isNull opening then None
+        if isNull opening then
+            None
         else
             Some
                 { AssignmentText = unbox<string> opening?assignment
@@ -158,19 +179,29 @@ module XTraceProjection =
                   ConstitutiveBody = unbox<string> opening?constitutiveBody }
 
     let hasOpening (state: XTraceProjectionState) = openingCaptured state
-    let hasSemanticParts (state: XTraceProjectionState option) = state |> Option.exists (fun trace -> partCount trace > 0)
-    let orderedSemanticParts state = parts state |> List.map semanticPartView
+
+    let hasSemanticParts (state: XTraceProjectionState option) =
+        state |> Option.exists (fun trace -> partCount trace > 0)
+
+    let orderedSemanticParts state =
+        parts state |> List.map semanticPartView
+
     let internal headSequence (state: XTraceProjectionState) = state.History.headSequence ()
 
     let latestPartCursor (state: XTraceProjectionState) =
         let value = state.History.latestSequence ()
-        if isNull value then None else Some(XTraceCursor.create (unbox<int64> value))
+
+        if isNull value then
+            None
+        else
+            Some(XTraceCursor.create (unbox<int64> value))
 
     let internal head (state: XTraceProjectionState) = state.History.head ()
     let headCursor state = XTraceCursor.create (head state)
 
     let rangeFrom (startInclusive: XTraceCursor) (state: XTraceProjectionState) =
-        state.History.rangeFrom (XTraceCursor.sequence startInclusive) |> WanxiangliTrace.rangeFromNative
+        state.History.rangeFrom (XTraceCursor.sequence startInclusive)
+        |> WanxiangliTrace.rangeFromNative
 
     let slice (range: XTraceRange) (state: XTraceProjectionState) =
         state.History.slice (WanxiangliTrace.rangeObject range)
@@ -178,27 +209,45 @@ module XTraceProjection =
         |> Array.toList
 
     let frontierAfter (part: XTraceSemanticPartView) = XTraceCursor.nextCursor part.Cursor
-    let rangeOfPart (part: XTraceSemanticPartView) = XTraceRange.create part.Cursor (frontierAfter part)
-    let partKinds state = parts state |> List.map (fun part -> part.Kind)
-    let internal latestTerminal (state: XTraceProjectionState) = state.History.latestTerminal () |> terminalOption
-    let latestTerminalEvidence state = latestTerminal state |> Option.map terminalEvidence
+
+    let rangeOfPart (part: XTraceSemanticPartView) =
+        XTraceRange.create part.Cursor (frontierAfter part)
+
+    let partKinds state =
+        parts state |> List.map (fun part -> part.Kind)
+
+    let internal latestTerminal (state: XTraceProjectionState) =
+        state.History.latestTerminal () |> terminalOption
+
+    let latestTerminalEvidence state =
+        latestTerminal state |> Option.map terminalEvidence
 
     let internal terminalForProviderRun (providerRun: ProviderRunIdentity) (state: XTraceProjectionState) =
-        state.History.terminalFor (ProviderRunIdentity.value providerRun) |> terminalOption
+        state.History.terminalFor (ProviderRunIdentity.value providerRun)
+        |> terminalOption
 
-    let terminalEvidenceForProviderRun providerRun state = terminalForProviderRun providerRun state |> Option.map terminalEvidence
+    let terminalEvidenceForProviderRun providerRun state =
+        terminalForProviderRun providerRun state |> Option.map terminalEvidence
+
+    let private updatedHistory (state: XTraceProjectionState) next =
+        if obj.ReferenceEquals(state.History, next) then
+            state
+        else
+            { History = next }
+
+    let private appendRejection (error: obj) =
+        match unbox<string> error?kind with
+        | "OpeningAlreadyCaptured" -> Error XTraceFoldRejection.OpeningAlreadyCaptured
+        | "CursorNotAfterHead" ->
+            Error(XTraceFoldRejection.CursorNotAfterHead(unbox<int64> error?expected, unbox<int64> error?actual))
+        | "TerminalAlreadyCaptured" -> Error XTraceFoldRejection.TerminalAlreadyCaptured
+        | kind -> invalidOp ("wanxiangli/trace returned an unknown append rejection: " + kind)
 
     let private appendResult (state: XTraceProjectionState) (result: obj) =
         if unbox<bool> result?ok then
-            let next = unbox<WanxiangliTrace.History> result?value
-            Ok(if obj.ReferenceEquals(state.History, next) then state else { History = next })
+            Ok(updatedHistory state (unbox<WanxiangliTrace.History> result?value))
         else
-            let error: obj = result?error
-            match unbox<string> error?kind with
-            | "OpeningAlreadyCaptured" -> Error XTraceFoldRejection.OpeningAlreadyCaptured
-            | "CursorNotAfterHead" -> Error(XTraceFoldRejection.CursorNotAfterHead(unbox<int64> error?expected, unbox<int64> error?actual))
-            | "TerminalAlreadyCaptured" -> Error XTraceFoldRejection.TerminalAlreadyCaptured
-            | kind -> invalidOp ("wanxiangli/trace returned an unknown append rejection: " + kind)
+            appendRejection result?error
 
     let applyOpening (assignment: string) (requirements: string list) (state: XTraceProjectionState) =
         createObj [ "assignment" ==> assignment; "requirements" ==> List.toArray requirements ]
@@ -215,7 +264,8 @@ module XTraceProjection =
             let rest = provenance.Substring(2)
             let slash = rest.IndexOf('/')
             parseGeneration (if slash < 0 then rest else rest.Substring(0, slash))
-        else 0
+        else
+            0
 
     let applyPart
         (cursorSequence: int64)
@@ -253,9 +303,14 @@ module XTraceProjection =
                   "bodyDigest" ==> BlobDigest.value textDigest
                   "descriptor" ==> descriptor role provenance kind toolName textRef textDigest ]
 
-        state.History.appendPart(part, prepareMetadata) |> appendResult state
+        state.History.appendPart (part, prepareMetadata) |> appendResult state
 
-    let applyTerminal (textRef: BlobRef) (textDigest: BlobDigest) (providerRun: ProviderRunIdentity) (state: XTraceProjectionState) =
+    let applyTerminal
+        (textRef: BlobRef)
+        (textDigest: BlobDigest)
+        (providerRun: ProviderRunIdentity)
+        (state: XTraceProjectionState)
+        =
         createObj
             [ "providerRun" ==> ProviderRunIdentity.value providerRun
               "bodyRef" ==> BlobRef.value textRef
@@ -263,11 +318,23 @@ module XTraceProjection =
         |> state.History.appendTerminal
         |> appendResult state
 
-    let traceHeadCut (state: XTraceProjectionState) = state.History.headCut () |> WanxiangliTrace.cutFromNative
-    let traceCutAt (cursor: XTraceCursor) (state: XTraceProjectionState) = state.History.cutAt (XTraceCursor.sequence cursor) |> WanxiangliTrace.cutFromNative
-    let traceIntervalOfRange (range: XTraceRange) (state: XTraceProjectionState) = state.History.interval (WanxiangliTrace.rangeObject range) |> WanxiangliTrace.intervalFromNative
-    let traceIntervalAfterCoverage (coverage: RecordCoverage) (state: XTraceProjectionState) = state.History.afterCoverage (coverage |> RecordCoverage.ingestedThrough |> XTraceCursor.sequence) |> WanxiangliTrace.intervalFromNative
-    let traceRecords (state: XTraceProjectionState) = state.History.records () |> Array.toList
+    let traceHeadCut (state: XTraceProjectionState) =
+        state.History.headCut () |> WanxiangliTrace.cutFromNative
+
+    let traceCutAt (cursor: XTraceCursor) (state: XTraceProjectionState) =
+        state.History.cutAt (XTraceCursor.sequence cursor)
+        |> WanxiangliTrace.cutFromNative
+
+    let traceIntervalOfRange (range: XTraceRange) (state: XTraceProjectionState) =
+        state.History.interval (WanxiangliTrace.rangeObject range)
+        |> WanxiangliTrace.intervalFromNative
+
+    let traceIntervalAfterCoverage (coverage: RecordCoverage) (state: XTraceProjectionState) =
+        state.History.afterCoverage (coverage |> RecordCoverage.ingestedThrough |> XTraceCursor.sequence)
+        |> WanxiangliTrace.intervalFromNative
+
+    let traceRecords (state: XTraceProjectionState) =
+        state.History.records () |> Array.toList
 
     let rec private collectCurrentGeneration (maxGen: int) (acc: XTracePartRef list) (remaining: XTracePartRef list) =
         match remaining with
@@ -281,44 +348,74 @@ module XTraceProjection =
         | [] -> []
         | first :: rest -> collectCurrentGeneration first.Generation [ first ] rest
 
-    let currentGenerationSemanticParts state = parts state |> currentGenerationParts |> List.map semanticPartView
+    let currentGenerationSemanticParts state =
+        parts state |> currentGenerationParts |> List.map semanticPartView
 
     let providerRunParts (providerRun: ProviderRunIdentity) state =
-        parts state |> List.filter (fun part -> part.ProviderRun = Some providerRun) |> List.map semanticPartView
+        parts state
+        |> List.filter (fun part -> part.ProviderRun = Some providerRun)
+        |> List.map semanticPartView
 
     let toolResultParts (providerRun: ProviderRunIdentity) (toolCallId: ToolCallId) state =
         parts state
-        |> List.filter (fun part -> part.Kind = "tool_result" && part.ProviderRun = Some providerRun && part.ToolCallId = Some toolCallId)
+        |> List.filter (fun part ->
+            part.Kind = "tool_result"
+            && part.ProviderRun = Some providerRun
+            && part.ToolCallId = Some toolCallId)
         |> List.map semanticPartView
 
-    let toolPartsForHostIdentity (providerRun: ProviderRunIdentity) (toolCallId: ToolCallId) (hostToolPartId: HostToolPartId) state =
+    let toolPartsForHostIdentity
+        (providerRun: ProviderRunIdentity)
+        (toolCallId: ToolCallId)
+        (hostToolPartId: HostToolPartId)
+        state
+        =
         parts state
-        |> List.filter (fun part -> part.ProviderRun = Some providerRun && part.ToolCallId = Some toolCallId && part.HostToolPartId = Some hostToolPartId)
+        |> List.filter (fun part ->
+            part.ProviderRun = Some providerRun
+            && part.ToolCallId = Some toolCallId
+            && part.HostToolPartId = Some hostToolPartId)
         |> List.map semanticPartView
 
     let private nonBlankHostMessageId (messageId: string) =
-        if String.IsNullOrWhiteSpace messageId then None else Some messageId
+        if String.IsNullOrWhiteSpace messageId then
+            None
+        else
+            Some messageId
 
     let private hostMessageIdFrom (part: XTracePartRef) (idStart: int) =
         let slash = part.Provenance.IndexOf('/', idStart)
         let idEnd = if slash < 0 then part.Provenance.Length else slash
         let length = idEnd - idStart
-        if length <= 0 then None else part.Provenance.Substring(idStart, length) |> nonBlankHostMessageId
+
+        if length <= 0 then
+            None
+        else
+            part.Provenance.Substring(idStart, length) |> nonBlankHostMessageId
 
     let internal tryHostMessageId (part: XTracePartRef) =
         let marker = "/msg:"
         let start = part.Provenance.IndexOf(marker, StringComparison.Ordinal)
-        if start < 0 then None else hostMessageIdFrom part (start + marker.Length)
+
+        if start < 0 then
+            None
+        else
+            hostMessageIdFrom part (start + marker.Length)
 
     let tryHostMessageIdAt (cursor: XTraceCursor) state =
-        parts state |> List.tryFind (fun part -> part.Cursor = cursor) |> Option.bind tryHostMessageId
+        parts state
+        |> List.tryFind (fun part -> part.Cursor = cursor)
+        |> Option.bind tryHostMessageId
 
     let hostMessageFirstCursors state =
         parts state
-        |> List.fold (fun cursors part ->
-            match tryHostMessageId part with
-            | Some messageId when not (Map.containsKey messageId cursors) -> Map.add messageId (XTraceCursor.sequence part.Cursor) cursors
-            | _ -> cursors) Map.empty
+        |> List.fold
+            (fun cursors part ->
+                match tryHostMessageId part with
+                | Some messageId when not (Map.containsKey messageId cursors) ->
+                    Map.add messageId (XTraceCursor.sequence part.Cursor) cursors
+                | _ -> cursors)
+            Map.empty
 
     let partsForHostMessageIds (messageIds: Set<string>) state =
         parts state
@@ -326,11 +423,15 @@ module XTraceProjection =
         |> List.map semanticPartView
 
     let tryContiguousHostRange (messageIds: Set<string>) state =
-        let matched = parts state |> List.filter (fun part -> tryHostMessageId part |> Option.exists messageIds.Contains)
+        let matched =
+            parts state
+            |> List.filter (fun part -> tryHostMessageId part |> Option.exists messageIds.Contains)
+
         let rec contiguous (previous: int64) (remaining: XTracePartRef list) =
             match remaining with
             | [] -> true
-            | part :: tail when XTraceCursor.sequence part.Cursor = previous + 1L -> contiguous (XTraceCursor.sequence part.Cursor) tail
+            | part :: tail when XTraceCursor.sequence part.Cursor = previous + 1L ->
+                contiguous (XTraceCursor.sequence part.Cursor) tail
             | _ -> false
 
         let observedIds = matched |> List.choose tryHostMessageId |> Set.ofList
@@ -342,19 +443,25 @@ module XTraceProjection =
         | _ -> None
 
     let tryTurnOfHostMessageId (messageId: string) state =
-        parts state |> currentGenerationParts
+        parts state
+        |> currentGenerationParts
         |> List.tryPick (fun part ->
             match tryHostMessageId part with
             | Some stable when stable = messageId -> Some part.Turn
             | _ -> None)
 
     let tryOpeningHostMessageId state =
-        parts state |> currentGenerationParts
+        parts state
+        |> currentGenerationParts
         |> List.tryPick (fun part ->
-            if part.Role.Equals("user", StringComparison.OrdinalIgnoreCase) then tryHostMessageId part else None)
+            if part.Role.Equals("user", StringComparison.OrdinalIgnoreCase) then
+                tryHostMessageId part
+            else
+                None)
 
     let hostMessageIdsBeforeTurn (cutoffExclusive: int) state =
-        parts state |> currentGenerationParts
+        parts state
+        |> currentGenerationParts
         |> List.filter (fun part -> part.Turn < cutoffExclusive)
         |> List.choose tryHostMessageId
         |> List.distinct
@@ -364,11 +471,15 @@ module XTraceProjection =
         let current = currentGenerationParts ordered
         let searchable = if List.isEmpty current then ordered else current
 
-        match searchable |> List.tryFind (fun part -> XTraceCursor.sequence part.Cursor > sequence) with
+        match
+            searchable
+            |> List.tryFind (fun part -> XTraceCursor.sequence part.Cursor > sequence)
+        with
         | Some part -> part.Cursor
         | None ->
             match List.tryLast searchable with
             | Some last -> XTraceCursor.nextCursor last.Cursor
             | None -> XTraceCursor.create 0L
 
-    let semanticCursorAfter (cursor: XTraceCursor) state = semanticCursorFor (XTraceCursor.sequence cursor) state
+    let semanticCursorAfter (cursor: XTraceCursor) state =
+        semanticCursorFor (XTraceCursor.sequence cursor) state

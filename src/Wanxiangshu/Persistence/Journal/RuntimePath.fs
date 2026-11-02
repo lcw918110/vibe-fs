@@ -20,8 +20,11 @@ module RuntimePath =
     [<Import("initializeStateDirectory", "wanxiangli/workspace-state")>]
     let private initializeStateDirectory (stateRoot: string) : string = jsNative
 
-    let private runtimeDirectory root = joinPath (joinPath root "wanxiangshu") "runtimes"
-    let private stateDirectory primary = joinPath primary ".Herdchestra" |> checkStateDirectory
+    let private runtimeDirectory root =
+        joinPath (joinPath root "wanxiangshu") "runtimes"
+
+    let private stateDirectory primary =
+        joinPath primary ".Herdchestra" |> checkStateDirectory
 
     let stateRoot (workspace: string) : Task<string> =
         task {
@@ -41,5 +44,8 @@ module RuntimePath =
             return runtimeDirectory target
         }
 
-    let stateRootSync (workspace: string) = primaryDirectorySync workspace |> stateDirectory
-    let forStateRoot (stateRoot: string) = checkStateDirectory stateRoot |> runtimeDirectory
+    let stateRootSync (workspace: string) =
+        primaryDirectorySync workspace |> stateDirectory
+
+    let forStateRoot (stateRoot: string) =
+        checkStateDirectory stateRoot |> runtimeDirectory

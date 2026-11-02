@@ -357,7 +357,8 @@ module JsToolWorkflow =
                         let effects = unbox<string array> access?effectPaths |> Array.toList
                         observer reads effects)
 
-            let invocation = JsToolsBindings.createInvocation root ledger observe returnedValueFailure
+            let invocation =
+                JsToolsBindings.createInvocation root ledger observe returnedValueFailure
 
             // Dynamic proxy: resolve host and ask at actual member invocation time
             // preventing stale closures across park/unpark turns and enforcing active lease gates!
@@ -403,7 +404,7 @@ module JsToolWorkflow =
                             }
                         | hostObj ->
                             let target = unbox<JsDelegationHost> hostObj
-                            target.Horizon ()
+                            target.Horizon()
                   Review =
                     fun findings note ->
                         match activeTurnBridge?resolveHost sessionId with
@@ -422,19 +423,13 @@ module JsToolWorkflow =
             let dynamicAsk: (string -> Task<Result<unit, string>>) =
                 fun question ->
                     match activeTurnBridge?resolveAsk sessionId with
-                    | null ->
-                        Task.FromResult(Error "ask channel is unavailable outside an active tool turn")
+                    | null -> Task.FromResult(Error "ask channel is unavailable outside an active tool turn")
                     | askObj ->
                         let askFn = unbox<string -> Task<Result<unit, string>>> askObj
                         askFn question
 
             let api =
-                JsToolsBindings.createApi
-                    capabilities
-                    root
-                    invocation?files
-                    (Some dynamicHost)
-                    (Some dynamicAsk)
+                JsToolsBindings.createApi capabilities root invocation?files (Some dynamicHost) (Some dynamicAsk)
                 |> applyReviewGates reviewGates
 
             let callId =
@@ -468,9 +463,18 @@ module JsToolWorkflow =
                       "lifecycle" ==> lifecycle lifecyclePersistence sessionId ]
 
             JsPrograms.noteCaller sessionId callId (string input?name)
+
+            let settledOutcome (receipt: obj) reported settlementFailure =
+                match reported, settlementFailure with
+                | JsToolOutcome.Failed(_, rewritten, created, removed, moved), Some failure when
+                    string receipt?code = JsFailure.code failure
+                    ->
+                    JsToolOutcome.Failed(failure, rewritten, created, removed, moved)
+                | _ -> reported
+
             try
                 let session = JsPrograms.forSession sessionId
-                let! completed = unbox<Task<obj>> (invocation?execute(session, spec, api))
+                let! completed = unbox<Task<obj>> (invocation?execute (session, spec, api))
                 let receipt = completed?receipt
                 let reported = outcome receipt
 
@@ -478,12 +482,7 @@ module JsToolWorkflow =
                     Option.ofObj completed?settlementFailure
                     |> Option.map (fun envelope -> unbox<JsFailure> envelope?failure)
 
-                match reported, settlementFailure with
-                | JsToolOutcome.Failed(_, rewritten, created, removed, moved), Some failure when
-                    string receipt?code = JsFailure.code failure
-                    ->
-                    return JsToolOutcome.Failed(failure, rewritten, created, removed, moved)
-                | _ -> return reported
+                return settledOutcome receipt reported settlementFailure
             finally
                 JsPrograms.clearCaller sessionId callId
         }
@@ -655,13 +654,17 @@ module JsToolsResult =
             values |> List.map (fun value -> box value) |> List.toArray |> box
 
         let fields =
-            [ if rewritten <> [] then "rewritten", strings rewritten
-              if created <> [] then "created", strings created
-              if removed <> [] then "removed", strings removed
+            [ if rewritten <> [] then
+                  "rewritten", strings rewritten
+              if created <> [] then
+                  "created", strings created
+              if removed <> [] then
+                  "removed", strings removed
               if moved <> [] then
                   "moved", strings (moved |> List.map (fun (fromPath, toPath) -> fromPath + " -> " + toPath)) ]
 
-        if List.isEmpty fields then []
+        if List.isEmpty fields then
+            []
         else
             Fable.Core.JsInterop.createObj [ "fs", Fable.Core.JsInterop.createObj fields ]
             |> LlmFacing.Data.ofJs

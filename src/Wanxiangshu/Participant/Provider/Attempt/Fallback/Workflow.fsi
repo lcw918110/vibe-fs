@@ -6,7 +6,6 @@ open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation.HostSession
-open Wanxiangshu.Foundation.HostSession
 open Wanxiangshu.Foundation.TerminalSignal
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Persistence.Journal
@@ -55,5 +54,21 @@ module ProviderRecoveryWorkflow =
         turn: ReconciledTurn ->
         observer: ContinuationAcceptanceObserver option ->
         failure: ExecutionFailure ->
+        error: string ->
+            Task<RetryVerdict>
+
+    /// The same-provider recovery classification for one confirmed failure.
+    /// Superseded only when a different authority root owns the session now;
+    /// a missing active profile is a terminal failure, never a silent
+    /// supersession. Exposed internal for the provider-attempt-recovery-026
+    /// test seam.
+    val internal continueSameProvider:
+        sessionPort: ISessionHostPort ->
+        rootWorkspace: IRootWorkspaceReader ->
+        durable: AgentJournal ->
+        turn: ReconciledTurn ->
+        observer: ContinuationAcceptanceObserver option ->
+        authorization: ProviderRecoveryAuthorization ->
+        continuationPrompt: string ->
         error: string ->
             Task<RetryVerdict>

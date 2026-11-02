@@ -1,6 +1,6 @@
 # verification-system — WHY
 
-规范正文见 [AXIOMS.md](AXIOMS.md)。本文只解释目标与取舍，测试与优化的执行要求以该文件的 SPEC 为准。
+规范正文见 [AXIOMS.md](AXIOMS.md)。本文只解释目标与取舍，测试与优化的执行要求见该文件；与程序不一致处标「程序待改」。
 
 ## 存在理由
 

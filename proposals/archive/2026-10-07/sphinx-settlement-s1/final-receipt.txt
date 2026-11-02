@@ -1,9 +1,0 @@
-U0-A1-S1 finite Commands callback and original guard proof, parent789054353.
-Five new formal leaves: valid start, malformed payload with real Release Unknown, ordinary Unknown(empty cuts), controlled NotAttempted and NoNewWrite mapping. Existing Commands already protects all five; no manufactured business red, no Commands/Wire/MCP implementation changes.
-Thin SettlementSurface invokes original Commands and RuntimeHandle guard. Original incident and Unknown evidence references, cause, inquiry/command/event identity retained. Callback occurs once after real append settlement; original incident redelivery rejects with no callback/owned I/O/byte/Current changes. Every case has independent cold OS process/new writer, exact canonical facts and stream heads/Current, zero new writer.
-gen254 first formal29/29,329pass0fail0skip15TODO,8.11wall24.36test,exit1 onlypending. First complete check failed missing compile-order fsi, not business red. Manual manifest correction then gen255 Fable/check/Fantomas pass.
-gen255 final frozen formal29/29,329pass0fail0skip15TODO,7.83wall23.26test,exit1 onlypending. outer28299 accepted=true15.845ms. Whole Sphinx plus durable006/024,JS002,requirement017. Both complete024 TODO retained.
-gen255 compiler a9a2e80381a6ea8ec43f9e536443290b4dca02fd6d4bd15242001bddcde15019
-gen255 generated 8a47fd03b4c9cde992f3ad08c9025fdcaf1d0866ee0dad8dbbc52747acd4c724
-Final gen256 rebuild binds updated prose; compiler/artifact identical, final generated identity in fresh-final.json. Raw evidence excluded from prose digest.
-No real Wire/MCP physical fatal, committed-cut consumer contract, legitimate encoder natural cut, full Host, H0b, or completeCI acceptance inferred. Two controlled failure cases prove mapping only. Current/Release actual single fault has no multi-cleanup claim.

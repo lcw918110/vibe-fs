@@ -1,9 +1,0 @@
-Running requirements/verification-system/tests/integration harness tests (288 cases, 8 at a time, 20000ms case-silence window)...
-
-harness: 288 cases, 288 passed, 0 failed (11.9s)
-harness: slowest cases:
-  9020ms  verification-system-006 verdicts actually renew the window, so legitimate slow work is not killed
-  7052ms  verification-system-006 a hung test that keeps printing is ended by the verdict-silence window
-  5042ms  watchdog restores default window
-  4052ms  verification-system-005 fact barrier rejects startup silence
-  3609ms  verification-system-006 a green ledger with a leaked handle is a failure, not a pass

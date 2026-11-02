@@ -1,22 +1,0 @@
-[36m[build][0m Compiling F# (focused)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @Krzysztof-Cieslak
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/ce9ad6638ce433c4fbeca57c1340ce464abde157ac308313ba446ab5bc466a51/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (1554 source files) parsed in 959ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 46950ms
-
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Composition/Commands.fs(338,32): (338,37) error FSHARP: This expression was expected to have type    'InquiryState'    but here has type    'StartPayload' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Composition/Commands.fs(350,45): (350,50) error FSHARP: This expression was expected to have type    'InquiryState'    but here has type    'StartPayload' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Composition/Commands.fs(373,115): (373,120) error FSHARP: This expression was expected to have type    'StartPayload'    but here has type    'InquiryState' (code 1)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

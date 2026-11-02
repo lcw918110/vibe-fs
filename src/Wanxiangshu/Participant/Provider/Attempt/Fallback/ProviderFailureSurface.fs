@@ -604,7 +604,7 @@ module ProviderFailureSurface =
         | Some RetryVerdict.ReceiptUnknown -> "ReceiptUnknown"
         | Some RetryVerdict.WaitDenied -> "WaitDenied"
         | Some RetryVerdict.Dispatched -> "Dispatched"
-        | Some (RetryVerdict.Terminal _) -> "Terminal"
+        | Some(RetryVerdict.Terminal _) -> "Terminal"
 
     let delegateRetryObservation (verdictName: string) : string =
         let verdict =
@@ -616,8 +616,9 @@ module ProviderFailureSurface =
             | other -> RetryVerdict.Terminal other
 
         match Retry.observeDelegateRetry verdict with
-        | Ok () -> "Ok"
+        | Ok() -> "Ok"
         | Error reason -> "Error:" + reason
+
     /// Record one confirmed provider failure through the production ledger using
     /// an opaque JournalHandle. Only `ExecutionFailurePolicy` may licence the
     /// advance against the single `ProviderFailureBudget.DefaultBudget`, and no
@@ -826,8 +827,10 @@ module ProviderFailureSurface =
     /// overflow, exhausted credits / spending limit) never earns a continuation:
     /// resending cannot succeed.
     let longWorkContinuationPathForReason (role: string) (failure: string) (reason: string) : string =
-        if ProviderRecoveryWorkflow.isHardStopReason reason then ""
-        else longWorkContinuationPath role failure
+        if ProviderRecoveryWorkflow.isHardStopReason reason then
+            ""
+        else
+            longWorkContinuationPath role failure
 
     /// Whether confirmed-failure recovery stops the turn outright: no retry, no
     /// continuation, no missing-report nudge.
@@ -839,3 +842,111 @@ module ProviderFailureSurface =
             | other -> invalidArg "failure" $"unsupported failure '{other}'"
 
         ProviderRecoveryWorkflow.isHardStop failureKind reason
+
+    let continueConfirmedFailure (handle: JournalHandle) (sessionPort: obj) (eventPort: obj) (input: obj) : Task =
+        let turn: ReconciledTurn =
+            { SessionId = SessionId.create (text input?session)
+              PhysicalUserMessageId = PhysicalUserMessageId.create (text input?physicalMessage)
+              AuthorityRootUserMessageId = AuthorityRootUserMessageId.create (text input?authorityRoot)
+              ProviderRun = ProviderRunIdentity.create (text input?providerRun)
+              Role = Roles.tryParseRole (text input?role)
+              Directory = None
+              Parts = [||]
+              Finish = None
+              ErrorName = None
+              Model = None
+              Outcome = ReconcileProgram.TurnFailed(text input?error)
+              Observation = None }
+
+        let failure =
+            match text input?failure with
+            | "ProviderTransient" -> ExecutionFailure.ProviderTransient
+            | "ProviderPermanent" -> ExecutionFailure.ProviderPermanent
+            | other -> invalidArg "failure" other
+
+        ProviderRecoveryWorkflow.continueAfterConfirmedFailure
+            (unbox sessionPort)
+            null
+            (unbox eventPort)
+            (Some handle.Journal)
+            turn
+            failure
+            (text input?error)
+            (text input?continuationPrompt)
+
+
+    /// provider-attempt-recovery-026 test seam: classify the same-provider recovery
+    /// verdict for one confirmed failure against the journal's live authority
+    /// projection. 'Superseded' only when a different authority root owns the
+    /// session; a missing active profile comes back 'Terminal'.
+    let continueSameProviderRecoveryVerdict
+        (handle: JournalHandle)
+        (session: string)
+        (attemptRoot: string)
+        (providerRun: string)
+        : Task<string> =
+        task {
+            let durable = handle.Journal
+            let projections = AgentJournal.snapshot durable
+
+            let current =
+                AgentProjection.tryFind (SessionId.create session) projections.AgentProjections
+                |> Option.bind _.ProviderFailures
+                |> Option.defaultWith (fun () ->
+                    ProviderFailureProjection.forAuthority
+                        (LogicalRunId.create session)
+                        (AuthorityRootUserMessageId.create attemptRoot))
+
+            let decision =
+                ExecutionFailurePolicy.decide
+                    { Failure = ExecutionFailure.ProviderTransient
+                      Lifecycle = DurableExecutionLifecycle.ProviderStarted
+                      ExecutionKey =
+                        { SessionId = SessionId.create session
+                          PhysicalUserMessageId = PhysicalUserMessageId.create "msg-recovery-probe" }
+                      Capacity = CapacityOwnership.NoCapacityFence
+                      Provider =
+                        { LogicalRun = current.LogicalRunId
+                          ProviderRun = ProviderRunIdentity.create providerRun
+                          RequestKind = ProviderRequestKind.WorkMain
+                          RetryBudget = ProviderRecoveryBudget.Available
+                          Breaker = ProviderBreakerState.Closed } }
+
+            let authorization =
+                match decision.Resolution with
+                | ExecutionFailureResolution.RetryFreshAttempt authorization -> authorization
+                | other -> failwith $"probe expects a fresh retry authorization, saw {other}"
+
+            let turn: ReconciledTurn =
+                { SessionId = SessionId.create session
+                  PhysicalUserMessageId = PhysicalUserMessageId.create "msg-recovery-probe"
+                  AuthorityRootUserMessageId = AuthorityRootUserMessageId.create attemptRoot
+                  ProviderRun = ProviderRunIdentity.create providerRun
+                  Role = None
+                  Directory = None
+                  Parts = [||]
+                  Finish = None
+                  ErrorName = None
+                  Model = None
+                  Outcome = ReconcileProgram.TurnFailed "probe"
+                  Observation = None }
+
+            let! verdict =
+                ProviderRecoveryWorkflow.continueSameProvider
+                    null
+                    null
+                    durable
+                    turn
+                    None
+                    authorization
+                    "probe continuation prompt"
+                    "probe failure"
+
+            return
+                match verdict with
+                | RetryVerdict.Dispatched -> "Dispatched"
+                | RetryVerdict.Superseded -> "Superseded"
+                | RetryVerdict.ReceiptUnknown -> "ReceiptUnknown"
+                | RetryVerdict.WaitDenied -> "WaitDenied"
+                | RetryVerdict.Terminal _ -> "Terminal"
+        }

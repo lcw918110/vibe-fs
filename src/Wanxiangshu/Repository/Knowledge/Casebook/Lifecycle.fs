@@ -34,7 +34,8 @@ module CasebookLifecycle =
 
         member _.Count(sessionId: string) : int = inner.Count(sessionId)
 
-    let collector = CasebookObservationCollector(CasebookServiceBinding.observationCollector)
+    let collector =
+        CasebookObservationCollector(CasebookServiceBinding.observationCollector)
 
     let private stateGate = obj ()
     // DSL-MUTABLE: resource

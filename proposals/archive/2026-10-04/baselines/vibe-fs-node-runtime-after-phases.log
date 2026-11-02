@@ -1,8 +1,0 @@
-{"phase":"materialize","ms":497.271875}
-{"phase":"inventory","ms":110.94433300000003}
-{"phase":"probe","argv":["--input-type=module","-e","console.log(JSON.stringify({ version: process.version, platform: process.platform, arch: process.arch }))"],"ms":1373.744959}
-{"phase":"inventory","ms":111.28945799999974}
-{"phase":"probe","argv":["/private/var/folders/g_/3ydzn7kx5lg9ylq8fd9p_13r0000gn/T/node-runtime-after-observe-fZ9FgR/verification-archive-PWm0ZF/toolchain/npm/bin/npm-cli.js","--version"],"ms":190.86837500000001}
-{"phase":"inventory","ms":120.45208299999967}
-{"phase":"prepared","ms":2448.763292,"node":{"path":"toolchain/node/bin/node","sha256":"68f4d07ca49e0500cc135c7e0a445093e228e42e126ac22306d045f0a8c2636b","version":"v22.23.3","platform":"darwin","arch":"arm64"},"npm":{"cliPath":"toolchain/npm/bin/npm-cli.js","cliSha256":"0c824459bbf215f2595952de62d52998932e3c94f1c12f667e5f0ad616feccc4","manifestSha256":"48a06e6aeede3499e391710db82fe948afa7e74ecbf3e819b66121f3cd54666b","version":"11.12.1"}}
-{"phase":"cleanup","remaining":[]}

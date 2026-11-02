@@ -1,22 +1,0 @@
-[36m[build][0m Compiling F# (full)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @delneg
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/6bca6b016a0368fcc9cc67bc7c7a48d035a6709354111e5faab4418f8999ee5b/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (1552 source files) parsed in 7390ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 257692ms
-
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Host/PairProgrammingThoughtTransform.fs(1076,25): (1076,67) error FSHARP: A unique overload for method 'ReturnFrom' could not be determined based on type information prior to this program point. A type annotation may be needed.Known type of argument: 'aCandidates: - member TaskResultBuilder.ReturnFrom: value: Result<'value,'error> -> Task<Result<'value,'error>> - member TaskResultBuilder.ReturnFrom: value: Task<Result<'value,'error>> -> Task<Result<'value,'error>> (code 41)
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Host/PairProgrammingThoughtTransform.fs(1090,24): (1090,32) error FSHARP: A unique overload for method 'Bind' could not be determined based on type information prior to this program point. A type annotation may be needed.Known types of arguments: 'a * ('b -> Task<Result<'b,string>>)Candidates: - member TaskResultBuilder.Bind: value: Result<'value,'error> * next: ('value -> Task<Result<'next,'error>>) -> Task<Result<'next,'error>> - member TaskResultBuilder.Bind: value: Task<Result<'value,'error>> * next: ('value -> Task<Result<'next,'error>>) -> Task<Result<'next,'error>> (code 41)
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Host/PairProgrammingThoughtTransform.fs(1160,31): (1160,73) error FSHARP: A unique overload for method 'ReturnFrom' could not be determined based on type information prior to this program point. A type annotation may be needed.Known type of argument: 'aCandidates: - member TaskResultBuilder.ReturnFrom: value: Result<'value,'error> -> Task<Result<'value,'error>> - member TaskResultBuilder.ReturnFrom: value: Task<Result<'value,'error>> -> Task<Result<'value,'error>> (code 41)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

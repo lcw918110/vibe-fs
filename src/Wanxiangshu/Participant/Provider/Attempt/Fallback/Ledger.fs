@@ -22,7 +22,8 @@ module ProviderFailureLedger =
     let private stateView (state: ProviderFailureProjection) =
         createObj
             [ "logicalRun" ==> LogicalRunId.value state.LogicalRunId
-              "authorityRoot" ==> AuthorityRootUserMessageId.value state.AuthorityRootUserMessageId
+              "authorityRoot"
+              ==> AuthorityRootUserMessageId.value state.AuthorityRootUserMessageId
               "consecutiveFailureCount" ==> state.Budget.ConsecutiveFailureCount
               "recentFailureKeys" ==> List.toArray state.RecentFailureKeys
               "exhausted" ==> state.Exhausted
@@ -33,6 +34,7 @@ module ProviderFailureLedger =
         let run = LogicalRunId.create (unbox value?logicalRun)
         let root = AuthorityRootUserMessageId.create (unbox value?authorityRoot)
         let provider = ProviderRunIdentity.create (unbox value?providerRun)
+
         let fact =
             match string value?kind with
             | "FailureRecorded" ->
@@ -55,6 +57,7 @@ module ProviderFailureLedger =
                        LogicalRunId = run
                        AuthorityRootUserMessageId = root
                        ProviderRun = provider |}
+
         session, provider, fact
 
     let private create (port: ProviderFailureJournalPort) =
@@ -62,16 +65,30 @@ module ProviderFailureLedger =
             task {
                 let session, provider, fact = factOf value
                 let! answer = port.Append session provider fact
+
                 return
                     match answer with
-                    | Ok () -> createObj [ "ok" ==> true ]
+                    | Ok() -> createObj [ "ok" ==> true ]
                     | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
             }
+
         let native =
             createObj
-                [ "current" ==> (fun session -> port.CurrentState (SessionId.create session) |> Option.map stateView |> Option.toObj)
+                [ "current"
+                  ==> (fun session ->
+                      port.CurrentState(SessionId.create session)
+                      |> Option.map stateView
+                      |> Option.toObj)
                   "append" ==> append ]
+
         createNew budgetClass native
+
+    let private admissionOutcome (value: obj) =
+        match string value with
+        | "RetryAuthorized" -> FailureAdmissionOutcome.RetryAuthorized
+        | "RetryExhausted" -> FailureAdmissionOutcome.RetryExhausted
+        | "EpisodeSuperseded" -> FailureAdmissionOutcome.EpisodeSuperseded
+        | _ -> FailureAdmissionOutcome.NoActiveRun
 
     let recordAuthorizedFailure
         (port: ProviderFailureJournalPort)
@@ -81,19 +98,19 @@ module ProviderFailureLedger =
         : Task<Result<FailureAdmissionOutcome, string>> =
         task {
             let owner = create port
+
             let input =
                 createObj
                     [ "logicalRun" ==> LogicalRunId.value authorization.LogicalRun
                       "providerRun" ==> ProviderRunIdentity.value authorization.ProviderRun ]
-            let! answer: obj = owner?recordAuthorizedFailure (SessionId.value sessionId, input, reason)
+
+            let! (answer: obj) = owner?recordAuthorizedFailure (SessionId.value sessionId, input, reason)
+
             return
-                if not (unbox<bool> answer?ok) then Error(unbox answer?error)
+                if not (unbox<bool> answer?ok) then
+                    Error(unbox answer?error)
                 else
-                    match string answer?value with
-                    | "RetryAuthorized" -> Ok FailureAdmissionOutcome.RetryAuthorized
-                    | "RetryExhausted" -> Ok FailureAdmissionOutcome.RetryExhausted
-                    | "EpisodeSuperseded" -> Ok FailureAdmissionOutcome.EpisodeSuperseded
-                    | _ -> Ok FailureAdmissionOutcome.NoActiveRun
+                    Ok(admissionOutcome answer?value)
         }
 
     let recordConfirmedSuccess
@@ -103,6 +120,13 @@ module ProviderFailureLedger =
         : Task<Result<unit, string>> =
         task {
             let owner = create port
-            let! answer: obj = owner?recordConfirmedSuccess (SessionId.value sessionId, ProviderRunIdentity.value providerRun)
-            return if unbox<bool> answer?ok then Ok () else Error(unbox answer?error)
+
+            let! (answer: obj) =
+                owner?recordConfirmedSuccess (SessionId.value sessionId, ProviderRunIdentity.value providerRun)
+
+            return
+                if unbox<bool> answer?ok then
+                    Ok()
+                else
+                    Error(unbox answer?error)
         }

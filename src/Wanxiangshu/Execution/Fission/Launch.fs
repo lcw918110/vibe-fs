@@ -31,10 +31,12 @@ module FissionLaunch =
 
     [<Import("FissionLifecycle", "wanxiangli/fission-group")>]
     let private lifecycleClass: obj = jsNative
+
     let private lifecycle: obj = createNew lifecycleClass ()
 
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let private fissionRuntime: obj = jsNative
+
     [<Emit("$0 === undefined")>]
     let private isUndefined (_v: obj) : bool = jsNative
 
@@ -104,6 +106,7 @@ module FissionLaunch =
     let private nativeResult convert (operation: Task<Result<'a, string>>) =
         task {
             let! answer = operation
+
             return
                 match answer with
                 | Ok value -> createObj [ "ok" ==> true; "value" ==> convert value ]
@@ -111,42 +114,51 @@ module FissionLaunch =
         }
 
     let private appendCompletion (durable: AgentJournal) (fact: obj) =
-        let owner = SessionId.create(unbox fact?owner)
+        let owner = SessionId.create (unbox fact?owner)
+
         let event =
             if string fact?kind = "completionCaptured" then
                 FissionFact.FissionCompletionCaptured
                     {| GroupId = unbox fact?groupId
                        OwnerSessionId = owner
                        CompletionId = unbox fact?completion
-                       PayloadRef = BlobRef.create(unbox fact?reference)
-                       PayloadDigest = BlobDigest.create(unbox fact?digest) |}
+                       PayloadRef = BlobRef.create (unbox fact?reference)
+                       PayloadDigest = BlobDigest.create (unbox fact?digest) |}
             else
                 FissionFact.FissionCompletionDelivered
                     {| GroupId = unbox fact?groupId
                        OwnerSessionId = owner
                        CompletionId = unbox fact?completion
                        LaneIndex = unbox fact?laneIndex |}
+
         appendFission durable owner None event |> nativeResult box
 
     let private sendSharedCompletion (port: FissionHostPort) (durable: AgentJournal) (request: obj) (lane: obj) =
         task {
-            let session = SessionId.create(unbox lane?session)
+            let session = SessionId.create (unbox lane?session)
+
             let authority =
                 PromptAuthorityProjectionQueries.activeProfile session (AgentJournal.snapshot durable).AgentProjections
+
             match authority with
             | None -> return Ok false
             | Some profile ->
                 let dispatcher = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
+
                 let! sent =
                     dispatcher.SendContinuation
                         (DispatchSessionPort.ofSessionPort port.Sessions)
                         session
-                        (deliveryPrompt (SessionId.create(unbox request?owner)) (unbox request?completion) (unbox request?payload))
+                        (deliveryPrompt
+                            (SessionId.create (unbox request?owner))
+                            (unbox request?completion)
+                            (unbox request?payload))
                         PromptAuthority.ContinuationKind.FissionHandoff
                         profile
                         (port.DirectoryFor session)
                         PromptDispatcher.AwaitMode.Detached
                         None
+
                 return sent |> Result.map (fun _ -> true)
         }
         |> nativeResult box
@@ -156,25 +168,52 @@ module FissionLaunch =
         let group: string = unbox request?id
         let completion: string = unbox request?completion
         let error: string = unbox detail?error
+
         let event, session, message =
             match kind with
             | "capture-write" ->
-                "fission-capture-write-failed", owner,
-                sprintf "fission completion capture blob write failed: group=%s completion=%s reason=%s" group completion error
+                "fission-capture-write-failed",
+                owner,
+                sprintf
+                    "fission completion capture blob write failed: group=%s completion=%s reason=%s"
+                    group
+                    completion
+                    error
             | "capture-append" ->
-                "fission-capture-fact-append-failed", owner,
-                sprintf "fission completion captured fact append failed: group=%s completion=%s reason=%s" group completion error
+                "fission-capture-fact-append-failed",
+                owner,
+                sprintf
+                    "fission completion captured fact append failed: group=%s completion=%s reason=%s"
+                    group
+                    completion
+                    error
             | "delivery-append" ->
-                "fission-delivery-fact-append-failed", owner,
-                sprintf "fission completion delivered fact append failed: group=%s completion=%s lane=%d reason=%s"
-                    group completion (unbox<int> detail?lane) error
+                "fission-delivery-fact-append-failed",
+                owner,
+                sprintf
+                    "fission completion delivered fact append failed: group=%s completion=%s lane=%d reason=%s"
+                    group
+                    completion
+                    (unbox<int> detail?lane)
+                    error
             | "shared-send" ->
-                "fission-send-failed", unbox detail?session,
-                sprintf "fission shared completion send failed: group=%s completion=%s lane=%d reason=%s"
-                    group completion (unbox<int> detail?lane) error
+                "fission-send-failed",
+                unbox detail?session,
+                sprintf
+                    "fission shared completion send failed: group=%s completion=%s lane=%d reason=%s"
+                    group
+                    completion
+                    (unbox<int> detail?lane)
+                    error
             | _ ->
-                "fission-broadcast-failed", owner,
-                sprintf "fission shared completion broadcast failed: group=%s completion=%s error=%s" group completion error
+                "fission-broadcast-failed",
+                owner,
+                sprintf
+                    "fission shared completion broadcast failed: group=%s completion=%s error=%s"
+                    group
+                    completion
+                    error
+
         Diagnostic.emit event [ "session_id", session; "result", message ]
 
     let private captureAndBroadcast
@@ -193,23 +232,46 @@ module FissionLaunch =
                   "owner" ==> SessionId.value owner
                   "completion" ==> completionId
                   "payload" ==> payload
-                  "lanes" ==> (lanes |> List.map (fun lane ->
-                      createObj [ "index" ==> lane.Index; "session" ==> SessionId.value lane.SessionId; "prompt" ==> lane.Prompt ]) |> List.toArray) ]
+                  "lanes"
+                  ==> (lanes
+                       |> List.map (fun lane ->
+                           createObj
+                               [ "index" ==> lane.Index
+                                 "session" ==> SessionId.value lane.SessionId
+                                 "prompt" ==> lane.Prompt ])
+                       |> List.toArray) ]
+
         let effects =
             createObj
-                [ "history" ==> (fun () -> FissionProjection.native (AgentJournal.snapshot durable).AgentProjections.Fission)
-                  "writeBlob" ==> (fun text -> durable.WriteBlob text |> nativeResult (fun receipt ->
-                      createObj [ "reference" ==> BlobRef.value receipt.BlobRef; "digest" ==> BlobDigest.value receipt.BlobDigest ]))
+                [ "history"
+                  ==> (fun () -> FissionProjection.native (AgentJournal.snapshot durable).AgentProjections.Fission)
+                  "writeBlob"
+                  ==> (fun text ->
+                      durable.WriteBlob text
+                      |> nativeResult (fun receipt ->
+                          createObj
+                              [ "reference" ==> BlobRef.value receipt.BlobRef
+                                "digest" ==> BlobDigest.value receipt.BlobDigest ]))
                   "append" ==> (fun fact -> appendCompletion durable fact)
-                  "sendShared" ==> (fun request lane -> sendSharedCompletion port durable request lane)
+                  "sendShared"
+                  ==> (fun request lane -> sendSharedCompletion port durable request lane)
                   "canConverge" ==> port.Events.IsSome
                   "revision" ==> (fun () -> snd durable.SnapshotWithRevision)
-                  "awaitChange" ==> (fun revision -> task {
-                      let! _ = durable.AwaitChangeFrom revision
-                      return () })
-                  "converge" ==> (fun owner ->
-                      FissionHost.tryConverge port.Sessions durable (fun session -> port.DirectoryFor session) (SessionId.create owner))
+                  "awaitChange"
+                  ==> (fun revision ->
+                      task {
+                          let! _ = durable.AwaitChangeFrom revision
+                          return ()
+                      })
+                  "converge"
+                  ==> (fun owner ->
+                      FissionHost.tryConverge
+                          port.Sessions
+                          durable
+                          (fun session -> port.DirectoryFor session)
+                          (SessionId.create owner))
                   "report" ==> (fun kind request detail -> reportBroadcast kind request detail) ]
+
         lifecycle?broadcast (request, effects)
 
     let private payloadFromView view fallback =
@@ -431,7 +493,14 @@ module FissionLaunch =
             | Ok laneId ->
                 port.RegisterLane laneId physicalParent directory
 
-                fissionRuntime?bindLane (groupId, SessionId.value owner, lane.Index, parsedCount, SessionId.value laneId)
+                fissionRuntime?bindLane (
+                    groupId,
+                    SessionId.value owner,
+                    lane.Index,
+                    parsedCount,
+                    SessionId.value laneId
+                )
+
                 return Ok laneId
         }
 

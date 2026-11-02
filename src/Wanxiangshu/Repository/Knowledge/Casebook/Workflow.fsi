@@ -17,14 +17,11 @@ module CasebookServiceBinding =
 
     val finalizeCaptured: store: IEventStore -> case: Case -> Task<CaseFinalizeSettlement>
 
-    val finalizeDraft:
-        root: string -> store: IEventStore -> identity: string -> Task<CaseFinalizeSettlement>
+    val finalizeDraft: root: string -> store: IEventStore -> identity: string -> Task<CaseFinalizeSettlement>
 
-    val refresh:
-        root: string -> store: IEventStore -> identity: string -> Task<Result<bool, CasebookMutationError>>
+    val refresh: root: string -> store: IEventStore -> identity: string -> Task<Result<bool, CasebookMutationError>>
 
-    val touch:
-        root: string -> store: IEventStore -> identity: string -> Task<Result<unit, CasebookMutationError>>
+    val touch: root: string -> store: IEventStore -> identity: string -> Task<Result<unit, CasebookMutationError>>
 
     val fetch:
         root: string -> store: IEventStore -> shelfmark: string -> notify: (CasebookAppendFailure -> unit) -> Task<obj>

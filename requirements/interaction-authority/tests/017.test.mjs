@@ -4,7 +4,7 @@ import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.j
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as executionStatus from '../../../dist/Execution/Session/ChatExecution/StatusSurface.js'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
-import * as runtimePath from '../../../dist/Persistence/Journal/RuntimePath.js'
+const runtimePath = { stateRoot: journal.JournalSurface_stateRoot }
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import { rootFor, rootSelection, withJournal, withSharedJournal, acceptOwner, hostPort } from './support/authority.mjs'
 

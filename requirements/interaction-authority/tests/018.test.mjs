@@ -8,7 +8,7 @@ import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js
 import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.js'
 import * as lifeClassification from '../../../dist/Interaction/Authority/LifeClassification.js'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
-import * as runtimePath from '../../../dist/Persistence/Journal/RuntimePath.js'
+const runtimePath = { stateRoot: journal.JournalSurface_stateRoot }
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import { withJournal, withSharedJournal, acceptOwner, rootSelection as durableRootSelection } from './support/authority.mjs'
 

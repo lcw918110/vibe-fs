@@ -1,3 +1,0 @@
-M  "proposals/TODO\346\226\275\345\267\245\346\200\273\350\256\241\345\210\222-2026-10-03.md"
-A  "proposals/W1\345\267\245\345\205\267\345\275\222\346\241\243\346\265\201\345\274\217\350\276\223\345\207\272-2026-10-07.md"
-M  requirements/verification-system/tests/support/node-tool-candidate-tests.mjs

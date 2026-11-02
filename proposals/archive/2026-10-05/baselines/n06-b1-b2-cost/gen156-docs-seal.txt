@@ -1,6 +1,0 @@
-Documentation settlement seal: generation 156.
-Build exit 0; complete check exit 0.
-Compiler and artifact input digests equal the generation 155 formal run.
-Generated input digest changed only for documentation settlement.
-The generation 155 formal result remains 225/225 drained, 1125 pass, 0 fail,
-27 skip, 121 TODO; generation 156 is not a second business test run.

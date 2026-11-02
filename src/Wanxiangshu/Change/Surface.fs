@@ -422,7 +422,8 @@ module ChangeSurface =
         match decodePublishClaimed payload with
         | Error error -> Error error
         | Ok claim ->
-            OrchestratorFactFold.fold projection
+            OrchestratorFactFold.fold
+                projection
                 (OrchestratorFactCases.PublishClaimed
                     {| ManagerJobId = managerJobId
                        TargetRef = claim.TargetRef
@@ -799,25 +800,6 @@ module ChangeSurface =
               FailPublishedAppend = false
               GateCancelled = false
               CleanupFails = false }
-        | "reentry-missing-rebased" ->
-            { InitialHead = "rebased-1"
-              InitialTarget = "target-1"
-              InitialRebasedTarget = None
-              Signals = []
-              Snapshots = [ "snapshot-rebased-1" ]
-              TargetReads = []
-              RebaseResults = []
-              ConflictReads = []
-              FfResults = []
-              SeededCandidateReady = None
-              SeededRebasedReady = None
-              SeededPublishClaimed =
-                Some("refs/heads/main", "rebased-1", "target-1", "snapshot-rebased-1", "certificate-1", "authority-1")
-              SeededPublished = None
-              WorktreeReads = [ "rebased-1" ]
-              FailPublishedAppend = false
-              GateCancelled = false
-              CleanupFails = false }
         | "reentry-claim-snapshot-mismatch" ->
             { InitialHead = "rebased-1"
               InitialTarget = "target-1"
@@ -977,7 +959,7 @@ module ChangeSurface =
             // on the old pin and never fail closed without consuming signals.
             { InitialHead = "rebased-1"
               InitialTarget = "target-1"
-              InitialRebasedTarget = None
+              InitialRebasedTarget = Some "target-1"
               Signals =
                 [ ProgramScenarioSignal.Retired
                   ProgramScenarioSignal.Exceptional "scenario-complete" ]
@@ -1160,12 +1142,18 @@ module ChangeSurface =
                         fun command ->
                             task {
                                 let args = unbox<string array> command?args
+
                                 let removeFails =
-                                    scenario.CleanupFails && args.Length >= 2
-                                    && args[0] = "worktree" && args[1] = "remove"
-                                return box {| code = (if removeFails then 1 else 0)
-                                              stdout = ""
-                                              stderr = (if removeFails then "disk detached" else "") |}
+                                    scenario.CleanupFails
+                                    && args.Length >= 2
+                                    && args[0] = "worktree"
+                                    && args[1] = "remove"
+
+                                return
+                                    box
+                                        {| code = (if removeFails then 1 else 0)
+                                           stdout = ""
+                                           stderr = (if removeFails then "disk detached" else "") |}
                             }
                     )
                   IsDirty = fun _ -> Task.FromResult(Ok [])
@@ -1306,15 +1294,13 @@ module ChangeSurface =
                                    ResultingTargetHead = CommitHash.create resulting |})
                             current
 
-                // Seed order mirrors durable write order: candidate, rebased,
-                // claim, then terminal. Physical doubles only replay queued
-                // observations; they never read source files or copy the model.
-                created
-                |> withLegacyRebased
-                |> withCandidate
-                |> withRebased
-                |> withClaim
-                |> withPublished
+                let initial = created |> withLegacyRebased |> withCandidate
+
+                if scenarioName = "reentry-stale-claim-superseded" then
+                    // The old claim was accepted before a later rebase replaced its pin.
+                    initial |> withClaim |> withRebased |> withPublished
+                else
+                    initial |> withRebased |> withClaim |> withPublished
 
             let initialProjection = Wanxiangshu.Composition.Durable.Fold.empty
 
@@ -1607,10 +1593,12 @@ module ChangeSurface =
     let gitCreateWorktree (git: obj) (job: string) (path: string) (sourceRef: string) : Task<obj> =
         task {
             let! result =
-                (git :?> GitHandle).Port.Worktrees.Create(
-                    ManagerWorktreePolicy.managerBranchOf job |> WorktreeIdentity.create,
-                    WorktreePath.create path,
-                    TargetRef.create sourceRef)
+                (git :?> GitHandle)
+                    .Port.Worktrees.Create(
+                        ManagerWorktreePolicy.managerBranchOf job |> WorktreeIdentity.create,
+                        WorktreePath.create path,
+                        TargetRef.create sourceRef
+                    )
 
             return resultObject result (fun value -> box (WorktreeIdentity.value value.Identity))
         }
@@ -1623,7 +1611,10 @@ module ChangeSurface =
 
     let gitDeleteBranch (git: obj) (identity: string) : Task<obj> =
         task {
-            let! result = (git :?> GitHandle).Port.Worktrees.DeleteBranch(WorktreeIdentity.create identity)
+            let! result =
+                (git :?> GitHandle)
+                    .Port.Worktrees.DeleteBranch(WorktreeIdentity.create identity)
+
             return resultObject result (fun _ -> null)
         }
 
@@ -1657,18 +1648,20 @@ module ChangeSurface =
     let worktreeCreate (git: obj) (job: string) (path: string) (sourceRef: string) : Task<obj> =
         task {
             let! result =
-                (git :?> GitHandle).Port.Worktrees.Create(
-                    ManagerWorktreePolicy.managerBranchOf job |> WorktreeIdentity.create,
-                    WorktreePath.create path,
-                    TargetRef.create sourceRef
-                )
+                (git :?> GitHandle)
+                    .Port.Worktrees.Create(
+                        ManagerWorktreePolicy.managerBranchOf job |> WorktreeIdentity.create,
+                        WorktreePath.create path,
+                        TargetRef.create sourceRef
+                    )
 
             return resultObject result (fun resource -> WorktreeHandle resource :> obj)
         }
 
     let worktreeAdopt (git: obj) (identity: string) (path: string) : obj =
         WorktreeHandle(
-            (git :?> GitHandle).Port.Worktrees.Adopt(WorktreeIdentity.create identity, WorktreePath.create path)
+            (git :?> GitHandle)
+                .Port.Worktrees.Adopt(WorktreeIdentity.create identity, WorktreePath.create path)
         )
         :> obj
 
@@ -1788,3 +1781,160 @@ module ChangeSurface =
         }
 
     let verdictMaxBatch () : int = JoinBatch.MaxJoinBatch
+
+    let managerBranchOf (job: string) =
+        ManagerWorktreePolicy.managerBranchOf job
+
+    let staleManagerWorktrees (entries: obj array) (owned: string array) =
+        entries
+        |> Array.map (fun entry ->
+            let pair = unbox<obj array> entry
+
+            unbox<string> pair[0],
+            (if isNullish pair[1] then
+                 None
+             else
+                 Some(unbox<string> pair[1])))
+        |> Array.toList
+        |> fun values -> ManagerWorktreePolicy.staleWorktrees values (Array.toList owned)
+        |> List.toArray
+
+    let staleManagerBranches (branches: string array) (owned: string array) =
+        ManagerWorktreePolicy.staleBranches (Array.toList branches) (Array.toList owned)
+        |> List.toArray
+
+    let lifecycleJob (journal: Wanxiangshu.Persistence.Journal.JournalHandle) (id: string) =
+        (Wanxiangshu.Persistence.Journal.AgentJournal.snapshot journal.Journal)
+            .AgentProjections.Orchestrator
+        |> OrchestratorProjection.tryFind (ManagerJobId.create id)
+        |> Option.map OrchestratorProjection.toJob
+        |> Option.toObj
+
+    [<Emit("$0[$1](...$2)")>]
+    let private lifecycleCall (_port: obj) (_name: string) (_args: obj array) : Task<obj> = jsNative
+
+    let createLifecycle (journal: Wanxiangshu.Persistence.Journal.JournalHandle) (options: obj) : obj =
+        let convert decode operation =
+            task {
+                let! raw = operation
+
+                return
+                    if unbox<bool> raw?ok then
+                        Ok(decode raw?value)
+                    else
+                        Error(unbox<string> raw?error)
+            }
+
+        let gitInput: obj = options?git
+
+        let gitCall name args decode =
+            lifecycleCall gitInput name args |> convert decode
+
+        let git: GitPort =
+            { IsDirty =
+                fun path -> gitCall "isDirty" [| box (WorktreePath.value path) |] (unbox<string array> >> Array.toList)
+              Worktrees = GitWorktrees.FromNative options?worktrees
+              FreezeTargetBranch = fun () -> gitCall "freezeTarget" [||] (unbox<string> >> TargetRef.create)
+              Rebase =
+                fun path target ->
+                    gitCall "rebase" [| box (WorktreePath.value path); box (TargetRef.value target) |] ignore
+              FfMerge =
+                fun path target expected candidate ->
+                    gitCall
+                        "ffMerge"
+                        [| box (WorktreePath.value path)
+                           box (TargetRef.value target)
+                           box (CommitHash.value expected)
+                           box (CommitHash.value candidate) |]
+                        (unbox<string> >> CommitHash.create)
+              ConflictedFiles =
+                fun path ->
+                    gitCall "conflictedFiles" [| box (WorktreePath.value path) |] (unbox<string array> >> Array.toList)
+              HasRebaseHead =
+                fun path ->
+                    task {
+                        let! value = lifecycleCall gitInput "hasRebaseHead" [| box (WorktreePath.value path) |]
+                        return unbox<bool> value
+                    }
+              ReadHead =
+                fun path -> gitCall "readHead" [| box (WorktreePath.value path) |] (unbox<string> >> CommitHash.create)
+              GetTargetHead =
+                fun target ->
+                    gitCall "targetHead" [| box (TargetRef.value target) |] (unbox<string> >> CommitHash.create) }
+
+        let relayInput: obj = options?relay
+
+        let relayCall name id decode =
+            lifecycleCall relayInput name [| box (ManagerJobId.value id) |]
+            |> convert decode
+
+        let relay: RelayPort =
+            { CreateManagerSession =
+                fun request ->
+                    lifecycleCall
+                        relayInput
+                        "createSession"
+                        [| box
+                               {| id = ManagerJobId.value request.JobId
+                                  agent = request.ManagerAgent
+                                  path = WorktreePath.value request.Worktree
+                                  prompt = request.RootRequest |} |]
+                    |> convert (unbox<string> >> SessionId.create)
+              ActivateManager = fun id -> relayCall "activate" id ignore
+              AwaitLoopSignal =
+                fun id ->
+                    relayCall "signal" id (fun value ->
+                        match unbox<string> value?kind with
+                        | "Candidate" -> ManagerLoopSignal.Candidate
+                        | "Continue" -> ManagerLoopSignal.Continue
+                        | _ -> ManagerLoopSignal.ExceptionalTerminal value?reason)
+              ContinueLoop = fun id -> relayCall "continue" id (unbox<string> >> IncumbencyId.create)
+              PrepareCandidate = fun id -> relayCall "prepare" id (unbox<string> >> CommitHash.create)
+              TerminateWorkResources =
+                fun id ->
+                    task {
+                        let! _ = lifecycleCall relayInput "terminate" [| box (ManagerJobId.value id) |]
+                        return ()
+                    } }
+
+        Orchestrator(
+            CausalWaitRuntime().Observer,
+            git,
+            relay,
+            options?root,
+            TargetRef.create options?target,
+            journal = OrchestratorJournalAdapter.forEngine journal.Journal
+        )
+        |> box
+
+    let startLifecycle (runtime: obj) (id: string) (agent: string) (prompt: string) (path: string) =
+        task {
+            let! result =
+                (unbox<Orchestrator> runtime)
+                    .ForkManager(ManagerJobId.create id, agent, prompt, worktreePath = WorktreePath.create path)
+
+            return
+                match result with
+                | Ok handle ->
+                    box
+                        {| ok = true
+                           id = ManagerJobId.value handle.JobId
+                           path = WorktreePath.value handle.WorktreePath |}
+                | Error error ->
+                    box
+                        {| ok = false
+                           error = verdictObject error |}
+        }
+
+    let recoverLifecycle (runtime: obj) (job: obj) =
+        (unbox<Orchestrator> runtime)
+            .RecoverManagerJob(OrchestratorProjection.fromJob job)
+
+    let collectLifecycle (runtime: obj) =
+        task {
+            let! answer =
+                (unbox<Orchestrator> runtime)
+                    .JoinPublishedBatch(1, TaskCompletionSource<JoinInterruptReason>().Task)
+
+            return verdictJoinOutcomeObject answer
+        }

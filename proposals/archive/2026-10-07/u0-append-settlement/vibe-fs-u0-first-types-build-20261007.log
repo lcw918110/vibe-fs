@@ -1,202 +1,0 @@
-[36m[build][0m Compiling F# (full)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @Zaid-Ajaj
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/a6867bf3a5421b09f15bd4d4bab419446b3d0d61408c549031e39a9aaeb805f0/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (1556 source files) parsed in 1225ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 32660ms
-
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fsi(5,18): (5,29) error FSHARP: The namespace 'Persistence' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fsi(11,33): (11,60) error FSHARP: The type 'AppendCommitUnknownEvidence' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fsi(15,18): (15,29) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fsi(27,48): (27,78) error FSHARP: The type 'AppendNoNewWriteReleaseFailure' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fsi(33,48): (33,78) error FSHARP: The type 'AppendNoNewWriteReleaseFailure' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(5,18): (5,29) error FSHARP: The namespace 'Persistence' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(12,33): (12,60) error FSHARP: The type 'AppendCommitUnknownEvidence' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(16,18): (16,29) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(35,48): (35,78) error FSHARP: The type 'AppendNoNewWriteReleaseFailure' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(47,48): (47,78) error FSHARP: The type 'AppendNoNewWriteReleaseFailure' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(58,100): (58,107) error FSHARP: The type 'Object' does not define the field, constructor or member 'Primary'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(58,123): (58,130) error FSHARP: The type 'Object' does not define the field, constructor or member 'Primary'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(63,83): (63,94) error FSHARP: The value, namespace, type or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/Outcome.fs(65,113): (65,118) error FSHARP: The type 'Object' does not define the field, constructor or member 'Cause'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fsi(14,37): (14,48) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fsi(22,37): (22,48) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fsi(27,38): (27,49) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fsi(29,21): (29,32) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fs(14,37): (14,48) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fs(22,37): (22,48) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fs(25,57): (25,68) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fs(26,30): (26,41) error FSHARP: The value, namespace, type or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/DurabilityPort.fs(26,60): (26,71) error FSHARP: The value, namespace, type or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fsi(20,14): (20,25) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(20,14): (20,25) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(97,23): (97,36) error FSHARP: Incomplete pattern matches on this expression. (code 25)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(98,19): (98,30) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(99,19): (99,30) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(100,19): (100,30) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(101,19): (101,30) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(102,19): (102,30) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(103,19): (103,30) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(145,130): (145,141) error FSHARP: The value, namespace, type or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fsi(13,14): (13,25) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(13,14): (13,25) error FSHARP: The type 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(29,106): (29,117) error FSHARP: The value, namespace, type or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(35,11): (35,22) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(36,11): (36,22) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(37,11): (37,22) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(42,11): (42,22) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(43,11): (43,22) error FSHARP: The namespace or module 'AppendError' is not defined. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/Store.fs(557,47): (557,54) error FSHARP: 'failure' is bound twice in this pattern (code 38)
-[39m[22m[31m./src/Wanxiangshu/Strength/Persistence/Store.fs(558,42): (558,49) error FSHARP: 'failure' is bound twice in this pattern (code 38)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/AgentJournal.fs(243,79): (243,87) error FSHARP: The type 'Object' does not define the field, constructor or member 'Prepared'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/AgentJournal.fs(244,128): (244,135) error FSHARP: The type 'Object' does not define the field, constructor or member 'Primary'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Persistence/Journal/AgentJournal.fs(244,151): (244,158) error FSHARP: The type 'Object' does not define the field, constructor or member 'Primary'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Execution/Session/ChatExecution/Acceptance.fs(204,73): (204,80) error FSHARP: This expression was expected to have type    'AppendNoNewWriteReleaseFailure'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Execution/Session/ChatExecution/Acceptance.fs(264,80): (264,87) error FSHARP: This expression was expected to have type    'AppendNoNewWriteReleaseFailure'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Host/HostSignalSurface.fs(31,9): (31,17) error FSHARP: Incomplete pattern matches on this expression. For example, the value 'PersistenceFailure (NoNewWrite)' may indicate a case not covered by the pattern(s). (code 25)
-[39m[22m[31m./src/Wanxiangshu/Strength/OpenCode/Replay.fs(30,56): (30,71) error FSHARP: Type constraint mismatch. The type     'obj'    is not compatible with type    'AppendError' (code 193)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Hosts/Mcp/Server.fs(167,13): (167,103) error FSHARP: This expression was expected to have type    'ToolRefusal'    but here has type    'WireError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Hosts/Mcp/Server.fs(168,42): (168,109) error FSHARP: All branches of a pattern match expression must return values implicitly convertible to the type of the first branch, which here is 'ToolRefusal'. This branch returns a value of type 'WireError'. (code 1)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Hosts/Mcp/Server.fs(169,46): (169,80) error FSHARP: All branches of a pattern match expression must return values implicitly convertible to the type of the first branch, which here is 'ToolRefusal'. This branch returns a value of type 'WireError'. (code 1)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Hosts/Mcp/Server.fs(170,47): (170,85) error FSHARP: All branches of a pattern match expression must return values implicitly convertible to the type of the first branch, which here is 'ToolRefusal'. This branch returns a value of type 'WireError'. (code 1)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Hosts/Mcp/Server.fs(171,42): (171,69) error FSHARP: All branches of a pattern match expression must return values implicitly convertible to the type of the first branch, which here is 'ToolRefusal'. This branch returns a value of type 'WireError'. (code 1)
-[39m[22m[31m./src/Wanxiangshu/Sphinx/V2/Hosts/Mcp/Server.fs(172,52): (172,79) error FSHARP: All branches of a pattern match expression must return values implicitly convertible to the type of the first branch, which here is 'ToolRefusal'. This branch returns a value of type 'WireError'. (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Surface.fs(338,37): (338,58) error FSHARP: The value, namespace, type or module 'CasebookAppendSurface' is not defined. Maybe you want one of the following:   CasebookAppendFailure   CasebookAppendOperation   CasebookDraft   CasebookDraftStore   CasebookCapture (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Surface.fs(354,37): (354,58) error FSHARP: The value, namespace, type or module 'CasebookAppendSurface' is not defined. Maybe you want one of the following:   CasebookAppendFailure   CasebookAppendOperation   CasebookDraft   CasebookDraftStore   CasebookCapture (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Surface.fs(429,39): (429,60) error FSHARP: The value, namespace, type or module 'CasebookAppendSurface' is not defined. Maybe you want one of the following:   CasebookAppendFailure   CasebookAppendOperation   CasebookDraft   CasebookDraftStore   CasebookCapture (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Surface.fs(478,24): (478,45) error FSHARP: The value, namespace, type or module 'CasebookAppendSurface' is not defined. Maybe you want one of the following:   CasebookAppendFailure   CasebookAppendOperation   CasebookDraft   CasebookDraftStore   CasebookCapture (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionSurface.fs(212,15): (212,51) error FSHARP: This expression was expected to have type    'obj'    but here has type    'AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionSurface.fs(218,15): (218,46) error FSHARP: This expression was expected to have type    'obj'    but here has type    'AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionSurface.fs(224,15): (224,56) error FSHARP: This expression was expected to have type    'obj'    but here has type    'AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/BookkeeperRefreshSurface.fs(14,37): (14,58) error FSHARP: The value, namespace, type or module 'CasebookAppendSurface' is not defined. Maybe you want one of the following:   CasebookAppendFailure   CasebookAppendOperation   CasebookSurface   CasebookIndexSurface   CasebookDraft (code 39)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/LifecycleSurface.fs(22,26): (22,47) error FSHARP: The value, namespace, type or module 'CasebookAppendSurface' is not defined. Maybe you want one of the following:   CasebookAppendFailure   CasebookBookkeeperSurface   CasebookAppendOperation   CasebookSurface   CasebookIndexSurface (code 39)
-[39m[22m[31m./src/Wanxiangshu/Strength/OpenCode/Delegate.fs(931,108): (931,115) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Strength/OpenCode/Delegate.fs(1066,61): (1066,68) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Strength/OpenCode/Delegate.fs(1103,61): (1103,68) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Strength/OpenCode/Delegate.fs(1296,66): (1296,73) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Strength/Surface.fs(1356,55): (1356,62) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'EventId * AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Strength/Surface.fs(1454,113): (1454,120) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Strength/Surface.fs(1485,62): (1485,69) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Plugin/PluginStrengthPorts.fs(59,52): (59,59) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Plugin/PluginStrengthPorts.fs(62,64): (62,71) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Verification/EventStoreWriterSurface.fs(45,88): (45,95) error FSHARP: The type 'Object' does not define the field, constructor or member 'Primary'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Verification/EventStoreWriterSurface.fs(49,15): (49,49) error FSHARP: This expression was expected to have type    'obj'    but here has type    'AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Verification/EventStoreWriterSurface.fs(50,65): (50,70) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Verification/EventStoreWriterSurface.fs(234,102): (234,115) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Verification/EventStoreWriterSurface.fs(236,116): (236,124) error FSHARP: This expression was expected to have type    'AppendCommitUnknownEvidence'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Verification/EventStoreWriterSurface.fs(238,136): (238,143) error FSHARP: This expression was expected to have type    'AppendNoNewWriteReleaseFailure'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Verification/JournalPortObservationSurface.fs(88,88): (88,95) error FSHARP: The type 'Object' does not define the field, constructor or member 'Primary'. (code 39)
-[39m[22m[31m./src/Wanxiangshu/Verification/JournalPortObservationSurface.fs(89,99): (89,110) error FSHARP: This expression was expected to have type    'AppendError'    but here has type    'obj' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/AppendSurface.fs(25,15): (25,51) error FSHARP: This expression was expected to have type    'obj'    but here has type    'AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/AppendSurface.fs(31,15): (31,46) error FSHARP: This expression was expected to have type    'obj'    but here has type    'AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/AppendSurface.fs(37,15): (37,56) error FSHARP: This expression was expected to have type    'obj'    but here has type    'AppendError' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/Failure.fs(1,1): error EXCEPTION: error recovery at (103,18--103,44)
-   at FSharp.Compiler.Symbols.ExprTranslationImpl.wfail[a](String msg, Range m) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 85
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreeCase(SymbolEnv cenv, ExprTranslationEnv env, Range m, Expr inpExpr, TType dtreeRetTy, DecisionTreeCase dcase, E acc) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1335
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim@1277.Invoke(DecisionTreeCase dcase, E acc)
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 420
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvLetBind(SymbolEnv cenv, ExprTranslationEnv env, Binding bind) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 972
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 389
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprOnDemand@1340.Invoke(Unit unitVar0) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1340
-   at FSharp.Compiler.Symbols.FSharpExpr.get_E() in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 153
-   at FSharp.Compiler.Symbols.FSharpExprPatterns.|Coerce|_|(FSharpExpr e) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1452
-   at Fable.Transforms.FSharp2Fable.Compiler.transformExpr@639.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 733
-   at MonadicTrampoline.run[a](Thunk`1 _arg1) in /home/runner/work/Fable/Fable/src/Fable.Transforms/MonadicTrampoline.fs:line 9
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunction(IFableCompiler com, Context ctx, String name, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1842
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunctionOrValue(IFableCompiler com, Context ctx, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1924
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberDecl(FableCompiler com, Context ctx, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2089
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Fable.Transforms.FSharp2Fable.Compiler.transformFile(Compiler com) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2984
-   at Fable.Cli.Pipeline.Js.compileFile@174.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Cli/Pipeline.fs:line 180
-   at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 509
-   at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 112
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/Settlement.fs(1,1): error EXCEPTION: error recovery at (37,10--37,47)
-   at FSharp.Compiler.Symbols.ExprTranslationImpl.wfail[a](String msg, Range m) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 85
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreeCase(SymbolEnv cenv, ExprTranslationEnv env, Range m, Expr inpExpr, TType dtreeRetTy, DecisionTreeCase dcase, E acc) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1335
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim@1277.Invoke(DecisionTreeCase dcase, E acc)
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 420
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprOnDemand@1340.Invoke(Unit unitVar0) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1340
-   at FSharp.Compiler.Symbols.FSharpExpr.get_E() in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 153
-   at FSharp.Compiler.Symbols.FSharpExprPatterns.|Coerce|_|(FSharpExpr e) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1452
-   at Fable.Transforms.FSharp2Fable.Compiler.transformExpr@639.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 733
-   at MonadicTrampoline.run[a](Thunk`1 _arg1) in /home/runner/work/Fable/Fable/src/Fable.Transforms/MonadicTrampoline.fs:line 9
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunction(IFableCompiler com, Context ctx, String name, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1842
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunctionOrValue(IFableCompiler com, Context ctx, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1924
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberDecl(FableCompiler com, Context ctx, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2089
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Fable.Transforms.FSharp2Fable.Compiler.transformFile(Compiler com) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2984
-   at Fable.Cli.Pipeline.Js.compileFile@174.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Cli/Pipeline.fs:line 180
-   at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 509
-   at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 112
-[39m[22m[31m./src/Wanxiangshu/Repository/Programming/Js/TransactionSurface.fs(1,1): error EXCEPTION: error recovery at (224,14--224,55)
-   at FSharp.Compiler.Symbols.ExprTranslationImpl.wfail[a](String msg, Range m) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 85
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreeCase(SymbolEnv cenv, ExprTranslationEnv env, Range m, Expr inpExpr, TType dtreeRetTy, DecisionTreeCase dcase, E acc) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1335
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 420
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvLetBind(SymbolEnv cenv, ExprTranslationEnv env, Binding bind) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 972
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 389
-   at FSharp.Compiler.Symbols.FSharpExprPatterns.|Coerce|_|(FSharpExpr e) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1452
-   at Fable.Transforms.FSharp2Fable.Compiler.transformExpr@639.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 733
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunction(IFableCompiler com, Context ctx, String name, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1842
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Fable.Transforms.FSharp2Fable.Compiler.transformFile(Compiler com) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2984
-   at Fable.Cli.Pipeline.Js.compileFile@174.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Cli/Pipeline.fs:line 180
-   at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 509
-   at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 112
-[39m[22m[31m./src/Wanxiangshu/Verification/EventStoreWriterSurface.fs(1,1): error EXCEPTION: error recovery at (49,14--49,48)
-   at FSharp.Compiler.Symbols.ExprTranslationImpl.wfail[a](String msg, Range m) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 85
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreeCase(SymbolEnv cenv, ExprTranslationEnv env, Range m, Expr inpExpr, TType dtreeRetTy, DecisionTreeCase dcase, E acc) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1335
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 420
-   at FSharp.Compiler.Symbols.FSharpExprPatterns.|Coerce|_|(FSharpExpr e) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1452
-   at Fable.Transforms.FSharp2Fable.Compiler.transformExpr@639.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 733
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunction(IFableCompiler com, Context ctx, String name, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1842
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Fable.Transforms.FSharp2Fable.Compiler.transformFile(Compiler com) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2984
-   at Fable.Cli.Pipeline.Js.compileFile@174.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Cli/Pipeline.fs:line 180
-   at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 509
-   at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 112
-[39m[22m[31m./src/Wanxiangshu/Repository/Knowledge/Casebook/AppendSurface.fs(1,1): error EXCEPTION: error recovery at (37,14--37,55)
-   at FSharp.Compiler.Symbols.ExprTranslationImpl.wfail[a](String msg, Range m) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 85
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreeCase(SymbolEnv cenv, ExprTranslationEnv env, Range m, Expr inpExpr, TType dtreeRetTy, DecisionTreeCase dcase, E acc) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1335
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvDecisionTreePrim(SymbolEnv cenv, ExprTranslationEnv env, TType dtreeRetTy, DecisionTree x) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1290
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 420
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvLetBind(SymbolEnv cenv, ExprTranslationEnv env, Binding bind) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 972
-   at FSharp.Compiler.Symbols.FSharpExprConvert.ConvExprPrimLinear(SymbolEnv cenv, ExprTranslationEnv env, Expr expr, FSharpFunc`2 contF) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 389
-   at FSharp.Compiler.Symbols.FSharpExprPatterns.|Coerce|_|(FSharpExpr e) in /home/dev/Projects/fsharp/src/Compiler/Symbols/Exprs.fs:line 1452
-   at Fable.Transforms.FSharp2Fable.Compiler.transformExpr@639.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 733
-   at Fable.Transforms.FSharp2Fable.Compiler.transformMemberFunction(IFableCompiler com, Context ctx, String name, FSharpMemberOrFunctionOrValue memb, FSharpList`1 args, FSharpExpr body) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 1842
-   at Microsoft.FSharp.Primitives.Basics.List.collectToFreshConsTail[T,TResult](FSharpFunc`2 f, FSharpList`1 list, FSharpList`1 cons) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 436
-   at Microsoft.FSharp.Primitives.Basics.List.collect[T,TResult](FSharpFunc`2 f, FSharpList`1 list) in /home/dev/Projects/fsharp/src/FSharp.Core/local.fs:line 443
-   at Fable.Transforms.FSharp2Fable.Compiler.transformFile(Compiler com) in /home/runner/work/Fable/Fable/src/Fable.Transforms/FSharp2Fable.fs:line 2984
-   at Fable.Cli.Pipeline.Js.compileFile@174.Invoke(Unit unitVar) in /home/runner/work/Fable/Fable/src/Fable.Cli/Pipeline.fs:line 180
-   at Microsoft.FSharp.Control.AsyncPrimitives.CallThenInvoke[T,TResult](AsyncActivation`1 ctxt, TResult result1, FSharpFunc`2 part2) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 509
-   at Microsoft.FSharp.Control.Trampoline.Execute(FSharpFunc`2 firstAction) in /home/dev/Projects/fsharp/src/FSharp.Core/async.fs:line 112
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

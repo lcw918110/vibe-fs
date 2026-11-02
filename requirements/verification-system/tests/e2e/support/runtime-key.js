@@ -41,7 +41,7 @@ import {
   source as pairProgrammingThoughtSource,
 } from '../../../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js';
 import { createHash } from 'node:crypto';
-import { sanitizeMessage } from '../../../../../dist/OpenCode/Host/HostMessageProjection.js';
+import { sanitizeMessage } from '../../../../../dist/OpenCode/Host/HostBoundarySurface.js';
 
 /**
  * The Host's own rendering of an assistant row that carries no content at all.

@@ -26,5 +26,4 @@ module TerminalValidity =
         elif toolMarkup.IsMatch text then Error Rejection.XmlOnly
         else Ok()
 
-    let isValid (text: string) : bool =
-        check text |> Result.isOk
+    let isValid (text: string) : bool = check text |> Result.isOk

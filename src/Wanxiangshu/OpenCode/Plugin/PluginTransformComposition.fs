@@ -608,52 +608,68 @@ module PluginTransformComposition =
         let finishedConsultationTurn (physical: PhysicalUserMessageId option) (outObj: obj) =
             let messages = ProviderWireDecode.messagesFromTransformOutput outObj
             let physicalId = physical |> Option.map PhysicalUserMessageId.value
+
             let current =
                 messages
                 |> List.tryFindIndex (fun message -> ProviderWireDecode.hostMessageId message = physicalId)
+
             match current with
             | None -> false
             | Some index ->
                 let message = List.item index messages
+
                 let marked =
                     ProviderWireDecode.rawPartsOf message
-                    |> List.exists (fun part -> not (isNull part?metadata) && part?metadata?wanxiangshu_consultation_steer = box true)
+                    |> List.exists (fun part ->
+                        not (isNull part?metadata)
+                        && part?metadata?wanxiangshu_consultation_steer = box true)
+
                 let isAssistant item =
                     ProviderWireDecode.firstString (ProviderWireDecode.infoObject item) [ "role" ] = Some "assistant"
                 // The agent already ran a model step after this answer landed:
                 // the answer was consumed inside a live loop, so this request is
                 // ordinary work, never a late wake-up to suppress.
                 let answeredAlready = messages |> List.skip (index + 1) |> List.exists isAssistant
-                let previous =
-                    messages |> List.take index |> List.rev |> List.tryFind isAssistant
+                let previous = messages |> List.take index |> List.rev |> List.tryFind isAssistant
                 // WHAT[delegation-041]: Manager, Orchestrator and Plan own long
                 // work. Their tool-free stop is no closing report; the answer
                 // is the nudge that carries the work on, never a wake-up to stop.
                 let agentOf item =
                     let info = ProviderWireDecode.infoObject item
+
                     ProviderWireDecode.firstString info [ "agent" ]
                     |> Option.orElseWith (fun () -> ProviderWireDecode.firstString info [ "mode" ])
+
                 let longRunning =
                     message :: Option.toList previous
                     |> List.exists (fun item ->
                         agentOf item
                         |> Option.bind Roles.tryParseRole
                         |> Option.exists Roles.isLongRunning)
-                marked && not answeredAlready && not longRunning && (previous |> Option.exists (fun assistant ->
-                    let info = ProviderWireDecode.infoObject assistant
-                    let finished = not (isNull info?time) && not (isNull info?time?completed)
-                    let calls = ProviderWireDecode.rawPartsOf assistant |> List.exists (fun part -> ProviderWireDecode.firstString part [ "type" ] = Some "tool")
-                    // WHAT[delegation-040]: an empty finished turn (finish=length,
-                    // no prose) is no closing report. The answer is then the only
-                    // thing that keeps the run alive; stopping it left nothing to
-                    // settle and nothing to continue.
-                    let prose =
-                        ProviderWireDecode.rawPartsOf assistant
-                        |> List.exists (fun part ->
-                            ProviderWireDecode.firstString part [ "type" ] = Some "text"
-                            && (ProviderWireDecode.firstString part [ "text" ]
-                                |> Option.exists (fun text -> not (String.IsNullOrWhiteSpace text))))
-                    finished && not calls && prose))
+
+                marked
+                && not answeredAlready
+                && not longRunning
+                && (previous
+                    |> Option.exists (fun assistant ->
+                        let info = ProviderWireDecode.infoObject assistant
+                        let finished = not (isNull info?time) && not (isNull info?time?completed)
+
+                        let calls =
+                            ProviderWireDecode.rawPartsOf assistant
+                            |> List.exists (fun part -> ProviderWireDecode.firstString part [ "type" ] = Some "tool")
+                        // WHAT[delegation-040]: an empty finished turn (finish=length,
+                        // no prose) is no closing report. The answer is then the only
+                        // thing that keeps the run alive; stopping it left nothing to
+                        // settle and nothing to continue.
+                        let prose =
+                            ProviderWireDecode.rawPartsOf assistant
+                            |> List.exists (fun part ->
+                                ProviderWireDecode.firstString part [ "type" ] = Some "text"
+                                && (ProviderWireDecode.firstString part [ "text" ]
+                                    |> Option.exists (fun text -> not (String.IsNullOrWhiteSpace text))))
+
+                        finished && not calls && prose))
 
         /// 条款 3：本次 attempt 是否存在一次已成立的交付。判据只认真实交付
         /// 事实——交付登记时的物理输入必须仍是当前请求的物理输入，物理输入
@@ -669,11 +685,19 @@ module PluginTransformComposition =
         /// 只是「无法证明成立」——条款 3 只认真实交付事实，无法证明成立就不能
         /// 当作已完成，所以这里既不停本次请求，也不把交付呈现为已完成。
         let fenceObjOf (fence: DeliveryAttemptFence) : obj =
-            createObj [
-                "sessionId" ==> SessionId.value fence.SessionId
-                "providerRun" ==> ProviderRunIdentity.value fence.ProviderRun
-                "callId" ==> ToolCallId.value fence.CallId
-            ]
+            createObj
+                [ "sessionId" ==> SessionId.value fence.SessionId
+                  "providerRun" ==> ProviderRunIdentity.value fence.ProviderRun
+                  "callId" ==> ToolCallId.value fence.CallId ]
+
+        let fenceOfNative (fence: obj) =
+            if isNull fence then
+                None
+            else
+                Some
+                    { SessionId = SessionId.create (string fence?sessionId)
+                      ProviderRun = ProviderRunIdentity.create (string fence?providerRun)
+                      CallId = ToolCallId.create (string fence?callId) }
 
         let adjudicateDelivery (sessionText: string) (outObj: obj) : DeliveryAdjudication =
             let physical =
@@ -687,15 +711,8 @@ module PluginTransformComposition =
             let inMemory: DeliveryAttemptFence option =
                 let found: obj option =
                     deliveryAttemptLedger?tryFindEstablished (SessionId.value sessionId, physicalStr)
-                found
-                |> Option.bind (fun res ->
-                    let fence = res?fence
-                    if isNull fence then None
-                    else
-                        Some
-                            { SessionId = SessionId.create (string fence?sessionId)
-                              ProviderRun = ProviderRunIdentity.create (string fence?providerRun)
-                              CallId = ToolCallId.create (string fence?callId) })
+
+                found |> Option.bind (fun res -> fenceOfNative res?fence)
 
             let durableConfirmed: DeliveryAttemptFence option =
                 match journal, physicalStr with
@@ -705,23 +722,18 @@ module PluginTransformComposition =
                         |> Map.toList
                         |> List.filter (fun ((s, _, _), _) -> s = sessionId)
                         |> List.map (fun ((s, r, c), witness) ->
-                            createObj [
-                                "sessionId" ==> SessionId.value s
-                                "providerRun" ==> ProviderRunIdentity.value r
-                                "callId" ==> ToolCallId.value c
-                                "physicalUserMessageId" ==> PhysicalUserMessageId.value witness.Fence.PhysicalUserMessageId
-                            ])
+                            createObj
+                                [ "sessionId" ==> SessionId.value s
+                                  "providerRun" ==> ProviderRunIdentity.value r
+                                  "callId" ==> ToolCallId.value c
+                                  "physicalUserMessageId"
+                                  ==> PhysicalUserMessageId.value witness.Fence.PhysicalUserMessageId ])
                         |> List.toArray
+
                     let confirmed: obj option =
                         deliveryAttemptLedger?tryFindDurableEstablished (deliveries, SessionId.value sessionId, phys)
-                    confirmed
-                    |> Option.bind (fun f ->
-                        if isNull f then None
-                        else
-                            Some
-                                { SessionId = SessionId.create (string f?sessionId)
-                                  ProviderRun = ProviderRunIdentity.create (string f?providerRun)
-                                  CallId = ToolCallId.create (string f?callId) })
+
+                    confirmed |> Option.bind fenceOfNative
                 | _ -> None
 
             inMemory
@@ -733,6 +745,11 @@ module PluginTransformComposition =
             match outcome with
             | Ok() -> "ok"
             | Error _ -> "failed"
+
+        let interruptOutcomeView (outcome: Result<unit, string>) =
+            match outcome with
+            | Ok() -> createObj [ "ok" ==> true ]
+            | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
 
         /// 中断请求本身：宿主拒绝或抛错都只记成「已观察到失败」，不向上抛。
         let requestRetiredAttemptInterrupt (exactSessionId: SessionId) : Task<Result<unit, string>> =
@@ -762,14 +779,12 @@ module PluginTransformComposition =
                 | false ->
                     let interrupt = requestRetiredAttemptInterrupt exactSessionId
 
-                    deliveryAttemptLedger?recordInterruptIssued (fenceObj, interrupt :> Task) |> ignore
+                    deliveryAttemptLedger?recordInterruptIssued (fenceObj, interrupt :> Task)
+                    |> ignore
 
                     let! outcome = interrupt
 
-                    let outcomeObj =
-                        match outcome with
-                        | Ok() -> createObj [ "ok" ==> true ]
-                        | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
+                    let outcomeObj = interruptOutcomeView outcome
 
                     deliveryAttemptLedger?recordInterruptObserved (fenceObj, outcomeObj) |> ignore
 
@@ -807,18 +822,16 @@ module PluginTransformComposition =
 
         let recordRetiredInterruptIssued (fence: DeliveryAttemptFence option) (issued: Task) =
             match fence with
-            | Some exact ->
-                deliveryAttemptLedger?recordInterruptIssued (fenceObjOf exact, issued) |> ignore
+            | Some exact -> deliveryAttemptLedger?recordInterruptIssued (fenceObjOf exact, issued) |> ignore
             | None -> ()
 
         let recordRetiredInterruptObserved (fence: DeliveryAttemptFence option) (outcome: Result<unit, string>) =
             match fence with
             | Some exact ->
-                let outcomeObj =
-                    match outcome with
-                    | Ok() -> createObj [ "ok" ==> true ]
-                    | Error reason -> createObj [ "ok" ==> false; "error" ==> reason ]
-                deliveryAttemptLedger?recordInterruptObserved (fenceObjOf exact, outcomeObj) |> ignore
+                let outcomeObj = interruptOutcomeView outcome
+
+                deliveryAttemptLedger?recordInterruptObserved (fenceObjOf exact, outcomeObj)
+                |> ignore
             | None -> ()
 
         /// 本次退休 attempt 的中断是否已经发出过。同一退休 attempt 的第二次
@@ -906,6 +919,11 @@ module PluginTransformComposition =
                           "result", deliveryInterruptResultName (Error ex.Message) ]
             }
 
+        let abortCompletedConsultation sid =
+            match boot.PortOpt with
+            | Some port -> port.AbortSession sid
+            | None -> Task.FromResult(Error "No Host transport: cannot interrupt consultation")
+
         { BeginPhysicalProviderAttempt =
             fun sessionId output ->
                 task {
@@ -955,11 +973,9 @@ module PluginTransformComposition =
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.record
                             sid
                             (PhysicalUserMessageId.value (Option.get physical))
+
                         RelayNarrativeTransform.clearRequestMessages outObj
-                        let! outcome =
-                            match boot.PortOpt with
-                            | Some port -> port.AbortSession sid
-                            | None -> Task.FromResult(Error "No Host transport: cannot interrupt consultation")
+                        let! outcome = abortCompletedConsultation sid
 
                         Diagnostic.emit
                             "completed-continuation-interrupt-observed"
@@ -1116,8 +1132,7 @@ module PluginTransformComposition =
                         let replaced = SyncDelegateBatching.applyReplacedResults currentMessages
                         HostMessageProjection.replaceMessagesInPlace outObj replaced
                 }
-          SanitizeMessages =
-            fun _ outObj -> HostMessageProjection.sanitizeOutputMessages outObj
+          SanitizeMessages = fun _ outObj -> HostMessageProjection.sanitizeOutputMessages outObj
 
           // 条款 3：裁决只认真实交付事实——本次 attempt 存在一次已成立的
           // 交付，且登记时的物理输入仍是当前物理输入。view 声明、助手正文与

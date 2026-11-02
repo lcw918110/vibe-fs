@@ -56,6 +56,11 @@ module JournalSurface =
     let initializeStateRoot (workspace: string) : Task<string> =
         RuntimePath.initializeStateRoot workspace
 
+    let stateRoot (workspace: string) = RuntimePath.stateRoot workspace
+    let stateRootSync (workspace: string) = RuntimePath.stateRootSync workspace
+    let enqueueRecovery (handle: JournalHandle) (recover: unit -> Task) = handle.Journal.EnqueueRecovery recover
+    let runOrAwaitRecovery (handle: JournalHandle) = handle.Journal.RunOrAwaitRecovery()
+
     let private str (value: obj) : string =
         if isNull value then "" else string value
 
@@ -317,7 +322,8 @@ module JournalSurface =
                placementCount = GuidelineProjection.placementCount state
                visibleFromOrdinal = GuidelineProjection.visibleFromOrdinal state
                pairs =
-                GuidelineProjection.pairs state |> List.rev
+                GuidelineProjection.pairs state
+                |> List.rev
                 |> List.map (fun pair ->
                     box
                         {| ordinal = pair.Ordinal

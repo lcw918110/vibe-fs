@@ -95,6 +95,7 @@ module PluginRecoveryWiring =
 
             ignore observed
             ignore retirementBlockers
+
             Wanxiangshu.Foundation.Diagnostic.emit
                 "plan-delivery-recovery-retired"
                 [ "work_id", workId
@@ -123,12 +124,14 @@ module PluginRecoveryWiring =
         ignore gitCommonDir
         ignore snapshots
         ignore retirementBlockers
+
         Wanxiangshu.Foundation.Diagnostic.emit
             "plan-delivery-recovery-retired"
             [ "work_id", workId
               "operation_id", operationId
               "exec_session_id", execSessionId
               "reason", "review is the only lifecycle entry" ]
+
         Task.FromResult(()) :> Task
 
     let private discoverUnboundDelivery
@@ -252,8 +255,7 @@ module PluginRecoveryWiring =
         let scope = boot.Scope
         let snapshotPort = boot.Transport.Snapshot
 
-        let discoveryPort =
-            boot.Transport.SessionCatalog
+        let discoveryPort = boot.Transport.SessionCatalog
 
         let retirementBlockers sessionId =
             scope.RetirementBlockersFor sessionId |> List.toArray
@@ -266,52 +268,105 @@ module PluginRecoveryWiring =
         | Some journal -> SessionBindingRecovery.install journal
         | None -> ()
 
-        let recovery () =
-            scope.RunBackgroundTracked(fun () ->
+        /// crash-reconciliation-020: the load-phase void settlement is journal-only
+        /// and fast, and every handoff's identity judgment must read its facts, so
+        /// it is the entire journal recovery barrier. Host round-trips (delivery
+        /// observation, per-session reload sweeps) never sit inside it: they would
+        /// put every unrelated session's slow Host answer between a handoff and
+        /// this settlement — the first-admission stall.
+        ///
+        /// `RunOwnedWork` keeps the shutdown drain informed while letting the
+        /// settlement's real failure propagate; `RunOrAwaitRecovery` clears a
+        /// faulted run so a later caller retries the idempotent settlement instead
+        /// of re-observing a stale failure forever.
+        let settleLoadPhase () =
+            scope.RunOwnedWork(fun () ->
                 task {
-                        // crash-reconciliation-020: the child work the previous process
-                        // left behind can no longer be delivered, so it is voided
-                        // (Abandoned(Voided)) — the obligation stays visible until
-                        // join reports the void once and retires it.
-                        match boot.Journal with
-                        | Some journal -> do! ChildWorkRecovery.settleOrphanedChildRuns journal
-                        | None -> ()
+                    // crash-reconciliation-020: the child work the previous process
+                    // left behind can no longer be delivered, so it is voided
+                    // (Abandoned(Voided)) — the obligation stays visible until
+                    // join reports the void once and retires it.
+                    match boot.Journal with
+                    | Some journal -> do! ChildWorkRecovery.settleOrphanedChildRuns journal
+                    | None -> ()
+
+                    // crash-reconciliation-018: the durable load homing is done once
+                    // the void settlement landed; the next real user instruction
+                    // carries one restart status guidance.
+                    scope.MarkRestartGuidancePending()
+                })
+
+        let reloadPendingSession sessionId =
+            task {
+                try
+                    do! scope.ReloadChatSession sessionId
+                    return None
+                with error ->
+                    Wanxiangshu.Foundation.Diagnostic.emit
+                        "load-session-recovery-failed"
+                        [ "session_id", SessionId.value sessionId; "reason", error.Message ]
+
+                    return Some error
+            }
+
+        let reloadPendingSessions () =
+            task {
+                let mutable firstFailure: exn option = None
+
+                for sessionId in scope.PendingChatRecoverySessions() do
+                    let! failure = reloadPendingSession sessionId
+                    firstFailure <- firstFailure |> Option.orElse failure
+
+                match firstFailure with
+                | Some error -> raise error
+                | None -> ()
+            }
+
+        /// Host-observation recovery that must never block a handoff: delivery
+        /// reconciliation and the boot-time reload sweep, sliced per session. Each
+        /// session's sweep is single-flight on the recovery host, so an admission
+        /// joins its own session's sweep while unrelated sessions' sweeps — however
+        /// slow their Host answers — run entirely in the background.
+        let reconcileHostObservations () =
+            scope.RunBackground(fun () ->
+                task {
+                    match boot.Journal with
+                    | Some journal ->
+                        // crash-reconciliation-020: the void facts stay the first durable
+                        // action — every per-session sweep chains on the same barrier.
+                        do! journal.RunOrAwaitRecovery()
 
                         // provider-attempt-recovery-024: the abandoned stale requests
-                        let! recoveryWorks =
-                            match boot.Journal with
-                            | Some journal -> inspectRecoveryWorks journal boot.WorkspaceDirectory
-                            | None -> Task.FromResult [||]
+                        let! recoveryWorks = inspectRecoveryWorks journal boot.WorkspaceDirectory
 
-                        match boot.Journal with
-                        | Some journal ->
-                            do!
-                                reconcilePendingDeliveries
-                                    recoveryWorks
-                                    boot.WorkspaceDirectory
-                                    snapshotPort
-                                    discoveryPort
-                                    retirementBlockers
-                        | None -> ()
+                        do!
+                            reconcilePendingDeliveries
+                                recoveryWorks
+                                boot.WorkspaceDirectory
+                                snapshotPort
+                                discoveryPort
+                                retirementBlockers
 
-                        do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded)
+                        // provider-attempt-recovery-023: the boot reload, one session at a
+                        // time. A sweep's failure is isolated to its own session (other
+                        // sessions still settle), emitted as a diagnostic, and re-raised
+                        // at the end so the background failure slot keeps the first one.
+                        do! reloadPendingSessions ()
+                    | None -> ()
+                })
 
-                        do! scope.SignalChatRecovery(ChatExecutionRecoveryLifecycleEvent.CapacityProjectionReplayed)
-
-                        // crash-reconciliation-018: the load-phase normalization above owes
-                        // one restart status guidance to the next real user instruction.
-                        scope.MarkRestartGuidancePending()
-                    })
-
-        // crash-reconciliation-020: the same recovery must be observable by the
-        // next handoff's identity judgment, which can happen before (or without)
-        // the scope activator firing. The journal carries the barrier so both
-        // dispatch and admission can trigger and await the very same work.
+        // crash-reconciliation-020: the load settlement must be observable by
+        // the next handoff's identity judgment, which can happen before (or
+        // without) the scope activator firing. The journal carries the barrier
+        // so both dispatch and admission can trigger and await the very same
+        // work; the host observation above only ever runs after it.
         match boot.Journal with
-        | Some durable -> durable.EnqueueRecovery recovery
+        | Some durable -> durable.EnqueueRecovery settleLoadPhase
         | None -> ()
 
         scope.AttachDurabilityActivation(fun () ->
             match boot.Journal with
             | Some durable -> scope.TrackDurabilityActivation(durable.RunOrAwaitRecovery())
-            | None -> scope.TrackDurabilityActivation(recovery ()))
+            | None -> scope.TrackDurabilityActivation(settleLoadPhase ())
+
+            reconcileHostObservations ())

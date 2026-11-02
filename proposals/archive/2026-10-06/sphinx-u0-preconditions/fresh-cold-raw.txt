@@ -1,1 +1,0 @@
-{"pid":14199,"event":{"id":"7777777777777777777777777777777777777777","stream":"proof/u0-release","type":"JobRequested","parents":[],"payload":{"text":"真实释放之后-é","detail":{"ready":true}},"payloadRefs":[]},"head":"7777777777777777777777777777777777777777","heads":["7777777777777777777777777777777777777777"]}

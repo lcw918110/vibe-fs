@@ -1,1 +1,0 @@
-{"scope":"native direct diagnostic, not formal freshness","measuredPid":80297,"coldPid":80299,"appendCalls":1,"releaseCalls":2,"faultedRelease":1,"completeLines":3,"current":"Prepared","causeSame":true,"eventId":"0e117e31975c25ada1d6a0cb3adcb70a6ae24c81dcf2f2fc91e21c8b1a691949","typedCode":"CommitUnknown","assertions":"passed"}

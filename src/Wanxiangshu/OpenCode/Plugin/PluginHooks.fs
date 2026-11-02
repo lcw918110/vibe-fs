@@ -3,6 +3,7 @@ namespace Wanxiangshu.OpenCode
 open Wanxiangshu.Context.Prefix
 
 open Wanxiangshu.Persistence.Journal.JournalOutcome
+
 #nowarn "3511"
 
 open System
@@ -73,21 +74,6 @@ open Wanxiangshu.OpenCode.Host
 open PluginHostInterop
 
 module PluginHooks =
-
-    [<Import("SqliteJournal", "wanxiangli/eventstore")>]
-    let private retentionJournalConstructor: obj = jsNative
-
-    [<Import("createRequire", "node:module")>]
-    let private createRequire (url: string) : obj = jsNative
-
-    [<Emit("import.meta.url")>]
-    let private moduleUrl: string = jsNative
-
-    [<Emit("typeof globalThis.Bun !== 'undefined'")>]
-    let private runningOnBun () : bool = jsNative
-
-    [<Emit("$0($1)")>]
-    let private requireModule (_require: obj) (_name: string) : obj = jsNative
 
     [<Import("join", "node:path")>]
     let private joinPath (left: string) (right: string) : string = jsNative
@@ -187,11 +173,9 @@ module PluginHooks =
     let private snapshotPromptText (sessionText: string) (questions: string) =
         questions.TrimEnd() + "\n\n" + snapshotForbidText sessionText
 
-    let private negotiationPromptText (delegator: string) (questions: string) =
-        snapshotPromptText delegator questions
+    let private negotiationPromptText (delegator: string) (questions: string) = snapshotPromptText delegator questions
 
-    let private previousScopePromptText (recipient: string) (questions: string) =
-        snapshotPromptText recipient questions
+    let private previousScopePromptText (recipient: string) (questions: string) = snapshotPromptText recipient questions
 
     [<RequireQualifiedAccess>]
     type private TemporaryAnswer =
@@ -200,25 +184,35 @@ module PluginHooks =
         | Failed of string
 
     let private classifyTemporaryAnswer (text: string) (blocked: bool) =
-        if blocked then TemporaryAnswer.Retry
+        if blocked then
+            TemporaryAnswer.Retry
         elif String.IsNullOrWhiteSpace text then
             TemporaryAnswer.Failed "temporary consultation completed without assistant prose"
-        else TemporaryAnswer.Replied text
+        else
+            TemporaryAnswer.Replied text
 
     // An SDK error without an observed tool-call veto is a transport/admission
     // failure, never an incomplete reply. An independently observed tool veto
     // can still use its bounded clarification retry.
     let private classifyTemporaryFailure (ex: exn) (blocked: bool) =
-        if blocked then TemporaryAnswer.Retry
-        else TemporaryAnswer.Failed ex.Message
+        if blocked then
+            TemporaryAnswer.Retry
+        else
+            TemporaryAnswer.Failed ex.Message
 
     let private temporarySdkError (result: obj) =
         let body = negotiationResponse result
+
         let raw =
-            if not (isNull result) && not (isNull result?error) then result?error
-            elif not (isNull body) && not (isNull body?error) then body?error
-            elif not (isNull body) && not (isNull body?info) then body?info?error
-            else null
+            if not (isNull result) && not (isNull result?error) then
+                result?error
+            elif not (isNull body) && not (isNull body?error) then
+                body?error
+            elif not (isNull body) && not (isNull body?info) then
+                body?info?error
+            else
+                null
+
         if isNull raw then None
         elif isNull raw?message then Some(string raw)
         else Some(string raw?message)
@@ -349,7 +343,7 @@ module PluginHooks =
                 | ConsultationOrigin.Delegator delegator ->
                     PluginTransforms.negotiationStartTemporary tempId delegator,
                     PluginTransforms.negotiationModelFor delegator
-                | ConsultationOrigin.Previous (source, metadata) ->
+                | ConsultationOrigin.Previous(source, metadata) ->
                     PluginTransforms.consultationStartPrevious tempId source metadata,
                     PluginTransforms.consultationModelForPrevious source metadata
 
@@ -450,13 +444,9 @@ module PluginHooks =
             let chatParams = ChatParamsHook.createWith journal
 
             let compaction = wired.Compaction
+
             let requestLatency =
-                RequestLatency.create
-                    sessionPort
-                    host.RootWorkspace
-                    eventPort
-                    journal
-                    compaction.IsCompacting
+                RequestLatency.create sessionPort host.RootWorkspace eventPort journal compaction.IsCompacting
 
             // Scope retention is the only durable scope store: its annotation
             // stream replays on cold start.
@@ -466,39 +456,39 @@ module PluginHooks =
             match workspaceDirectory with
             | Some workspace ->
                 let! root = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
-                let directory = joinPath root "wanxiangshu"
-                mkdirSync directory (createObj [ "recursive" ==> true ])
-                let target = joinPath directory "scope-retention.sqlite"
-                let makeJournal = Func<string, obj>(fun _session ->
-                    let loader = createRequire moduleUrl
-                    let sqlite = requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
-                    let connection =
-                        if runningOnBun () then createNew sqlite?Database target
-                        else createNew sqlite?DatabaseSync target
-                    try createNew retentionJournalConstructor connection
-                    with _ ->
-                        connection?close() |> ignore
-                        reraise ())
+                mkdirSync (joinPath root "wanxiangshu") (createObj [ "recursive" ==> true ])
+
+                let makeJournal =
+                    Func<string, obj>(fun _session ->
+                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.openScopeJournal root)
+
                 retentionJournalFactory <- Some(box makeJournal)
-                scopeRetention?configureJournal(makeJournal) |> ignore
+                scopeRetention?configureJournal (makeJournal) |> ignore
             | None ->
-                let unavailable = Func<string, obj>(fun _ -> failwith "ScopeRetention requires a verified durable workspace")
-                scopeRetention?configureJournal(unavailable) |> ignore
+                let unavailable =
+                    Func<string, obj>(fun _ -> failwith "ScopeRetention requires a verified durable workspace")
+
+                scopeRetention?configureJournal (unavailable) |> ignore
 
             let scopeEpoch (sessionId: string) : string =
                 journal
                 |> Option.bind (fun durable ->
-                    AgentProjection.tryFind (SessionId.create sessionId) (AgentJournal.snapshot durable).AgentProjections)
+                    AgentProjection.tryFind
+                        (SessionId.create sessionId)
+                        (AgentJournal.snapshot durable).AgentProjections)
                 |> Option.bind (fun session -> session.PrefixEpoch)
                 |> Option.map (fun epoch -> string (PrefixEpochProjection.scopeCount epoch))
                 |> Option.defaultValue "0"
 
+            let bindRetentionFactory sessionId =
+                match retentionJournalFactory with
+                | Some factory -> scopeRetention?bindSessionJournal (sessionId, factory) |> ignore
+                | None -> scopeRetention?unbindSessionJournal (sessionId) |> ignore
+
             let bindRetentionJournal (sessionId: string) =
                 if not (String.IsNullOrWhiteSpace sessionId) then
-                    match retentionJournalFactory with
-                    | Some factory -> scopeRetention?bindSessionJournal(sessionId, factory) |> ignore
-                    | None -> scopeRetention?unbindSessionJournal(sessionId) |> ignore
-                    scopeRetention?ensureEpoch(sessionId, scopeEpoch sessionId) |> ignore
+                    bindRetentionFactory sessionId
+                    scopeRetention?ensureEpoch (sessionId, scopeEpoch sessionId) |> ignore
 
             let roleFor (sessionId: SessionId) =
                 journal
@@ -575,8 +565,11 @@ module PluginHooks =
                     |> Option.orElseWith (fun () ->
                         let mode = readTrimmed lastMsg "mode"
                         let infoMode = readTrimmed lastMsg?info "mode"
-                        if mode = Some "compaction" || infoMode = Some "compaction" then Some "compaction"
-                        else None))
+
+                        if mode = Some "compaction" || infoMode = Some "compaction" then
+                            Some "compaction"
+                        else
+                            None))
 
             let tryRequestAgent (candidate: obj) : string option =
                 nonNull candidate
@@ -585,12 +578,17 @@ module PluginHooks =
                         readTrimmed c "agent"
                         |> Option.orElseWith (fun () -> readTrimmed c?info "agent")
                         |> Option.orElseWith (fun () -> readTrimmed c?message "agent")
+
                     let directMode =
                         let m1 = readTrimmed c "mode"
                         let m2 = readTrimmed c?info "mode"
                         let m3 = readTrimmed c?message "mode"
-                        if m1 = Some "compaction" || m2 = Some "compaction" || m3 = Some "compaction" then Some "compaction"
-                        else None
+
+                        if m1 = Some "compaction" || m2 = Some "compaction" || m3 = Some "compaction" then
+                            Some "compaction"
+                        else
+                            None
+
                     directAgent
                     |> Option.orElse directMode
                     |> Option.orElseWith (fun () -> lastMessageAgent c?messages))
@@ -609,14 +607,18 @@ module PluginHooks =
                 [ for language in [ ProviderLanguage.English; ProviderLanguage.SimplifiedChinese ] do
                       for role in [ Role.Manager; Role.Orchestrator; Role.Engineer; Role.DevOps; Role.Plan ] do
                           yield (PromptResources.systemForRole language role).Trim()
+
                       yield (PromptResources.loadBookkeeperSystemFor language).Trim() ]
 
             let ownsSystem (output: obj) : bool =
-                let system: string array = if isNull output?system then [||] else unbox output?system
+                let system: string array =
+                    if isNull output?system then [||] else unbox output?system
+
                 system
                 |> Array.tryHead
                 |> Option.exists (fun text ->
-                    ownedSystemPrompts |> List.exists (fun owned ->
+                    ownedSystemPrompts
+                    |> List.exists (fun owned ->
                         not (String.IsNullOrWhiteSpace owned)
                         && (text = owned || text.StartsWith(owned + "\n", StringComparison.Ordinal))))
 
@@ -640,6 +642,7 @@ module PluginHooks =
 
             let systemTransform (input: obj) (output: obj) : Task<unit> =
                 let temporary = PluginTransforms.negotiationIsTemporary (sessionStringOf input)
+
                 if not temporary && not (ownsSystem output) then
                     Task.FromResult(())
                 else
@@ -1059,8 +1062,7 @@ module PluginHooks =
                         && (String.IsNullOrWhiteSpace sessionId
                             || not (sessionPort.IsManagedChild(SessionId.create sessionId)))
                     then
-                        invalidOp
-                            "negotiate is only available in delegated child sessions, not user-facing sessions."
+                        invalidOp "negotiate is only available in delegated child sessions, not user-facing sessions."
 
                     // capability-enforcement-002/007: a Host-declared external
                     // (MCP) tool holds no office capability, so it is advertised
@@ -1144,6 +1146,7 @@ module PluginHooks =
             let chatMessageWithNegotiationPolicy (input: obj) (output: obj) : Task<unit> =
                 task {
                     let rawSession = if isNull input then null else input?sessionID
+
                     let temporary =
                         not (isNull rawSession)
                         && PluginTransforms.negotiationIsTemporary (string rawSession)
@@ -1158,6 +1161,7 @@ module PluginHooks =
                     if not temporary && not isFunctional then
                         let pending: Task<unit> =
                             emitJsExpr (originalChatMessage, input, output) "$0($1, $2)"
+
                         do! pending
 
                     let managedChild =
@@ -1166,7 +1170,14 @@ module PluginHooks =
                         && sessionPort.IsManagedChild(SessionId.create (string rawSession))
 
                     let unmanaged = isExplicitlyUnmanagedAgent input
-                    if not unmanaged && not temporary && not managedChild && not (isNull output) && not (isNull output?message) then
+
+                    if
+                        not unmanaged
+                        && not temporary
+                        && not managedChild
+                        && not (isNull output)
+                        && not (isNull output?message)
+                    then
                         let tools = requireUserMessageTools output?message
                         tools?negotiate <- box false
                 }
@@ -1176,7 +1187,13 @@ module PluginHooks =
 
             let rememberModelParams (input: obj) (output: obj) =
                 let unmanaged = isExplicitlyUnmanagedAgent input
-                let currentSession = if isNull input?sessionID then "" else string input?sessionID
+
+                let currentSession =
+                    if isNull input?sessionID then
+                        ""
+                    else
+                        string input?sessionID
+
                 let temporary =
                     not (String.IsNullOrWhiteSpace currentSession)
                     && PluginTransforms.negotiationIsTemporary currentSession
@@ -1188,11 +1205,15 @@ module PluginHooks =
                     emitJsExpr (chatParams, input, output) "$0($1, $2)" |> ignore
 
                 let shouldRememberModel = not temporary && not unmanaged
+
                 if shouldRememberModel then
                     PluginTransforms.negotiationRememberModel input
 
                 let modelSessionId = unbox<string> input?sessionID
-                let shouldRecordModel = not temporary && not unmanaged && not (String.IsNullOrEmpty modelSessionId)
+
+                let shouldRecordModel =
+                    not temporary && not unmanaged && not (String.IsNullOrEmpty modelSessionId)
+
                 if shouldRecordModel then
                     outboundViewStore?recordModel (modelSessionId, input?model) |> ignore
 
@@ -1240,7 +1261,13 @@ module PluginHooks =
             let config = registeredHook HookKey.Config (unaryHook (box configurePluginHost))
 
             let onSessionCompacting (input: obj) (output: obj) : Task<unit> =
-                compaction.OnCompacting(product.Compaction, PluginTransforms.negotiationIsTemporary, client, input, output)
+                compaction.OnCompacting(
+                    product.Compaction,
+                    PluginTransforms.negotiationIsTemporary,
+                    client,
+                    input,
+                    output
+                )
 
             let onCompactionAutoContinue (input: obj) (output: obj) : Task<unit> =
                 compaction.OnAutoContinue(product.Compaction, PluginTransforms.negotiationIsTemporary, input, output)
@@ -1302,14 +1329,14 @@ module PluginHooks =
                     HostEventEnvelope.trySessionId raw
                     |> Option.iter (fun sessionId ->
                         Surface.clearSessionState (SessionId.value sessionId)
-                        scopeProgress?clear(SessionId.value sessionId) |> ignore
-                        scopeRetention?clear(SessionId.value sessionId) |> ignore
-                        scopeRetention?unbindSessionJournal(SessionId.value sessionId) |> ignore
-                        calibration?clearSession(SessionId.value sessionId) |> ignore
+                        scopeProgress?clear (SessionId.value sessionId) |> ignore
+                        scopeRetention?clear (SessionId.value sessionId) |> ignore
+                        scopeRetention?unbindSessionJournal (SessionId.value sessionId) |> ignore
+                        calibration?clearSession (SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
                         compaction.ForgetSession(SessionId.value sessionId)
-                        requestLatency.SessionDeleted (SessionId.value sessionId)
+                        requestLatency.SessionDeleted(SessionId.value sessionId)
                         Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.forget sessionId)
 

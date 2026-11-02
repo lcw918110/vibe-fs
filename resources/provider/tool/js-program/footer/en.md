@@ -10,10 +10,10 @@ boundaries, duplicated text, cleanup debris, and extra programs whose only job
 was to repair the previous program. A higher-level primitive is not decorative
 sugar when it owns structure, snapshots, or commit semantics; it is the guard
 rail. Use the highest-level primitive that already owns the boundary. Drop down
-only when it genuinely cannot express the job, and validate the result before
+only when it genuinely cannot express the job, and check the result before
 you let the transaction commit.
 
-Remember the authority order: facts beat confidence; Host-owned semantics
-beat hand-rolled duplicates; a red invariant beats a plausible-looking prefix.
-Use the guardrail or prove the guardrail cannot carry the job. Do not invent a
+Remember the order: facts beat confidence; Host-owned semantics
+beat hand-rolled duplicates; a red check beats a plausible-looking prefix.
+Use the guardrail, or show that the guardrail cannot carry the job. Do not invent a
 third category called "probably fine".

@@ -26,7 +26,10 @@ module ModelRouting =
         | ExecutionAdmissionAcquisition.Queued _ -> None
 
     let internal capacityOwnership (lease: ExecutionAdmissionLease) =
-        lease |> box |> ExactCapacityFenceReference.Create |> CapacityOwnership.OwnsExactFence
+        lease
+        |> box
+        |> ExactCapacityFenceReference.Create
+        |> CapacityOwnership.OwnsExactFence
 
     type private RoutingProtocolLibrary =
         abstract route: route: obj * role: string * running: obj array * previous: obj -> obj
@@ -75,7 +78,9 @@ module ModelRouting =
               "participant" ==> identity.Participant
               "target" ==> targetObject identity.Target ]
 
-    let private purposeLabel = function ModelExecutionPurpose.Normal -> "normal"
+    let private purposeLabel =
+        function
+        | ModelExecutionPurpose.Normal -> "normal"
 
     let private acquisitionOf (value: obj) =
         match unbox<string> value?kind with
@@ -117,8 +122,10 @@ module ModelRouting =
         | other -> invalidOp ("wanxiangli/routing returned an unknown rejection: " + other)
 
     let private permitResult convert (value: obj) =
-        if unbox<bool> value?ok then Ok(convert value?value)
-        else Error(rejectionOf (unbox<string> value?rejection))
+        if unbox<bool> value?ok then
+            Ok(convert value?value)
+        else
+            Error(rejectionOf (unbox<string> value?rejection))
 
     [<Emit("BigInt($0)")>]
     let private integerOf (_value: obj) : int64 = jsNative
@@ -134,7 +141,9 @@ module ModelRouting =
 
         { LedgerEntries =
             unbox<obj array> value?ledgerEntries
-            |> Array.map (fun entry -> { Credit = integerOf entry?credit; Target = targetOf entry?target })
+            |> Array.map (fun entry ->
+                { Credit = integerOf entry?credit
+                  Target = targetOf entry?target })
           Tokens =
             unbox<obj array> value?tokens
             |> Array.map (fun token ->
@@ -144,7 +153,9 @@ module ModelRouting =
                   Target = targetOf token?target })
           Custodies =
             unbox<obj array> value?custodies
-            |> Array.map (fun custody -> { Credit = integerOf custody?credit; Owner = ownerOf custody?owner })
+            |> Array.map (fun custody ->
+                { Credit = integerOf custody?credit
+                  Owner = ownerOf custody?owner })
           Executions = unbox<obj array> value?executions |> Array.map ownerOf
           Waiters =
             unbox<obj array> value?waiters
@@ -184,53 +195,86 @@ module ModelRouting =
 
         { providerID = target.Model.Substring(0, slash)
           modelID = target.Model.Substring(slash + 1)
-          variant = if String.IsNullOrWhiteSpace target.Reasoning then None else Some target.Reasoning }
+          variant =
+            if String.IsNullOrWhiteSpace target.Reasoning then
+                None
+            else
+                Some target.Reasoning }
 
     let toOpenCodeModel (target: ModelRoutingTarget) : HostModel = toHostModel target
 
     let private matchReasoning (expectedReasoning: string) (observedReasoning: string) =
-        if String.IsNullOrWhiteSpace expectedReasoning then String.IsNullOrWhiteSpace observedReasoning
-        else String.Equals(observedReasoning, expectedReasoning, StringComparison.OrdinalIgnoreCase)
+        if String.IsNullOrWhiteSpace expectedReasoning then
+            String.IsNullOrWhiteSpace observedReasoning
+        else
+            String.Equals(observedReasoning, expectedReasoning, StringComparison.OrdinalIgnoreCase)
 
     let sameTarget (expected: ModelRoutingTarget) (observed: HostModel) =
-        if String.IsNullOrWhiteSpace observed.providerID || String.IsNullOrWhiteSpace observed.modelID then
+        if
+            String.IsNullOrWhiteSpace observed.providerID
+            || String.IsNullOrWhiteSpace observed.modelID
+        then
             false
         else
             let model = observed.providerID.Trim() + "/" + observed.modelID.Trim()
+
             let reasoning =
                 observed.variant
-                |> Option.bind (fun value -> if String.IsNullOrWhiteSpace value then None else Some(value.Trim()))
+                |> Option.bind (fun value ->
+                    if String.IsNullOrWhiteSpace value then
+                        None
+                    else
+                        Some(value.Trim()))
                 |> Option.defaultValue ""
 
             String.Equals(model, expected.Model.Trim(), StringComparison.OrdinalIgnoreCase)
             && matchReasoning (expected.Reasoning.Trim()) reasoning
 
     let private failedTask<'T> (error: exn) : Task<'T> =
-        let completion = TaskCompletionSource<'T>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let completion =
+            TaskCompletionSource<'T>(TaskCreationOptions.RunContinuationsAsynchronously)
+
         completion.SetException error
         completion.Task
 
     let private isDeprecatedRole =
         function
-        | Role.Coder | Role.Inspector | Role.Browser | Role.Inquiry | Role.Distiller -> true
+        | Role.Coder
+        | Role.Inspector
+        | Role.Browser
+        | Role.Inquiry
+        | Role.Distiller -> true
         | _ -> false
 
     let private normalizeReservationInput (sessionId: string) (role: Role) =
         if String.IsNullOrWhiteSpace sessionId then
             Error(ArgumentException("sessionId must be non-empty") :> exn)
         elif isDeprecatedRole role then
-            Error(InvalidOperationException(sprintf "execution-model-routing: deprecated role %s cannot acquire model lease" (Roles.roleLabel role)) :> exn)
-        else Ok(sessionId.Trim(), role)
+            Error(
+                InvalidOperationException(
+                    sprintf
+                        "execution-model-routing: deprecated role %s cannot acquire model lease"
+                        (Roles.roleLabel role)
+                )
+                :> exn
+            )
+        else
+            Ok(sessionId.Trim(), role)
 
     let private normalizeExecutionInput sessionId (physical: string) role (participant: string) =
         match normalizeReservationInput sessionId role with
         | Error error -> Error error
-        | Ok _ when String.IsNullOrWhiteSpace physical -> Error(ArgumentException("physicalUserMessageId must be non-empty") :> exn)
-        | Ok _ when String.IsNullOrWhiteSpace participant -> Error(ArgumentException("participant must be non-empty") :> exn)
+        | Ok _ when String.IsNullOrWhiteSpace physical ->
+            Error(ArgumentException("physicalUserMessageId must be non-empty") :> exn)
+        | Ok _ when String.IsNullOrWhiteSpace participant ->
+            Error(ArgumentException("participant must be non-empty") :> exn)
         | Ok(session, role) -> Ok(session, physical.Trim(), role, participant.Trim())
 
     let private normalizeSessionId (sessionId: string) =
-        if String.IsNullOrWhiteSpace sessionId then None else Some(sessionId.Trim())
+        if String.IsNullOrWhiteSpace sessionId then
+            None
+        else
+            Some(sessionId.Trim())
 
     type private ExecutionRoutingLibrary =
         abstract acquire: input: obj -> Task<obj>
@@ -284,7 +328,8 @@ module ModelRouting =
               "role" ==> Roles.roleLabel role
               "participant" ==> participant
               "purpose" ==> purposeLabel purpose
-              "lenderSessionId" ==> (lender |> Option.bind normalizeSessionId |> optionalObject box)
+              "lenderSessionId"
+              ==> (lender |> Option.bind normalizeSessionId |> optionalObject box)
               "hostTarget" ==> optionalObject targetObject target ]
 
     let mutable private sharedDurableResolver: (string -> string option) option = None
@@ -297,30 +342,50 @@ module ModelRouting =
 
         let bindingError (details: obj) : exn =
             match unbox<string> details?kind with
-            | "durable" -> InvalidOperationException "execution-model-routing: durable DevOps model binding is immutable" :> exn
+            | "durable" ->
+                InvalidOperationException "execution-model-routing: durable DevOps model binding is immutable" :> exn
             | "immutable" ->
                 let bound = targetOf details?bound
                 let target = targetOf details?target
-                InvalidOperationException(sprintf "execution-model-routing: DevOps model binding is immutable (%s/%s vs %s/%s)" bound.Model bound.Reasoning target.Model target.Reasoning) :> exn
+
+                InvalidOperationException(
+                    sprintf
+                        "execution-model-routing: DevOps model binding is immutable (%s/%s vs %s/%s)"
+                        bound.Model
+                        bound.Reasoning
+                        target.Model
+                        target.Reasoning
+                )
+                :> exn
             | other -> invalidOp ("wanxiangli/routing requested an unknown binding error: " + other)
 
         let library =
-            createRouting executionRoutingClass
+            createRouting
+                executionRoutingClass
                 (createObj
                     [ "scheduler" ==> scheduler
-                      "binding" ==>
-                        createObj
-                            [ "applies" ==> Func<string, bool>(fun role -> role = Roles.roleLabel Role.DevOps)
-                              "read" ==> Func<string, obj>(fun session ->
-                                  durableResolver |> Option.bind (fun resolve -> resolve session) |> optionalObject box)
-                              "error" ==> Func<obj, exn>(bindingError) ] ])
+                      "binding"
+                      ==> createObj
+                              [ "applies" ==> Func<string, bool>(fun role -> role = Roles.roleLabel Role.DevOps)
+                                "read"
+                                ==> Func<string, obj>(fun session ->
+                                    durableResolver
+                                    |> Option.bind (fun resolve -> resolve session)
+                                    |> optionalObject box)
+                                "error" ==> Func<obj, exn>(bindingError) ] ])
 
         new(scheduler: obj) = ModelRoutingRuntime(scheduler, ?durableDevopsResolver = None)
 
         member _.AcquireExecutionAdmission
-            (sessionId: string, physicalUserMessageId: string, role: Role, participant: string,
-             purpose: ModelExecutionPurpose, lenderSessionId: string option, ?hostTarget: ModelRoutingTarget)
-            : Task<ExecutionAdmissionAcquisition> =
+            (
+                sessionId: string,
+                physicalUserMessageId: string,
+                role: Role,
+                participant: string,
+                purpose: ModelExecutionPurpose,
+                lenderSessionId: string option,
+                ?hostTarget: ModelRoutingTarget
+            ) : Task<ExecutionAdmissionAcquisition> =
             match normalizeExecutionInput sessionId physicalUserMessageId role participant with
             | Error error -> failedTask error
             | Ok(session, physical, role, participant) ->
@@ -331,30 +396,38 @@ module ModelRouting =
         member _.ExecutionAdmissionTarget(lease: ExecutionAdmissionLease) =
             library.target lease |> permitResult targetOf
 
-        member internal _.ContinueExecutionAdmission(previous: ExecutionAdmissionLease, physicalUserMessageId: string, ?selectedTarget: ModelRoutingTarget) =
+        member internal _.ContinueExecutionAdmission
+            (previous: ExecutionAdmissionLease, physicalUserMessageId: string, ?selectedTarget: ModelRoutingTarget)
+            =
             library.``continue`` (previous, physicalUserMessageId, optionalObject targetObject selectedTarget)
             |> acquisitionTask
 
         member internal _.RetainContinuationInput(previous: ExecutionAdmissionLease, physicalUserMessageId: string) =
-            library.retainInput(previous, physicalUserMessageId) |> targetOf
+            library.retainInput (previous, physicalUserMessageId) |> targetOf
 
         member internal _.TryContinuationInput(sessionId: string, physicalUserMessageId: string) =
-            library.tryInput(sessionId, physicalUserMessageId) |> optionalValue unbox<ExecutionAdmissionLease>
+            library.tryInput (sessionId, physicalUserMessageId)
+            |> optionalValue unbox<ExecutionAdmissionLease>
 
         member internal _.CancelContinuationInput(sessionId: string, physicalUserMessageId: string) =
-            library.cancelInput(sessionId, physicalUserMessageId)
+            library.cancelInput (sessionId, physicalUserMessageId)
 
         member internal _.CancelRetainedInputsForSession(sessionId: string) = library.cancelSessionInputs sessionId
 
         member _.CommitExecutionAdmission(lease: ExecutionAdmissionLease, observed: ExecutionAdmissionExactIdentity) =
-            library.commit(lease, identityObject observed) |> outcomeOf
+            library.commit (lease, identityObject observed) |> outcomeOf
 
-        member _.ReleaseExecutionAdmissionBeforeProvider(lease: ExecutionAdmissionLease, observed: ExecutionAdmissionExactIdentity) =
-            library.releaseBeforeProvider(lease, identityObject observed) |> outcomeOf
+        member _.ReleaseExecutionAdmissionBeforeProvider
+            (lease: ExecutionAdmissionLease, observed: ExecutionAdmissionExactIdentity)
+            =
+            library.releaseBeforeProvider (lease, identityObject observed) |> outcomeOf
 
-        member _.ExecutionAdmissionLifecycle(lease: ExecutionAdmissionLease) = library.lifecycle lease |> permitResult unbox<string>
+        member _.ExecutionAdmissionLifecycle(lease: ExecutionAdmissionLease) =
+            library.lifecycle lease |> permitResult unbox<string>
 
-        member _.TryReserveManaged(sessionId: string, role: Role, purpose: ModelExecutionPurpose, lenderSessionId: string option) =
+        member _.TryReserveManaged
+            (sessionId: string, role: Role, purpose: ModelExecutionPurpose, lenderSessionId: string option)
+            =
             match normalizeReservationInput sessionId role with
             | Error _ -> None
             | Ok(session, role) ->
@@ -362,7 +435,15 @@ module ModelRouting =
                 |> library.reserve
                 |> optionalValue targetOf
 
-        member _.TryLease(sessionId: string, physicalUserMessageId: string, role: Role, participant: string, purpose: ModelExecutionPurpose, lenderSessionId: string option) =
+        member _.TryLease
+            (
+                sessionId: string,
+                physicalUserMessageId: string,
+                role: Role,
+                participant: string,
+                purpose: ModelExecutionPurpose,
+                lenderSessionId: string option
+            ) =
             match normalizeExecutionInput sessionId physicalUserMessageId role participant with
             | Error _ -> None
             | Ok(session, physical, role, participant) ->
@@ -371,37 +452,62 @@ module ModelRouting =
                 |> optionalValue targetOf
 
         member _.TryReadExecution(sessionId: string, physicalUserMessageId: string) =
-            library.tryRead(sessionId, physicalUserMessageId) |> optionalValue unbox<ExecutionAdmissionLease>
+            library.tryRead (sessionId, physicalUserMessageId)
+            |> optionalValue unbox<ExecutionAdmissionLease>
 
-        member _.WasExecutionSuperseded(sessionId: string, physicalUserMessageId: string) = library.wasSuperseded(sessionId, physicalUserMessageId)
-        member _.WasStoppedExecutionSuperseded(sessionId: string, physicalUserMessageId: string) = library.wasStoppedSuperseded(sessionId, physicalUserMessageId)
-        member _.OwnsExecutionAdmission(sessionId: string, physicalUserMessageId: string) = library.owns(sessionId, physicalUserMessageId)
+        member _.WasExecutionSuperseded(sessionId: string, physicalUserMessageId: string) =
+            library.wasSuperseded (sessionId, physicalUserMessageId)
+
+        member _.WasStoppedExecutionSuperseded(sessionId: string, physicalUserMessageId: string) =
+            library.wasStoppedSuperseded (sessionId, physicalUserMessageId)
+
+        member _.OwnsExecutionAdmission(sessionId: string, physicalUserMessageId: string) =
+            library.owns (sessionId, physicalUserMessageId)
+
         member _.DropSession(sessionId: string) = library.dropSession sessionId
         member _.SetDurableDevopsResolver(resolver: string -> string option) = durableResolver <- Some resolver
-        member _.SeedBoundDevOpsModel(sessionId: string, value: string) = library.seedBoundTarget(sessionId, value)
-        member _.RememberProviderStepIdentity(sessionId: string, physicalUserMessageId: string, providerRun: string) = library.rememberStep(sessionId, physicalUserMessageId, providerRun)
+
+        member _.SeedBoundDevOpsModel(sessionId: string, value: string) =
+            library.seedBoundTarget (sessionId, value)
+
+        member _.RememberProviderStepIdentity(sessionId: string, physicalUserMessageId: string, providerRun: string) =
+            library.rememberStep (sessionId, physicalUserMessageId, providerRun)
 
         member _.TryProviderStepIdentity(providerRun: string) =
             library.stepOf providerRun
             |> optionalValue (fun value -> unbox<string> value?sessionId, unbox<string> value?physicalUserMessageId)
 
-        member _.TryActivePhysical(sessionId: string) = library.activePhysical sessionId |> optionalValue unbox<string>
-        member _.BoundDevopsTarget(sessionId: string) = library.boundTarget sessionId |> optionalValue targetOf
-        member internal _.ReleaseExecution(sessionId: string) = library.releaseSession sessionId |> outcomeOf
+        member _.TryActivePhysical(sessionId: string) =
+            library.activePhysical sessionId |> optionalValue unbox<string>
+
+        member _.BoundDevopsTarget(sessionId: string) =
+            library.boundTarget sessionId |> optionalValue targetOf
+
+        member internal _.ReleaseExecution(sessionId: string) =
+            library.releaseSession sessionId |> outcomeOf
 
         member internal _.ReleasePhysicalExecution(sessionId: string, physicalUserMessageId: string) =
-            let value = library.releasePhysical(sessionId, physicalUserMessageId)
+            let value = library.releasePhysical (sessionId, physicalUserMessageId)
+
             match unbox<string> value?kind with
             | "Released" -> PhysicalExecutionReleaseOutcome.Released(outcomeOf (unbox<string> value?outcome))
             | "HeldForInput" -> PhysicalExecutionReleaseOutcome.HeldForInput
             | other -> invalidOp ("wanxiangli/routing returned an unknown physical release: " + other)
 
-        member _.CancelPendingExecution(sessionId: string) = library.cancelPending sessionId |> outcomeOf
-        member _.CancelPendingPhysicalExecution(sessionId: string, physicalUserMessageId: string) = library.cancelPendingPhysical(sessionId, physicalUserMessageId) |> outcomeOf
-        member _.CapacitySnapshot() = library.snapshot () |> snapshotOf
-        member internal _.HoldsPhysical(sessionId: string, physicalUserMessageId: string) = library.holdsPhysical(sessionId, physicalUserMessageId)
+        member _.CancelPendingExecution(sessionId: string) =
+            library.cancelPending sessionId |> outcomeOf
 
-        member _.EnterProviderStep(sessionId: string, physicalUserMessageId: string, visibleProviderRuns: Set<string>, ?requestKey: string) =
+        member _.CancelPendingPhysicalExecution(sessionId: string, physicalUserMessageId: string) =
+            library.cancelPendingPhysical (sessionId, physicalUserMessageId) |> outcomeOf
+
+        member _.CapacitySnapshot() = library.snapshot () |> snapshotOf
+
+        member internal _.HoldsPhysical(sessionId: string, physicalUserMessageId: string) =
+            library.holdsPhysical (sessionId, physicalUserMessageId)
+
+        member _.EnterProviderStep
+            (sessionId: string, physicalUserMessageId: string, visibleProviderRuns: Set<string>, ?requestKey: string)
+            =
             createObj
                 [ "sessionId" ==> sessionId
                   "physicalUserMessageId" ==> physicalUserMessageId
@@ -409,18 +515,29 @@ module ModelRouting =
                   "requestKey" ==> optionalObject box requestKey ]
             |> library.enterStep
 
-        member _.EndProviderStep(sessionId: string, physicalUserMessageId: string, providerRun: string) = library.endStep(sessionId, physicalUserMessageId, providerRun)
-        member _.TakeProviderRunTarget(providerRun: string) = library.takeRunTarget providerRun |> optionalValue targetOf
-        member _.SuppressProviderStep(sessionId: string, physicalUserMessageId: string) = library.suppressStep(sessionId, physicalUserMessageId)
-        member _.SnapshotOccupied() = library.occupied () |> Array.map targetOf
+        member _.EndProviderStep(sessionId: string, physicalUserMessageId: string, providerRun: string) =
+            library.endStep (sessionId, physicalUserMessageId, providerRun)
+
+        member _.TakeProviderRunTarget(providerRun: string) =
+            library.takeRunTarget providerRun |> optionalValue targetOf
+
+        member _.SuppressProviderStep(sessionId: string, physicalUserMessageId: string) =
+            library.suppressStep (sessionId, physicalUserMessageId)
+
+        member _.SnapshotOccupied() =
+            library.occupied () |> Array.map targetOf
+
         member _.PendingCount = library.pendingCount
         member _.PendingBound = library.pendingBound
         member _.PendingContractVersion = library.pendingContractVersion
-        member _.HasTheoreticalCapacity (role: string) (purpose: ModelExecutionPurpose) = library.hasTheoreticalCapacity(role, purposeLabel purpose)
+
+        member _.HasTheoreticalCapacity (role: string) (purpose: ModelExecutionPurpose) =
+            library.hasTheoreticalCapacity (role, purposeLabel purpose)
 
     let private sharedGate = obj ()
 
-    let internal setSharedDurableDevopsResolver (resolver: string -> string option) = sharedDurableResolver <- Some resolver
+    let internal setSharedDurableDevopsResolver (resolver: string -> string option) =
+        sharedDurableResolver <- Some resolver
 
     let mutable private sharedRuntime: ModelRoutingRuntime option = None
     let mutable private sharedLoad: Task<ModelRoutingRuntime> option = None
@@ -453,7 +570,8 @@ module ModelRouting =
         | Some runtime -> runtime
         | None -> invalidOp "execution-model-routing: scheduler runtime was not initialized during plugin load"
 
-    let private tryCurrent () = lock sharedGate (fun () -> sharedRuntime)
+    let private tryCurrent () =
+        lock sharedGate (fun () -> sharedRuntime)
 
     let internal takeProviderRunTarget (providerRun: ProviderRunIdentity) =
         current().TakeProviderRunTarget(ProviderRunIdentity.value providerRun)
@@ -470,27 +588,38 @@ module ModelRouting =
         (lenderSessionId: string option)
         (hostTarget: ModelRoutingTarget option)
         =
-        current().AcquireExecutionAdmission(
-            SessionId.value sessionId,
-            PhysicalUserMessageId.value physicalUserMessageId,
-            role,
-            participant,
-            purpose,
-            lenderSessionId,
-            ?hostTarget = hostTarget
-        )
+        current()
+            .AcquireExecutionAdmission(
+                SessionId.value sessionId,
+                PhysicalUserMessageId.value physicalUserMessageId,
+                role,
+                participant,
+                purpose,
+                lenderSessionId,
+                ?hostTarget = hostTarget
+            )
 
-    let internal executionAdmissionTarget (lease: ExecutionAdmissionLease) = current().ExecutionAdmissionTarget lease
+    let internal executionAdmissionTarget (lease: ExecutionAdmissionLease) =
+        current().ExecutionAdmissionTarget lease
 
     let internal commitExecutionAdmission (lease: ExecutionAdmissionLease) (observed: ExecutionAdmissionExactIdentity) =
         current().CommitExecutionAdmission(lease, observed)
 
-    let internal releaseExecutionAdmissionBeforeProvider (lease: ExecutionAdmissionLease) (observed: ExecutionAdmissionExactIdentity) =
+    let internal releaseExecutionAdmissionBeforeProvider
+        (lease: ExecutionAdmissionLease)
+        (observed: ExecutionAdmissionExactIdentity)
+        =
         current().ReleaseExecutionAdmissionBeforeProvider(lease, observed)
 
-    let tryReserveManaged (sessionId: SessionId) (role: Role) (purpose: ModelExecutionPurpose) (lenderSessionId: string option) =
+    let tryReserveManaged
+        (sessionId: SessionId)
+        (role: Role)
+        (purpose: ModelExecutionPurpose)
+        (lenderSessionId: string option)
+        =
         tryCurrent ()
-        |> Option.bind (fun runtime -> runtime.TryReserveManaged(SessionId.value sessionId, role, purpose, lenderSessionId))
+        |> Option.bind (fun runtime ->
+            runtime.TryReserveManaged(SessionId.value sessionId, role, purpose, lenderSessionId))
 
     let tryLease
         (sessionId: SessionId)
@@ -502,59 +631,115 @@ module ModelRouting =
         =
         tryCurrent ()
         |> Option.bind (fun runtime ->
-            runtime.TryLease(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId, role, participant, purpose, lenderSessionId))
+            runtime.TryLease(
+                SessionId.value sessionId,
+                PhysicalUserMessageId.value physicalUserMessageId,
+                role,
+                participant,
+                purpose,
+                lenderSessionId
+            ))
 
-    let internal continueExecutionAdmission (previous: ExecutionAdmissionLease) (physicalId: PhysicalUserMessageId) (target: ModelRoutingTarget) =
+    let internal continueExecutionAdmission
+        (previous: ExecutionAdmissionLease)
+        (physicalId: PhysicalUserMessageId)
+        (target: ModelRoutingTarget)
+        =
         match tryCurrent () with
-        | Some runtime -> runtime.ContinueExecutionAdmission(previous, PhysicalUserMessageId.value physicalId, selectedTarget = target)
-        | None -> failedTask<ExecutionAdmissionAcquisition> (InvalidOperationException "model-routing runtime is unavailable")
+        | Some runtime ->
+            runtime.ContinueExecutionAdmission(
+                previous,
+                PhysicalUserMessageId.value physicalId,
+                selectedTarget = target
+            )
+        | None ->
+            failedTask<ExecutionAdmissionAcquisition> (InvalidOperationException "model-routing runtime is unavailable")
 
     let internal retainContinuationInput (previous: ExecutionAdmissionLease) (key: ChatExecutionKey) =
         match tryCurrent () with
-        | Some runtime -> runtime.RetainContinuationInput(previous, PhysicalUserMessageId.value key.PhysicalUserMessageId)
+        | Some runtime ->
+            runtime.RetainContinuationInput(previous, PhysicalUserMessageId.value key.PhysicalUserMessageId)
         | None -> invalidOp "model-routing runtime is unavailable"
 
-    let internal retainContinuationInputForPhysical (previous: ExecutionAdmissionLease) (physicalUserMessageId: PhysicalUserMessageId) =
+    let internal retainContinuationInputForPhysical
+        (previous: ExecutionAdmissionLease)
+        (physicalUserMessageId: PhysicalUserMessageId)
+        =
         match tryCurrent () with
         | Some runtime -> runtime.RetainContinuationInput(previous, PhysicalUserMessageId.value physicalUserMessageId)
         | None -> invalidOp "model-routing runtime is unavailable"
 
     let internal tryContinuationInput (key: ChatExecutionKey) =
         tryCurrent ()
-        |> Option.bind (fun runtime -> runtime.TryContinuationInput(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId))
+        |> Option.bind (fun runtime ->
+            runtime.TryContinuationInput(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            ))
 
     let internal cancelContinuationInput (key: ChatExecutionKey) =
         tryCurrent ()
-        |> Option.iter (fun runtime -> runtime.CancelContinuationInput(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId))
+        |> Option.iter (fun runtime ->
+            runtime.CancelContinuationInput(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            ))
 
     let internal cancelRetainedInputsForSession (sessionId: SessionId) =
-        tryCurrent () |> Option.iter (fun runtime -> runtime.CancelRetainedInputsForSession(SessionId.value sessionId))
+        tryCurrent ()
+        |> Option.iter (fun runtime -> runtime.CancelRetainedInputsForSession(SessionId.value sessionId))
 
     let internal tryReadExecution (key: ChatExecutionKey) : ExecutionAdmissionLease option =
         tryCurrent ()
-        |> Option.bind (fun runtime -> runtime.TryReadExecution(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId))
+        |> Option.bind (fun runtime ->
+            runtime.TryReadExecution(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            ))
 
     let internal wasExecutionSuperseded (key: ChatExecutionKey) =
         match tryCurrent () with
-        | Some runtime -> runtime.WasExecutionSuperseded(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId)
+        | Some runtime ->
+            runtime.WasExecutionSuperseded(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            )
         | None -> false
 
     let internal wasStoppedExecutionSuperseded (key: ChatExecutionKey) =
         match tryCurrent () with
-        | Some runtime -> runtime.WasStoppedExecutionSuperseded(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId)
+        | Some runtime ->
+            runtime.WasStoppedExecutionSuperseded(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            )
         | None -> false
 
     let internal ownsExecutionAdmission (key: ChatExecutionKey) =
         match tryCurrent () with
-        | Some runtime -> runtime.OwnsExecutionAdmission(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId)
+        | Some runtime ->
+            runtime.OwnsExecutionAdmission(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            )
         | None -> false
 
-    let internal rememberProviderStepIdentity (sessionId: SessionId) (physicalUserMessageId: PhysicalUserMessageId) (providerRun: ProviderRunIdentity) =
+    let internal rememberProviderStepIdentity
+        (sessionId: SessionId)
+        (physicalUserMessageId: PhysicalUserMessageId)
+        (providerRun: ProviderRunIdentity)
+        =
         tryCurrent ()
         |> Option.iter (fun runtime ->
-            runtime.RememberProviderStepIdentity(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId, ProviderRunIdentity.value providerRun))
+            runtime.RememberProviderStepIdentity(
+                SessionId.value sessionId,
+                PhysicalUserMessageId.value physicalUserMessageId,
+                ProviderRunIdentity.value providerRun
+            ))
 
-    let internal tryProviderStepIdentity (providerRun: ProviderRunIdentity) : (SessionId * PhysicalUserMessageId) option =
+    let internal tryProviderStepIdentity
+        (providerRun: ProviderRunIdentity)
+        : (SessionId * PhysicalUserMessageId) option =
         tryCurrent ()
         |> Option.bind (fun runtime -> runtime.TryProviderStepIdentity(ProviderRunIdentity.value providerRun))
         |> Option.map (fun (session, physical) -> SessionId.create session, PhysicalUserMessageId.create physical)
@@ -571,13 +756,15 @@ module ModelRouting =
         |> Option.map toHostModel
 
     let internal dropSession (sessionId: SessionId) =
-        tryCurrent () |> Option.iter (fun runtime -> runtime.DropSession(SessionId.value sessionId))
+        tryCurrent ()
+        |> Option.iter (fun runtime -> runtime.DropSession(SessionId.value sessionId))
 
     let internal seedBoundDevOpsModel (sessionId: SessionId) (value: string) =
         match tryCurrent () with
         | Some runtime -> runtime.SeedBoundDevOpsModel(SessionId.value sessionId, value)
         | None ->
-            invalidOp "execution-model-routing: the shared runtime is not loaded, so the durable DevOps model target cannot be seeded; refusing to fall back to the current scheduler preference."
+            invalidOp
+                "execution-model-routing: the shared runtime is not loaded, so the durable DevOps model target cannot be seeded; refusing to fall back to the current scheduler preference."
 
     let internal releaseExecution (sessionId: SessionId) =
         match tryCurrent () with
@@ -586,12 +773,18 @@ module ModelRouting =
 
     let internal releasePhysicalExecution (sessionId: SessionId) (physicalUserMessageId: PhysicalUserMessageId) =
         match tryCurrent () with
-        | Some runtime -> runtime.ReleasePhysicalExecution(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId)
+        | Some runtime ->
+            runtime.ReleasePhysicalExecution(
+                SessionId.value sessionId,
+                PhysicalUserMessageId.value physicalUserMessageId
+            )
         | None -> PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.AlreadyApplied
 
     let internal observePhysicalResource (key: ChatExecutionKey) =
         match tryCurrent () with
-        | Some runtime when runtime.HoldsPhysical(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId) ->
+        | Some runtime when
+            runtime.HoldsPhysical(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId)
+            ->
             PhysicalResourceObservation.ResourceHeld key
         | _ -> PhysicalResourceObservation.ResourceAbsent key
 
@@ -602,27 +795,47 @@ module ModelRouting =
 
     let internal cancelPendingPhysicalExecution (key: ChatExecutionKey) =
         match tryCurrent () with
-        | Some runtime -> runtime.CancelPendingPhysicalExecution(SessionId.value key.SessionId, PhysicalUserMessageId.value key.PhysicalUserMessageId)
+        | Some runtime ->
+            runtime.CancelPendingPhysicalExecution(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            )
         | None -> CapacityTransitionOutcome.AlreadyApplied
 
     let internal capacitySnapshot () = current().CapacitySnapshot()
 
-    let enterProviderStep (sessionId: SessionId) (physicalUserMessageId: PhysicalUserMessageId) (visibleProviderRuns: Set<ProviderRunIdentity>) (requestKey: string option) =
-        current().EnterProviderStep(
-            SessionId.value sessionId,
-            PhysicalUserMessageId.value physicalUserMessageId,
-            visibleProviderRuns |> Set.map ProviderRunIdentity.value,
-            ?requestKey = requestKey
-        )
+    let enterProviderStep
+        (sessionId: SessionId)
+        (physicalUserMessageId: PhysicalUserMessageId)
+        (visibleProviderRuns: Set<ProviderRunIdentity>)
+        (requestKey: string option)
+        =
+        current()
+            .EnterProviderStep(
+                SessionId.value sessionId,
+                PhysicalUserMessageId.value physicalUserMessageId,
+                visibleProviderRuns |> Set.map ProviderRunIdentity.value,
+                ?requestKey = requestKey
+            )
 
-    let endProviderStep (sessionId: SessionId) (physicalUserMessageId: PhysicalUserMessageId) (providerRun: ProviderRunIdentity) =
+    let endProviderStep
+        (sessionId: SessionId)
+        (physicalUserMessageId: PhysicalUserMessageId)
+        (providerRun: ProviderRunIdentity)
+        =
         tryCurrent ()
         |> Option.iter (fun runtime ->
-            runtime.EndProviderStep(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId, ProviderRunIdentity.value providerRun))
+            runtime.EndProviderStep(
+                SessionId.value sessionId,
+                PhysicalUserMessageId.value physicalUserMessageId,
+                ProviderRunIdentity.value providerRun
+            ))
 
     let suppressProviderStep (sessionId: SessionId) (physicalUserMessageId: PhysicalUserMessageId) =
         tryCurrent ()
-        |> Option.iter (fun runtime -> runtime.SuppressProviderStep(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId))
+        |> Option.iter (fun runtime ->
+            runtime.SuppressProviderStep(SessionId.value sessionId, PhysicalUserMessageId.value physicalUserMessageId))
 
     let tryActivePhysical (sessionId: string) =
-        tryCurrent () |> Option.bind (fun runtime -> runtime.TryActivePhysical(sessionId.Trim()))
+        tryCurrent ()
+        |> Option.bind (fun runtime -> runtime.TryActivePhysical(sessionId.Trim()))

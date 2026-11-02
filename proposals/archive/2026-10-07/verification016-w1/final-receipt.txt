@@ -1,5 +1,0 @@
-W1 final prose/input freeze: generation296, source compiler digest unchanged from formal generation295; see final-fresh.json and full final-build-manifest.json for distinct generated digest.
-Final Fable 174 surfaces / 834 modules passed. Full check exit0.
-Final formal JS002 + requirement017: 2/2 files, 23 pass, 0 fail, 0 skip, 0 TODO, exit0, 1.41s wall / 1.96s summed test duration. Original outer26270 accepted=true19.780ms.
-The complete original formal016 certificate remains receipt.txt, gen295, 288 pass / 0 fail / 19 skip / 2 TODO, exit1 only pending.
-No retry, timeout expansion, owner/archive cache, test deletion, whole CI closure or causal speedup claim.

@@ -92,6 +92,7 @@ module FissionAdmission =
     let private resultToNative convert (operation: Task<Result<'a, string>>) =
         task {
             let! result = operation
+
             return
                 match result with
                 | Ok value -> createObj [ "ok" ==> true; "value" ==> convert value ]
@@ -99,43 +100,54 @@ module FissionAdmission =
         }
 
     let private optionalText (value: obj) =
-        if isNullOrUndefined value then None else Some(unbox<string> value)
+        if isNullOrUndefined value then
+            None
+        else
+            Some(unbox<string> value)
 
-    let private optionalSession value = optionalText value |> Option.map SessionId.create
+    let private optionalSession value =
+        optionalText value |> Option.map SessionId.create
 
     let private lanePrompt (value: obj) : FissionLanePrompt =
-        { Index = unbox value?index; Prompt = unbox value?prompt }
+        { Index = unbox value?index
+          Prompt = unbox value?prompt }
 
     let private startedLane (value: obj) : FissionStartedLane =
         { Index = unbox value?index
           Prompt = unbox value?prompt
           SessionId = SessionId.create (unbox value?session) }
 
-    let private startedLanes (values: obj array) = values |> Array.map startedLane |> Array.toList
+    let private startedLanes (values: obj array) =
+        values |> Array.map startedLane |> Array.toList
 
     let private effects (runtime: FissionAdmissionRuntime) =
         let deps = runtime.Dependencies
         let hooks = runtime.Hooks
+
         createObj
-            [ "parentOf" ==> (fun owner ->
+            [ "parentOf"
+              ==> (fun owner ->
                   deps.ParentOf(SessionId.create owner)
                   |> resultToNative (Option.map SessionId.value >> box))
-              "ownerView" ==> (fun owner ->
-                  deps.OwnerView(SessionId.create owner) |> resultToNative box)
-              "createLane" ==> (fun owner parent lane ->
+              "ownerView"
+              ==> (fun owner -> deps.OwnerView(SessionId.create owner) |> resultToNative box)
+              "createLane"
+              ==> (fun owner parent lane ->
                   deps.CreateLane (SessionId.create owner) (optionalSession parent) (lanePrompt lane)
                   |> resultToNative (SessionId.value >> box))
-              "renderStartup" ==> (fun count lane view ->
-                  FissionStartup.render count (lanePrompt lane) (optionalText view))
-              "startLane" ==> (fun session prompt ->
-                  deps.StartLane (SessionId.create session) prompt |> resultToNative box)
+              "renderStartup"
+              ==> (fun count lane view -> FissionStartup.render count (lanePrompt lane) (optionalText view))
+              "startLane"
+              ==> (fun session prompt -> deps.StartLane (SessionId.create session) prompt |> resultToNative box)
               "abortLane" ==> (fun session -> deps.AbortLane(SessionId.create session))
-              "interruptOwner" ==> (fun owner ->
-                  deps.SilentInterruptOwner(SessionId.create owner) |> resultToNative box)
-              "onLanesCreated" ==> (fun owner parent view lanes ->
+              "interruptOwner"
+              ==> (fun owner -> deps.SilentInterruptOwner(SessionId.create owner) |> resultToNative box)
+              "onLanesCreated"
+              ==> (fun owner parent view lanes ->
                   hooks.OnLanesCreated (SessionId.create owner) (optionalSession parent) view (startedLanes lanes)
                   |> resultToNative box)
-              "onFailed" ==> (fun owner reason -> hooks.OnFailed (SessionId.create owner) reason) ]
+              "onFailed"
+              ==> (fun owner reason -> hooks.OnFailed (SessionId.create owner) reason) ]
 
     let admit
         (runtime: FissionAdmissionRuntime)
@@ -147,21 +159,29 @@ module FissionAdmission =
                 createObj
                     [ "owner" ==> SessionId.value ownerSessionId
                       "count" ==> parsed.Count
-                      "lanes" ==> (parsed.Lanes |> List.map (fun lane ->
-                          createObj [ "index" ==> lane.Index; "prompt" ==> lane.Prompt ]) |> List.toArray) ]
-            let! result: obj = lifecycle?admit (request, effects runtime)
+                      "lanes"
+                      ==> (parsed.Lanes
+                           |> List.map (fun lane -> createObj [ "index" ==> lane.Index; "prompt" ==> lane.Prompt ])
+                           |> List.toArray) ]
+
+            let! (result: obj) = lifecycle?admit (request, effects runtime)
+
+            let rejection () =
+                match string result?kind with
+                | "TooFewLanes" -> FissionRejectReason.TooFewLanes
+                | "InvalidOrigin" -> FissionRejectReason.InvalidOrigin
+                | "AlreadyFissioned" -> FissionRejectReason.AlreadyFissioned
+                | _ -> FissionRejectReason.RuntimeUnavailable(unbox result?error)
+
             if unbox<bool> result?ok then
                 let value: obj = result?value
-                return Ok
-                    { OwnerSessionId = SessionId.create(unbox value?owner)
-                      ParentSessionId = optionalSession value?parent
-                      OwnerView = optionalText value?ownerView
-                      Lanes = startedLanes (unbox value?lanes) }
+
+                return
+                    Ok
+                        { OwnerSessionId = SessionId.create (unbox value?owner)
+                          ParentSessionId = optionalSession value?parent
+                          OwnerView = optionalText value?ownerView
+                          Lanes = startedLanes (unbox value?lanes) }
             else
-                return Error(
-                    match string result?kind with
-                    | "TooFewLanes" -> FissionRejectReason.TooFewLanes
-                    | "InvalidOrigin" -> FissionRejectReason.InvalidOrigin
-                    | "AlreadyFissioned" -> FissionRejectReason.AlreadyFissioned
-                    | _ -> FissionRejectReason.RuntimeUnavailable(unbox result?error))
+                return Error(rejection ())
         }

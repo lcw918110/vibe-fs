@@ -6,14 +6,6 @@ import test from 'node:test'
 import * as store from '../../../dist/Persistence/EventStore/Surface.js'
 import * as retention from '../../../dist/Persistence/EventStore/RetentionSurface.js'
 import * as codec from '../../../dist/Persistence/EventStore/CodecSurface.js'
-import { CanonicalEventCodec_ofLibraryEvent } from '../../../dist/Persistence/EventStore/CanonicalEventCodec.js'
-import {
-  ProcessEventLogModule_create as createWriter,
-  ProcessEventLogModule_filePath as writerFilePath,
-  ProcessEventLogModule_append as appendWriter,
-  ProcessEventLogModule_PhysicalAppendCompletion as Completion,
-} from '../../../dist/Persistence/EventStore/ProcessEventLog.js'
-import { ofArray } from '../../../dist/fable_modules/fable-library-js.5.13.0/List.js'
 
 const event = (ordinal, text, parents = []) => ({
   id: ordinal.toString(16).padStart(40, '0'),
@@ -82,14 +74,13 @@ test('the original writer rechecks a replaced events directory for Git paths whi
   const gitTarget = join(root, '.git', 'writer-target')
   const writerId = 'directory-swap-writer'
   try {
-    const original = createWriter(stateRoot, writerId)
+    const original = store.createPhysicalWriter(stateRoot, writerId)
     const first = event(1, 'accepted before the physical directory changes')
     const next = event(2, 'must not enter Git metadata', [first.id])
-    const written = appendWriter(original, ofArray([CanonicalEventCodec_ofLibraryEvent(first)]))
-    assert.equal(written.tag, 0)
-    assert.deepEqual(written.fields[0], Completion.AppendDurable)
-    assert.equal(writerFilePath(original), join(events, `${writerId}-0000.ndjson`))
-    const before = readFileSync(writerFilePath(original))
+    const written = store.appendPhysicalWriter(original, [first])
+    assert.deepEqual(written, { ok: true, completion: 'AppendDurable' })
+    assert.equal(store.physicalWriterPath(original), join(events, `${writerId}-0000.ndjson`))
+    const before = readFileSync(store.physicalWriterPath(original))
 
     mkdirSync(gitTarget, { recursive: true })
     const marker = join(gitTarget, 'preserve.txt')
@@ -98,17 +89,15 @@ test('the original writer rechecks a replaced events directory for Git paths whi
     renameSync(events, savedEvents)
     symlinkSync(gitTarget, events, 'dir')
 
-    assert.throws(() => writerFilePath(original), /\.git/)
-    const refused = appendWriter(original, ofArray([CanonicalEventCodec_ofLibraryEvent(next)]))
-    assert.equal(refused.tag, 1)
-    assert.equal(refused.fields[0].cases()[refused.fields[0].tag], 'BeforeAppend')
-    const fault = refused.fields[0].fields[0]
-    assert.equal(fault.Phase.cases()[fault.Phase.tag], 'BeforePhysicalAppend')
-    assert.match(fault.Cause.message, /\.git/)
+    assert.throws(() => store.physicalWriterPath(original), /\.git/)
+    const refused = store.appendPhysicalWriter(original, [next])
+    assert.equal(refused.ok, false)
+    assert.equal(refused.kind, 'BeforeAppend')
+    assert.equal(refused.fault.phase, 'BeforePhysicalAppend')
+    assert.match(refused.fault.cause.message, /\.git/)
 
-    const empty = appendWriter(original, ofArray([]))
-    assert.equal(empty.tag, 0)
-    assert.deepEqual(empty.fields[0], Completion.NoAppend)
+    const empty = store.appendPhysicalWriter(original, [])
+    assert.deepEqual(empty, { ok: true, completion: 'NoAppend' })
     assert.deepEqual(readdirSync(gitTarget), ['preserve.txt'])
     assert.deepEqual(readFileSync(marker), markerBytes)
     assert.deepEqual(readFileSync(join(savedEvents, `${writerId}-0000.ndjson`)), before)

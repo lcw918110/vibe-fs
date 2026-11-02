@@ -70,7 +70,9 @@ module JsToolsBindings =
             createObj
                 [ yield "root" ==> root
                   yield "ledger" ==> ledgerApi
-                  yield "checkReturn" ==> Func<obj, obj>(fun request -> checkReturn request |> failureValue)
+                  yield
+                      "checkReturn"
+                      ==> Func<obj, obj>(fun request -> checkReturn request |> failureValue)
                   match observe with
                   | Some observe -> yield "observe" ==> Func<obj, Task<unit>>(observe)
                   | None -> () ]

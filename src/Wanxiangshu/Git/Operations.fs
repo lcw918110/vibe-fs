@@ -42,17 +42,27 @@ module GitOperations =
                       Stdin = None
                       PtyOptions = None }
 
-            return box {| code = code; stdout = stdout; stderr = stderr |}
+            return
+                box
+                    {| code = code
+                       stdout = stdout
+                       stderr = stderr |}
         }
 
     let private result (decode: obj -> 'T) (value: obj) : Result<'T, string> =
-        if value?ok then
-            Ok(decode value?value)
-        else
+        let error () =
             let code: string = value?code
-            Error(if code = "target-moved" then OrchestratorConstants.targetRefMovedError else value?error)
 
-    let private strings value = unbox<string array> value |> Array.toList
+            if code = "target-moved" then
+                OrchestratorConstants.targetRefMovedError
+            else
+                value?error
+
+        if value?ok then Ok(decode value?value) else Error(error ())
+
+    let private strings value =
+        unbox<string array> value |> Array.toList
+
     let private commit value = CommitHash.create (unbox<string> value)
 
     let prepareWorktree (runner: Command -> Task<int * string * string>) dir message =

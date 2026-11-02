@@ -30,9 +30,7 @@ module ReviewShell =
         ProviderProse.render (ProviderLanguageBinding.readGlobalPreference ()) path substitutions
 
     let private rejected reason =
-        ToolResultText.tomlObjectWithInstructions
-            [ reason ]
-            [ "recorded", ToolResultText.TBool false ]
+        ToolResultText.tomlObjectWithInstructions [ reason ] [ "recorded", ToolResultText.TBool false ]
 
     let private accepted (reply: obj) =
         let kind = string reply?kind
@@ -41,8 +39,7 @@ module ReviewShell =
 
         ToolResultText.tomlObjectWithInstructions
             [ sprintf "kind = %s\nmilestone = %s\nwait = %s" kind milestone wait ]
-            [ "recorded", ToolResultText.TBool true
-              "kind", ToolResultText.TString kind ]
+            [ "recorded", ToolResultText.TBool true; "kind", ToolResultText.TString kind ]
 
     let private updatesOf (findings: ReviewFindings) : obj =
         ReviewFindings.values findings
@@ -77,45 +74,47 @@ module ReviewShell =
         |> box
 
     let private officeOf (scope: ToolRuntimeScope) (context: HostToolContext) =
-        if scope.IsRole(context, Role.Plan) then
-            Ok "Plan"
-        elif scope.IsRole(context, Role.Manager) then
-            Ok "Manager"
-        else
-            Error "review is admitted only for Plan and Manager"
+        if scope.IsRole(context, Role.Plan) then Ok "Plan"
+        elif scope.IsRole(context, Role.Manager) then Ok "Manager"
+        else Error "review is admitted only for Plan and Manager"
 
     let private fenceOf (context: HostToolContext) =
         match context.ProviderRunId, context.ToolCallId with
         | Some run, Some call -> Ok(ProviderRunIdentity.value run, ToolCallId.value call)
         | _ -> Error "review requires the calling provider run and tool call"
 
-    /// Findings are the obligation updates. Work applies them and decides the wait.
-    let private run
+    let private submit
         (gitCommonDir: string)
         (scope: ToolRuntimeScope)
         (args: HostToolArguments)
         (context: HostToolContext)
         : obj =
+        match Model.tryParse args.Raw, officeOf scope context, fenceOf context with
+        | Error reason, _, _
+        | _, Error reason, _
+        | _, _, Error reason -> createObj [ "status", box "Conflict"; "kind", box ""; "reason", box reason ]
+        | Ok findings, Ok office, Ok(providerRunId, toolCallId) ->
+            DurableWorkHost.submitReview
+                gitCommonDir
+                context.SessionId
+                (providerRunId + ":" + toolCallId)
+                office
+                providerRunId
+                toolCallId
+                (updatesOf findings)
+                (blockersOf scope context.SessionId (providerRunId + ":" + toolCallId))
+                (digestOf args.Raw)
+                (scope.ReviewPorts context)
+
+    /// Findings are the obligation updates. Work applies them and decides the wait.
+    let private run gitCommonDir scope args context =
         if String.IsNullOrWhiteSpace gitCommonDir then
-            createObj [ "status", box "Conflict"; "kind", box ""; "reason", box "git common directory is missing" ]
+            createObj
+                [ "status", box "Conflict"
+                  "kind", box ""
+                  "reason", box "git common directory is missing" ]
         else
-            match Model.tryParse args.Raw, officeOf scope context, fenceOf context with
-            | Error reason, _, _
-            | _, Error reason, _
-            | _, _, Error reason ->
-                createObj [ "status", box "Conflict"; "kind", box ""; "reason", box reason ]
-            | Ok findings, Ok office, Ok(providerRunId, toolCallId) ->
-                DurableWorkHost.submitReview
-                    gitCommonDir
-                    context.SessionId
-                    (providerRunId + ":" + toolCallId)
-                    office
-                    providerRunId
-                    toolCallId
-                    (updatesOf findings)
-                    (blockersOf scope context.SessionId (providerRunId + ":" + toolCallId))
-                    (digestOf args.Raw)
-                    (scope.ReviewPorts context)
+            submit gitCommonDir scope args context
 
     let spec (factory: HostToolFactory) (scope: ToolRuntimeScope) : ToolSpec =
         let findingSchema =

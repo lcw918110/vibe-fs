@@ -5,4 +5,8 @@ open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Persistence.Journal
 
 module PrefixReanchor =
-    val observed: journal: AgentJournal -> sessionId: SessionId -> observed: ProviderRunIdentity list -> Task<Result<ProviderRunIdentity option, string>>
+    val observed:
+        journal: AgentJournal ->
+        sessionId: SessionId ->
+        observed: ProviderRunIdentity list ->
+            Task<Result<ProviderRunIdentity option, string>>

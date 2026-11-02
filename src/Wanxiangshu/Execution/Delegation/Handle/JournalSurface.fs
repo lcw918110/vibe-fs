@@ -187,6 +187,52 @@ module JournalSurface =
         | Retired -> "Retired"
         | Abandoned _ -> "Abandoned"
 
+    let drainWhere
+        (handle: JournalHandle)
+        (parent: string)
+        (maxCount: int)
+        (completedAt: string)
+        (accept: obj -> bool)
+        : Task<obj> =
+        task {
+            let acceptRecord (record: HandleRecord) =
+                accept (
+                    box
+                        {| child = SessionId.value record.ChildSessionId
+                           lifecycle = lifecycle record.Lifecycle |}
+                )
+
+            let! result =
+                JoinDrain.drainFromJournalWhere
+                    (AgentJournalPortAdapter.fromAgentJournal handle.Journal)
+                    (SessionId.create parent)
+                    maxCount
+                    (System.DateTimeOffset.Parse completedAt)
+                    acceptRecord
+
+            return
+                match result with
+                | Error error -> failure (string error)
+                | Ok completions ->
+                    let items =
+                        completions
+                        |> List.map (fun completed ->
+                            let outcome = completed.Outcome
+
+                            let view =
+                                match outcome with
+                                | Wanxiangshu.Execution.Session.AgentCompleted value -> value.View
+                                | _ -> null
+
+                            box
+                                {| agent = Wanxiangshu.Execution.Session.AgentCompletion.agentId outcome
+                                   kind = Wanxiangshu.Execution.Session.AgentCompletion.status outcome
+                                   view = view |})
+                        |> List.toArray
+
+                    box {| ok = true; items = items |}
+        }
+
     /// The durable view of one work unit.
     ///
     /// `lifecycle` is the work's own lifecycle; `lifecycleKind` is the kind of

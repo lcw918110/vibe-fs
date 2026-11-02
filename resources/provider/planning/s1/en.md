@@ -12,9 +12,9 @@ Write down the target state first: after planning completes, what state should t
 
 Obtain repository facts through `devops`. Separate three kinds:
 
-- Verified facts: sourced and re-checkable.
-- Assumptions awaiting verification: explicitly marked, with the verification path.
-- Non-verifiable items: state why.
+- Checked facts: sourced and re-checkable.
+- Assumptions awaiting a check: explicitly marked, with the check path.
+- Non-checkable items: state why.
 
 Never write an assumption as a fact in the draft.
 
@@ -30,6 +30,6 @@ When a key trade-off depends on the user's value judgment, use `ask` to request 
 
 ## Review and Advancement
 
-`S1` is ready to advance when: the target state is clear, key facts are verified or marked, root causes are traced to the bottom, and trade-offs are recorded.
+`S1` is ready to advance when: the target state is clear, key facts are checked or marked, root causes are traced to the bottom, and trade-offs are recorded.
 
 This criterion serves the review first: what you check with it is the `S1` account left by previous runners, and whether it advances depends on how well the previous runner did. The object of review is the gap to being ready for promotion to `S2` (meaning the `S1` account is complete so `S2` can begin), not whether `S2` itself (problem restatement, candidate paths, chosen path, and counterfactual checks) is already written: never list `S2` path design work as an `S1` gap merely because the draft has not started `S2` yet. For each non-empty gap, record the gap in the obligation ledger: that is this leg's repair list, to be filled in for the `S1` account, then hand over and retire. An empty gap set advances the milestone by itself (only on a successor's first review; when an originator's ledger is empty the system asks the user instead): on return the system presents the `S2` method, and as the originator of `S2` in this same tenure you begin `S2` writing under that method. There is no separate promotion call. Relay does not swap the stage: your successor takes over in whatever stage you retire in.

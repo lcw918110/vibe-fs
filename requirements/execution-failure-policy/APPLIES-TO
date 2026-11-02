@@ -36,7 +36,6 @@
 /src/Wanxiangshu/Foundation/FatalProcess.fs
 /src/Wanxiangshu/Persistence/Journal/EventStoreJournalWriter.fs
 /scripts/checks/retry-owner.mjs
-/scripts/checks/fatal-inventory-gate.mjs
 /src/Wanxiangshu/Execution/Failure/Model.fs
 /src/Wanxiangshu/Execution/Failure/Policy.fs
 /src/Wanxiangshu/Execution/Failure/Surface.fs

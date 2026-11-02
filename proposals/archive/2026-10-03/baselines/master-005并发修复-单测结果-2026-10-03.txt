@@ -1,9 +1,0 @@
-# master 005 并发修复单测结果（2026-10-03）
-# 方法: node requirements/verification-system/tests/run.mjs (816 文件)
-# 工蜂报告: 3617 passed / 0 failed；未附 skipped/TODO 及完整运行输出，本轮独立复核尚未复现完整全量。
-# 统计纠正: 005 新增的是 integrationTest，在默认入口中为 skip，不增加 passed。
-# e6b82c54a 实际新增3项已注册测试，另1项并发失败测试位于helper的return之后，未注册；旧TODO移除1项。
-# 独立复核移出该用例后005共8项integration测试，obligation-ledger包启用integration为13 passed / 0 failed / 5 TODO。
-# js-boundary-gate: 0 违规; format:check 通过
-# 本轮: 005 追加失败与并发重复终态 (joinPending 共享 + 失败分类处理)
-# 独立验证、变异对照及全量进展超时见 master-005并发修复-独立复核.txt。

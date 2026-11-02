@@ -25,7 +25,8 @@ module PromptDispatcherSend =
     [<Import("promptPhysicalAcceptance", "wanxiangli/dispatch")>]
     let private physicalAcceptance: obj = jsNative
 
-    let private attempt: obj = emitJsExpr (attemptClass, physicalAcceptance) "new $0($1)"
+    let private attempt: obj =
+        emitJsExpr (attemptClass, physicalAcceptance) "new $0($1)"
 
     [<Emit("$0.dispose()")>]
     let private disposeNative (_subscription: obj) : unit = jsNative
@@ -33,7 +34,9 @@ module PromptDispatcherSend =
     let private outcomeToNative (outcome: SendOutcome) : obj =
         match outcome with
         | AdmittedWithReceipt receipt ->
-            createObj [ "kind" ==> "AdmittedWithReceipt"; "receipt" ==> TransportReceipt.value receipt ]
+            createObj
+                [ "kind" ==> "AdmittedWithReceipt"
+                  "receipt" ==> TransportReceipt.value receipt ]
         | AdmittedWithPhysicalMessage physical ->
             createObj
                 [ "kind" ==> "AdmittedWithPhysicalMessage"
@@ -69,7 +72,9 @@ module PromptDispatcherSend =
 
     let private observerToNative (observer: ContinuationAcceptanceObserver) : obj =
         createObj
-            [ yield "notify" ==> Action<string>(fun physical -> observer.Notify(PhysicalUserMessageId.create physical))
+            [ yield
+                  "notify"
+                  ==> Action<string>(fun physical -> observer.Notify(PhysicalUserMessageId.create physical))
               yield
                   "own"
                   ==> Action<obj>(fun owned ->
@@ -79,6 +84,15 @@ module PromptDispatcherSend =
               match observer.Budget with
               | Some budget -> yield "budget" ==> budget
               | None -> () ]
+
+    let private observeSend observe (event: obj) =
+        let eventKey = PromptKey.create (unbox<string> event?key)
+
+        match unbox<string> event?kind with
+        | "Sending" -> observe (PromptDispatcher.PromptSendObservation.Sending eventKey)
+        | "Answered" ->
+            observe (PromptDispatcher.PromptSendObservation.Answered(eventKey, outcomeFromNative event?outcome))
+        | other -> invalidOp ("wanxiangli/dispatch returned an unknown send observation: " + other)
 
     let private specOf
         (key: PromptKey)
@@ -98,21 +112,13 @@ module PromptDispatcherSend =
               | Some observer -> yield "observer" ==> observerToNative observer
               | None -> ()
               match observed with
-              | Some observe ->
-                  yield
-                      "observed"
-                      ==> Action<obj>(fun event ->
-                          let eventKey = PromptKey.create (unbox<string> event?key)
-
-                          match unbox<string> event?kind with
-                          | "Sending" -> observe (PromptDispatcher.PromptSendObservation.Sending eventKey)
-                          | "Answered" ->
-                              observe (PromptDispatcher.PromptSendObservation.Answered(eventKey, outcomeFromNative event?outcome))
-                          | other -> invalidOp ("wanxiangli/dispatch returned an unknown send observation: " + other))
+              | Some observe -> yield "observed" ==> Action<obj>(observeSend observe)
               | None -> ()
               match onFailure with
               | Some notify ->
-                  yield "onFailure" ==> Func<obj, Task>(fun verdict -> notify (sprintf "%A" (verdictFromNative verdict)))
+                  yield
+                      "onFailure"
+                      ==> Func<obj, Task>(fun verdict -> notify (sprintf "%A" (verdictFromNative verdict)))
               | None -> () ]
 
     /// PROMPT-011: the key is derived, never generated.
@@ -193,9 +199,7 @@ module PromptDispatcherSend =
                       let listener: Wanxiangshu.Host.Ports.LateDeliveryListener option =
                           match box late with
                           | null -> None
-                          | _ ->
-                              Some(fun verdict ->
-                                  unbox<Task> (emitJsExpr (late, verdictToNative verdict) "$0($1)"))
+                          | _ -> Some(fun verdict -> unbox<Task> (emitJsExpr (late, verdictToNative verdict) "$0($1)"))
 
                       let pending = port.SendPrompt(sessionId, request, metadata, listener)
 
@@ -305,7 +309,7 @@ module PromptDispatcherSend =
                 let effects = effectsOf this port sessionId key request metadata acceptFn None
 
                 return!
-                    unbox<Task<obj>> (attempt?sendInitial(spec, effects))
+                    unbox<Task<obj>> (attempt?sendInitial (spec, effects))
                     |> TaskValue.map (attemptFromNative >> publicResultOfAttempt)
             }
 
@@ -399,20 +403,27 @@ module PromptDispatcherSend =
                     this.AcceptContinuation key sessionId physicalId
                     |> TaskValue.map (Result.map ignore)
 
+                let physicalVerdict () =
+                    let admitted =
+                        physicalAdmission
+                        |> Option.map (fun check -> check ())
+                        |> Option.defaultValue (Ok())
+
+                    match admitted with
+                    | Ok() -> createObj [ "kind" ==> "allowed" ]
+                    | Error failure -> createObj [ "kind" ==> "rejected"; "failure" ==> failure ]
+
                 let admit () =
                     match this.RequireActiveProfile sessionId profile with
                     | Error reason -> createObj [ "kind" ==> "failed"; "reason" ==> reason ]
-                    | Ok() ->
-                        let admitted =
-                            physicalAdmission |> Option.map (fun check -> check ()) |> Option.defaultValue (Ok())
-
-                        match admitted with
-                        | Ok() -> createObj [ "kind" ==> "allowed" ]
-                        | Error failure -> createObj [ "kind" ==> "rejected"; "failure" ==> failure ]
+                    | Ok() -> physicalVerdict ()
 
                 let spec = specOf key awaitMode onAccepted onSendObserved None
-                let effects = effectsOf this port sessionId key request metadata acceptFn (Some admit)
-                let! result = unbox<Task<obj>> (attempt?sendContinuation(spec, effects))
+
+                let effects =
+                    effectsOf this port sessionId key request metadata acceptFn (Some admit)
+
+                let! result = unbox<Task<obj>> (attempt?sendContinuation (spec, effects))
                 return attemptFromNative result
             }
 
@@ -629,21 +640,7 @@ module PromptDispatcherSend =
             (directory: string option)
             (tools: Map<string, bool> option)
             : Task<Result<PromptKey, string>> =
-            match (this.ProjectionFor sessionId).ActiveLogicalRun with
-            | Some profile ->
-                this.SendContinuationWithDigest
-                    port
-                    sessionId
-                    text
-                    (HostDigest.sha256Hex text)
-                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
-                    profile
-                    directory
-                    PromptDispatcher.AwaitMode.Detached
-                    None
-                    None
-                    tools
-            | None ->
+            let sendRoot () =
                 match issueIdentitySeed () with
                 | Error reason -> Task.FromResult(Error reason)
                 | Ok identitySeed ->
@@ -659,6 +656,22 @@ module PromptDispatcherSend =
                         None
                         tools
 
+            match (this.ProjectionFor sessionId).ActiveLogicalRun with
+            | Some profile ->
+                this.SendContinuationWithDigest
+                    port
+                    sessionId
+                    text
+                    (HostDigest.sha256Hex text)
+                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
+                    profile
+                    directory
+                    PromptDispatcher.AwaitMode.Detached
+                    None
+                    None
+                    tools
+            | None -> sendRoot ()
+
         member this.SendManagedAssignmentObserved
             (port: IDispatchSessionPort)
             (sessionId: SessionId)
@@ -670,21 +683,7 @@ module PromptDispatcherSend =
             (onSendObserved: (PromptDispatcher.PromptSendObservation -> unit) option)
             (tools: Map<string, bool> option)
             : Task<Result<PromptKey, string>> =
-            match (this.ProjectionFor sessionId).ActiveLogicalRun with
-            | Some profile ->
-                this.SendContinuationWithDigest
-                    port
-                    sessionId
-                    text
-                    (HostDigest.sha256Hex text)
-                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
-                    profile
-                    directory
-                    awaitMode
-                    onAccepted
-                    onSendObserved
-                    tools
-            | None ->
+            let sendRoot () =
                 match issueIdentitySeed () with
                 | Error reason -> Task.FromResult(Error reason)
                 | Ok identitySeed ->
@@ -699,6 +698,22 @@ module PromptDispatcherSend =
                         onSendObserved
                         None
                         tools
+
+            match (this.ProjectionFor sessionId).ActiveLogicalRun with
+            | Some profile ->
+                this.SendContinuationWithDigest
+                    port
+                    sessionId
+                    text
+                    (HostDigest.sha256Hex text)
+                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
+                    profile
+                    directory
+                    awaitMode
+                    onAccepted
+                    onSendObserved
+                    tools
+            | None -> sendRoot ()
 
         /// provider-attempt-recovery-008: the one request + terminal-scoped interaction repair an unusable terminal earns.
         ///

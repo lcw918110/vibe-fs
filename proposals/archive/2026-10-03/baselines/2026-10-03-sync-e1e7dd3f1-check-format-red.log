@@ -1,8 +1,0 @@
-check.mjs: FAILED with 4 issue(s) across 1 gate(s)
-
-Gate: /Users/yuanxi/Workwork/vibe-fs/scripts/checks/fsharp-control-pyramid.mjs (4 issue(s))
-  - src/Wanxiangshu/Execution/Delegation/ExecutionFactFold.fs:78 [branch-pyramid] depth=2 chain=match → if: if terminal then
-  - src/Wanxiangshu/Execution/Delegation/Fork/Host/Runtime.fs:798 [match-pyramid] depth=2 chain=if → match: match observedWorkWaiter with
-  - src/Wanxiangshu/Sphinx/V2/Persistence/BodyDto.fs:33 [branch-pyramid] depth=2 chain=if → if: if Set.ofArray keys <> Set.ofList fields then
-  - src/Wanxiangshu/Sphinx/V2/Persistence/Codec.fs:213 [branch-pyramid] depth=2 chain=if → if: if envelope.StreamId <> inquiryStream batch.InquiryId then
-

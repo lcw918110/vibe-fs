@@ -23,7 +23,8 @@ module RepositoryWarmStart =
         (limit: int)
         (action: Func<'T, obj, Task<'U>>)
         (items: 'T array)
-        : Task<'U array> = jsNative
+        : Task<'U array> =
+        jsNative
 
     type Search = string -> string -> int -> Task<SembleMcp.Hit list>
 

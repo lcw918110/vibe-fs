@@ -1,24 +1,0 @@
-[36m[build][0m Compiling F# (focused)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @ericharding
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/b05f74d5d1ef2d28324033b30157a2332e7a82ae812a311d925daa80b1dae179/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (1556 source files) parsed in 1010ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 51349ms
-
-[39m[22m[31m./src/Wanxiangshu/Execution/Delegation/Fork/OpenCode/ToolSurface.fs(540,25): (551,31) error FSHARP: Type constraint mismatch. The type     'string -> Task<string option>'    is not compatible with type    '(string -> Task<string option>) option' (code 193)
-[39m[22m[31m./src/Wanxiangshu/Execution/Delegation/Fork/OpenCode/ToolSurface.fs(562,83): (562,87) error FSHARP: This expression was expected to have type    'SessionId -> string -> Task<Result<unit,string>>'    but here has type    ''a option' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Execution/Delegation/Fork/OpenCode/ToolSurface.fs(565,83): (565,87) error FSHARP: This expression was expected to have type    'SessionId -> string -> Task<Result<unit,string>>'    but here has type    ''a option' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Execution/Delegation/Fork/OpenCode/ToolSurface.fs(576,14): (576,107) error FSHARP: This expression was expected to have type    'SessionId -> string -> Task<Result<unit,string>>'    but here has type    ''a option' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Execution/Delegation/Fork/OpenCode/ToolSurface.fs(591,56): (591,60) error FSHARP: This expression was expected to have type    'SessionId -> string -> Task<Result<unit,string>>'    but here has type    ''a option' (code 1)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

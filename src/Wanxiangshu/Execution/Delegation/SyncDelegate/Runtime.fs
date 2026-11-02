@@ -167,11 +167,11 @@ module internal SyncDelegateInternals =
                      Some assistant)
         | _ -> None
 
-    let readDelivery
-        (journal: AgentJournal option)
-        (turn: ReconciledTurn)
-        : string option =
-        let assistant = CompletedTurnClassifier.partsSessionText turn.Parts
+    let readDelivery (journal: AgentJournal option) (turn: ReconciledTurn) : string option =
+        // WHAT[context-compression-037]: the fallback body prose handed to the
+        // parent is the terminal turn's formal text; reasoning and tool parts
+        // never travel with it.
+        let assistant = CompletedTurnClassifier.partsText turn.Parts
 
         durableWitnessView journal turn
         |> Option.orElseWith (fun () -> fencedMaterial turn assistant)
@@ -183,7 +183,7 @@ module internal SyncDelegateInternals =
             [ prose ]
 
     let naturalMaterial (turn: ReconciledTurn) =
-        CompletedTurnClassifier.partsSessionText turn.Parts
+        CompletedTurnClassifier.partsText turn.Parts
         |> naturalStopBody
         |> fun body -> ReturnedMaterial.encode body []
 
@@ -602,6 +602,7 @@ type SyncDelegateRuntime
 
     let captureTerminal (observation: obj) =
         let turn: ReconciledTurn = observation?original
+
         task {
             match! XTraceCapture.captureTerminalWithReceipt (Some journal) turn with
             | Error(XTraceCaptureError.StorageAppendFailed(JournalAppendFailure.WriterUnavailable _))
@@ -609,7 +610,10 @@ type SyncDelegateRuntime
             | Error(XTraceCaptureError.StorageAppendFailed(JournalAppendFailure.NoNewWriteReleaseFailed _)) ->
                 return createObj [ "kind" ==> "pending" ]
             | Error error ->
-                return createObj [ "kind" ==> "failed"; "error" ==> sprintf "sync delegate terminal trace capture failed: %A" error ]
+                return
+                    createObj
+                        [ "kind" ==> "failed"
+                          "error" ==> sprintf "sync delegate terminal trace capture failed: %A" error ]
             | Ok _ -> return createObj [ "kind" ==> "captured" ]
         }
 
@@ -620,6 +624,7 @@ type SyncDelegateRuntime
             | ReconcileProgram.TurnAborted reason -> "aborted", reason
             | ReconcileProgram.TurnFailed reason -> "failed", reason
             | _ -> "ongoing", ""
+
         createObj
             [ "session" ==> SessionId.value turn.SessionId
               "physical" ==> PhysicalUserMessageId.value turn.PhysicalUserMessageId
@@ -636,28 +641,40 @@ type SyncDelegateRuntime
     let terminalEffects =
         createObj
             [ "captureTerminal" ==> captureTerminal
-              "readDelivery" ==> (fun (observation: obj) ->
+              "readDelivery"
+              ==> (fun (observation: obj) ->
                   let turn: ReconciledTurn = observation?original
                   let material = SyncDelegateInternals.readDelivery (Some journal) turn
+
                   if material.IsNone && unbox<string> observation?outcome = "aborted" then
-                      Diagnostic.emit "sync-delegate-aborted-without-delivery"
+                      Diagnostic.emit
+                          "sync-delegate-aborted-without-delivery"
                           [ "session_id", SessionId.value turn.SessionId
                             "role", turn.Role |> Option.map Roles.roleLabel |> Option.defaultValue ""
                             "result", "interrupted without a delivered view; the obligation stays open" ]
+
                   DelegateValues.nullable id material)
-              "noteAnswer" ==> (fun (raw: obj) (observation: obj) (record: string) ->
+              "noteAnswer"
+              ==> (fun (raw: obj) (observation: obj) (record: string) ->
                   let turn: ReconciledTurn = observation?original
                   noteDelegateIfRole (SyncDelegateCall raw) turn.SessionId (ReturnedMaterial.render record))
-              "retry" ==> (fun (_: obj) (observation: obj) -> task {
-                  let turn: ReconciledTurn = observation?original
-                  let failure: ExecutionFailure option = observation?failure
-                  let source =
-                      { SessionId = turn.SessionId
-                        PhysicalUserMessageId = turn.PhysicalUserMessageId
-                        AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
-                        ProviderRun = turn.ProviderRun }
-                  let! result = retry turn (bindContinuationAcceptance source) failure.Value (unbox observation?error)
-                  return DelegateValues.resultToNative result }) ]
+              "retry"
+              ==> (fun (_: obj) (observation: obj) ->
+                  task {
+                      let turn: ReconciledTurn = observation?original
+                      let failure: ExecutionFailure option = observation?failure
+
+                      let source =
+                          { SessionId = turn.SessionId
+                            PhysicalUserMessageId = turn.PhysicalUserMessageId
+                            AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
+                            ProviderRun = turn.ProviderRun }
+
+                      let! result =
+                          retry turn (bindContinuationAcceptance source) failure.Value (unbox observation?error)
+
+                      return DelegateValues.resultToNative result
+                  }) ]
 
     let singletonResult taskResult =
         task {
@@ -752,18 +769,32 @@ type SyncDelegateRuntime
             ?isCancelled: unit -> bool
         ) : Task<Result<string, string>> =
         let pending =
-            SyncDelegateWorkflow.invokeResponse store deps (SessionId.create ownerSessionKey) role charge
-                prepareProviderPrompt (defaultArg isCancelled (fun () -> false))
+            SyncDelegateWorkflow.invokeResponse
+                store
+                deps
+                (SessionId.create ownerSessionKey)
+                role
+                charge
+                prepareProviderPrompt
+                (defaultArg isCancelled (fun () -> false))
+
         task {
             let! result = pending
-            if not (unbox<bool> result?ok) then return Error(unbox result?error)
-            else
-                let response: obj = result?value
-                if isNullOrUndefined response then return Error "Completed delegation did not supply a formal response"
+
+            let formalText (response: obj) =
+                if isNullOrUndefined response then
+                    None
                 else
-                    let terminal = unbox<SyncDelegateTerminalResponse> response
-                    if String.IsNullOrWhiteSpace terminal.FormalText then return Error "Completed delegation did not supply a formal response"
-                    else return Ok terminal.FormalText
+                    Some((unbox<SyncDelegateTerminalResponse> response).FormalText)
+
+            if not (unbox<bool> result?ok) then
+                return Error(unbox result?error)
+            else
+                return
+                    formalText result?value
+                    |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                    |> Option.map Ok
+                    |> Option.defaultValue (Error "Completed delegation did not supply a formal response")
         }
 
     member _.ValidateObservedOwner(ownerSessionId: SessionId) : Result<unit, string> =
@@ -779,14 +810,26 @@ type SyncDelegateRuntime
             ?isCancelled: unit -> bool
         ) : SyncDelegateObservedExecution =
         let invocation =
-            SyncDelegateWorkflow.invokeObserved store deps ownerSessionId charge
-                prepareProviderPrompt (defaultArg isCancelled (fun () -> false))
+            SyncDelegateWorkflow.invokeObserved
+                store
+                deps
+                ownerSessionId
+                charge
+                prepareProviderPrompt
+                (defaultArg isCancelled (fun () -> false))
+
         let completion: Task<obj> = invocation?completion
+
         { Admission = unbox<Task<SyncDelegateObservedAdmission>> invocation?admission
-          Completion = task {
-              let! result = completion
-              if unbox<bool> result?ok then return Ok(unbox<SyncDelegateTerminalResponse> result?value)
-              else return Error(unbox result?error) } }
+          Completion =
+            task {
+                let! result = completion
+
+                if unbox<bool> result?ok then
+                    return Ok(unbox<SyncDelegateTerminalResponse> result?value)
+                else
+                    return Error(unbox result?error)
+            } }
 
     member _.InvokeBatchPrepared
         (
@@ -903,7 +946,8 @@ type SyncDelegateRuntime
 
         cleanupDelegateDraft (sessionKey sessionId)
 
-        RuntimeDeferredInterop.deferredStore?clearSession (sessionKey sessionId) |> ignore
+        RuntimeDeferredInterop.deferredStore?clearSession (sessionKey sessionId)
+        |> ignore
 
     member _.Dispose() =
         let retiredDelegates = store.ClearAll()

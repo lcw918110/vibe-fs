@@ -57,14 +57,17 @@ module internal WanxiangliTrace =
               "end" ==> (range |> XTraceRange.endExclusive |> XTraceCursor.sequence) ]
 
     let rangeFromNative (range: obj) =
-        XTraceRange.create (XTraceCursor.create (unbox<int64> range?start)) (XTraceCursor.create (unbox<int64> range?``end``))
+        XTraceRange.create
+            (XTraceCursor.create (unbox<int64> range?start))
+            (XTraceCursor.create (unbox<int64> range?``end``))
 
     let cutFromNative (cut: obj) : XTraceCut =
         { TraceId = unbox<string> cut?traceId
           Cursor = unbox<int> cut?cursor
           Digest = unbox<string> cut?digest }
 
-    let intervalFromNative (interval: obj) = cutFromNative interval?after, cutFromNative interval?through
+    let intervalFromNative (interval: obj) =
+        cutFromNative interval?after, cutFromNative interval?through
 
     let semanticToNative =
         function
@@ -86,7 +89,14 @@ module internal WanxiangliTrace =
         | "tool_result" -> SemanticToolResult(unbox<string> part?text)
         | "media" ->
             let mediaType: obj = part?mediaType
-            SemanticMedia((if isNull mediaType then None else Some(unbox<string> mediaType)), unbox<string> part?digest)
+
+            SemanticMedia(
+                (if isNull mediaType then
+                     None
+                 else
+                     Some(unbox<string> mediaType)),
+                unbox<string> part?digest
+            )
         | kind -> invalidOp ("wanxiangli/trace returned an unknown semantic part: " + kind)
 
     let itemFromNative (provenanceOf: obj -> string) (item: obj) : XTraceItem =
@@ -104,10 +114,18 @@ module internal WanxiangliTrace =
 
     let materializeItemsInRange (range: XTraceRange) (items: XTraceItem list) : XTraceItem list =
         let native = items |> List.map itemToNative |> List.toArray
-        let values: obj array = emitJsExpr (materializeItems, rangeObject range, native) "$0($1, $2)"
+
+        let values: obj array =
+            emitJsExpr (materializeItems, rangeObject range, native) "$0($1, $2)"
+
         values |> Array.map (itemFromNative unbox<string>) |> Array.toList
 
-    let inspectItemsBridge (traceId: string) (openingText: string option) (range: XTraceRange) (items: XTraceItem list) : obj =
+    let inspectItemsBridge
+        (traceId: string)
+        (openingText: string option)
+        (range: XTraceRange)
+        (items: XTraceItem list)
+        : obj =
         let native = items |> List.map itemToNative |> List.toArray
         let opening = openingText |> Option.map box |> Option.defaultValue null
         emitJsExpr (inspectItems, traceId, opening, rangeObject range, native) "$0($1, $2, $3, $4)"
@@ -125,10 +143,15 @@ module XTrace =
 
     let sliceFrom (start: XTraceCursor) (items: XTraceItem list) =
         let traceHead = head items
-        if XTraceCursor.isAfter start traceHead then [] else sliceBetween start traceHead items
+
+        if XTraceCursor.isAfter start traceHead then
+            []
+        else
+            sliceBetween start traceHead items
 
     let flatten (messages: SemanticMessage list) : {| Role: string; Part: SemanticPart |} list =
-        messages |> List.collect (fun message -> message.Parts |> List.map (fun part -> {| Role = message.Role; Part = part |}))
+        messages
+        |> List.collect (fun message -> message.Parts |> List.map (fun part -> {| Role = message.Role; Part = part |}))
 
     let forOpening (items: XTraceItem list) : XTraceItem list = items
 
@@ -139,7 +162,8 @@ module XTrace =
 
     let private renderPart =
         function
-        | SemanticText text | SemanticReasoning text -> text
+        | SemanticText text
+        | SemanticReasoning text -> text
         | SemanticToolCall(name, args) -> sprintf "[tool call] %s %s" name args
         | SemanticToolResult result -> sprintf "[tool result] %s" result
         | SemanticMedia(mediaType, _) -> renderMedia mediaType
@@ -149,4 +173,5 @@ module XTrace =
         | SemanticText _ -> sprintf "%s: %s" item.Role (renderPart item.Part)
         | _ -> renderPart item.Part
 
-    let render (items: XTraceItem list) = items |> List.map renderItem |> String.concat "\n"
+    let render (items: XTraceItem list) =
+        items |> List.map renderItem |> String.concat "\n"

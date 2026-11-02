@@ -150,8 +150,11 @@ module PluginTransforms =
 
     let consultationStartPrevious (tempId: string) (sourceSessionId: string) (metadata: obj) : Result<unit, string> =
         let response = Surface.startTemporaryPrevious tempId sourceSessionId metadata
-        if not (isNull response?ok) && unbox<bool> response?ok then Ok()
-        else Error(responseErrorReason response "previous Scope source is unavailable in latest provider view")
+
+        if not (isNull response?ok) && unbox<bool> response?ok then
+            Ok()
+        else
+            Error(responseErrorReason response "previous Scope source is unavailable in latest provider view")
 
     let consultationModelForTemporary (tempId: string) : obj = Surface.modelForTemporary tempId
 
@@ -262,8 +265,7 @@ module PluginTransforms =
           SettleAndReplaceDeferredInspections: string option -> obj -> Task<unit>
           SanitizeMessages: string option -> obj -> unit
           AdjudicateDelivery: string option -> obj -> Task<DeliveryAdjudication>
-          StopAfterDelivery:
-              string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit> }
+          StopAfterDelivery: string option -> PhysicalUserMessageId option -> DeliveryAttemptFence -> obj -> Task<unit> }
 
     type TransformBranchCapabilities = { RegisterOwned: string -> unit }
 
@@ -359,13 +361,16 @@ module PluginTransforms =
     let private scopeAnnotationOf (part: obj) : obj =
         let fromBag (bag: obj) =
             if isNull bag then null else scopeField bag "scope"
+
         let state = scopeField part "state"
+
         let candidates =
             [ fromBag part
               fromBag (scopeField part "arguments")
               fromBag (scopeField part "input")
               fromBag (scopeField state "input")
               fromBag state ]
+
         candidates |> List.tryFind (fun v -> not (isNull v)) |> Option.defaultValue null
 
     let private neutralPart (part: obj) : obj =
@@ -376,6 +381,7 @@ module PluginTransforms =
             let name = if isNull tool then scopeField part "name" else tool
             let resultField = scopeTerminalField (scopeField part "state")
             let scope = scopeAnnotationOf part
+
             if isNull scope then
                 createObj [ "id", scopeToolId part; "tool", name; "terminalField", box resultField ]
             else
@@ -532,6 +538,7 @@ module PluginTransforms =
     /// step id on the message against BeatRetracted.beatId + aliases.
     let private messageBeatKeys (message: obj) : string list =
         let info = scopeField message "info"
+
         let top =
             [ scopeField info "id"
               scopeField message "id"
@@ -543,12 +550,16 @@ module PluginTransforms =
               scopeField info "runId" ]
             |> List.choose (fun v -> if isNull v then None else Some(scopeText v))
             |> List.filter (fun s -> s <> "")
+
         let parts = scopeField message "parts"
+
         let fromParts =
-            if isNull parts then []
+            if isNull parts then
+                []
             else
                 try
                     let arr: obj array = unbox parts
+
                     arr
                     |> Array.toList
                     |> List.collect (fun part ->
@@ -562,11 +573,14 @@ module PluginTransforms =
                         |> List.filter (fun s -> s <> ""))
                 with _ ->
                     []
+
         (top @ fromParts) |> List.distinct
 
     let private collapseRetracted (sessionId: string) (messages: obj array) : obj array =
-        let rows: obj array = unbox (scopeRetention?retractions(sessionId))
-        if isNull (box rows) || rows.Length = 0 then messages
+        let rows: obj array = unbox (scopeRetention?retractions (sessionId))
+
+        if isNull (box rows) || rows.Length = 0 then
+            messages
         else
             // Map every alias → replacement text.
             let byKey =
@@ -576,50 +590,55 @@ module PluginTransforms =
                         let replacement = scopeText (scopeField row "replacement")
                         let beat = scopeText (scopeField row "beatId")
                         let aliasField = scopeField row "aliases"
+
                         let aliases =
                             let baseKeys = if beat = "" then [] else [ beat ]
-                            if isNull aliasField then baseKeys
+
+                            if isNull aliasField then
+                                baseKeys
                             else
                                 try
                                     let arr: obj array = unbox aliasField
+
                                     baseKeys
-                                    @ (arr
-                                       |> Array.toList
-                                       |> List.map scopeText
-                                       |> List.filter (fun s -> s <> ""))
+                                    @ (arr |> Array.toList |> List.map scopeText |> List.filter (fun s -> s <> ""))
                                 with _ ->
                                     baseKeys
+
                         aliases
                         |> List.distinct
                         |> List.fold (fun m key -> Map.add key replacement m) acc)
                     Map.empty
-            if Map.isEmpty byKey then messages
+
+            if Map.isEmpty byKey then
+                messages
             else
                 // DSL-MUTABLE: algorithm-scratch — beat keys already consumed by this projection pass
                 let mutable used = Set.empty<string>
+
                 messages
                 |> Array.map (fun message ->
-                    if scopeRole message <> "assistant" then message
+                    if scopeRole message <> "assistant" then
+                        message
                     else
                         let keys = messageBeatKeys message
+
                         let hit =
                             keys
                             |> List.tryPick (fun key ->
                                 match Map.tryFind key byKey with
                                 | Some replacement when not (Set.contains key used) -> Some(key, replacement)
                                 | _ -> None)
+
                         match hit with
                         | None -> message
                         | Some(key, replacement) ->
                             used <- Set.add key used
                             let info = scopeField message "info"
+
                             createObj
                                 [ "info", box info
-                                  "parts",
-                                  box
-                                      [| createObj
-                                             [ "type", box "text"
-                                               "text", box replacement ] |] ])
+                                  "parts", box [| createObj [ "type", box "text"; "text", box replacement ] |] ])
 
     let private prepareNeutralScope (sessionId: string) (raw: obj array) : obj array =
         let normal = raw |> Array.map neutralScopeMessage
@@ -628,16 +647,36 @@ module PluginTransforms =
         unbox<obj array> plan?hints |> Array.iter (applyNeutralHint staged)
         let selected = unbox<obj array> plan?slots |> Array.map (applyNeutralSlot staged)
         let collapsed = collapseRetracted sessionId selected
-        let retention: obj = scopeRetention?status(sessionId)
-        if not (unbox<bool> plan?active) then collapsed
-        elif not (isNull plan?strong) then openCodeScopeSteer collapsed (scopeText plan?strong) true
-        elif not (isNull retention?known) && unbox<bool> retention?known
-             && not (isNull retention?remaining) && unbox<int> retention?remaining = 0 then
-            openCodeScopeSteer collapsed (ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) "host/scope-steer/reset-due" Map.empty) true
+        let retention: obj = scopeRetention?status (sessionId)
+
+        if not (unbox<bool> plan?active) then
+            collapsed
+        elif not (isNull plan?strong) then
+            openCodeScopeSteer collapsed (scopeText plan?strong) true
+        elif
+            not (isNull retention?known)
+            && unbox<bool> retention?known
+            && not (isNull retention?remaining)
+            && unbox<int> retention?remaining = 0
+        then
+            openCodeScopeSteer
+                collapsed
+                (ProviderProse.render
+                    (ProviderLanguageBinding.forSessionText sessionId)
+                    "host/scope-steer/reset-due"
+                    Map.empty)
+                true
         elif isNull retention?known || not (unbox<bool> retention?known) then
             // No retention scope yet — nudge scope.kind=resetScope (resource path name is historical).
-            openCodeScopeSteer collapsed (ProviderProse.render (ProviderLanguageBinding.forSessionText sessionId) "host/scope-steer/missing-estimate" Map.empty) true
-        else collapsed
+            openCodeScopeSteer
+                collapsed
+                (ProviderProse.render
+                    (ProviderLanguageBinding.forSessionText sessionId)
+                    "host/scope-steer/missing-estimate"
+                    Map.empty)
+                true
+        else
+            collapsed
 
     let private purgeAndSuffixSession (sessionId: string) (rawMessages: obj array) (outObj: obj) : unit =
         let sideRequest =
@@ -704,8 +743,11 @@ module PluginTransforms =
             // The paired output is published only after the real transform finishes.
             let incomingMessages: obj array =
                 let raw = scopeField outObj "messages"
-                if isNull raw then [||]
-                else unbox (emitJsExpr raw "structuredClone($0)")
+
+                if isNull raw then
+                    [||]
+                else
+                    unbox (emitJsExpr raw "structuredClone($0)")
 
             // 预读：在 Relay 投影改写消息数组之前捕获原始物理用户消息 id。
             let physicalUserMessageId =
@@ -882,7 +924,9 @@ module PluginTransforms =
             projectionSessionIdOpt
             |> Option.iter (fun sid ->
                 let transformed = negotiationMessages outObj
-                if transformed.Length > 0 then Surface.rememberTransform sid incomingMessages transformed)
+
+                if transformed.Length > 0 then
+                    Surface.rememberTransform sid incomingMessages transformed)
 
             outboundViewStore?recordMessages (outObj?messages) |> ignore
 

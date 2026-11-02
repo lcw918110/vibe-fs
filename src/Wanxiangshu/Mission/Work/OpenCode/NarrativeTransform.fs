@@ -177,7 +177,7 @@ module RelayNarrativeTransform =
 
     let private explicitCall (part: obj) =
         match stringField part "type" |> Option.map (fun kind -> kind.ToLowerInvariant()) with
-        | Some ("toolcall" | "tool-call" | "tool_call") ->
+        | Some("toolcall" | "tool-call" | "tool_call") ->
             stringField part "id" |> Option.orElse (stringField part "callId")
         // OpenCode's session-shaped tool part holds the call and, once
         // completed, its result. The decoder reports the completed part as a
@@ -197,7 +197,10 @@ module RelayNarrativeTransform =
         let decoded = parts |> List.choose ProviderWireDecode.decodePart
 
         let prefer (ids: string list) =
-            if List.contains barrierCall ids then Some barrierCall else List.tryHead ids
+            if List.contains barrierCall ids then
+                Some barrierCall
+            else
+                List.tryHead ids
 
         let call =
             (decoded
@@ -222,19 +225,47 @@ module RelayNarrativeTransform =
         let identified = ProviderWireDecode.hostMessageId message
 
         createObj
-            [ "id", (match identified with Some id -> box id | None -> null)
+            [ "id",
+              (match identified with
+               | Some id -> box id
+               | None -> null)
               "role", box (roleText message)
               "synthetic", box (emitJsExpr message " $0.synthetic === true")
               "semantic", box true
               "cursor", null
-              "toolCallId", (match call with Some id -> box id | None -> null)
-              "resultFor", (match answered with Some id -> box id | None -> null)
-              "tenureId", (match tenureId with Some id -> box id | None -> null) ]
+              "toolCallId",
+              (match call with
+               | Some id -> box id
+               | None -> null)
+              "resultFor",
+              (match answered with
+               | Some id -> box id
+               | None -> null)
+              "tenureId",
+              (match tenureId with
+               | Some id -> box id
+               | None -> null) ]
 
     /// The Host message a turn answers (OpenCode `info.parentID`).
     let private parentOf (message: obj) =
         ProviderWireDecode.firstString (ProviderWireDecode.infoObject message) [ "parentID" ]
         |> Option.filter (String.IsNullOrWhiteSpace >> not)
+
+    let private attributeTurnsAfter cut (messages: obj array) (neutral: obj array) successor =
+        let successorParents =
+            messages
+            |> Array.skip (cut + 1)
+            |> Array.filter (fun message -> (roleText message).ToLowerInvariant() = "user")
+            |> Array.choose messageId
+            |> Set.ofArray
+
+        let attribute index =
+            match parentOf messages.[index] with
+            | Some parent when Set.contains parent successorParents ->
+                emitJsStatement (neutral.[index], successor) "$0.tenureId = $1"
+            | _ -> ()
+
+        [ cut + 1 .. messages.Length - 1 ] |> List.iter attribute
 
     /// Tenure attribution from Host facts. After the cut, a turn whose parent is
     /// a user message that itself lies after the cut was started by the
@@ -255,22 +286,32 @@ module RelayNarrativeTransform =
         let resultAt = neutral |> Array.tryFindIndex (carries "resultFor")
 
         match callAt, resultAt with
-        | Some call, Some result ->
-            let cut = max call result
-            let successorParents =
-                [ for index in cut + 1 .. messages.Length - 1 do
-                      if (roleText messages.[index]).ToLowerInvariant() = "user" then
-                          match messageId messages.[index] with
-                          | Some id -> yield id
-                          | None -> () ]
-                |> Set.ofList
-
-            for index in cut + 1 .. messages.Length - 1 do
-                match parentOf messages.[index] with
-                | Some parent when Set.contains parent successorParents ->
-                    emitJsStatement (neutral.[index], successor) "$0.tenureId = $1"
-                | _ -> ()
+        | Some call, Some result -> attributeTurnsAfter (max call result) messages neutral successor
         | _ -> ()
+
+    let private cutAtBarrier (messages: obj array) callId successor =
+        let neutral = messages |> Array.map (tenureMessage callId)
+        attributeSuccessorTurns messages neutral callId successor
+
+        let barrier =
+            createObj [ "toolCallId", box callId; "successorTenureId", box successor ]
+
+        let kept = unbox<obj array> (tenureRule.tenure (box neutral, barrier))
+        let indexes = kept |> Array.map (fun item -> int (unbox<float> item))
+        let span = [| 0 .. messages.Length - 1 |]
+
+        if
+            indexes.Length = span.Length
+            && Array.forall2 (fun index value -> index = value) indexes span
+        then
+            None
+        else
+            Some(indexes |> Array.map (fun index -> messages.[index]))
+
+    let private activeBarrier (inspected: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
+        match inspected.BarrierToolCallId, inspected.SuccessorTenureId, inspected.ActiveId with
+        | Some callId, Some successor, Some active when active = successor -> Some(callId, successor)
+        | _ -> None
 
     /// Keep the successor's own messages after the committed review barrier.
     /// Returns None when this work has no barrier for the active tenure, so the
@@ -280,25 +321,9 @@ module RelayNarrativeTransform =
         (messages: obj array)
         (work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option)
         : obj array option =
-        match work with
-        | None -> None
-        | Some inspected ->
-            match inspected.BarrierToolCallId, inspected.SuccessorTenureId, inspected.ActiveId with
-            | Some callId, Some successor, Some active when active = successor ->
-                let neutral = messages |> Array.map (tenureMessage callId)
-                attributeSuccessorTurns messages neutral callId successor
-                let barrier =
-                    createObj [ "toolCallId", box callId; "successorTenureId", box successor ]
-
-                let kept = unbox<obj array> (tenureRule.tenure (box neutral, barrier))
-                let indexes = kept |> Array.map (fun item -> int (unbox<float> item))
-                let span = [| 0 .. messages.Length - 1 |]
-
-                if indexes.Length = span.Length && Array.forall2 (fun index value -> index = value) indexes span then
-                    None
-                else
-                    Some(indexes |> Array.map (fun index -> messages.[index]))
-            | _ -> None
+        work
+        |> Option.bind activeBarrier
+        |> Option.bind (fun (callId, successor) -> cutAtBarrier messages callId successor)
 
 
     let private cutRequest (outObj: obj) work =
@@ -307,6 +332,11 @@ module RelayNarrativeTransform =
         match cutVisible messages work with
         | None -> ()
         | Some kept -> HostMessageProjection.replaceMessagesInPlace outObj (Array.toList kept)
+
+    let private cutProjectedRequest outObj work disposition =
+        match disposition with
+        | RelayProjectionDisposition.RetiredAttemptStopped -> ()
+        | _ -> cutRequest outObj (Some work)
 
     let apply
         (journal: AgentJournal option)
@@ -325,9 +355,7 @@ module RelayNarrativeTransform =
                 let! disposition =
                     project durable interruptAttempt (SessionId.create value) acceptedRequest (Some work) outObj
 
-                match disposition with
-                | RelayProjectionDisposition.RetiredAttemptStopped -> ()
-                | _ -> cutRequest outObj (Some work)
+                cutProjectedRequest outObj work disposition
 
                 return disposition
             | _, _, Some work ->

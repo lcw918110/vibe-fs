@@ -75,14 +75,20 @@ type AttachedSessionRuntime
                   ==> Func<obj, Task<obj>>(fun _ ->
                       task {
                           let! observed = observeChild ownerSessionId scope role agentName
-                          return observeHint observed |> AttachmentLeaseCore.resultToNative AttachmentLeaseCore.optionalText
+
+                          return
+                              observeHint observed
+                              |> AttachmentLeaseCore.resultToNative AttachmentLeaseCore.optionalText
                       })
                   "create"
                   ==> Func<obj, Task<obj>>(fun request ->
                       task {
                           let directory = Option.ofObj (unbox<string> request?directory)
                           let! created = createChild ownerSessionId scope role agentName directory
-                          return created |> AttachmentLeaseCore.resultToNative (fun child -> box (SessionId.value child))
+
+                          return
+                              created
+                              |> AttachmentLeaseCore.resultToNative (fun child -> box (SessionId.value child))
                       })
                   "link"
                   ==> Func<obj, Task<obj>>(fun request ->
@@ -93,7 +99,7 @@ type AttachedSessionRuntime
                       onReady child agent
                       Task.FromResult(AttachmentLeaseCore.resultToNative box (Ok()))) ]
 
-        let pending = unbox<Task<obj>> (sessions?getOrCreate(spec, effects))
+        let pending = unbox<Task<obj>> (sessions?getOrCreate (spec, effects))
 
         task {
             let! result = pending
@@ -101,38 +107,46 @@ type AttachedSessionRuntime
         }
 
     member _.TryFind(ownerSessionId: SessionId, role: SyncDelegateRole) : SessionId option =
-        let lease: obj = sessions?tryFind(SessionId.value ownerSessionId, kindKey role, canUse)
+        let lease: obj =
+            sessions?tryFind (SessionId.value ownerSessionId, kindKey role, canUse)
 
         match box lease with
         | null -> None
         | _ -> Some(leaseValue lease |> fst)
 
     member _.TryFindByScope(scope: ReuseScopeId, role: SyncDelegateRole) : SessionId option =
-        let lease: obj = sessions?tryFind(ReuseScopeId.value scope, kindKey role, canUse)
+        let lease: obj = sessions?tryFind (ReuseScopeId.value scope, kindKey role, canUse)
 
         match box lease with
         | null -> None
         | _ -> Some(leaseValue lease |> fst)
 
     member _.TryFindOwner(delegateSessionId: SessionId, role: SyncDelegateRole) : SessionId option =
-        let owner: string = sessions?tryFindOwner(SessionId.value delegateSessionId, kindKey role)
+        let owner: string =
+            sessions?tryFindOwner (SessionId.value delegateSessionId, kindKey role)
+
         Option.ofObj owner |> Option.map SessionId.create
 
     member _.Remove(ownerSessionId: SessionId, role: SyncDelegateRole) : bool =
-        unbox<bool> (sessions?remove(SessionId.value ownerSessionId, kindKey role))
+        unbox<bool> (sessions?remove (SessionId.value ownerSessionId, kindKey role))
 
     member _.RemoveByDelegateSession(delegateSessionId: SessionId) : bool =
-        unbox<bool> (sessions?removeByChild(SessionId.value delegateSessionId))
+        unbox<bool> (sessions?removeByChild (SessionId.value delegateSessionId))
 
     member _.Clear() =
-        sessions?clearKinds(ownKinds) |> ignore
+        sessions?clearKinds (ownKinds) |> ignore
 
     interface IAttachedSessionPort with
         member this.TryFind(ownerSessionId, role) = this.TryFind(ownerSessionId, role)
         member this.TryFindByScope(scope, role) = this.TryFindByScope(scope, role)
-        member this.TryFindOwner(delegateSessionId, role) = this.TryFindOwner(delegateSessionId, role)
+
+        member this.TryFindOwner(delegateSessionId, role) =
+            this.TryFindOwner(delegateSessionId, role)
+
         member this.Remove(ownerSessionId, role) = this.Remove(ownerSessionId, role)
-        member this.RemoveByDelegateSession(delegateSessionId) = this.RemoveByDelegateSession(delegateSessionId)
+
+        member this.RemoveByDelegateSession(delegateSessionId) =
+            this.RemoveByDelegateSession(delegateSessionId)
 
         member this.GetOrCreate
             (ownerSessionId, role, agentName, directory, observeChild, createChild, bindChild, onReady)

@@ -1,5 +1,6 @@
 namespace Wanxiangshu.OpenCode
 
+open System
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
@@ -11,8 +12,106 @@ open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.OpenCode.Host
 open Wanxiangshu.Persistence.Journal
 open Wanxiangshu.Persistence.EventStore
+open Wanxiangshu.Foundation.HostSession
+open Wanxiangshu.Host
+open Wanxiangshu.Host.Ports
+open Wanxiangshu.Persistence.Journal.JournalOutcome
 
 module PluginHooksSurface =
+
+    let private snapshotMessage (value: obj) : SessionMessage =
+        { Id = unbox value?id
+          Role = "assistant"
+          Agent = None
+          Finish = None
+          ErrorName = None
+          Model = None
+          ParentId = None
+          CreatedAt = None
+          Completed = unbox value?completed
+          IsCompaction = unbox value?compaction
+          PromptKey = None
+          Parts = [||]
+          PartIds = [||]
+          ToolParts = [||] }
+
+    let private productCompaction (product: obj) : ICompactionGate =
+        { new ICompactionGate with
+            member _.OnCompacting session =
+                task {
+                    let! (lines: string array) = product?OnCompacting (SessionId.value session)
+                    return CompactionContribution.Context(Array.toList lines)
+                }
+
+            member _.AutoContinue session =
+                task {
+                    let! (allowed: bool) = product?AutoContinue (SessionId.value session)
+
+                    return
+                        if allowed then
+                            ContinueVerdict.Allow
+                        else
+                            ContinueVerdict.Deny "fixture"
+                } }
+
+    let createCompaction (handle: JournalHandle option) : obj =
+        let owner = OpenCodeCompaction(handle |> Option.map _.Journal)
+
+        createObj
+            [ "IsCompacting" ==> Func<string, bool>(owner.IsCompacting)
+              "TemporaryOverflowed" ==> Func<string, bool>(owner.TemporaryOverflowed)
+              "FinishTemporary" ==> Action<string>(owner.FinishTemporary)
+              "ForgetSession" ==> Action<string>(owner.ForgetSession)
+              "TryConsumeHistoryBypass"
+              ==> Func<obj, obj, bool>(fun input output -> owner.TryConsumeHistoryBypass(input, output))
+              "RecordSettingGap"
+              ==> Action<obj>(fun gap ->
+                  owner.RecordSettingGap(
+                      Some
+                          { Path = unbox<string array> gap?Path |> Array.toList
+                            Required = unbox gap?Required
+                            Clause = unbox gap?Clause
+                            Reason = unbox gap?Reason }
+                  ))
+              "OnCompacting"
+              ==> Func<obj, (string -> bool), obj, obj, obj, Task<unit>>(fun product temporary client input output ->
+                  owner.OnCompacting(productCompaction product, temporary, client, input, output))
+              "OnAutoContinue"
+              ==> Func<obj, (string -> bool), obj, obj, Task<unit>>(fun product temporary input output ->
+                  owner.OnAutoContinue(productCompaction product, temporary, input, output))
+              "ObserveSnapshot"
+              ==> Func<string, obj array, Task>(fun session messages ->
+                  owner.ObserveSnapshot(
+                      SessionId.create session,
+                      messages |> Array.map snapshotMessage |> Array.toList
+                  )) ]
+
+    let refuseCompactionAppendOnce (handle: JournalHandle) : obj =
+        let writer = box handle.Journal.Writer
+        let original: obj = writer?Append
+        let mutable attempts = 0
+
+        let append (stream: obj) (run: obj) (fact: obj) : Task<obj> =
+            attempts <- attempts + 1
+
+            if attempts = 1 then
+                Task.FromResult(
+                    box (
+                        CommitResult<obj>
+                            .NotAttempted(
+                                EventId.create "not-attempted",
+                                JournalUnavailable.WriterRefused "fixture refusal"
+                            )
+                    )
+                )
+            else
+                emitJsExpr (original, writer, [| stream; run; fact |]) "$0.apply($1,$2)"
+
+        writer?Append <- Func<obj, obj, obj, Task<obj>>(append)
+
+        createObj
+            [ "attempts" ==> Func<int>(fun () -> attempts)
+              "restore" ==> Action(fun () -> writer?Append <- original) ]
 
     let policyAwareHook operation (adaptedHook: obj) : obj =
         PluginHostInterop.policyAwareHook operation adaptedHook

@@ -25,7 +25,10 @@ module HandleCompletionCodec =
         value |> Option.map (map >> box) |> Option.defaultValue null
 
     let private optionalIdentity create (value: obj) =
-        if isNull value then None else Some(create (unbox<string> value))
+        if isNull value then
+            None
+        else
+            Some(create (unbox<string> value))
 
     let private workValue (work: HandleWorkId) =
         createObj
@@ -41,7 +44,8 @@ module HandleCompletionCodec =
                       "runId" ==> runId
                       "view" ==> payload.View
                       "childSessionId" ==> optionalValue SessionId.value payload.ChildSessionId
-                      "authorityRoot" ==> optionalValue AuthorityRootUserMessageId.value payload.AuthorityRoot
+                      "authorityRoot"
+                      ==> optionalValue AuthorityRootUserMessageId.value payload.AuthorityRoot
                       "providerRun" ==> optionalValue ProviderRunIdentity.value payload.ProviderRun
                       "directory" ==> optionalValue id payload.Directory ]
             | AgentFailed payload ->
@@ -58,7 +62,7 @@ module HandleCompletionCodec =
                       "agentId" ==> agentId
                       "reason" ==> reason ]
 
-        library?encode(value)
+        library?encode (value)
 
     let private payloadValue (decoded: DurableAgentCompletionV2) =
         match decoded with
@@ -108,7 +112,7 @@ module HandleCompletionCodec =
         | kind -> invalidOp ("Unknown completion decode error: " + kind)
 
     let decodeBody (json: string) : DurableCompletionDecode =
-        let decoded: obj = library?decode(json)
+        let decoded: obj = library?decode (json)
 
         match unbox<string> decoded?kind with
         | "current" -> Current(payloadOf decoded?payload)
@@ -126,7 +130,7 @@ module HandleCompletionCodec =
         | kind -> invalidOp ("Unknown completion decode kind: " + kind)
 
     let belongsToWork (work: HandleWorkId) (decoded: DurableAgentCompletionV2) : bool =
-        library?belongsToWork(workValue work, payloadValue decoded)
+        library?belongsToWork (workValue work, payloadValue decoded)
 
     let private runCompletionOf
         (record: HandleRecord)
@@ -171,7 +175,7 @@ module HandleCompletionCodec =
         (decoded: DurableAgentCompletionV2)
         (completedAt: DateTimeOffset)
         : RunCompletion =
-        library?materialize(agentId, payloadValue decoded)
+        library?materialize (agentId, payloadValue decoded)
         |> runCompletionOf record agentId completedAt
 
     let tryDecode
@@ -180,7 +184,8 @@ module HandleCompletionCodec =
         (json: string)
         (completedAt: DateTimeOffset)
         : Result<RunCompletion, string> =
-        let result: obj = library?decodeForWork(optionalValue workValue record.Work, agentId, json)
+        let result: obj =
+            library?decodeForWork (optionalValue workValue record.Work, agentId, json)
 
         if unbox<bool> result?ok then
             Ok(runCompletionOf record agentId completedAt result?value)
@@ -207,7 +212,7 @@ module HandleCompletionCodec =
             }
 
         task {
-            let! result = unbox<Task<obj>> (library?read(reference, readBlob, journal.Sha256))
+            let! result = unbox<Task<obj>> (library?read (reference, readBlob, journal.Sha256))
 
             if unbox<bool> result?ok then
                 let value: obj = result?value
@@ -215,6 +220,11 @@ module HandleCompletionCodec =
             else
                 return Error(unbox result?error)
         }
+
+    let private decodeReadBody record agentId completedAt =
+        function
+        | None -> Ok None
+        | Some(value: obj) -> tryDecode record agentId (unbox value?body) completedAt |> Result.map Some
 
     let tryRead
         (journal: AgentJournalPort)
@@ -227,15 +237,17 @@ module HandleCompletionCodec =
             taskResult {
                 let! body = readCompletionBody journal completion
 
-                match body with
-                | None -> return None
-                | Some value ->
-                    let! decoded = tryDecode record agentId (unbox value?body) completedAt
-                    return Some decoded
+                return! decodeReadBody record agentId completedAt body
             }
         | HandleLifecycle.Active
         | HandleLifecycle.Abandoned _
         | HandleLifecycle.Retired -> Task.FromResult(Ok None)
+
+    let private bodyReference =
+        function
+        | None -> None, None, None
+        | Some(value: obj) ->
+            Some(unbox value?body), Some(BlobRef.create (unbox value?ref)), Some(BlobDigest.create (unbox value?digest))
 
     let tryReadBody
         (journal: AgentJournalPort)
@@ -246,13 +258,7 @@ module HandleCompletionCodec =
             taskResult {
                 let! body = readCompletionBody journal completion
 
-                return
-                    match body with
-                    | None -> None, None, None
-                    | Some value ->
-                        Some(unbox value?body),
-                        Some(BlobRef.create (unbox value?ref)),
-                        Some(BlobDigest.create (unbox value?digest))
+                return bodyReference body
             }
         | HandleLifecycle.Active
         | HandleLifecycle.Abandoned _

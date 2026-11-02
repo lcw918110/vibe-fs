@@ -54,11 +54,7 @@ module JsBookkeeperTool =
         }
 
     /// Validate the returned JSON before committing the edit.
-    let private finishBookkeeper
-        (language: ProviderLanguage)
-        (edit: obj)
-        (json: string)
-        : string =
+    let private finishBookkeeper (language: ProviderLanguage) (edit: obj) (json: string) : string =
         result {
             let! value =
                 JsToolsData.parse json
@@ -81,8 +77,7 @@ module JsBookkeeperTool =
             let settle (receipt: obj) : Task<obj> =
                 task {
                     if string receipt?state = "completed" then
-                        let rendered =
-                            finishBookkeeper language edit (JS.JSON.stringify receipt?value)
+                        let rendered = finishBookkeeper language edit (JS.JSON.stringify receipt?value)
 
                         return emitJsExpr (receipt, rendered) "Object.assign({}, $0, {value:$1})"
                     else

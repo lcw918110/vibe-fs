@@ -31,17 +31,21 @@ module OrchestratorGit =
     let private requestOf (cmd: Command) : obj =
         let environment =
             cmd.Environment
-            |> Option.map (fun values -> values |> Map.toSeq |> Seq.map (fun (name, value) -> name, box value) |> createObj)
+            |> Option.map (fun values ->
+                values
+                |> Map.toSeq
+                |> Seq.map (fun (name, value) -> name, box value)
+                |> createObj)
             |> Option.defaultValue null
 
         createObj
             [ "command"
               ==> createObj
-                  [ "fileName" ==> cmd.FileName
-                    "args" ==> List.toArray cmd.Arguments
-                    "cwd" ==> Option.toObj cmd.WorkingDirectory
-                    "env" ==> environment
-                    "stdin" ==> Option.toObj cmd.Stdin ]
+                      [ "fileName" ==> cmd.FileName
+                        "args" ==> List.toArray cmd.Arguments
+                        "cwd" ==> Option.toObj cmd.WorkingDirectory
+                        "env" ==> environment
+                        "stdin" ==> Option.toObj cmd.Stdin ]
               "estimate"
               ==> createObj [ "runtimeSeconds" ==> 30.0; "outputBytes" ==> 65536L; "memory" ==> "medium" ]
               "context" ==> createObj [ "hardLimitMs" ==> 3600000.0 ] ]
@@ -56,6 +60,18 @@ module OrchestratorGit =
                 Spool.delete path
         }
 
+    let private readOutcome (outcome: obj) =
+        task {
+            let code: int = unbox outcome?exitCode
+
+            match unbox<string> outcome?kind with
+            | "Completed" -> return (code, unbox outcome?stdout, unbox outcome?stderr)
+            | "Spooled" ->
+                let! stdout = readSpooled (unbox outcome?spoolPath)
+                return (code, stdout, "")
+            | kind -> return invalidOp $"unknown process outcome kind: {kind}"
+        }
+
     let run (cmd: Command) : Task<int * string * string> =
         task {
             let! result = runProcess (requestOf cmd)
@@ -63,15 +79,7 @@ module OrchestratorGit =
             if not (unbox<bool> result?ok) then
                 return (1, "", sprintf "%A" (errorOf result?error))
             else
-                let outcome: obj = result?value
-                let code: int = unbox outcome?exitCode
-
-                match unbox<string> outcome?kind with
-                | "Completed" -> return (code, unbox outcome?stdout, unbox outcome?stderr)
-                | "Spooled" ->
-                    let! stdout = readSpooled (unbox outcome?spoolPath)
-                    return (code, stdout, "")
-                | kind -> return invalidOp $"unknown process outcome kind: {kind}"
+                return! readOutcome result?value
         }
 
     let finalizeWorktree

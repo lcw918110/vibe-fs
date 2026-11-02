@@ -1,9 +1,0 @@
-Next finite packages, documentation-only delivery, 2026-10-08 Singapore
-Baseline b85533202. D0-R/K1-A/K1-F are readonly investigations and proposed plans, not executed business proof or completed fixes.
-Root read original audits and relevant source/WHAT, checked original fixture createHooks precedes extra Journal acquire, Store commit precedes Release, Casebook rule preserves old Current on cut, and Fetch raw-key/store-reference boundary.
-Readonly lexical ProjectReference DFS from durable-events.runtime.fsproj to host-boundary.opencode-host-workspaceeventstore.fsproj visited205 projects, no path found; this does not certify future project reference compilation or architecture acceptance.
-K1-A must preserve linked-worktree isolation and knowledge009 neutral/constructor/schema failure behavior. Raw aliases have not been exercised. K1-F current finally exists; post-settlement same-key reentry has not been executed. Expected red/green is not actual evidence.
-D0-R must install only the original first shared entry; no alternate Store/Scope, active-entry replacement, manual staging or synthetic settlement. Existing NO_FATAL_EXIT fixture can prove typed/background rejection only, not physical kill/full phase or identity closure.
-Final document input captured in staged-document-input.patch.txt. Source hashes preserved for audit only. Fable gen313175 surfaces/835 modules, full scripts/check.mjs exit0, JS002/requirement017 formal23pass/0fail/0skip/0TODO2/2 exit0; freshness passed.
-No61/131/41-file suite rerun claimed on this prose refresh. Their original frozen inputs and failures remain in their own evidence directories. Latest archived official4fd unit remains300s failure805D/2A/17Q/global verdict unknown.
-Next order K1-A -> K1-F; D0-R seam/identity clarification separately; J3 whole90–150min window per its own plan. Do not partially migrate required capability or borrow local green as full Host/U0/GAP/CI acceptance.

@@ -282,7 +282,8 @@ module ContextFoldSurface =
                placementCount = GuidelineProjection.placementCount state
                visibleFromOrdinal = GuidelineProjection.visibleFromOrdinal state
                pairs =
-                GuidelineProjection.pairs state |> List.rev
+                GuidelineProjection.pairs state
+                |> List.rev
                 |> List.map (fun pair ->
                     box
                         {| ordinal = pair.Ordinal
@@ -308,7 +309,9 @@ module ContextFoldSurface =
                 | Some epoch ->
                     box
                         {| EpochId = PrefixEpochId.value (PrefixEpochProjection.epochId epoch)
-                           ReanchoredRuns = PrefixEpochProjection.reanchoredRuns epoch |> Array.map ProviderRunIdentity.value
+                           ReanchoredRuns =
+                            PrefixEpochProjection.reanchoredRuns epoch
+                            |> Array.map ProviderRunIdentity.value
                            ReanchoredTenures = PrefixEpochProjection.reanchoredTenures epoch |}
                Handles = session.Handles |> Option.map handlesToJs |> Option.toObj
                ProviderFailures = session.ProviderFailures |> Option.map providerFailuresToJs |> Option.toObj

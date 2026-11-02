@@ -51,7 +51,10 @@ module SessionsSurface =
                    error = hostErrorReason error |}
 
     let observeDeliveryDiscovery (input: obj) (title: string) : Task<obj> =
-        match (OpenCodeTransport.openConnection (PathsPort.workspaceDirectory input) input).SessionCatalog with
+        match
+            (OpenCodeTransport.openConnection (PathsPort.workspaceDirectory input) input)
+                .SessionCatalog
+        with
         | None -> Task.FromResult(discoveryView (Error(HostError.Transport "Session discovery is unavailable")))
         | Some sessions ->
             task {
@@ -60,25 +63,50 @@ module SessionsSurface =
             }
 
     let transportRoundTrip (input: obj) : Task<obj> =
-        let connection = OpenCodeTransport.openConnection (PathsPort.workspaceDirectory input) input
-        let errorKind = function
+        let connection =
+            OpenCodeTransport.openConnection (PathsPort.workspaceDirectory input) input
+
+        let errorKind =
+            function
             | HostError.NotFound _ -> "NotFound"
             | HostError.Refused _ -> "Refused"
             | HostError.Transport _ -> "Transport"
             | HostError.Unknown _ -> "Unknown"
             | HostError.Unsupported _ -> "Unsupported"
-        let resultView convert = function
+
+        let resultView convert =
+            function
             | Ok value -> createObj [ "ok" ==> true; "value" ==> convert value ]
             | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+
         task {
             match connection.Sending, connection.Snapshot, connection.SessionCatalog with
             | Some sending, Some snapshot, Some catalog ->
                 let session = SessionId.create "ses-transport"
-                let! created = sending.CreateSession None { Title = Some "transport"; Agent = Some "engineer"; Directory = None }
+
+                let! created =
+                    sending.CreateSession
+                        None
+                        { Title = Some "transport"
+                          Agent = Some "engineer"
+                          Directory = None }
+
                 let! messages = snapshot.GetMessages session
-                let! sent = sending.SendPrompt session "hello" { Model = None; Agent = Some "engineer"; Directory = None; Metadata = None; Tools = None; DetachedListener = None }
+
+                let! sent =
+                    sending.SendPrompt
+                        session
+                        "hello"
+                        { Model = None
+                          Agent = Some "engineer"
+                          Directory = None
+                          Metadata = None
+                          Tools = None
+                          DetachedListener = None }
+
                 let! closed = sending.CloseChildSession session
                 let! removed = catalog.Close session
+
                 let sentKind =
                     match sent with
                     | AdmittedWithReceipt _ -> "AdmittedWithReceipt"
@@ -86,17 +114,24 @@ module SessionsSurface =
                     | Retryable _ -> "Retryable"
                     | AcceptanceUnknown _ -> "AcceptanceUnknown"
                     | Fatal _ -> "Fatal"
+
                 let removedView =
                     match removed with
                     | Ok() -> createObj [ "ok" ==> true ]
-                    | Error error -> createObj [ "ok" ==> false; "kind" ==> errorKind error; "error" ==> hostErrorReason error ]
-                return createObj [
-                    "available" ==> true
-                    "created" ==> resultView (SessionId.value >> box) created
-                    "messages" ==> resultView (List.length >> box) messages
-                    "sentKind" ==> sentKind
-                    "closed" ==> resultView (fun () -> box true) closed
-                    "removed" ==> removedView ]
+                    | Error error ->
+                        createObj
+                            [ "ok" ==> false
+                              "kind" ==> errorKind error
+                              "error" ==> hostErrorReason error ]
+
+                return
+                    createObj
+                        [ "available" ==> true
+                          "created" ==> resultView (SessionId.value >> box) created
+                          "messages" ==> resultView (List.length >> box) messages
+                          "sentKind" ==> sentKind
+                          "closed" ==> resultView (fun () -> box true) closed
+                          "removed" ==> removedView ]
             | _ -> return createObj [ "available" ==> false ]
         }
 

@@ -1,23 +1,0 @@
-[36m[build][0m Compiling F# (full)...
-[37mFable 5.13.0: F# to JavaScript compiler
-[39m[22m[37mMinimum @fable-org/fable-library-js version (when installed from npm): 2.5.1
-[39m[22m[37m
-Thanks to the contributor! @fdcastel
-[39m[22m[37mStand with Ukraine! https://standwithukraine.com.ua/
-
-[39m[22m[37mParsing src/Wanxiangshu/.fable-build/output-compile/43cb2b9198f853bdef9dba7b8c50fe56189a0c69ffd3b229b447533ae9eda283/Wanxiangshu.Impact.fsproj...
-[39m[22m[37mProject and references (1554 source files) parsed in 1348ms
-
-[39m[22m[37mStarted Fable compilation...
-[39m[22m[37m
-Fable compilation finished in 36128ms
-
-[39m[22m[31m./src/Wanxiangshu/Interaction/Dispatch/Send.fs(474,43): (474,49) error FSHARP: This expression was expected to have type    'Result<obj,obj>'    but here has type    'PromptKey' (code 1)
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Host/HostTurnObserver.fs(61,76): (61,82) error FSHARP: This expression was expected to have type    'ProviderAttemptSource'    but here has type    'AuthorityRootAcceptedPayload' (code 1)
-[39m[22m[31m./src/Wanxiangshu/OpenCode/Host/HostTurnObserver.fs(68,17): (68,32) error FSHARP: Type mismatch. Expecting a    'ProviderAttemptSource -> DegenerationKind -> string option -> ContinuationAcceptanceObserver option -> Task<Result<unit,string>>'    but given a    'AuthorityRootAcceptedPayload -> DegenerationKind -> string option -> ContinuationAcceptanceObserver option -> Task<Result<unit,string>>'    The type 'AuthorityRootAcceptedPayload' does not match the type 'ProviderAttemptSource' (code 1)
-[39m[22m[31m./src/Wanxiangshu/Execution/Delegation/SyncDelegate/Surface.fs(857,9): (857,31) error FSHARP: Module 'Wanxiangshu.Execution.Delegation.SyncDelegate.SyncDelegateSurface' contains    val createForGuardRecovery<'a> : directory: string -> owners: 'a -> Task<obj>    but its signature specifies    val createForGuardRecovery: directory: string -> owners: obj -> Task<obj>    The respective type parameter counts differ (code 34)
-[39m[22m[31mCompilation failed
-[39m[22m[31m════════════════════════════════════════════════════════════════════════════════
-  BUILD FAILED
-════════════════════════════════════════════════════════════════════════════════[0m
-Fable compilation failed with exit code 1

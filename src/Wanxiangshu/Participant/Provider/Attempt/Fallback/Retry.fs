@@ -55,7 +55,11 @@ module Retry =
 
     let verdictUnlessContinuing (alreadyAdmitted: bool) (stopWait: string) : RetryVerdict option =
         let answer: obj = recovery?verdictUnlessContinuing (alreadyAdmitted, stopWait)
-        if isNull answer then None else Some(fromNativeVerdict answer)
+
+        if isNull answer then
+            None
+        else
+            Some(fromNativeVerdict answer)
 
     let observeDelegateRetry (verdict: RetryVerdict) : Result<unit, string> =
         match verdict with
@@ -92,21 +96,33 @@ module Retry =
             | ExecutionFailureResolution.RetryFreshAttempt authorization ->
                 createObj [ "resolution" ==> "RetryFreshAttempt"; "authorization" ==> authorization ]
             | ExecutionFailureResolution.PreserveCurrentFact -> createObj [ "resolution" ==> "PreserveCurrentFact" ]
-            | ExecutionFailureResolution.AwaitAcceptanceReconciliation _ -> createObj [ "resolution" ==> "AwaitAcceptanceReconciliation" ]
-            | ExecutionFailureResolution.TerminalizeAcceptedPreProvider _ -> createObj [ "resolution" ==> "TerminalizeAcceptedPreProvider" ]
-            | ExecutionFailureResolution.TerminalizeProviderStarted _ -> createObj [ "resolution" ==> "TerminalizeProviderStarted" ]
+            | ExecutionFailureResolution.AwaitAcceptanceReconciliation _ ->
+                createObj [ "resolution" ==> "AwaitAcceptanceReconciliation" ]
+            | ExecutionFailureResolution.TerminalizeAcceptedPreProvider _ ->
+                createObj [ "resolution" ==> "TerminalizeAcceptedPreProvider" ]
+            | ExecutionFailureResolution.TerminalizeProviderStarted _ ->
+                createObj [ "resolution" ==> "TerminalizeProviderStarted" ]
+
         let effects =
             createObj
-                [ "admit" ==> (fun authorization -> task {
-                      let! answer = ports.Admit authorization
-                      return
-                          match answer with
-                          | Ok value -> createObj [ "ok" ==> true; "value" ==> string value ]
-                          | Error error -> createObj [ "ok" ==> false; "error" ==> error ] })
-                  "redispatch" ==> (fun authorization -> task {
-                      let! answer = ports.Redispatch authorization input
-                      return toNativeVerdict answer }) ]
+                [ "admit"
+                  ==> (fun authorization ->
+                      task {
+                          let! answer = ports.Admit authorization
+
+                          return
+                              match answer with
+                              | Ok value -> createObj [ "ok" ==> true; "value" ==> string value ]
+                              | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+                      })
+                  "redispatch"
+                  ==> (fun authorization ->
+                      task {
+                          let! answer = ports.Redispatch authorization input
+                          return toNativeVerdict answer
+                      }) ]
+
         task {
-            let! answer: obj = recovery?attempt (selected, effects, input.Error)
+            let! (answer: obj) = recovery?attempt (selected, effects, input.Error)
             return fromNativeVerdict answer
         }

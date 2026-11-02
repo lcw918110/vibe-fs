@@ -123,6 +123,7 @@ module PromptDispatcherSend =
             onAccepted: ContinuationAcceptanceObserver option ->
             physicalAdmission: (unit -> Result<unit, QuiescencePermitFailure>) ->
                 Task<PromptDispatcher.SendAttemptOutcome>
+
         member internal SendIdleGateNudge:
             port: IDispatchSessionPort ->
             sessionId: SessionId ->

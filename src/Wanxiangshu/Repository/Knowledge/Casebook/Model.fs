@@ -59,15 +59,20 @@ module internal CasebookValues =
         | Observation.FileRead(path, contentHash) ->
             createObj [ "kind" ==> "file-read"; "path" ==> path; "contentHash" ==> contentHash ]
         | Observation.GlobResult(pattern, paths) ->
-            createObj [ "kind" ==> "glob-result"; "pattern" ==> pattern; "paths" ==> List.toArray paths ]
+            createObj
+                [ "kind" ==> "glob-result"
+                  "pattern" ==> pattern
+                  "paths" ==> List.toArray paths ]
         | Observation.GrepResult(pattern, matches) ->
-            createObj [ "kind" ==> "grep-result"; "pattern" ==> pattern; "matches" ==> List.toArray matches ]
+            createObj
+                [ "kind" ==> "grep-result"
+                  "pattern" ==> pattern
+                  "matches" ==> List.toArray matches ]
 
     let observationOfNative (value: obj) : Observation =
         match unbox<string> value?kind with
         | "file-read" -> Observation.FileRead(unbox value?path, unbox value?contentHash)
-        | "glob-result" ->
-            Observation.GlobResult(unbox value?pattern, unbox<string array> value?paths |> Array.toList)
+        | "glob-result" -> Observation.GlobResult(unbox value?pattern, unbox<string array> value?paths |> Array.toList)
         | "grep-result" ->
             Observation.GrepResult(
                 unbox value?pattern,
@@ -106,8 +111,7 @@ module internal CasebookValues =
 
     let eventToNative (event: CasebookEvent) : obj =
         match event with
-        | CasebookEvent.CaseCaptured case ->
-            createObj [ "kind" ==> "captured"; "case" ==> caseToNative case ]
+        | CasebookEvent.CaseCaptured case -> createObj [ "kind" ==> "captured"; "case" ==> caseToNative case ]
         | CasebookEvent.CaseRefreshed(identity, q, a, maintenanceFileState, relatedPaths, observations) ->
             createObj
                 [ "kind" ==> "refreshed"
@@ -178,9 +182,16 @@ module CasebookProjection =
             |> Map.ofArray
 
     let resolve (store: IEventStore) (capacity: int) (shelfmark: string) : Result<Case option, string> =
+        let optionalCase (value: obj) =
+            if isNull value then
+                None
+            else
+                Some(CasebookValues.caseOfNative value)
+
         match store.TryCurrent "Casebook" with
         | None -> Ok None
         | Some current ->
             let (State state) = unbox<State> current
             let value: obj = state?resolve (capacity, shelfmark)
-            Ok(if isNull value then None else Some(CasebookValues.caseOfNative value))
+
+            Ok(optionalCase value)

@@ -10,4 +10,4 @@ SDK v1/v2 请求字段、Unicode workspace header、prompt metadata 和 steer �
 
 `InjectedSessionPort` 中 managed/root 保护、family topology、listener-before-send 和 ModelRouting 结算仍是产品规则；不因它调用宿主而搬进此传输对象。本次移动保留真实SDK/HTTP实现，退出原三份选择器和产品组装处的重复构造。
 
-程序待改：`Snapshot.fs` 的 HttpSessionPort 和 HttpSnapshotPort 各自把 fetch Emit 放在类内，当前 Fable 输出将接收者放到了 URL 参数位置。这会使 HTTP 快照和 catalog 在发出请求前失败；发送端的模块级 fetch 不受此问题影响。原 `OpenCode/Host/SessionSnapshotPort.fs` 已有同样写法，本次保持原行为，不把迁移当作修复授权。`session-transport.test.mjs` 保留两条真实 HTTP 失败用例，后续单独修复这处调用边界。
+HTTP 快照和 catalog 共用模块级 fetch 绑定，按 URL 与请求参数调用，避免类接收者挤占 URL 参数。`session-transport.test.mjs` 用本地 HTTP 服务检查请求与错误出口，并检查 SDK 缺方法时不会回退到 HTTP。

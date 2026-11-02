@@ -36,6 +36,7 @@ module ProviderRecoveryWorkflow =
         (physicalUserMessageId: PhysicalUserMessageId)
         : ProviderRequestKind option =
         let projection = AgentJournal.snapshot durable
+
         projection.AgentProjections.ChatExecutions
         |> ChatExecutionProjection.byKey
             { SessionId = sessionId
@@ -43,7 +44,8 @@ module ProviderRecoveryWorkflow =
         |> Option.bind (fun execution ->
             match execution.startedEvidence with
             | Some started -> Some started.RequestKind
-            | None when SessionAssociationProjection.isSatellite sessionId projection.AgentProjections.Associations -> None
+            | None when SessionAssociationProjection.isSatellite sessionId projection.AgentProjections.Associations ->
+                None
             | None -> Some(AttemptPlanner.ordinaryRequestKind execution.origin))
 
     let private notifyFailure (eventPort: IEventObservationPort) (turn: ReconciledTurn) (reason: string) =
@@ -61,6 +63,7 @@ module ProviderRecoveryWorkflow =
 
     let isContextOverflowReason (reason: string) : bool =
         let text = if isNull reason then "" else reason.ToLowerInvariant()
+
         text.Contains "input_too_large"
         || text.Contains "context_length_exceeded"
         || text.Contains "contextoverflow"
@@ -82,11 +85,27 @@ module ProviderRecoveryWorkflow =
                   "value" ==> profile ])
         |> Option.toObj
 
-    let private waitForStop (turn: ReconciledTurn) () : Task<string> =
-        providerAttemptStopFence?WaitForStop
-            (SessionId.value turn.SessionId, ProviderRunIdentity.value turn.ProviderRun, 30000)
+    let private sameRunAlreadyClosed (durable: AgentJournal) (turn: ReconciledTurn) () =
+        let projections = (AgentJournal.snapshot durable).AgentProjections
 
-    let private sentView = function
+        match PromptAuthorityProjectionQueries.projectionFor turn.SessionId projections with
+        | Some authority when authority.ActiveLogicalRun.IsNone ->
+            PromptAuthorityProjectionQueries.lastAuthorityProfile turn.SessionId projections
+            |> Option.exists (fun profile ->
+                profile.AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
+                && (PromptAuthorityProjectionQueries.closedRun turn.SessionId profile.LogicalRunId projections
+                    |> Option.isSome))
+        | _ -> false
+
+    let private waitForStop (turn: ReconciledTurn) () : Task<string> =
+        providerAttemptStopFence?WaitForStop (
+            SessionId.value turn.SessionId,
+            ProviderRunIdentity.value turn.ProviderRun,
+            30000
+        )
+
+    let private sentView =
+        function
         | HostSessionNudge.GateContinuationOutcome.Sent _ -> createObj [ "kind" ==> "Sent" ]
         | HostSessionNudge.GateContinuationOutcome.AlreadyAdmitted -> createObj [ "kind" ==> "AlreadyAdmitted" ]
         | HostSessionNudge.GateContinuationOutcome.Retired -> createObj [ "kind" ==> "Retired" ]
@@ -135,6 +154,7 @@ module ProviderRecoveryWorkflow =
         : bool =
         let kind =
             (AgentJournalPortAdapter.forTurnObservation durable).TryContinuationKind sessionId physicalUserMessageId
+
         let establishedRun =
             (AgentJournal.snapshot durable).AgentProjections.ChatExecutions
             |> ChatExecutionProjection.byKey
@@ -142,7 +162,67 @@ module ProviderRecoveryWorkflow =
                   PhysicalUserMessageId = physicalUserMessageId }
             |> Option.bind _.startedEvidence
             |> Option.map (fun started -> started.ProviderRun)
-        kind = Some PromptAuthority.ContinuationKind.ProviderRetryAttempt && establishedRun = Some providerRun
+
+        kind = Some PromptAuthority.ContinuationKind.ProviderRetryAttempt
+        && establishedRun = Some providerRun
+
+    let private retryEffects
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (durable: AgentJournal)
+        (turn: ReconciledTurn)
+        (continuationPrompt: string)
+        (observer: ContinuationAcceptanceObserver option)
+        =
+        let sendRetry (_profile: obj) (license: ProviderRecoveryAuthorization) =
+            task {
+                let! sent =
+                    HostSessionNudge.trySendGateContinuationObserved
+                        sessionPort
+                        rootWorkspace
+                        turn.SessionId
+                        continuationPrompt
+                        PromptAuthority.ContinuationKind.ProviderRetryAttempt
+                        turn.Directory
+                        (Some durable)
+                        (recoveryGateKind license)
+                        license.ProviderRun
+                        observer
+
+                return sentView sent
+            }
+
+        createObj
+            [ "alreadyAdmitted" ==> recoveryAlreadyAdmitted durable turn
+              "observeAcceptance" ==> observeRecoveryAcceptance durable turn observer
+              "waitForStop" ==> waitForStop turn
+              "currentAuthority" ==> currentAuthority durable turn
+              "sendRetry" ==> sendRetry ]
+
+    let internal continueSameProvider
+        (sessionPort: ISessionHostPort)
+        (rootWorkspace: IRootWorkspaceReader)
+        (durable: AgentJournal)
+        (turn: ReconciledTurn)
+        (observer: ContinuationAcceptanceObserver option)
+        (authorization: ProviderRecoveryAuthorization)
+        (continuationPrompt: string)
+        (error: string)
+        : Task<RetryVerdict> =
+        task {
+            let effects =
+                retryEffects sessionPort rootWorkspace durable turn continuationPrompt observer
+
+            let! (answer: obj) =
+                recovery?continueSameProvider (
+                    AuthorityRootUserMessageId.value turn.AuthorityRootUserMessageId,
+                    authorization,
+                    effects,
+                    error
+                )
+
+            return Retry.fromNativeVerdict answer
+        }
 
     let private redispatchAfterFailure
         (sessionPort: ISessionHostPort)
@@ -154,27 +234,18 @@ module ProviderRecoveryWorkflow =
         (authorization: ProviderRecoveryAuthorization)
         (input: RetryAttempt)
         : Task<RetryVerdict> =
-        let sendRetry (_profile: obj) (license: ProviderRecoveryAuthorization) =
-            task {
-                let! sent =
-                    HostSessionNudge.trySendGateContinuationObserved
-                        sessionPort rootWorkspace input.Turn.SessionId continuationPrompt
-                        PromptAuthority.ContinuationKind.ProviderRetryAttempt input.Turn.Directory
-                        (Some durable) (recoveryGateKind license) license.ProviderRun observer
-                return sentView sent
-            }
         let effects =
-            createObj
-                [ "alreadyAdmitted" ==> recoveryAlreadyAdmitted durable input.Turn
-                  "observeAcceptance" ==> observeRecoveryAcceptance durable input.Turn observer
-                  "waitForStop" ==> waitForStop input.Turn
-                  "currentAuthority" ==> currentAuthority durable input.Turn
-                  "sendRetry" ==> sendRetry ]
+            retryEffects sessionPort rootWorkspace durable input.Turn continuationPrompt observer
+
         task {
-            let! answer: obj =
-                recovery?redispatch
-                    (AuthorityRootUserMessageId.value input.Turn.AuthorityRootUserMessageId,
-                     authorization, effects, failureReason)
+            let! (answer: obj) =
+                recovery?redispatch (
+                    AuthorityRootUserMessageId.value input.Turn.AuthorityRootUserMessageId,
+                    authorization,
+                    effects,
+                    failureReason
+                )
+
             return Retry.fromNativeVerdict answer
         }
 
@@ -186,17 +257,29 @@ module ProviderRecoveryWorkflow =
 
     let private capacityFor (role: Role option) =
         let roleName = role |> Option.map Roles.roleLabel |> Option.defaultValue ""
-        roleName = "" || ModelRouting.hasTheoreticalCapacity roleName ModelExecutionPurpose.Normal
+
+        roleName = ""
+        || ModelRouting.hasTheoreticalCapacity roleName ModelExecutionPurpose.Normal
 
     let private retry
-        sessionPort rootWorkspace (durable: AgentJournal) turn failure prompt error observer
+        sessionPort
+        rootWorkspace
+        (durable: AgentJournal)
+        turn
+        failure
+        prompt
+        error
+        observer
         (ownerSessionId, requestKind, current)
         =
         Retry.attempt
-            { Admit = fun authorization ->
-                  ProviderFailureLedger.recordAuthorizedFailure
-                      (AgentJournalPortAdapter.forProviderFailure durable)
-                      ownerSessionId authorization error
+            { Admit =
+                fun authorization ->
+                    ProviderFailureLedger.recordAuthorizedFailure
+                        (AgentJournalPortAdapter.forProviderFailure durable)
+                        ownerSessionId
+                        authorization
+                        error
               Redispatch = redispatchAfterFailure sessionPort rootWorkspace durable prompt error observer }
             { Turn = turn
               Failure = failure
@@ -215,9 +298,15 @@ module ProviderRecoveryWorkflow =
 
     let private sendMissing (sessionPort: ISessionHostPort) (turn: ReconciledTurn) () =
         task {
-            let prompt = ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+            let prompt =
+                ProviderProse.documentFor turn.SessionId RuntimeNudge.MissingClosingReport Map.empty
+
             let! sent = sessionPort.SendPrompt(turn.SessionId, prompt, defaultPromptOptions)
-            return match sent with SendOutcome.AdmittedWithReceipt _ -> true | _ -> false
+
+            return
+                match sent with
+                | SendOutcome.AdmittedWithReceipt _ -> true
+                | _ -> false
         }
 
     let private recoveryInput failure error hasCapacity context continueLongWork (turn: ReconciledTurn) =
@@ -227,7 +316,15 @@ module ProviderRecoveryWorkflow =
               "hasCapacity" ==> hasCapacity
               "hasRecovery" ==> Option.isSome context
               "continueLongWork" ==> continueLongWork
-              "expectedRoot" ==> AuthorityRootUserMessageId.value turn.AuthorityRootUserMessageId ]
+              "expectedRoot"
+              ==> AuthorityRootUserMessageId.value turn.AuthorityRootUserMessageId ]
+
+    let private mainFailure satellite active projections session =
+        if satellite then
+            None
+        else
+            active
+            |> Option.bind (fun _ -> currentFailure projections session ProviderRequestKind.WorkMain)
 
     let continueAfterConfirmedFailure
         (sessionPort: ISessionHostPort)
@@ -244,40 +341,79 @@ module ProviderRecoveryWorkflow =
             | None -> notifyFailure eventPort turn error
             | Some durable ->
                 let projections = AgentJournal.snapshot durable
-                let active = PromptAuthorityProjectionQueries.activeProfile turn.SessionId projections.AgentProjections
+
+                let active =
+                    PromptAuthorityProjectionQueries.activeProfile turn.SessionId projections.AgentProjections
+
                 let hasCapacity = capacityFor (active |> Option.map _.CanonicalRole)
-                let satellite = SessionAssociationProjection.isSatellite turn.SessionId projections.AgentProjections.Associations
+
+                let satellite =
+                    SessionAssociationProjection.isSatellite turn.SessionId projections.AgentProjections.Associations
+
                 let context =
                     requestKindFor durable turn.SessionId turn.PhysicalUserMessageId
                     |> Option.bind (currentFailure projections turn.SessionId)
-                    |> Option.orElseWith (fun () ->
-                        if satellite then None
-                        else active |> Option.bind (fun _ -> currentFailure projections turn.SessionId ProviderRequestKind.WorkMain))
+                    |> Option.orElseWith (fun () -> mainFailure satellite active projections turn.SessionId)
+
                 let longPath = longWorkContinuationPath turn.Role failure
-                let retryCurrent () = task {
-                    let! answer = retry sessionPort rootWorkspace durable turn failure continuationPrompt error None (Option.get context)
-                    return Retry.toNativeVerdict answer }
-                let sendLong (_profile: obj) = task {
-                    let prompt =
-                        ProviderProse.documentFor turn.SessionId RuntimeNudge.ProviderRetry Map.empty
-                        + "\n\n" + ProviderProse.documentFor turn.SessionId (Option.get longPath) Map.empty
-                    let! sent =
-                        HostSessionNudge.trySendGateContinuation
-                            sessionPort rootWorkspace turn.SessionId prompt
-                            PromptAuthority.ContinuationKind.InteractionRepair turn.Directory
-                            (Some durable) "unfinished-long-work-after-provider-failure" turn.ProviderRun
-                    return sentView sent }
+
+                let retryCurrent () =
+                    task {
+                        let! answer =
+                            retry
+                                sessionPort
+                                rootWorkspace
+                                durable
+                                turn
+                                failure
+                                continuationPrompt
+                                error
+                                None
+                                (Option.get context)
+
+                        return Retry.toNativeVerdict answer
+                    }
+
+                let sendLong (_profile: obj) =
+                    task {
+                        let prompt =
+                            ProviderProse.documentFor turn.SessionId RuntimeNudge.ProviderRetry Map.empty
+                            + "\n\n"
+                            + ProviderProse.documentFor turn.SessionId (Option.get longPath) Map.empty
+
+                        let! sent =
+                            HostSessionNudge.trySendGateContinuation
+                                sessionPort
+                                rootWorkspace
+                                turn.SessionId
+                                prompt
+                                PromptAuthority.ContinuationKind.InteractionRepair
+                                turn.Directory
+                                (Some durable)
+                                "unfinished-long-work-after-provider-failure"
+                                turn.ProviderRun
+
+                        return sentView sent
+                    }
+
                 let effects =
                     createObj
                         [ "terminal" ==> notifyFailure eventPort turn
+                          "isRunClosed" ==> sameRunAlreadyClosed durable turn
                           "sendMissing" ==> sendMissing sessionPort turn
                           "retry" ==> retryCurrent
                           "hardStop" ==> isHardStop failure
                           "waitForStop" ==> waitForStop turn
                           "currentAuthority" ==> currentAuthority durable turn
                           "sendLong" ==> sendLong ]
-                do! recovery?recoverOrdinary (recoveryInput failure error hasCapacity context (Option.isSome longPath) turn, effects)
-        } :> Task
+
+                do!
+                    recovery?recoverOrdinary (
+                        recoveryInput failure error hasCapacity context (Option.isSome longPath) turn,
+                        effects
+                    )
+        }
+        :> Task
 
     let continueDelegateCallAfterConfirmedFailure
         (sessionPort: ISessionHostPort)
@@ -290,18 +426,32 @@ module ProviderRecoveryWorkflow =
         : Task<RetryVerdict> =
         task {
             let projections = AgentJournal.snapshot durable
+
             let hasCapacity =
                 PromptAuthorityProjectionQueries.activeProfile turn.SessionId projections.AgentProjections
                 |> Option.map _.CanonicalRole
                 |> capacityFor
+
             let context =
                 requestKindFor durable turn.SessionId turn.PhysicalUserMessageId
                 |> Option.bind (currentFailure projections turn.SessionId)
-            let retryCurrent () = task {
-                let prompt = ProviderProse.documentFor turn.SessionId RuntimeNudge.ProviderRetry Map.empty
-                let! answer = retry sessionPort rootWorkspace durable turn failure prompt error observer (Option.get context)
-                return Retry.toNativeVerdict answer }
-            let effects = createObj [ "sendMissing" ==> sendMissing sessionPort turn; "retry" ==> retryCurrent ]
-            let! answer: obj = recovery?recoverDelegate (recoveryInput failure error hasCapacity context false turn, effects)
+
+            let retryCurrent () =
+                task {
+                    let prompt =
+                        ProviderProse.documentFor turn.SessionId RuntimeNudge.ProviderRetry Map.empty
+
+                    let! answer =
+                        retry sessionPort rootWorkspace durable turn failure prompt error observer (Option.get context)
+
+                    return Retry.toNativeVerdict answer
+                }
+
+            let effects =
+                createObj [ "sendMissing" ==> sendMissing sessionPort turn; "retry" ==> retryCurrent ]
+
+            let! (answer: obj) =
+                recovery?recoverDelegate (recoveryInput failure error hasCapacity context false turn, effects)
+
             return Retry.fromNativeVerdict answer
         }

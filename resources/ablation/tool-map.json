@@ -17,9 +17,7 @@
     "todowrite-for-devops": "process-execution",
     "todowrite-for-bookkeeper": "knowledge-reuse",
     "todowrite-for-plan": "work",
-    "resetScope": "context-compression",
     "negotiate": "context-compression",
-    "askPreviousScope": "context-compression",
     "askPreviousScope": "context-compression"
   }
 }

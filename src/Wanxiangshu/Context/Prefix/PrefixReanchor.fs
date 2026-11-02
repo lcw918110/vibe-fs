@@ -16,20 +16,28 @@ module PrefixReanchor =
         : Task<Result<ProviderRunIdentity option, string>> =
         task {
             let snapshot = AgentJournal.snapshot journal
+
             let epoch =
                 AgentProjection.tryFind sessionId snapshot.AgentProjections
                 |> Option.bind (fun session -> session.PrefixEpoch)
                 |> Option.defaultValue PrefixEpochProjection.empty
+
             match PrefixEpochProjection.proposeCompaction observed epoch with
             | None -> return Ok None
             | Some candidate ->
                 let run = candidate.CompactionRun
+
                 let fact =
                     ContextFact.ContextReanchored
                         {| SessionId = sessionId
                            PreviousEpochId = candidate.PreviousEpochId
                            NextEpochId = candidate.NextEpochId
                            ObservedCompactionRun = run |}
+
                 let! appended = AgentJournal.appendAgent (StreamId.Session sessionId) (Some run) fact journal
-                return appended |> Result.map (fun _ -> Some run) |> Result.mapError JournalAppendFailure.describe
+
+                return
+                    appended
+                    |> Result.map (fun _ -> Some run)
+                    |> Result.mapError JournalAppendFailure.describe
         }

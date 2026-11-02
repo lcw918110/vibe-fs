@@ -1,18 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  ManagerWorktreePolicy_managerBranchOf,
-  ManagerWorktreePolicy_staleWorktrees,
-  ManagerWorktreePolicy_staleBranches,
-} from '../../../dist/Change/Runtime.js'
-import { ofArray } from '../../../dist/fable_modules/fable-library-js.5.13.0/List.js'
-
-const staleWorktrees = (entries, owned) => Array.from(ManagerWorktreePolicy_staleWorktrees(ofArray(entries), ofArray(owned)))
-const staleBranches = (branches, owned) => Array.from(ManagerWorktreePolicy_staleBranches(ofArray(branches), ofArray(owned)))
+  managerBranchOf,
+  staleManagerWorktrees as staleWorktrees,
+  staleManagerBranches as staleBranches,
+} from '../../../dist/Change/Surface.js'
 
 test('manager branch naming preserves the complete job identity', () => {
-  assert.equal(ManagerWorktreePolicy_managerBranchOf('job-7'), 'manager/job-7')
-  assert.equal(ManagerWorktreePolicy_managerBranchOf('nested/job'), 'manager/nested/job')
+  assert.equal(managerBranchOf('job-7'), 'manager/job-7')
+  assert.equal(managerBranchOf('nested/job'), 'manager/nested/job')
 })
 
 test('worktree cleanup selects only unowned manager names without a positional exemption', () => {

@@ -4,9 +4,9 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  ProcessEventLogModule_acquireStoreLock as acquireStoreLock,
-  StoreFileGate__Release as releaseStoreLock,
-} from '../../../dist/Persistence/EventStore/ProcessEventLog.js'
+  acquirePhysicalStoreLock as acquireStoreLock,
+  releasePhysicalStoreLock as releaseStoreLock,
+} from '../../../dist/Persistence/EventStore/Surface.js'
 
 test('file-lock extraction: expired acquisition budget preserves the store timeout diagnosis', async () => {
   const root = mkdtempSync(join(tmpdir(), 'store-lock-timeout-'))

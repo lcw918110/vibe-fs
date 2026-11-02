@@ -1,8 +1,0 @@
-{"phase":"launcher","execPath":"/private/tmp/node-v22.23.3-darwin-arm64/bin/node","version":"v22.23.3","context":null,"execArgv":[]}
-context-probe: 1 test file(s), 5000ms verdict-silence window
-
-[test-summary] 1 file(s), 1 passed, 0 failed (0.04s wall, 0.00s test time)
-context-probe: post-exit group verification/reclamation: pid=34540; elapsedMs=20.612; accepted=true
-context-probe: 1 test(s), 0.0s of test time; max 2ms, p90 2ms, median 2ms
-
-context-probe: 1 passed, 0 failed; 1/1 planned file(s) completed

@@ -120,11 +120,7 @@ test.todo('WHAT[delegation-013] real agent completion join enforces current owne
 test('durable agent drain keeps earlier deliveries when a later item fails', async () => {
   const { withAdmittedChildren } = await import('../../managed-session-lifecycle/tests/support/admitted-child-work.mjs')
   const journal = await import('../../../dist/Persistence/Journal/Surface.js')
-  const adapter = await import('../../../dist/Composition/Durable/AgentJournalPortAdapter.js')
-  const identity = await import('../../../dist/Foundation/Identity.js')
   const handleJournal = await import('../../../dist/Execution/Delegation/Handle/JournalSurface.js')
-  const drain = await import('../../../dist/Execution/Delegation/Handle/JoinDrain.js')
-  const { toArray } = await import('../../../dist/fable_modules/fable-library-js.5.13.0/List.js')
   const parent = 'partial-drain-parent'
   await withAdmittedChildren('partial-agent-drain', parent, [
     { agentId: 'first', sessionId: 'first-child', role: 'engineer' },
@@ -137,13 +133,12 @@ test('durable agent drain keeps earlier deliveries when a later item fails', asy
       assert.equal(blob.ok, true)
       assert.equal((await handleJournal.recordWorkCompletion(handle, parent, agent, `${agent}-child`, profile.authorityRoot, 'Terminal', blob.blobRef, blob.blobDigest)).ok, true)
     }
-    const port = adapter.fromAgentJournal(journal.JournalHandle__get_Journal(handle))
-    const result = await drain.drainFromJournalWhere(port, identity.SessionIdModule_create(parent), 32, new Date('2026-11-02T00:00:00Z'), () => true)
-    assert.equal(result.tag, 0)
-    const delivered = toArray(result.fields[0])
+    const result = await handleJournal.drainWhere(handle, parent, 32, '2026-11-02T00:00:00Z', () => true)
+    assert.equal(result.ok, true)
+    const delivered = result.items
     assert.equal(delivered.length, 1)
-    assert.equal(delivered[0].Outcome.fields[0].AgentId, 'first')
-    assert.equal(delivered[0].Outcome.fields[0].View, '{"body":["first result"],"carry":[]}')
+    assert.equal(delivered[0].agent, 'first')
+    assert.equal(delivered[0].view, '{"body":["first result"],"carry":[]}')
     assert.equal(handleJournal.snapshot(handle, parent, 'first', 'first-child', profiles.get('first').authorityRoot).record.lifecycle, 'Retired')
     assert.equal(handleJournal.snapshot(handle, parent, 'second', 'second-child', profiles.get('second').authorityRoot).record.lifecycle, 'CompletedAwaitingJoin')
   })
@@ -151,12 +146,7 @@ test('durable agent drain keeps earlier deliveries when a later item fails', asy
 
 test('durable filtered drain admits the effective work summary before selecting delivery cells', async () => {
   const { withAdmittedChildren } = await import('../../managed-session-lifecycle/tests/support/admitted-child-work.mjs')
-  const journal = await import('../../../dist/Persistence/Journal/Surface.js')
-  const adapter = await import('../../../dist/Composition/Durable/AgentJournalPortAdapter.js')
-  const identity = await import('../../../dist/Foundation/Identity.js')
   const handleJournal = await import('../../../dist/Execution/Delegation/Handle/JournalSurface.js')
-  const drain = await import('../../../dist/Execution/Delegation/Handle/JoinDrain.js')
-  const { toArray } = await import('../../../dist/fable_modules/fable-library-js.5.13.0/List.js')
   const parent = 'filtered-drain-parent'
   await withAdmittedChildren('filtered-agent-drain', parent, [
     { agentId: 'selected', sessionId: 'selected-child', role: 'engineer' },
@@ -164,14 +154,13 @@ test('durable filtered drain admits the effective work summary before selecting 
   ], async (handle, profiles) => {
     for (const agent of ['selected', 'other']) assert.equal((await handleJournal.recordAbandon(handle, parent, agent, `${agent}-child`, profiles.get(agent).authorityRoot, 'Voided')).ok, true)
     const observed = []
-    const port = adapter.fromAgentJournal(journal.JournalHandle__get_Journal(handle))
-    const result = await drain.drainFromJournalWhere(port, identity.SessionIdModule_create(parent), 32, new Date('2026-11-02T00:00:00Z'), record => {
-      observed.push(record.Lifecycle.tag)
-      return identity.SessionIdModule_value(record.ChildSessionId) === 'selected-child'
+    const result = await handleJournal.drainWhere(handle, parent, 32, '2026-11-02T00:00:00Z', record => {
+      observed.push(record.lifecycle)
+      return record.child === 'selected-child'
     })
-    assert.equal(result.tag, 0)
-    assert.equal(toArray(result.fields[0]).length, 1)
-    assert.deepEqual(observed, [2, 2])
+    assert.equal(result.ok, true)
+    assert.equal(result.items.length, 1)
+    assert.deepEqual(observed, ['Abandoned', 'Abandoned'])
     assert.equal(handleJournal.snapshot(handle, parent, 'selected', 'selected-child', profiles.get('selected').authorityRoot).record.lifecycle, 'Retired')
     assert.equal(handleJournal.snapshot(handle, parent, 'other', 'other-child', profiles.get('other').authorityRoot).record.lifecycle, 'Abandoned')
   })

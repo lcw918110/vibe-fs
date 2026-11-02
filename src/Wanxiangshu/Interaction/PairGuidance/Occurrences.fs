@@ -101,17 +101,28 @@ module PairGuidanceOccurrences =
         }
 
     let private entryOrdinal (entry: obj) : int64 =
-        if isNull entry?ordinal then int64 (string entry?Ordinal) else int64 (string entry?ordinal)
+        if isNull entry?ordinal then
+            int64 (string entry?Ordinal)
+        else
+            int64 (string entry?ordinal)
 
     let private entryCallId (entry: obj) : string =
-        if isNull entry?callId then string entry?CallId else string entry?callId
+        if isNull entry?callId then
+            string entry?CallId
+        else
+            string entry?callId
 
     let private entryMarkerText (entry: obj) : string =
-        if isNull entry?markerText then string entry?MarkerText else string entry?markerText
+        if isNull entry?markerText then
+            string entry?MarkerText
+        else
+            string entry?markerText
 
     let private unboxEntry (entry: obj) : PairGuidanceOccurrence option =
-        if isNull entry then None
-        elif not (isNull entry?raw) then Some(unbox<PairGuidanceOccurrence> entry?raw)
+        if isNull entry then
+            None
+        elif not (isNull entry?raw) then
+            Some(unbox<PairGuidanceOccurrence> entry?raw)
         else
             Some
                 { Ordinal = entryOrdinal entry
@@ -122,6 +133,7 @@ module PairGuidanceOccurrences =
 
     let private readMemory (key: string) : PairGuidanceOccurrence list =
         let entries: obj array = pairGuidanceMemoryStore?read (key)
+
         entries
         |> Option.ofObj
         |> Option.defaultValue [||]
@@ -179,7 +191,9 @@ module PairGuidanceOccurrences =
         | TranscriptGap.After addr -> "After:" + TranscriptMessageAddress.value addr
 
     let private occupiedEntry (pair: PairGuidanceOccurrence) : obj =
-        box {| callGapKey = gapKey pair.CallGap; resultGapKey = gapKey pair.ResultGap |}
+        box
+            {| callGapKey = gapKey pair.CallGap
+               resultGapKey = gapKey pair.ResultGap |}
 
     [<Import("PairGuidanceOccurrences", "wanxiangli/pair-hint")>]
     let private occurrencesClass: obj = jsNative
@@ -195,27 +209,45 @@ module PairGuidanceOccurrences =
 
     let private occurrenceFrom (entry: obj) : PairGuidanceOccurrence =
         let callGap, resultGap = unbox<TranscriptGap * TranscriptGap> entry?metadata
+
         { Ordinal = entry?ordinal
           CallId = entry?callId
           MarkerText = entry?markerText
           CallGap = callGap
           ResultGap = resultGap }
 
-    let private resultObject = function
+    let private resultObject =
+        function
         | Ok value -> createObj [ "ok" ==> true; "value" ==> value ]
         | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
 
     let private placementObject internalSession (transcript: PairGuidanceTranscript) =
-        if internalSession || transcript.InternalAuthor then null
+        if internalSession || transcript.InternalAuthor then
+            null
         else
             transcript.Carrier
-            |> Result.map (Option.map (fun (callGap, resultGap) ->
-                createObj
-                    [ "callGapKey" ==> gapKey callGap
-                      "resultGapKey" ==> gapKey resultGap
-                      "metadata" ==> box (callGap, resultGap) ]) >> Option.defaultValue null)
+            |> Result.map (
+                Option.map (fun (callGap, resultGap) ->
+                    createObj
+                        [ "callGapKey" ==> gapKey callGap
+                          "resultGapKey" ==> gapKey resultGap
+                          "metadata" ==> box (callGap, resultGap) ])
+                >> Option.defaultValue null
+            )
             |> Result.mapError (fun () -> "guidance carrier without transcript address (HOST-013)")
             |> resultObject
+
+    let private occurrenceFailure (error: obj) =
+        if unbox<string> error?kind = "Orphaned" then
+            let ids: string array = error?callIds
+
+            Error(
+                sprintf
+                    "synthetic messages without durable record (callId %s, HOST-013)"
+                    (String.Join(", ", ids |> Array.truncate 3))
+            )
+        else
+            Error(unbox<string> error?cause)
 
     let occur
         (ledger: PairGuidanceLedger)
@@ -236,20 +268,28 @@ module PairGuidanceOccurrences =
                       "skipNew" ==> skipRequested ()
                       "sessionKey" ==> transcriptKey sessionId
                       "markerText" ==> markerText ]
-            let renderNative = Func<obj array, obj>(fun entries -> entries |> Array.map occurrenceFrom |> Array.toList |> render |> resultObject)
-            let appendNative = Func<obj, Task<obj>>(fun entry ->
-                task {
-                    let! result = ledger.Append(occurrenceFrom entry)
-                    return result |> Result.map box |> Result.mapError (fun (PairGuidanceAppendError.JournalRejected reason) -> reason) |> resultObject
-                })
-            let! result: obj = occurrences?occur (input, renderNative, appendNative)
+
+            let renderNative =
+                Func<obj array, obj>(fun entries ->
+                    entries |> Array.map occurrenceFrom |> Array.toList |> render |> resultObject)
+
+            let appendNative =
+                Func<obj, Task<obj>>(fun entry ->
+                    task {
+                        let! result = ledger.Append(occurrenceFrom entry)
+
+                        return
+                            result
+                            |> Result.map box
+                            |> Result.mapError (fun (PairGuidanceAppendError.JournalRejected reason) -> reason)
+                            |> resultObject
+                    })
+
+            let! (result: obj) = occurrences?occur (input, renderNative, appendNative)
+
             if unbox<bool> result?ok then
                 let value: obj = result?value
                 return Ok(unbox<'Wire> value?wire, unbox<bool> value?appended)
             else
-                let error: obj = result?error
-                if unbox<string> error?kind = "Orphaned" then
-                    let ids: string array = error?callIds
-                    return Error(sprintf "synthetic messages without durable record (callId %s, HOST-013)" (String.Join(", ", ids |> Array.truncate 3)))
-                else return Error(unbox<string> error?cause)
+                return occurrenceFailure result?error
         }

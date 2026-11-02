@@ -18,6 +18,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-llm-facing.fsproj"/>
     <Compile Include="Execution/Delegation/SyncDelegate/Wait.fsi"/>
     <Compile Include="Execution/Delegation/SyncDelegate/Wait.fs"/>
+    <Compile Include="Execution/Delegation/SyncDelegate/Store.fsi"/>
     <Compile Include="Execution/Delegation/SyncDelegate/Store.fs"/>
     <Compile Include="Execution/Delegation/SyncDelegate/Prompt.fsi"/>
     <Compile Include="Execution/Delegation/SyncDelegate/Prompt.fs"/>

@@ -1,6 +1,0 @@
-Generation 160 documentation settlement seal.
-Build exit 0; full check exit 0.
-Compiler/artifact input digests are unchanged from the gen159 formal run.
-The generated input digest changed for documentation settlement only.
-This does not claim a second business run; authoritative gen159 scope is
-238/238 drained, 1178 pass, 0 fail, 28 skip, 129 TODO.

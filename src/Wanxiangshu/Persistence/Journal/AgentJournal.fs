@@ -55,37 +55,55 @@ module private AgentJournalInternals =
                   "sequence" ==> LocalSeq.value envelope.LocalSeq
                   "envelope" ==> envelope ]
         | Rejected(eventId, reason) ->
-            createObj [ "kind" ==> "Rejected"; "eventId" ==> EventId.value eventId; "reason" ==> reason ]
+            createObj
+                [ "kind" ==> "Rejected"
+                  "eventId" ==> EventId.value eventId
+                  "reason" ==> reason ]
         | CommitUnknown(eventId, failure) ->
-            createObj [ "kind" ==> "CommitUnknown"; "eventId" ==> EventId.value eventId; "error" ==> failure ]
+            createObj
+                [ "kind" ==> "CommitUnknown"
+                  "eventId" ==> EventId.value eventId
+                  "error" ==> failure ]
         | CommitResult.NoNewWriteReleaseFailed(eventId, failure) ->
-            createObj [ "kind" ==> "NoNewWriteReleaseFailed"; "eventId" ==> EventId.value eventId; "error" ==> failure ]
+            createObj
+                [ "kind" ==> "NoNewWriteReleaseFailed"
+                  "eventId" ==> EventId.value eventId
+                  "error" ==> failure ]
         | NotAttempted(eventId, unavailable) ->
-            createObj [ "kind" ==> "NotAttempted"; "eventId" ==> EventId.value eventId; "unavailable" ==> unavailable ]
+            createObj
+                [ "kind" ==> "NotAttempted"
+                  "eventId" ==> EventId.value eventId
+                  "unavailable" ==> unavailable ]
 
     let failure (value: obj) : JournalAppendFailure =
         let eventId = EventId.create (unbox<string> value?eventId)
+
         match unbox<string> value?kind with
         | "CommitUnknown" -> WriteUnknown(eventId, unbox<JournalFailure> value?error)
-        | "NoNewWriteReleaseFailed" ->
-            JournalAppendFailure.NoNewWriteReleaseFailed(eventId, unbox value?error)
+        | "NoNewWriteReleaseFailed" -> JournalAppendFailure.NoNewWriteReleaseFailed(eventId, unbox value?error)
         | "NotAttempted" -> WriterUnavailable(eventId, unbox<JournalUnavailable> value?unavailable)
         | "Rejected" ->
-            FactRejected(eventId, { Fact = "semantic-cut"; Reason = unbox<string> value?reason })
+            FactRejected(
+                eventId,
+                { Fact = "semantic-cut"
+                  Reason = unbox<string> value?reason }
+            )
         | kind -> invalidOp ("Unknown journal session failure: " + kind)
+
+    let private onUnknown (failure: JournalFailure) =
+        match failure with
+        | StoreAppendUnknown evidence when not (List.isEmpty evidence.Prepared.Cuts) ->
+            FatalProcess.trip
+                "journal-semantic-cut"
+                (sprintf
+                    "semantic cut append settled unknown at %A: %s"
+                    evidence.Primary.Phase
+                    evidence.Primary.Cause.Message)
+        | _ -> ()
 
     let onSettlement (value: obj) =
         match unbox<string> value?kind with
-        | "CommitUnknown" ->
-            match unbox<JournalFailure> value?error with
-            | StoreAppendUnknown evidence when not (List.isEmpty evidence.Prepared.Cuts) ->
-                FatalProcess.trip
-                    "journal-semantic-cut"
-                    (sprintf
-                        "semantic cut append settled unknown at %A: %s"
-                        evidence.Primary.Phase
-                        evidence.Primary.Cause.Message)
-            | _ -> ()
+        | "CommitUnknown" -> onUnknown (unbox<JournalFailure> value?error)
         | "Rejected" -> FatalProcess.trip "journal-semantic-cut" (JournalAppendFailure.describe (failure value))
         | _ -> ()
 
@@ -114,33 +132,42 @@ module private AgentJournalInternals =
               Reason = AblationGate.deniedFactPath }
         )
 
+    let appendResult (value: obj) =
+        if unbox<string> value?kind = "Committed" then
+            Ok(unbox<ProjectionSet> value?current)
+        else
+            Error(failure value)
+
 open AgentJournalInternals
 
 /// 领域投影仍来自唯一的 Current，通知与恢复由库会话持有。
 type AgentJournal internal (writer: IJournalWriter, initialProjection: ProjectionSet) =
     let session =
-        create
-            (createObj
+        create (
+            createObj
                 [ "initialRevision" ==> writer.LastCommittedLocalSeq
-                  "writer" ==>
-                      createObj
-                          [ "append" ==>
-                                Func<obj, Task<obj>>(fun request ->
-                                    let stream, providerRun, fact = unbox<StreamId * ProviderRunIdentity option * Fact> request
-                                    task {
-                                        let! committed = writer.Append stream providerRun fact
-                                        return outcome committed
-                                    })
+                  "writer"
+                  ==> createObj
+                          [ "append"
+                            ==> Func<obj, Task<obj>>(fun request ->
+                                let stream, providerRun, fact =
+                                    unbox<StreamId * ProviderRunIdentity option * Fact> request
+
+                                task {
+                                    let! committed = writer.Append stream providerRun fact
+                                    return outcome committed
+                                })
                             "isPoisoned" ==> Func<bool>(fun () -> writer.IsPoisoned)
                             "release" ==> Action(writer.Release)
                             "releaseAsync" ==> Func<Task>(fun () -> writer.ReleaseAsync() |> asTask) ]
-                  "readCurrent" ==>
-                      Func<obj>(fun () ->
-                          match writer.TryCurrent "Journal" with
-                          | Some current -> current
-                          | None -> box initialProjection)
+                  "readCurrent"
+                  ==> Func<obj>(fun () ->
+                      match writer.TryCurrent "Journal" with
+                      | Some current -> current
+                      | None -> box initialProjection)
                   "refreshCurrent" ==> Func<obj>(fun () -> box (writer.RefreshCurrent()))
-                  "onSettlement" ==> Action<obj>(onSettlement) ])
+                  "onSettlement" ==> Action<obj>(onSettlement) ]
+        )
 
     member _.Writer = writer
     member _.RuntimeId = writer.RuntimeId
@@ -148,7 +175,9 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
     member _.RefreshCurrent() : Result<unit, string> = session?refreshCurrent ()
     member _.IsPoisoned: bool = session?isPoisoned ()
     member _.Snapshot: ProjectionSet = session?snapshot ()
-    member _.Revision: JournalRevision = JournalRevision.create (unbox<int64> (session?revision ()))
+
+    member _.Revision: JournalRevision =
+        JournalRevision.create (unbox<int64> (session?revision ()))
 
     member _.SnapshotWithRevision: ProjectionSet * JournalRevision =
         let value: obj = session?snapshotWithRevision ()
@@ -167,13 +196,15 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
                 Func<Action, Action>(fun cancel ->
                     let registration = cancellation.Register(fun () -> cancel.Invoke()) :> IDisposable
                     Action(fun () -> registration.Dispose()))
-            let! value: obj = session?awaitChange (JournalRevision.value fromRevision, registerCancel)
+
+            let! value = (session?awaitChange (JournalRevision.value fromRevision, registerCancel): Task<obj>)
             return if isNull value then None else Some(change value)
         }
 
     member this.AwaitChangeFrom(fromRevision: JournalRevision) : Task<JournalChange> =
         task {
             let! changed = this.AwaitChangeFromOrCancel(fromRevision, CancellationToken.None)
+
             match changed with
             | Some committed -> return committed
             | None -> return failwith "unreachable: uncancelled journal wait"
@@ -186,13 +217,13 @@ type AgentJournal internal (writer: IJournalWriter, initialProjection: Projectio
         : Task<Result<ProjectionSet, JournalAppendFailure>> =
         task {
             let tag = agentFactTag fact
+
             if AblationGate.factDenied (AblationGate.registry ()) tag then
                 return Error(rejectAblation tag)
             else
                 let! value = append session (box (stream, providerRun, Fact.Agent fact))
-                if unbox<string> value?kind = "Committed" then
-                    return Ok(unbox<ProjectionSet> value?current)
-                else return Error(failure value)
+
+                return appendResult value
         }
 
     interface IDisposable with

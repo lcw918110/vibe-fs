@@ -4,18 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setImmediate } from 'node:timers/promises'
-import { typedRole } from '../../../dist/Repository/Programming/Js/GeneratorSurface.js'
-import { JsToolWorkflow_run } from '../../../dist/Repository/Programming/Js/ToolWorkflow.js'
-import { closePrograms } from '../../../dist/Repository/Programming/Js/WorkflowSurface.js'
-import {
-  JsFailureModule_code,
-  JsFailureModule_reason,
-  JsTransactionAppendFailure,
-  JsTransactionAppendPhase,
-} from '../../../dist/Repository/Programming/Js/Failure.js'
-import { EventIdModule_create } from '../../../dist/Foundation/Identity.js'
-import { AppendError } from '../../../dist/Persistence/EventStore/StoreTypes.js'
-import { FSharpResult$2 } from '../../../dist/fable_modules/fable-library-js.5.13.0/Result.js'
+import * as workflow from '../../../dist/Repository/Programming/Js/WorkflowSurface.js'
 
 const deferred = () => {
   let resolve
@@ -24,13 +13,8 @@ const deferred = () => {
   return { promise, resolve, reject }
 }
 
-const ok = () => new FSharpResult$2(0, [EventIdModule_create('settled-event')])
-const appendError = (call) => new FSharpResult$2(1, [new JsTransactionAppendFailure(
-  call.phase,
-  call.transactionId,
-  EventIdModule_create('failed-event'),
-  new AppendError(2, ['record refused']),
-)])
+const ok = () => ({ ok: true, eventId: 'settled-event' })
+const appendError = () => ({ ok: false, eventId: 'failed-event', error: 'record refused' })
 
 const program = `class Js extends JsProgram {
   async run() {
@@ -88,20 +72,14 @@ for (const scenario of scenarios) {
       if (calls.length === 8) appended.resolve()
       return pending.promise
     }
-    const persistence = {
-      AppendPrepared: prepared => append(JsTransactionAppendPhase.Prepared, prepared.TransactionId),
-      AppendCommitted: transactionId => append(JsTransactionAppendPhase.Committed, transactionId),
-    }
     let running
     try {
       writeFileSync(join(root, 'rewrite.txt'), 'before')
       writeFileSync(join(root, 'source.txt'), 'moved bytes')
       writeFileSync(join(root, 'removed.txt'), 'removed bytes')
-      const surface = typedRole('Engineer', 'en')
-      assert.ok(surface)
-      running = JsToolWorkflow_run(
-        surface.Capabilities, root, surface.BaseClassSource, program,
-        3000, BigInt(Date.now() + 60_000), 1 << 20, persistence,
+      running = workflow.runWithRecord(
+        root, 'Engineer', 'en', program,
+        3000, BigInt(Date.now() + 60_000), 1 << 20, append,
       )
       let finished = false
       running.then(() => { finished = true }, () => { finished = true })
@@ -133,23 +111,22 @@ for (const scenario of scenarios) {
       calls.at(-1).resolve(ok())
 
       const outcome = await running
-      assert.equal(outcome.cases()[outcome.tag], 'Failed')
-      const [failure, rewritten, created, removed, moved] = outcome.fields
-      assert.equal(JsFailureModule_code(failure), scenario.code)
+      assert.equal(workflow.caseName(outcome), 'Failed')
+      assert.equal(workflow.failureCode(outcome), scenario.code)
       const reason = scenario.first === 'result'
-        ? `transaction ${calls[0].transactionId.fields[0]} event failed-event: append failed: record refused`
+        ? `transaction ${calls[0].transactionId} event failed-event: append failed: record refused`
         : scenario.reason
-      assert.equal(JsFailureModule_reason(failure), reason)
-      assert.deepEqual(Array.from(rewritten), ['rewrite.txt'])
-      assert.deepEqual(Array.from(created), ['created.txt'])
-      assert.deepEqual(Array.from(removed), ['removed.txt'])
-      assert.deepEqual(Array.from(moved), [['source.txt', 'destination.txt']])
+      assert.equal(workflow.failureReason(outcome), reason)
+      assert.deepEqual(workflow.rewritten(outcome), ['rewrite.txt'])
+      assert.deepEqual(workflow.created(outcome), ['created.txt'])
+      assert.deepEqual(workflow.removed(outcome), ['removed.txt'])
+      assert.deepEqual(workflow.moved(outcome), ['source.txt -> destination.txt'])
       assert.equal(calls.length, 8, 'each physical mutation has one Prepared/Committed pair')
       assertFiles()
     } finally {
       for (const call of calls) call.resolve(ok())
       if (running) await running.catch(() => {})
-      await closePrograms()
+      await workflow.closePrograms()
       rmSync(root, { recursive: true, force: true })
     }
   })

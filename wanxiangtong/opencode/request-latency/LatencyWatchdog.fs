@@ -26,20 +26,22 @@ type RequestLatencyDetector =
 /// Generation separates one attempt's timer callback from the next attempt's
 /// state, so a late timer never interrupts or samples a newer request.
 type private LatencyMeasurement =
-    { Generation: int
-      StartedAt: float
-      ThresholdMs: float
-      Armed: bool
-      Idle: bool
-      Aborting: bool
-      /// Parked after a final Completed terminal: the work was delivered, and
-      /// only a newer Provider start proves the session loop went on.
-      EndedFinal: bool
-      /// The request already counted as a complete sample; a later
-      /// continuation must not add a censored one for it.
-      SampledComplete: bool
-      ProviderRun: string option
-      Timer: IDisposable option }
+    {
+        Generation: int
+        StartedAt: float
+        ThresholdMs: float
+        Armed: bool
+        Idle: bool
+        Aborting: bool
+        /// Parked after a final Completed terminal: the work was delivered, and
+        /// only a newer Provider start proves the session loop went on.
+        EndedFinal: bool
+        /// The request already counted as a complete sample; a later
+        /// continuation must not add a censored one for it.
+        SampledComplete: bool
+        ProviderRun: string option
+        Timer: IDisposable option
+    }
 
 /// How a terminal event relates to the session's in-flight measurement.
 type private TerminalVerdict =
@@ -71,15 +73,24 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     let observe (pending: Task<'t>) (onSuccess: 't -> unit) (onFailure: obj -> unit) : unit = jsNative
 
     let gate = obj ()
-    let recovering = Dictionary<string, int>()
+    /// Live recovery generations per session, newest first. A session can
+    /// hold several at once: a second measurement's interrupt may be sent
+    /// while the first interrupt's Host receipt is still pending, and each
+    /// pending receipt settles its own recovery.
+    let recovering = Dictionary<string, int list>()
     let measurements = Dictionary<string, LatencyMeasurement>()
     /// An interrupt already sent to the Host (Aborting) whose request was
     /// ended by a tool boundary, a failure terminal or a newer Provider start
     /// before the Host answered. The Host's AbortSession stops the whole
     /// session loop, so an accepted interrupt still owes a continuation; the
     /// measurement is parked here instead of being dropped with its recovery.
-    let interruptedInFlight = Dictionary<string, LatencyMeasurement>()
-    // DSL-MUTABLE: resource — attempt generations and the watchdog disposal latch
+    let interruptedInFlight = Dictionary<string, LatencyMeasurement list>()
+    /// The generation whose continuation is already dispatched and owns the
+    /// session loop's resume. Other live receipts stay pending for their own
+    /// settlement but must not dispatch a second physical continuation.
+    let dispatched = Dictionary<string, int>()
+    // DSL-MUTABLE: resource — attempt generations, the dispatched continuation
+    // latch and the watchdog disposal latch
     let mutable generation = 0
     let mutable disposed = false
 
@@ -89,33 +100,79 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
         with _ ->
             ()
 
-    let validRecovery sessionId turn =
-        lock gate (fun () ->
-            not disposed
-            && (match recovering.TryGetValue sessionId with
-                | true, current -> current = turn
-                | _ -> false))
-
     let finishRecovery sessionId turn =
         lock gate (fun () ->
             match recovering.TryGetValue sessionId with
-            | true, current when current = turn ->
-                recovering.Remove sessionId |> ignore
+            | true, current when List.contains turn current ->
+                let rest = current |> List.filter (fun gen -> gen <> turn)
+
+                if List.isEmpty rest then
+                    recovering.Remove sessionId |> ignore
+                else
+                    recovering[sessionId] <- rest
+
+                match dispatched.TryGetValue sessionId with
+                | true, owner when owner = turn -> dispatched.Remove sessionId |> ignore
+                | _ -> ()
+
                 true
             | _ -> false)
 
     let failRecovery sessionId turn reason =
         if finishRecovery sessionId turn then
+            // The Failed return settles this degeneration episode: pending
+            // receipts of other interrupts must not revive or re-settle it.
+            lock gate (fun () ->
+                recovering.Remove sessionId |> ignore
+                dispatched.Remove sessionId |> ignore)
+
             diagnostic "latency-degeneration-returned" reason
-            try ports.Return sessionId reason
-            with error -> diagnostic "latency-degeneration-return-failed" error.Message
+
+            try
+                ports.Return sessionId reason
+            with error ->
+                diagnostic "latency-degeneration-return-failed" error.Message
 
     /// A parked interrupt (see interruptedInFlight) keeps its recovery until
-    /// the Host receipt decides; only Cancel and Dispose clear it first.
+    /// the Host receipt decides; only Cancel and Dispose clear it first. A
+    /// recovery without a parked entry has no pending receipt left to decide
+    /// it (its measurement was dropped or superseded): revoke it, and release
+    /// the dispatched continuation's observer with it.
     let revokeRecovery sid =
-        if not (interruptedInFlight.ContainsKey sid) && recovering.Remove sid then
-            try ports.DropObserver sid
-            with error -> diagnostic "latency-degeneration-dispose-observer-failed" error.Message
+        let removedDispatched =
+            lock gate (fun () ->
+                match recovering.TryGetValue sid with
+                | false, _ -> false
+                | true, current ->
+                    let parkedGenerations =
+                        match interruptedInFlight.TryGetValue sid with
+                        | true, parked -> parked |> List.map (fun entry -> entry.Generation) |> Set.ofList
+                        | false, _ -> Set.empty
+
+                    let kept = current |> List.filter (fun gen -> Set.contains gen parkedGenerations)
+
+                    let removed =
+                        current |> List.filter (fun gen -> not (Set.contains gen parkedGenerations))
+
+                    if List.isEmpty kept then
+                        recovering.Remove sid |> ignore
+                    else
+                        recovering[sid] <- kept
+
+                    let latchRemoved =
+                        match dispatched.TryGetValue sid with
+                        | true, owner when List.contains owner removed ->
+                            dispatched.Remove sid |> ignore
+                            true
+                        | _ -> false
+
+                    latchRemoved)
+
+        if removedDispatched then
+            try
+                ports.DropObserver sid
+            with error ->
+                diagnostic "latency-degeneration-dispose-observer-failed" error.Message
 
     let disposeQuietly (handle: IDisposable option) =
         match handle with
@@ -130,21 +187,63 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     /// recovery ownership alive until the interrupt receipt decides.
     let parkInterrupted sessionId (recorded: LatencyMeasurement) =
         disposeQuietly recorded.Timer
-        interruptedInFlight[sessionId] <- { recorded with Timer = None }
+        let parked = { recorded with Timer = None }
+
+        match interruptedInFlight.TryGetValue sessionId with
+        | true, existing -> interruptedInFlight[sessionId] <- parked :: existing
+        | false, _ -> interruptedInFlight[sessionId] <- [ parked ]
+
         diagnostic
             "latency-degeneration-interrupt-parked"
-            (sessionId + ": provider run ended while the interrupt was in flight; recovery kept")
+            (sessionId
+             + ": provider run ended while the interrupt was in flight; recovery kept")
 
     let takeParked sessionId turn =
         lock gate (fun () ->
             match interruptedInFlight.TryGetValue sessionId with
-            | true, parked when parked.Generation = turn ->
-                interruptedInFlight.Remove sessionId |> ignore
-                Some parked
-            | _ -> None)
+            | true, parked ->
+                match List.tryFind (fun entry -> entry.Generation = turn) parked with
+                | None -> None
+                | Some entry ->
+                    let rest = List.filter (fun candidate -> candidate.Generation <> turn) parked
+
+                    if List.isEmpty rest then
+                        interruptedInFlight.Remove sessionId |> ignore
+                    else
+                        interruptedInFlight[sessionId] <- rest
+
+                    Some entry
+            | false, _ -> None)
 
     let continueInterrupted sessionId turn (recorded: LatencyMeasurement) =
-        if validRecovery sessionId turn then
+        // One physical continuation in flight per session loop stop: the
+        // first dispatched receipt owns the resume, later live receipts are
+        // absorbed with their own censored sample.
+        let decision =
+            lock gate (fun () ->
+                if disposed then
+                    None
+                else
+                    let live =
+                        match recovering.TryGetValue sessionId with
+                        | true, current -> List.contains turn current
+                        | false, _ -> false
+
+                    let latched =
+                        match dispatched.TryGetValue sessionId with
+                        | true, owner -> owner <> turn
+                        | false, _ -> false
+
+                    if live && not latched then
+                        dispatched[sessionId] <- turn
+                        Some true
+                    elif live then
+                        Some false
+                    else
+                        None)
+
+        match decision with
+        | Some true ->
             let onAccepted () =
                 if finishRecovery sessionId turn then
                     diagnostic "latency-degeneration-resumed" sessionId
@@ -154,10 +253,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
 
             try
                 if not recorded.SampledComplete then
-                    detector.ObserveCensored(
-                        sessionId,
-                        max (ports.Now() - recorded.StartedAt) recorded.ThresholdMs
-                    )
+                    detector.ObserveCensored(sessionId, max (ports.Now() - recorded.StartedAt) recorded.ThresholdMs)
 
                 observe
                     (ports.Continue sessionId (ports.Text sessionId) onAccepted onContinueFailure)
@@ -167,6 +263,19 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                     (fun error -> onContinueFailure (string error))
             with error ->
                 onContinueFailure error.Message
+        | Some false ->
+            if not recorded.SampledComplete then
+                detector.ObserveCensored(sessionId, max (ports.Now() - recorded.StartedAt) recorded.ThresholdMs)
+
+            // The receipt decided; its settlement is "the resume is owned
+            // elsewhere". End this recovery so nothing stale lingers.
+            finishRecovery sessionId turn |> ignore
+
+            diagnostic
+                "latency-degeneration-interrupt-absorbed"
+                (sessionId
+                 + ": another continuation owns the session loop's resume; receipt settled with its sample")
+        | None -> ()
 
     /// The timer body. Everything it does re-validates the generation first,
     /// because the host may have completed, cancelled or replaced the request
@@ -178,15 +287,29 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                     match measurements.TryGetValue sessionId with
                     | true, measured when measured.Generation = thisGeneration && measured.Armed ->
                         disposeQuietly measured.Timer
-                        measurements[sessionId] <- { measured with Armed = false; Aborting = true; Timer = None }
-                        recovering[sessionId] <- thisGeneration
+
+                        measurements[sessionId] <-
+                            { measured with
+                                Armed = false
+                                Aborting = true
+                                Timer = None }
+
+                        let pending =
+                            match recovering.TryGetValue sessionId with
+                            | true, current -> current
+                            | false, _ -> []
+
+                        recovering[sessionId] <- thisGeneration :: pending
                         true
                     | _ -> false)
 
             if armed then
                 diagnostic
                     "latency-degeneration-interrupt"
-                    (sprintf "%s: request exceeded its latency threshold %.0fms; interrupting and continuing" sessionId thresholdMs)
+                    (sprintf
+                        "%s: request exceeded its latency threshold %.0fms; interrupting and continuing"
+                        sessionId
+                        thresholdMs)
                 // The event hook never waits for a Host promise.
                 let onAbortAccepted accepted =
                     let stillOurs =
@@ -227,6 +350,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                                         measurements[sessionId] <- { current with Aborting = false }
                                         false
                                 | _ -> false)
+
                         if idled then
                             failRecovery sessionId thisGeneration "interrupt refused after session became idle"
                         // Otherwise preserve the original request and its
@@ -249,31 +373,30 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                             continueInterrupted sessionId thisGeneration recorded
 
                 try
-                    observe
-                        (ports.Abort sessionId)
-                        onAbortAccepted
-                        (fun error ->
-                            let stillOurs =
-                                lock gate (fun () ->
-                                    match measurements.TryGetValue sessionId with
-                                    | true, current when current.Generation = thisGeneration ->
-                                        measurements.Remove(sessionId) |> ignore
-                                        true
-                                    | _ -> false)
-                            if stillOurs then
-                                failRecovery sessionId thisGeneration ("interrupt: " + string error)
-                            else
-                                // The request had already ended on its own; a
-                                // failed interrupt stopped nothing.
-                                match takeParked sessionId thisGeneration with
-                                | Some _ -> finishRecovery sessionId thisGeneration |> ignore
-                                | None -> ())
+                    observe (ports.Abort sessionId) onAbortAccepted (fun error ->
+                        let stillOurs =
+                            lock gate (fun () ->
+                                match measurements.TryGetValue sessionId with
+                                | true, current when current.Generation = thisGeneration ->
+                                    measurements.Remove(sessionId) |> ignore
+                                    true
+                                | _ -> false)
+
+                        if stillOurs then
+                            failRecovery sessionId thisGeneration ("interrupt: " + string error)
+                        else
+                            // The request had already ended on its own; a
+                            // failed interrupt stopped nothing.
+                            match takeParked sessionId thisGeneration with
+                            | Some _ -> finishRecovery sessionId thisGeneration |> ignore
+                            | None -> ())
                 with error ->
                     lock gate (fun () ->
                         match measurements.TryGetValue sessionId with
                         | true, current when current.Generation = thisGeneration ->
                             measurements.Remove(sessionId) |> ignore
                         | _ -> ())
+
                     failRecovery sessionId thisGeneration ("interrupt: " + error.Message)
 
     let startMeasurement (sessionId: string) (providerRun: string) =
@@ -284,7 +407,8 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
         // Novice protection: until the detector has enough observations its
         // threshold is +Infinity. The request is still measured (its sample
         // is what ends the protection) but no timer is armed at all.
-        let armed = not (Double.IsPositiveInfinity threshold) && not (Double.IsNaN threshold)
+        let armed =
+            not (Double.IsPositiveInfinity threshold) && not (Double.IsNaN threshold)
 
         let timer =
             if armed then
@@ -311,15 +435,25 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     /// the same session means the previous attempt's terminal was never
     /// observed: its measurement is dropped without a sample.
     member _.Begin(sessionId: string, providerRun: string option) =
-        if not disposed && not (String.IsNullOrWhiteSpace sessionId) && ports.Managed sessionId then
+        if
+            not disposed
+            && not (String.IsNullOrWhiteSpace sessionId)
+            && ports.Managed sessionId
+        then
             match providerRun with
             | None -> ()
             | Some run ->
                 lock gate (fun () ->
                     if not disposed then
                         match interruptedInFlight.TryGetValue sessionId with
-                        | true, parked when parked.EndedFinal && parked.ProviderRun <> Some run ->
-                            interruptedInFlight[sessionId] <- { parked with EndedFinal = false }
+                        | true, parked when parked |> List.exists (fun entry -> entry.EndedFinal) ->
+                            interruptedInFlight[sessionId] <-
+                                parked
+                                |> List.map (fun entry ->
+                                    if entry.EndedFinal && entry.ProviderRun <> Some run then
+                                        { entry with EndedFinal = false }
+                                    else
+                                        entry)
                         | _ -> ()
 
                         match measurements.TryGetValue sessionId with
@@ -389,12 +523,17 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                             // anything is decided by its receipt. A final
                             // terminal is a real complete sample.
                             measurements.Remove(sessionId) |> ignore
+
                             parkInterrupted
                                 sessionId
                                 { recorded with
                                     EndedFinal = not stepBoundary
                                     SampledComplete = not stepBoundary }
-                            if stepBoundary then NoInFlightMeasurement else SampledParked recorded
+
+                            if stepBoundary then
+                                NoInFlightMeasurement
+                            else
+                                SampledParked recorded
                         | Some recordedRun, Some completingRun when recordedRun = completingRun ->
                             measurements.Remove(sessionId) |> ignore
                             disposeQuietly recorded.Timer
@@ -408,11 +547,13 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                             // abort receipt decides — same as a matched terminal
                             // or a discarded failure while Aborting.
                             measurements.Remove(sessionId) |> ignore
+
                             parkInterrupted
                                 sessionId
                                 { recorded with
                                     EndedFinal = false
                                     SampledComplete = false }
+
                             NoInFlightMeasurement
                         | _ ->
                             measurements.Remove(sessionId) |> ignore
@@ -422,15 +563,16 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
             match verdict with
             | Sampled recorded ->
                 if finishRecovery sessionId recorded.Generation then
-                    try ports.DropObserver sessionId
-                    with error -> diagnostic "latency-degeneration-dispose-observer-failed" error.Message
+                    try
+                        ports.DropObserver sessionId
+                    with error ->
+                        diagnostic "latency-degeneration-dispose-observer-failed" error.Message
+
                 detector.ObserveCompleted(sessionId, ports.Now() - recorded.StartedAt)
             | SampledParked recorded -> detector.ObserveCompleted(sessionId, ports.Now() - recorded.StartedAt)
             | ForeignProviderRun -> ()
             | DroppedUnattributable ->
-                diagnostic
-                    "latency-degeneration-sample-dropped"
-                    (sessionId + ": terminal without request identity")
+                diagnostic "latency-degeneration-sample-dropped" (sessionId + ": terminal without request identity")
             | NoInFlightMeasurement -> ()
 
     /// An observed failed or cancelled provider attempt has ended, but is not
@@ -473,7 +615,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
                     | Some recorded when not recorded.Aborting ->
                         lock gate (fun () ->
                             match recovering.TryGetValue sessionId with
-                            | true, turn -> Some turn
+                            | true, turn :: _ -> Some turn
                             | _ -> None)
                         |> Option.bind (takeParked sessionId)
                     | _ -> None
@@ -496,8 +638,12 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     member _.Cancel(sessionId: string) =
         if not (String.IsNullOrWhiteSpace sessionId) then
             lock gate (fun () ->
-                revokeRecovery sessionId
+                // Session deletion clears the parked interrupts first: no
+                // Host receipt will decide them any more.
                 interruptedInFlight.Remove sessionId |> ignore
+                revokeRecovery sessionId
+                dispatched.Remove sessionId |> ignore
+
                 match measurements.TryGetValue sessionId with
                 | true, recorded ->
                     measurements.Remove(sessionId) |> ignore
@@ -530,6 +676,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
 
             if removed then
                 diagnostic "latency-degeneration-idle-without-completion" sessionId
+
             match rejectedRun with
             | Some run ->
                 failRecovery sessionId run "interrupt was refused; source request became idle without terminal"
@@ -546,7 +693,7 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
     member _.Snapshot() : obj =
         lock gate (fun () ->
             let entries =
-                [| for KeyValue (sessionId, recorded) in measurements ->
+                [| for KeyValue(sessionId, recorded) in measurements ->
                        {| SessionId = sessionId
                           StartedAt = recorded.StartedAt
                           ThresholdMs = recorded.ThresholdMs
@@ -559,13 +706,17 @@ type LatencyWatchdog(ports: LatencyWatchdogPorts, detector: RequestLatencyDetect
             lock gate (fun () ->
                 disposed <- true
 
-                for KeyValue (_sessionId, recorded) in measurements do
+                for KeyValue(_sessionId, recorded) in measurements do
                     disposeQuietly recorded.Timer
 
                 measurements.Clear()
                 interruptedInFlight.Clear()
-                for session in recovering.Keys |> Seq.toArray do revokeRecovery session
-                recovering.Clear())
+
+                for session in recovering.Keys |> Seq.toArray do
+                    revokeRecovery session
+
+                recovering.Clear()
+                dispatched.Clear())
 
 /// Positional factory for JS consumers: the compiled record field names of
 /// LatencyWatchdogPorts are not a stable contract, the factory's parameter
@@ -586,12 +737,16 @@ module LatencyWatchdogFactory =
             { Now = now
               Schedule = schedule
               Abort = abort
-              Continue = fun session prompt onAccepted _lateRefused ->
-                  task {
-                      let! error = continueAction session prompt
-                      if String.IsNullOrEmpty error then onAccepted ()
-                      return error
-                  }
+              Continue =
+                fun session prompt onAccepted _lateRefused ->
+                    task {
+                        let! error = continueAction session prompt
+
+                        if String.IsNullOrEmpty error then
+                            onAccepted ()
+
+                        return error
+                    }
               Return = fun session reason -> diagnostic "latency-degeneration-returned" (session + ": " + reason)
               DropObserver = fun _ -> ()
               Managed = managed

@@ -1,49 +1,137 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { requestLatencyDetector } from 'wanxiangli/degeneration'
-import { withExecutablePlugin, bindManagedChild } from '../../verification-system/tests/support/plugin-fixture.mjs'
+import fc from 'fast-check'
+import {LatencyWatchdogFactory_createObservedLatencyWatchdog as create} from '../../../dist/wanxiangtong/opencode/request-latency/LatencyWatchdog.js'
 
-const model = { providerID: 'fixture', modelID: 'engineer-model' }
-const assistant = (sessionID, id, parentID, finish) => ({
-  id, sessionID, parentID, role: 'assistant', agent: 'engineer',
-  providerID: model.providerID, modelID: model.modelID,
-  time: { created: 1, ...(finish ? { completed: 2 } : {}) },
-  ...(finish ? { finish } : {}),
+const flush = async () => {for (let i = 0; i < 16; i++) await Promise.resolve()}
+
+// Two interrupts can be in flight for one session: the second measurement's
+// timer fires while the first interrupt's Host receipt is still pending. The
+// old state kept ONE recovery slot and ONE parked slot per session, so the
+// second interrupt destroyed the first one's parked obligation, and its
+// ACCEPTED receipt then found neither a measurement nor its own parked entry
+// and settled silently: the accepted AbortSession had stopped the session
+// loop, no continuation was sent and no Failed returned — the parent's Join
+// waited forever. Regression for both receipt orders.
+function rig() {
+  const events = [], timers = []
+  const receipts = []
+  const watchdog = create(
+    () => 12,
+    (_ms, fire) => {const t = {fire, Dispose() {}}; timers.push(t); return t},
+    () => new Promise(resolve => {receipts.push(resolve)}),
+    (_s, _t, accepted) => {events.push('continue'); return Promise.resolve('')},
+    () => true,
+    () => 'Continue.',
+    kind => events.push(kind),
+    (_s, reason) => events.push('returned:' + reason),
+    () => events.push('observer-dropped'),
+    {ThresholdMs: () => 10, ObserveCompleted: () => events.push('completed'),
+      ObserveCensored: () => events.push('censored'), Forget: () => {}},
+  )
+  return {watchdog, events, timers,
+    begin: run => watchdog.Begin('engineer', run),
+    stepEnd: run => watchdog.CompleteStep('engineer', run),
+    fire: () => timers.at(-1).fire(),
+    settle: (interrupt, accepted) => receipts[interrupt - 1](accepted)}
+}
+
+const twoInterruptWindow = async steps => {
+  const r = rig()
+  try {
+    r.begin('run-1')
+    r.fire()
+    r.stepEnd('run-1')
+    r.begin('run-2')
+    r.fire()
+    r.stepEnd('run-2')
+    for (const [interrupt, accepted] of steps) { r.settle(interrupt, accepted); await flush() }
+    await flush()
+    const continued = r.events.filter(e => e === 'continue').length
+    const returned = r.events.some(e => e.startsWith('returned:'))
+    const acceptedCount = steps.filter(([, a]) => a).length
+    // WHAT[latency-degeneration-015]: every accepted interrupt settles the
+    // session loop exactly once (one continuation; later accepted receipts are
+    // absorbed, never a second physical prompt), and a refused receipt stops
+    // nothing and stays silent. Silence after an acceptance is the lost
+    // continuation that used to strand the parent's Join.
+    assert.equal(continued, acceptedCount > 0 ? 1 : 0, JSON.stringify({steps, events: r.events}))
+    assert.equal(returned, false, JSON.stringify({steps, events: r.events}))
+    // Each accepted-parked request records exactly one censored sample; a
+    // refused one records none.
+    const censored = r.events.filter(e => e === 'censored').length
+    assert.equal(censored, acceptedCount, JSON.stringify({steps, events: r.events}))
+    assert.equal(r.events.includes('completed'), false)
+  } finally { r.watchdog.Dispose() }
+}
+
+test('WHAT[latency-degeneration-015] fast-check: an accepted interrupt settles once in every two-receipt order', async () => {
+  await fc.assert(fc.asyncProperty(
+    fc.tuple(fc.constantFrom(true, false), fc.constantFrom(true, false), fc.constantFrom(1, 2))
+      .map(([first, second, last]) => {
+        // (receipt outcome of gen1, receipt outcome of gen2, which arrives first)
+        return last === 1 ? [[1, first], [2, second]] : [[2, second], [1, first]]
+      }),
+    async steps => twoInterruptWindow(steps),
+  ), {seed: 0xDE6E015, numRuns: 24})
 })
 
-test('registered OpenCode event and tool hooks settle exact model latency and forget a deleted session', async () => {
-  await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
-    const sessionID = 'latency-hook-child'
-    const root = 'latency-hook-assignment'
-    requestLatencyDetector.Forget(sessionID)
-    await bindManagedChild(runtime, 'latency-hook-parent', sessionID, 'engineer')
-    const message = { id: root, sessionID, role: 'user', agent: 'engineer', model }
-    await hooks['chat.message']({ sessionID, messageID: root, agent: 'engineer', model },
-      { message, parts: [{ type: 'text', text: 'Complete the assigned change.' }] })
-    const emit = async info => {
-      runtime.pushHostMessage(sessionID, { info, parts: [] })
-      await hooks.event({ event: { type: 'message.updated', properties: { info } } })
-    }
-    try {
-      await emit(assistant(sessionID, 'latency-hook-run-1', root))
-      await emit(assistant(sessionID, 'latency-hook-run-1', root, 'tool-calls'))
-      assert.equal(requestLatencyDetector.Snapshot(sessionID).Seen, 1)
+test('WHAT[latency-degeneration-015] first receipt accepted, second refused: the loop is continued (regression)', async () => {
+  await twoInterruptWindow([[1, true], [2, false]])
+})
 
-      await emit(assistant(sessionID, 'latency-hook-run-2', root))
-      await emit(assistant(sessionID, 'latency-hook-run-1', root, 'tool-calls'))
-      assert.equal(requestLatencyDetector.Snapshot(sessionID).Seen, 1, 'an old step cannot settle the successor')
-      await hooks['tool.execute.before'](
-        { sessionID, tool: 'negotiate', callID: 'latency-hook-tool' },
-        { args: { questions: 'Which file should change?', scope: { kind: 'keepLast' } } },
-      )
-      assert.equal(requestLatencyDetector.Snapshot(sessionID).Seen, 2, 'the registered tool hook ends model time')
-      await emit(assistant(sessionID, 'latency-hook-run-2', root, 'tool-calls'))
-      assert.equal(requestLatencyDetector.Snapshot(sessionID).Seen, 2, 'the later step-end does not add tool time')
-      assert.deepEqual(runtime.abortedIds, [])
-      await hooks.event({ event: { type: 'session.deleted', properties: { sessionID } } })
-      assert.equal(requestLatencyDetector.Snapshot(sessionID).Seen, 0)
-    } finally {
-      requestLatencyDetector.Forget(sessionID)
-    }
-  })
+test('WHAT[latency-degeneration-015] first receipt refused, second accepted: the loop is continued (regression)', async () => {
+  await twoInterruptWindow([[2, false], [1, true]])
+})
+
+test('WHAT[latency-degeneration-015] both receipts accepted: one continuation, the second is absorbed with its sample', async () => {
+  await twoInterruptWindow([[1, true], [2, true]])
+  const r = rig()
+  try {
+    r.begin('run-1'); r.fire(); r.stepEnd('run-1')
+    r.begin('run-2'); r.fire(); r.stepEnd('run-2')
+    r.settle(1, true)
+    await flush()
+    assert.deepEqual(r.events.filter(e => e === 'continue').length, 1)
+    r.settle(2, true)
+    await flush()
+    assert.equal(r.events.filter(e => e === 'continue').length, 1,
+      'the second accepted receipt must not dispatch a second physical continuation')
+    assert.equal(r.events.includes('latency-degeneration-interrupt-absorbed'), true)
+    assert.equal(r.events.filter(e => e === 'censored').length, 2)
+  } finally { r.watchdog.Dispose() }
+})
+
+test('WHAT[latency-degeneration-015] both receipts refused: nothing is continued and nothing fails', async () => {
+  await twoInterruptWindow([[2, false], [1, false]])
+})
+
+// A normal user cancel (no watchdog interrupt in flight, no recovery) must
+// neither resume work nor report failure: the cancel stands.
+test('WHAT[latency-degeneration-015] a plain user cancel without an interrupt stays a cancel', async () => {
+  const r = rig()
+  try {
+    r.begin('run-1')
+    r.watchdog.OnProviderCancelled('engineer', 'run-1')
+    await flush()
+    assert.equal(r.events.includes('continue'), false)
+    assert.equal(r.events.some(e => e.startsWith('returned:')), false)
+    assert.equal(r.watchdog.Snapshot().length, 0)
+
+    // And a user cancel of a newer run while an older interrupt is still
+    // pending resumes the owed continuation exactly once (WHAT[011]).
+    const s = rig()
+    s.begin('run-1')
+    s.fire()
+    s.stepEnd('run-1')
+    s.begin('run-2')
+    s.watchdog.OnProviderCancelled('engineer', 'run-2')
+    await flush()
+    assert.equal(s.events.filter(e => e === 'continue').length, 1)
+    assert.equal(s.events.filter(e => e === 'censored').length, 1)
+    s.settle(1, true)
+    await flush()
+    assert.equal(s.events.filter(e => e === 'continue').length, 1,
+      'the already dispatched continuation cannot be dispatched again by the late receipt')
+  } finally { r.watchdog.Dispose() }
 })

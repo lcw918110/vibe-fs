@@ -1,6 +1,0 @@
-34c19de55c7d3e2ac55d54b79e0dfb95836ccc4750d31d47034cbcb1ffab288e  proposals/archive/2026-10-07/casebook-capture-k2a/vibe-fs-k2a-build-doc.log
-5d12e098c8fd824dcb9e2241e93b62365222830ed1076d309cd5f3122bcd5029  proposals/archive/2026-10-07/casebook-capture-k2a/vibe-fs-k2a-build.log
-492fff45e09f08e91920c0cb379463ceacaab6c2e37efa46cac8e19a6caed31b  proposals/archive/2026-10-07/casebook-capture-k2a/vibe-fs-k2a-doc-fresh.json
-b14b88d74f517630a3d77919b24647364423c22e3256e4c768a191a608cb3272  proposals/archive/2026-10-07/casebook-capture-k2a/vibe-fs-k2a-formal-final.log
-254de5bda694a7642bc361c634812a3e31d8341d4ce6206fc9118b6e71fcc515  proposals/archive/2026-10-07/casebook-capture-k2a/vibe-fs-k2a-formal-targeted.log
-e15948621faed28e82695233426b62ee21e625f4a4713367bf4d082473c3296a  proposals/archive/2026-10-07/casebook-capture-k2a/vibe-fs-k2a-fresh.json
