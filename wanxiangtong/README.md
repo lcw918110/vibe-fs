@@ -10,6 +10,8 @@
 
 `opencode/provider-request/` 解释请求消息、system 和临时咨询的投影视图；产品能力的组合仍在 `PluginTransformComposition`。`opencode/request-latency/` 解释请求边界，并拥有延迟计时、打断及续发观察者。两者由主插件真实调用，随主程序构建和分发，不是新的 npm 包。
 
+`opencode/compaction/` 拥有压缩请求标记、首轮配置观察和快照协调；Prefix 的已提交世代仍由核持有，事实追加由产品连接器完成。`opencode/session-transport/` 选择一次 SDK/HTTP 连接能力，提供发送、会话目录与快照视图；工作接纳、家族归属和交付决定仍由产品对象负责。
+
 其余 OpenCode 入口和工具仍在 `src/Wanxiangshu/OpenCode/`，omp 适配仍在 `src/Wanxiangshu/Omp/`；宿主侧辅助脚本仍在 `scripts/`。这些残留尚未完成三层切换。
 
 **程序待改：** 按真实调用路径识别宿主翻译、领域状态和无用桥接，过闸后经授权再迁移或删除。不能仅按文件名搬迁，也不能假定历史原型已具备生产行为。核侧出现的宿主专有语义同样需要沿实际接口核查，不能靠目录命名判断。

@@ -941,37 +941,3 @@ module SessionSnapshotPort =
                     with ex ->
                         return! Error ex.Message
                 }
-
-
-    let create (workspaceDirectory: string option) (input: obj) : ISessionSnapshotPort option =
-
-        if isNull input then
-            None
-        elif not (isNull input?client) && not (isNull input?client?session) then
-            Some(SdkSnapshotPort(input?client, workspaceDirectory) :> ISessionSnapshotPort)
-        elif not (isNull input?serverUrl) then
-            Some(HttpSnapshotPort(unbox<string> input?serverUrl) :> ISessionSnapshotPort)
-        elif not (isNull input?baseUrl) then
-            Some(HttpSnapshotPort(unbox<string> input?baseUrl) :> ISessionSnapshotPort)
-        elif not (isNull input?port) then
-            Some(HttpSnapshotPort(sprintf "http://127.0.0.1:%d" (unbox<int> input?port)) :> ISessionSnapshotPort)
-        else
-            None
-
-    /// HNI P-01: the OpenCode adapter's session port. Every session verb is
-    /// mapped onto the OpenCode host; the adapter owns the host payload
-    /// shape and the product only ever sees port records.
-    let createSessionPort (workspaceDirectory: string option) (input: obj) : ISessionPort option =
-
-        if isNull input then
-            None
-        elif not (isNull input?client) && not (isNull input?client?session) then
-            Some(SdkSessionPort(input?client, workspaceDirectory) :> ISessionPort)
-        elif not (isNull input?serverUrl) then
-            Some(HttpSessionPort(unbox<string> input?serverUrl) :> ISessionPort)
-        elif not (isNull input?baseUrl) then
-            Some(HttpSessionPort(unbox<string> input?baseUrl) :> ISessionPort)
-        elif not (isNull input?port) then
-            Some(HttpSessionPort(sprintf "http://127.0.0.1:%d" (unbox<int> input?port)) :> ISessionPort)
-        else
-            None

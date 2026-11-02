@@ -567,12 +567,6 @@ Execution/Delegation/Handle/CompletionCodec.fsi
 Execution/Delegation/Handle/CompletionCodec.fs
 Execution/Delegation/Handle/Controller.fsi
 Execution/Delegation/Handle/Controller.fs
-Execution/Delegation/Fork/ChildRun.fsi
-Execution/Delegation/Fork/ChildRun.fs
-Execution/Delegation/Fork/LifecycleSurface.fsi
-Execution/Delegation/Fork/LifecycleSurface.fs
-Execution/Delegation/Fork/ChildRunProjection.fsi
-Execution/Delegation/Fork/ChildRunProjection.fs
 Process/Deadline.fsi
 Process/Deadline.fs
 Process/DeadlineSurface.fsi
@@ -597,8 +591,6 @@ Execution/Session/Attachment/ReuseScope.fsi
 Execution/Session/Attachment/ReuseScope.fs
 Execution/Session/Attachment/AttachedRuntime.fsi
 Execution/Session/Attachment/AttachedRuntime.fs
-Execution/Delegation/Fork/Recovery.fsi
-Execution/Delegation/Fork/Recovery.fs
 Execution/Delegation/Fork/Runtime.fsi
 Execution/Delegation/Fork/Runtime.fs
 Execution/Fission/Admission.fsi
@@ -773,8 +765,8 @@ Context/Scope/Surface.fsi
 Context/Scope/Surface.fs
 Context/Scope/SnapshotScope.fsi
 Context/Scope/SnapshotScope.fs
-OpenCode/Host/SessionSnapshotPort.fsi
-OpenCode/Host/SessionSnapshotPort.fs
+../../wanxiangtong/opencode/session-transport/Snapshot.fsi
+../../wanxiangtong/opencode/session-transport/Snapshot.fs
 OpenCode/Host/TranscriptPort.fsi
 OpenCode/Host/TranscriptPort.fs
 OpenCode/Host/ModelCatalogPort.fsi
@@ -793,8 +785,10 @@ Foundation/HostSendContract.fsi
 Foundation/HostSendContract.fs
 OpenCode/Host/OpenCodeContract.fsi
 OpenCode/Host/OpenCodeContract.fs
-OpenCode/Host/OpenCodePort.fsi
-OpenCode/Host/OpenCodePort.fs
+../../wanxiangtong/opencode/session-transport/Transport.fsi
+../../wanxiangtong/opencode/session-transport/Transport.fs
+../../wanxiangtong/opencode/session-transport/Connection.fsi
+../../wanxiangtong/opencode/session-transport/Connection.fs
 OpenCode/Host/SessionExecutionBinding.fsi
 OpenCode/Host/SessionExecutionBinding.fs
 OpenCode/Host/ModelRoutingSurface.fsi
@@ -980,8 +974,8 @@ Interaction/Repair/InteractionRepair.fsi
 Interaction/Repair/InteractionRepair.fs
 Composition/Turn/OrdinaryTurnWorkflow.fsi
 Composition/Turn/OrdinaryTurnWorkflow.fs
-OpenCode/Host/HostCompactionGate.fsi
-OpenCode/Host/HostCompactionGate.fs
+Context/Prefix/PrefixReanchor.fsi
+Context/Prefix/PrefixReanchor.fs
 Context/Prefix/AttemptSettlement.fsi
 Context/Prefix/AttemptSettlement.fs
 Context/Prefix/WireReconciliation.fsi
@@ -1006,8 +1000,8 @@ Execution/Fission/Surface.fsi
 Execution/Fission/Surface.fs
 OpenCode/Host/FissionHostSurface.fsi
 OpenCode/Host/FissionHostSurface.fs
-OpenCode/Host/HostCompactionObserver.fsi
-OpenCode/Host/HostCompactionObserver.fs
+../../wanxiangtong/opencode/compaction/OpenCodeCompaction.fsi
+../../wanxiangtong/opencode/compaction/OpenCodeCompaction.fs
 Execution/Delegation/SyncDelegate/OpenCode/Observation.fsi
 Execution/Delegation/SyncDelegate/OpenCode/Observation.fs
 OpenCode/Codec/ToolHostCodec.fsi

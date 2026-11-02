@@ -75,8 +75,6 @@
     <Compile Include="Execution/Delegation/Handle/FoldSurface.fs" />
     <Compile Include="Execution/Delegation/HostTurnObservedSurface.fsi" />
     <Compile Include="Execution/Delegation/HostTurnObservedSurface.fs" />
-    <Compile Include="Execution/Delegation/Fork/LifecycleSurface.fsi" />
-    <Compile Include="Execution/Delegation/Fork/LifecycleSurface.fs" />
     <Compile Include="Execution/Delegation/Fork/Surface.fsi" />
     <Compile Include="Execution/Delegation/Fork/Surface.fs" />
     <Compile Include="Execution/Delegation/Fork/Host/Restart.fsi" />

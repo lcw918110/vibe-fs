@@ -419,21 +419,16 @@ module ChangeSurface =
             box {| kind = "Reject"; reason = reason |}
 
     let private foldPublishClaimed (projection: OrchestratorProjection) (managerJobId: ManagerJobId) (payload: obj) =
-        match OrchestratorProjection.tryFind managerJobId projection with
-        | None -> Error "publish claimed for unknown job"
-        | Some job ->
-            match job.RebasedCandidateReady with
-            | None -> Error "publish claimed for a job with no rebased candidate (ORCH-004)"
-            | Some rebased ->
-                match decodePublishClaimed payload with
-                | Error err -> Error err
-                | Ok claim ->
-                    if claim.RebasedCommit <> rebased.RebasedCommit then
-                        Error "publish claimed commit does not match admitted rebased commit"
-                    else
-                        // Latest-event view identical to Fold: a retried publish
-                        // with fresh evidence supersedes the earlier claim.
-                        Ok(OrchestratorProjection.recordPublishClaimed managerJobId claim projection)
+        match decodePublishClaimed payload with
+        | Error error -> Error error
+        | Ok claim ->
+            OrchestratorFactFold.fold projection
+                (OrchestratorFactCases.PublishClaimed
+                    {| ManagerJobId = managerJobId
+                       TargetRef = claim.TargetRef
+                       RebasedCommit = claim.RebasedCommit
+                       ExpectedHead = claim.ExpectedHead |})
+            |> Result.mapError OrchestratorFoldRejection.message
 
     let private applyEvent (projection: OrchestratorProjection) (event: obj) : Result<OrchestratorProjection, string> =
         let kind = stringField event [ "kind"; "case"; "type" ]

@@ -73,7 +73,8 @@ module HostSignalBootstrap =
     /// functions are called internally by the binding helpers. Handing them out as
     /// well made the signal stack look like it had six more entry points than it does.
     type WiredSignals =
-        { RegisterOwned: string -> unit
+        { Compaction: OpenCodeCompaction
+          RegisterOwned: string -> unit
           CancelSignals: SessionId seq -> unit
           BindActiveRun: SessionId -> Role -> string option -> unit
           CurrentPhysicalUserMessage: string -> string option
@@ -157,12 +158,8 @@ module HostSignalBootstrap =
                 HostTurnObserver.observe observeTurnWorkflow sessionPort rootWorkspace eventPort journal scope
 
 
-            let compactionProbe: CompactionProbe =
-                { TryClaimStartupProbe = (fun () -> scope.TryClaimStartupProbe())
-                  ReadCompactionSettingGap = (fun () -> scope.CompactionSettingGap)
-                  IsStartupProbeOpen = (fun () -> scope.IsStartupProbeOpen) }
-
-            let onSnapshot = HostCompactionObserver.observe compactionProbe journal
+            let compaction = OpenCodeCompaction(journal)
+            let onSnapshot session messages = compaction.ObserveSnapshot(session, messages)
 
             let reconciler =
                 Reconciler.Scheduler(
@@ -1469,7 +1466,8 @@ module HostSignalBootstrap =
                 ids |> Seq.iter (fun id -> signalRouter.UnregisterOwned id)
 
             return
-                { RegisterOwned = registerOwned
+                { Compaction = compaction
+                  RegisterOwned = registerOwned
                   CancelSignals = cancelSignals
                   BindActiveRun = bindActiveRun
                   CurrentPhysicalUserMessage =

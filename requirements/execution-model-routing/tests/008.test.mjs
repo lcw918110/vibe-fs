@@ -45,11 +45,9 @@ const source = async (relative) => readFile(new URL(`../../../${relative}`, impo
 
 test('WHAT[execution-model-routing-008] EMR_008_host_inventory_no_longer_exposes_model_binding_authority', async () => {
   const managed = await source('src/Wanxiangshu/OpenCode/Host/ManagedAgentConfig.fs')
-  const port = await source('src/Wanxiangshu/OpenCode/Host/OpenCodePort.fs')
   const wiring = await source('src/Wanxiangshu/OpenCode/Plugin/PluginSessionWiring.fs')
 
   assert.doesNotMatch(managed, /tryBoundModel|tryOpencodeModel|DuplicatePairModel|liveInventory|Model:\s*string/)
-  assert.doesNotMatch(port, /ManagedAgentConfig\.tryBoundModel/)
   assert.doesNotMatch(wiring, /ManagedAgentInventory|tryOpencodeModel|promptModelFor/)
 })
 }

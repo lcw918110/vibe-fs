@@ -727,6 +727,10 @@ export async function runExternalConsumer({
   // 复用所选库候选的公开消费者，导入仍从实际主体包内解析。
   fs.copyFileSync(path.join(REPO_ROOT, 'wanxiangli/scripts/tests/fission-lifecycle-consumer.mjs'),
     path.join(targetPkgDir, '.verify-fission-lifecycle.mjs'))
+  for (const name of ['prefix-history', 'child-run-set', 'durable-handles', 'change']) {
+    fs.copyFileSync(path.join(REPO_ROOT, `wanxiangli/scripts/tests/${name}-consumer.mjs`),
+      path.join(targetPkgDir, `.verify-${name}.mjs`))
+  }
 
   // 探针位于实际主体包内，裸导入只能使用随包交付的库。
   fs.writeFileSync(path.join(targetPkgDir, '.verify-library-entries.mjs'), [
@@ -1278,6 +1282,9 @@ export async function runExternalConsumer({
       assert.deepEqual(entries.serialOrder, ['first', 'second']);
       assert.equal(entries.serialResult, 2);
       await import(pathToFileURL(path.join(pkgRoot, '.verify-fission-lifecycle.mjs')).href);
+      for (const name of ['prefix-history', 'child-run-set', 'durable-handles', 'change']) {
+        await import(pathToFileURL(path.join(pkgRoot, '.verify-' + name + '.mjs')).href);
+      }
       assert.equal(entries.fileLockHeld, true);
       assert.equal(entries.fileLockReleased, true);
       assert.ok(entries.lockDependency.startsWith(fs.realpathSync(path.dirname(lifecycleDependency)) + path.sep), 'file-lock must resolve its shipped runtime dependency');
@@ -1286,6 +1293,9 @@ export async function runExternalConsumer({
     } finally {
       fs.unlinkSync(entryProbe);
       fs.unlinkSync(path.join(pkgRoot, '.verify-fission-lifecycle.mjs'));
+      for (const name of ['prefix-history', 'child-run-set', 'durable-handles', 'change']) {
+        fs.unlinkSync(path.join(pkgRoot, '.verify-' + name + '.mjs'));
+      }
     }
 
     assert.ok(fs.readFileSync(enLaw, 'utf8').trim().length > 0, 'en common law is empty');

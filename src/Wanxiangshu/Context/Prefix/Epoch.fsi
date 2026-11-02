@@ -10,13 +10,7 @@ type ArchivedScope =
       ArchiveRef: BlobRef
       ArchiveDigest: BlobDigest }
 
-type ActivePrefixEpoch =
-    { EpochId: PrefixEpochId
-      ReanchoredRuns: Set<ProviderRunIdentity>
-      ReanchoredTenures: Set<string>
-      ReanchoredScopes: Set<string>
-      LastScopeArchive: ArchivedScope option
-      ScopeQuestions: Map<string, string> }
+type ActivePrefixEpoch
 
 [<RequireQualifiedAccess>]
 type PrefixFoldRejection =
@@ -33,6 +27,13 @@ type PrefixReanchorCandidate =
 
 module PrefixEpochProjection =
     val empty: ActivePrefixEpoch
+    val ofGeneration: generation: obj -> ActivePrefixEpoch
+    val epochId: state: ActivePrefixEpoch -> PrefixEpochId
+    val scopeCount: state: ActivePrefixEpoch -> int
+    val reanchoredScopes: state: ActivePrefixEpoch -> string array
+    val reanchoredTenures: state: ActivePrefixEpoch -> string array
+    val reanchoredRuns: state: ActivePrefixEpoch -> ProviderRunIdentity array
+    val lastScopeArchive: state: ActivePrefixEpoch -> ArchivedScope option
 
     val applyReanchor:
         previousEpoch: PrefixEpochId ->

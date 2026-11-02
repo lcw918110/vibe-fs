@@ -40,11 +40,12 @@ module AdmittedWork =
     val id: AdmittedWork -> HandleWorkId
     val logicalRunId: AdmittedWork -> LogicalRunId
 
+[<Sealed>]
 type AgentLinkageProjection =
-    { Handles: Map<HandleId, HandleRecord>
-      NextCreationOrder: int
-      Works: Map<HandleWorkId, HandleWork>
-      LegacyWorkHandles: Set<HandleId> }
+    member Handles: Map<HandleId, HandleRecord>
+    member NextCreationOrder: int
+    member Works: Map<HandleWorkId, HandleWork>
+    member LegacyWorkHandles: Set<HandleId>
 
 type HandleTransitionRejection =
     | UnknownHandle
@@ -60,6 +61,8 @@ type HandleTransitionRejection =
 
 module HandleProjection =
     val empty: AgentLinkageProjection
+    val native: AgentLinkageProjection -> obj
+    val filterBindings: (HandleRecord -> bool) -> AgentLinkageProjection -> AgentLinkageProjection
 
     val admitWork:
         SessionId ->
@@ -150,3 +153,13 @@ module HandleProjection =
     val activeHandles: current: AgentLinkageProjection -> HandleRecord list
     val tryFindByChildSession: childSessionId: SessionId -> current: AgentLinkageProjection -> HandleRecord option
     val linkedChildren: current: AgentLinkageProjection -> HandleRecord list
+
+    val handleValue: HandleId -> obj
+    val handleOf: obj -> HandleId
+    val workValue: HandleWorkId -> obj
+    val workOf: obj -> HandleWorkId
+    val completionOf: obj -> HandleCompletion
+    val reasonOf: string -> HandleAbandonReason
+    val recordValue: HandleRecord -> obj
+    val recordOf: obj -> HandleRecord
+    val rejectionOf: string -> HandleTransitionRejection

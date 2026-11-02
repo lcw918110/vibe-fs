@@ -424,8 +424,8 @@ module PluginTransformComposition =
                 let fact =
                     ContextFact.TenureReanchored
                         {| SessionId = sessionId
-                           PreviousEpochId = epoch.EpochId
-                           NextEpochId = PrefixEpochId.next epoch.EpochId
+                           PreviousEpochId = (PrefixEpochProjection.epochId epoch)
+                           NextEpochId = PrefixEpochId.next (PrefixEpochProjection.epochId epoch)
                            WorkId = tenure.WorkId
                            IncumbencyId = tenure.IncumbencyId |}
 

@@ -1,3 +1,5 @@
+import { PrefixEpochProjection_epochId as prefixEpochId, PrefixEpochProjection_lastScopeArchive as lastScopeArchive, PrefixEpochProjection_scopeQuestionReceipt as scopeQuestionReceipt } from '../../../dist/Context/Prefix/Epoch.js'
+import { PrefixEpochIdModule_value as epochValue } from '../../../dist/Foundation/Identity.js'
 // PRODUCT-RETIRED compat-pass (2026-10-29): standalone resetScope tool (c7a80d58) and remainingScopeTurnsEstimate billing are not product contract; affected cases are test.skip, steer asserts follow scope-steer/missing-estimate (newScopeRetentionBudget). See scope-retention.
 import { JournalHandle__get_Journal } from '../../../dist/Persistence/Journal/Surface.js'
 import test from 'node:test'
@@ -963,7 +965,7 @@ test.skip('WHAT[context-compression-043] OpenCode resetScope commits durable arc
     const sessionProj1 = AgentProjection_tryFind(SessionIdModule_create(sid), snap1.AgentProjections)
     const epoch1 = sessionProj1?.PrefixEpoch
     assert.ok(epoch1, 'PrefixEpoch must exist in projection')
-    assert.equal(epoch1.EpochId?.fields?.[0] ?? epoch1.EpochId, 1n, 'first reset advances epoch to 1n')
+    assert.equal(epochValue(prefixEpochId(epoch1)), 1n, 'first reset advances epoch to 1n')
 
     // 4. Verify single-drain semantics: sealed snapshot must have been discarded from store
     const drained = outboundViewStore.tryGetSealed(sid)
@@ -1005,7 +1007,7 @@ test.skip('WHAT[context-compression-043] OpenCode resetScope commits durable arc
     assert.equal(String(outcomeReplay), 'Scope reset. Objective: first verified scope objective')
     const snapReplay = AgentJournalModule_snapshot(JournalHandle__get_Journal(runtime.journal))
     const sessionProjReplay = AgentProjection_tryFind(SessionIdModule_create(sid), snapReplay.AgentProjections)
-    assert.equal(sessionProjReplay?.PrefixEpoch?.EpochId?.fields?.[0] ?? sessionProjReplay?.PrefixEpoch?.EpochId, 1n, 'replay must not advance epoch')
+    assert.equal(epochValue(prefixEpochId(sessionProjReplay.PrefixEpoch)), 1n, 'replay must not advance epoch')
   })
 })
 

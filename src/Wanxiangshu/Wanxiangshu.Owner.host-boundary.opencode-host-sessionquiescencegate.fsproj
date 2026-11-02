@@ -7,6 +7,7 @@
     <WanxiangshuOwnerLocalityKind>runtime</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="Wanxiangshu.Owner.execution-model-routing.opencode-host-opencodeport-adapter.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.action-affordance.opencode-tools-managedagent.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-neutral-ports.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj"/>
@@ -16,8 +17,10 @@
     <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-session-contract.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.participant-identity.foundation-roles.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.intra-participant-parallelism.foundation-taskresult.fsproj"/>
-    <Compile Include="OpenCode/Host/SessionSnapshotPort.fsi"/>
-    <Compile Include="OpenCode/Host/SessionSnapshotPort.fs"/>
+    <Compile Include="../../wanxiangtong/opencode/session-transport/Snapshot.fsi"/>
+    <Compile Include="../../wanxiangtong/opencode/session-transport/Snapshot.fs"/>
+    <Compile Include="../../wanxiangtong/opencode/session-transport/Connection.fsi"/>
+    <Compile Include="../../wanxiangtong/opencode/session-transport/Connection.fs"/>
     <Compile Include="OpenCode/Host/TranscriptPort.fsi"/>
     <Compile Include="OpenCode/Host/TranscriptPort.fs"/>
     <Compile Include="OpenCode/Host/ModelCatalogPort.fsi"/>

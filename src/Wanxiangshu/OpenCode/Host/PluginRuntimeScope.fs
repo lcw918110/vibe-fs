@@ -75,23 +75,6 @@ type PluginRuntimeScope
     // DSL-MUTABLE: single-flight — one-shot restart guidance latch
     let mutable restartGuidancePending = false
 
-    /// HOST-006: the first compaction setting the config hook could not establish.
-    ///
-    /// Recorded rather than thrown, because HOST-006's verdict needs both halves — the
-    /// settings and the first turn's observation. Throwing at config time would report
-    /// the symptom before the probe could say whether anything actually compacted.
-    // DSL-MUTABLE: resource — HOST-006 compaction setting gap observation
-    let mutable compactionSettingGap: Wanxiangshu.Host.CompactionSetting option = None
-
-    /// HOST-006 startup probe latch, with its own gate.
-    ///
-    /// Not sharing `toolRuntimeGate`: two unrelated invariants behind one lock read as
-    /// if they were related, and the next person to touch either has to prove they are
-    /// not.
-    let startupProbeGate = obj ()
-    // DSL-MUTABLE: single-flight — HOST-006 startup probe one-shot latch
-    let mutable startupProbeDone = false
-
     // DSL-MUTABLE: resource — message-visibility hub attachment slot
     let mutable messageVisibility: MessageVisibilityHub option = None
     // DSL-MUTABLE: resource — sync-delegate runtime attachment slot
@@ -258,38 +241,6 @@ type PluginRuntimeScope
 
     member this.ConsumeAttemptPlan (sessionId: SessionId) (providerRun: ProviderRunIdentity) =
         recovery.ConsumeAttemptPlan sessionId providerRun
-
-    /// HOST-006 prevention layer: the config hook's finding.
-    ///
-    /// Written once at config time, read once by the startup probe. Not a collection
-    /// because there is one verdict per plugin instance — the settings are
-    /// instance-global (`config/config.ts:607`), not per session.
-    member _.RecordCompactionSettingGap(gap: Wanxiangshu.Host.CompactionSetting option) = compactionSettingGap <- gap
-
-    member _.CompactionSettingGap = compactionSettingGap
-
-    /// HOST-006 startup probe: has it already run.
-    ///
-    /// One probe per plugin instance, not per session. The claim it tests is about the
-    /// Host build, and the first managed session's first turn is the cheapest place to
-    /// observe it — running it again on every later session would keep asking a
-    /// question already answered while risking a false refusal from a legitimate
-    /// `/compact`.
-    ///
-    /// `TryClaimStartupProbe` returns true exactly once, so the caller cannot
-    /// accidentally judge twice from concurrent reconcile passes.
-    member _.TryClaimStartupProbe() : bool =
-        lock startupProbeGate (fun () ->
-            if startupProbeDone then
-                false
-            else
-                startupProbeDone <- true
-                true)
-
-    /// Cheap read for the common case: after the probe has run, every later reconcile
-    /// pass skips the judgement entirely rather than building a verdict and discarding
-    /// it.
-    member _.IsStartupProbeOpen = lock startupProbeGate (fun () -> not startupProbeDone)
 
     member _.AttachToolRuntime(owner: ISessionRuntimeOwner) =
         lock toolRuntimeGate (fun () -> toolRuntime <- Some owner)

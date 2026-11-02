@@ -148,11 +148,11 @@ module ScopeReset =
                                     AgentProjection.tryFind sessionId journalSnapshot.AgentProjections
                                     |> Option.bind (fun session -> session.PrefixEpoch)
                                     |> Option.defaultValue PrefixEpochProjection.empty
-                                let nextEpoch = PrefixEpochId.next epoch.EpochId
+                                let nextEpoch = PrefixEpochId.next (PrefixEpochProjection.epochId epoch)
                                 let fact =
                                     ContextFact.ScopeReanchored
                                         {| SessionId = sessionId
-                                           PreviousEpochId = epoch.EpochId
+                                           PreviousEpochId = (PrefixEpochProjection.epochId epoch)
                                            NextEpochId = nextEpoch
                                            CallId = callId
                                            ArchiveRef = Some receipt.BlobRef
@@ -163,7 +163,7 @@ module ScopeReset =
                                 | Error failure -> raise (JournalAppendException failure)
                                 | Ok _ -> ()
                                 outboundViewStore?discardSealed (ctx.SessionId) |> ignore
-                                let nextScopeNumber = Set.count epoch.ReanchoredScopes + 1
+                                let nextScopeNumber = PrefixEpochProjection.scopeCount epoch + 1
                                 let nextEpochKey = string nextScopeNumber
                                 let budget = max 0 retentionBudget
                                 Surface.resetScopeState ctx.SessionId budget
@@ -173,7 +173,7 @@ module ScopeReset =
                                 if budget >= 1 then
                                     scopeRetention?seed (ctx.SessionId, budget) |> ignore
                                     Surface.setRetentionBudget ctx.SessionId budget
-                                if not (Set.isEmpty epoch.ReanchoredScopes) then
+                                if PrefixEpochProjection.scopeCount epoch > 0 then
                                     Surface.beginAskPreviousScope ctx.SessionId
                                 Surface.setHasPreviousScope ctx.SessionId true
                                 let! outstanding = outstandingReminder journal snapshotPort sessionId

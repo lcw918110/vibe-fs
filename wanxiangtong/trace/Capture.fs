@@ -8,6 +8,7 @@ open Fable.Core.JsInterop
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Context.Companion
+open Wanxiangshu.Context.Prefix
 open Wanxiangshu.Execution.Session.Recovery
 open Wanxiangshu.Foundation
 open Wanxiangshu.Host
@@ -322,7 +323,7 @@ module XTraceCapture =
         AgentJournal.snapshot journal
         |> fun projection -> AgentProjection.tryFind sessionId projection.AgentProjections
         |> Option.bind (fun session -> session.PrefixEpoch)
-        |> Option.map (fun epoch -> Set.count epoch.ReanchoredRuns)
+        |> Option.map (PrefixEpochProjection.reanchoredRuns >> Array.length)
         |> Option.defaultValue 0
 
     /// COMPANION-003 / COMPANION-007: synchronise the XTrace with the provider's

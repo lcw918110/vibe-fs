@@ -97,32 +97,6 @@ type PluginRuntimeScope =
 
     member ConsumeAttemptPlan: sessionId: SessionId -> providerRun: ProviderRunIdentity -> AttemptPlan option
 
-    /// HOST-006 prevention layer: the config hook's finding.
-    ///
-    /// Written once at config time, read once by the startup probe. Not a collection
-    /// because there is one verdict per plugin instance — the settings are
-    /// instance-global (`config/config.ts:607`), not per session.
-    member RecordCompactionSettingGap: gap: CompactionSetting option -> unit
-
-    member CompactionSettingGap: CompactionSetting option
-
-    /// HOST-006 startup probe: has it already run.
-    ///
-    /// One probe per plugin instance, not per session. The claim it tests is about the
-    /// Host build, and the first managed session's first turn is the cheapest place to
-    /// observe it — running it again on every later session would keep asking a
-    /// question already answered while risking a false refusal from a legitimate
-    /// `/compact`.
-    ///
-    /// `TryClaimStartupProbe` returns true exactly once, so the caller cannot
-    /// accidentally judge twice from concurrent reconcile passes.
-    member TryClaimStartupProbe: unit -> bool
-
-    /// Cheap read for the common case: after the probe has run, every later reconcile
-    /// pass skips the judgement entirely rather than building a verdict and discarding
-    /// it.
-    member IsStartupProbeOpen: bool
-
     member AttachToolRuntime: owner: ISessionRuntimeOwner -> unit
 
     member TrackSubscription: value: IDisposable option -> unit

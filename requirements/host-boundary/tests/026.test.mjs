@@ -80,7 +80,6 @@ test('WHAT[host-boundary-026] host session contract compiles independently witho
     'OpenCode/Host/HookPolicy.fs',
     'OpenCode/Host/HookPolicySurface.fs',
     'OpenCode/Host/Sessions.fs',
-    'OpenCode/Host/SessionSnapshotPort.fs',
     'OpenCode/Host/SessionSnapshotSurface.fs',
     'OpenCode/Host/SessionQuiescenceGate.fs',
     'OpenCode/Host/QuiescenceSurface.fs',

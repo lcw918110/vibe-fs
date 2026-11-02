@@ -3,6 +3,8 @@ namespace Wanxiangshu.Change
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Mission.Work
+open Fable.Core
+open Fable.Core.JsInterop
 
 [<RequireQualifiedAccess>]
 type TerminalOutcome =
@@ -71,9 +73,7 @@ type WorktreeReconciliationDecision =
     | AdoptCreated
     | Reject of WorktreeReconciliationFailure
 
-type OrchestratorProjection =
-    { Jobs: Map<ManagerJobId, ManagerJobProjection>
-      WorktreeEffects: Map<WorktreeIdentity, WorktreeEffectStatus> }
+type OrchestratorProjection = private { History: obj }
 
 [<RequireQualifiedAccess>]
 type RebasedCandidateReality =
@@ -145,377 +145,167 @@ type ClaimReentry =
     | RunLoop
     | Refused of ClaimReentryRefusal
 
-/// The publication decisions Change owns.
-///
-/// Publishing is Change's responsibility: which candidate may publish, which
-/// binding is still valid, and what a fast-forward outcome means. These are
-/// pure decisions over durable facts and the observed Git reality, so they live
-/// in the owner as typed answers — the host never re-reads a string protocol to
-/// learn what a library meant.
+module private NativePublication =
+    [<Fable.Core.Import("ChangePublication", "wanxiangli/change")>]
+    let constructor: obj = jsNative
+    let value: obj = Fable.Core.JsInterop.createNew constructor ()
+    let rebased (ready: {| RebasedCommit: CommitHash; TargetHeadSnapshot: CommitHash |}) = createObj [ "commit" ==> CommitHash.value ready.RebasedCommit; "target" ==> CommitHash.value ready.TargetHeadSnapshot ]
+    let optional mapping value = value |> Option.map (mapping >> box) |> Option.defaultValue null
+    let record (job: ManagerJobProjection) = createObj [ "rebased" ==> optional rebased job.RebasedCandidateReady; "terminal" ==> optional (fun _ -> true) job.Terminal; "claim" ==> optional (fun _ -> true) job.PublishClaimed ]
+
 [<RequireQualifiedAccess>]
 module PublicationLaw =
-    /// A terminal job is only cleaned up, a claimed one re-enters its claim,
-    /// anything else resumes the manager loop.
     let resume (record: ManagerJobProjection option) : RecoveryStep =
-        match record with
-        | Some job when job.Terminal.IsSome -> RecoveryStep.CleanUp
-        | Some job when job.PublishClaimed.IsSome -> RecoveryStep.ReenterClaim
-        | _ -> RecoveryStep.RunLoop
-
-    /// Re-entering a durable publish claim after restart: the claim must target
-    /// the job's own ref and still pin the latest rebased candidate exactly.
-    let reenterClaim
-        (jobTargetRef: TargetRef)
-        (claimTargetRef: TargetRef)
-        (claimRebased: CommitHash)
-        (claimExpected: CommitHash)
-        (record: ManagerJobProjection option)
-        : ClaimReentry =
-        let rebasedCandidateReentry (job: ManagerJobProjection) =
-            match job.RebasedCandidateReady with
-            | None -> ClaimReentry.Refused ClaimReentryRefusal.MissingRebased
-            | Some rebased when
-                rebased.RebasedCommit = claimRebased
-                && rebased.TargetHeadSnapshot = claimExpected
-                ->
-                ClaimReentry.VerifyHead
-            | Some _ -> ClaimReentry.RunLoop
-
-        match record with
-        | _ when claimTargetRef <> jobTargetRef -> ClaimReentry.Refused ClaimReentryRefusal.TargetMismatch
-        | None -> ClaimReentry.Refused ClaimReentryRefusal.MissingRecord
-        | Some job -> rebasedCandidateReentry job
-
-    /// A prepared candidate publishes only when the latest rebased record pins
-    /// exactly this candidate on exactly this target head; otherwise it rebases.
-    let admitCandidate
-        (candidate: CommitHash)
-        (target: CommitHash)
-        (rebased:
-            {| RebasedCommit: CommitHash
-               TargetHeadSnapshot: CommitHash |} option)
-        : CandidateAdmission =
-        match rebased with
-        | Some ready when ready.RebasedCommit = candidate && ready.TargetHeadSnapshot = target ->
-            CandidateAdmission.PublishCertified
-        | Some _ -> CandidateAdmission.Rebase "TargetAdvanced"
-        | None -> CandidateAdmission.Rebase "InitialRebaseRequired"
-
-    /// Certified publish evidence must match the rebased pin: candidate first,
-    /// then snapshot.
-    let certify
-        (candidate: CommitHash)
-        (expectedHead: CommitHash)
-        (rebased:
-            {| RebasedCommit: CommitHash
-               TargetHeadSnapshot: CommitHash |} option)
-        : PublicationCertification =
-        match rebased with
-        | None -> PublicationCertification.MissingRebased
-        | Some ready when candidate <> ready.RebasedCommit -> PublicationCertification.CandidatePinMismatch
-        | Some ready when expectedHead <> ready.TargetHeadSnapshot -> PublicationCertification.SnapshotPinMismatch
-        | Some _ -> PublicationCertification.Certified
-
-    /// A failed rebase with unmerged files is this job's conflict; without
-    /// conflicted files the failure is not a conflict and the job fails.
+        match unbox<string> (NativePublication.value?resume(NativePublication.optional NativePublication.record record)) with
+        | "CleanUp" -> RecoveryStep.CleanUp | "ReenterClaim" -> RecoveryStep.ReenterClaim | _ -> RecoveryStep.RunLoop
+    let reenterClaim (jobTargetRef: TargetRef) (claimTargetRef: TargetRef) (claimRebased: CommitHash) (claimExpected: CommitHash) (record: ManagerJobProjection option) : ClaimReentry =
+        match unbox<string> (NativePublication.value?reenterClaim(TargetRef.value jobTargetRef, TargetRef.value claimTargetRef, CommitHash.value claimRebased, CommitHash.value claimExpected, NativePublication.optional NativePublication.record record)) with
+        | "TargetMismatch" -> ClaimReentry.Refused ClaimReentryRefusal.TargetMismatch
+        | "MissingRecord" -> ClaimReentry.Refused ClaimReentryRefusal.MissingRecord
+        | "MissingRebased" -> ClaimReentry.Refused ClaimReentryRefusal.MissingRebased
+        | "VerifyHead" -> ClaimReentry.VerifyHead | _ -> ClaimReentry.RunLoop
+    let admitCandidate (candidate: CommitHash) (target: CommitHash) (rebased: {| RebasedCommit: CommitHash; TargetHeadSnapshot: CommitHash |} option) : CandidateAdmission =
+        match unbox<string> (NativePublication.value?admitCandidate(CommitHash.value candidate, CommitHash.value target, NativePublication.optional NativePublication.rebased rebased)) with
+        | "PublishCertified" -> CandidateAdmission.PublishCertified | reason -> CandidateAdmission.Rebase reason
+    let certify (candidate: CommitHash) (expectedHead: CommitHash) (rebased: {| RebasedCommit: CommitHash; TargetHeadSnapshot: CommitHash |} option) : PublicationCertification =
+        match unbox<string> (NativePublication.value?certify(CommitHash.value candidate, CommitHash.value expectedHead, NativePublication.optional NativePublication.rebased rebased)) with
+        | "MissingRebased" -> PublicationCertification.MissingRebased
+        | "CandidatePinMismatch" -> PublicationCertification.CandidatePinMismatch
+        | "SnapshotPinMismatch" -> PublicationCertification.SnapshotPinMismatch
+        | _ -> PublicationCertification.Certified
     let rebaseFailed (conflictFiles: string list) : ConflictOwnership =
-        match conflictFiles with
-        | [] -> ConflictOwnership.NotAConflict
-        | files -> ConflictOwnership.Conflict files
-
-    /// Inside the publish window: the evidence must belong to this job and
-    /// target, and the target head must still be the CAS expectation.
-    let checkPublication
-        (jobId: ManagerJobId)
-        (jobTargetRef: TargetRef)
-        (evidenceJobId: ManagerJobId)
-        (evidenceTargetRef: TargetRef)
-        (evidenceExpectedHead: CommitHash)
-        (current: CommitHash)
-        : PublicationCheck =
-        if evidenceJobId <> jobId then
-            PublicationCheck.JobMismatch
-        elif evidenceTargetRef <> jobTargetRef then
-            PublicationCheck.TargetMismatch
-        elif current <> evidenceExpectedHead then
-            PublicationCheck.CasMismatch
-        else
-            PublicationCheck.Matched
-
-    /// Only the pinned candidate counts as landed; the declared target-moved
-    /// error is a retryable miss, never a failure.
-    let fastForward
-        (merge: Result<CommitHash, string>)
-        (candidate: CommitHash)
-        (targetMovedError: string)
-        : FastForwardOutcome =
-        match merge with
-        | Ok landed when landed = candidate -> FastForwardOutcome.Landed landed
-        | Ok landed -> FastForwardOutcome.LandedMismatch landed
-        | Error error when error = targetMovedError -> FastForwardOutcome.TargetMoved
-        | Error error -> FastForwardOutcome.Failed error
+        match unbox<string> (NativePublication.value?rebaseFailed(List.toArray conflictFiles)) with
+        | "Conflict" -> ConflictOwnership.Conflict conflictFiles | _ -> ConflictOwnership.NotAConflict
+    let checkPublication (jobId: ManagerJobId) (jobTargetRef: TargetRef) (evidenceJobId: ManagerJobId) (evidenceTargetRef: TargetRef) (evidenceExpectedHead: CommitHash) (current: CommitHash) : PublicationCheck =
+        match unbox<string> (NativePublication.value?checkPublication(ManagerJobId.value jobId, TargetRef.value jobTargetRef, ManagerJobId.value evidenceJobId, TargetRef.value evidenceTargetRef, CommitHash.value evidenceExpectedHead, CommitHash.value current)) with
+        | "JobMismatch" -> PublicationCheck.JobMismatch | "TargetMismatch" -> PublicationCheck.TargetMismatch | "CasMismatch" -> PublicationCheck.CasMismatch | _ -> PublicationCheck.Matched
+    let fastForward (merge: Result<CommitHash, string>) (candidate: CommitHash) (targetMovedError: string) : FastForwardOutcome =
+        let merged = match merge with | Ok commit -> createObj [ "ok" ==> true; "value" ==> CommitHash.value commit ] | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+        let raw: obj = NativePublication.value?fastForward(merged, CommitHash.value candidate, targetMovedError)
+        match unbox<string> raw?kind with
+        | "Landed" -> FastForwardOutcome.Landed(CommitHash.create raw?head)
+        | "LandedMismatch" -> FastForwardOutcome.LandedMismatch(CommitHash.create raw?head)
+        | "TargetMoved" -> FastForwardOutcome.TargetMoved | _ -> FastForwardOutcome.Failed raw?error
 
 module OrchestratorProjection =
+    [<Fable.Core.Import("ChangeHistory", "wanxiangli/change")>]
+    let private constructor: obj = jsNative
 
-    let empty =
-        { Jobs = Map.empty
-          WorktreeEffects = Map.empty }
+    let empty: OrchestratorProjection = { History = createNew constructor () }
+    let native (projection: OrchestratorProjection) = projection.History
+    let private optional decode (value: obj) = if isNull value then None else Some(decode value)
+    let private text (value: obj) key : string = value?(key)
+    let fromJob (value: obj) : ManagerJobProjection =
+        let commit value key = CommitHash.create (text value key)
+        let terminal value =
+            match text value "kind" with
+            | "Published" -> TerminalOutcome.Published {| CandidateCommit = commit value "candidate"; ResultingTargetHead = commit value "head" |}
+            | "Failed" -> TerminalOutcome.Failed(text value "reason")
+            | _ -> TerminalOutcome.Abandoned
+        { ManagerJobId = ManagerJobId.create (text value "id")
+          ManagerSessionId = SessionId.create (text value "session")
+          ManagerAgent = text value "agent"
+          Byname = text value "byname"
+          WorktreeIdentity = WorktreeIdentity.create (text value "worktreeIdentity")
+          WorktreePath = WorktreePath.create (text value "worktreePath")
+          TargetRef = TargetRef.create (text value "target")
+          TargetBranchFrozen = text value "targetBranchFrozen"
+          CandidateReady = optional (fun item -> {| CandidateCommit = commit item "commit" |}) value?candidate
+          ConflictDetected = optional (fun item -> {| CandidateCommit = commit item "commit"; TargetHeadSnapshot = commit item "target"; ConflictFiles = unbox<string array> item?files |> Array.toList; DiagnosticsDigest = text item "digest" |}) value?conflict
+          RebasedCandidateReady = optional (fun item -> {| RebasedCommit = commit item "commit"; TargetHeadSnapshot = commit item "target" |}) value?rebased
+          PublishClaimed = optional (fun item -> {| TargetRef = TargetRef.create (text item "target"); RebasedCommit = commit item "commit"; ExpectedHead = commit item "expected" |}) value?claim
+          Terminal = optional terminal value?terminal }
 
-    let tryFind (jobId: ManagerJobId) (projection: OrchestratorProjection) = Map.tryFind jobId projection.Jobs
+    let toJob (job: ManagerJobProjection) : obj =
+        let option (mapping: 'a -> obj) (value: 'a option) : obj = value |> Option.map mapping |> Option.toObj
+        let terminal value =
+            match value with
+            | TerminalOutcome.Published data -> createObj [ "kind" ==> "Published"; "candidate" ==> CommitHash.value data.CandidateCommit; "head" ==> CommitHash.value data.ResultingTargetHead ]
+            | TerminalOutcome.Failed reason -> createObj [ "kind" ==> "Failed"; "reason" ==> reason ]
+            | TerminalOutcome.Abandoned -> createObj [ "kind" ==> "Abandoned" ]
+        createObj [
+            "id" ==> ManagerJobId.value job.ManagerJobId; "session" ==> SessionId.value job.ManagerSessionId
+            "agent" ==> job.ManagerAgent; "byname" ==> job.Byname
+            "worktreeIdentity" ==> WorktreeIdentity.value job.WorktreeIdentity; "worktreePath" ==> WorktreePath.value job.WorktreePath
+            "target" ==> TargetRef.value job.TargetRef; "targetBranchFrozen" ==> job.TargetBranchFrozen
+            "candidate" ==> option (fun (data: {| CandidateCommit: CommitHash |}) -> createObj [ "commit" ==> CommitHash.value data.CandidateCommit ]) job.CandidateReady
+            "conflict" ==> option (fun (data: {| CandidateCommit: CommitHash; TargetHeadSnapshot: CommitHash; ConflictFiles: string list; DiagnosticsDigest: string |}) -> createObj [ "commit" ==> CommitHash.value data.CandidateCommit; "target" ==> CommitHash.value data.TargetHeadSnapshot; "files" ==> List.toArray data.ConflictFiles; "digest" ==> data.DiagnosticsDigest ]) job.ConflictDetected
+            "rebased" ==> option (fun (data: {| RebasedCommit: CommitHash; TargetHeadSnapshot: CommitHash |}) -> createObj [ "commit" ==> CommitHash.value data.RebasedCommit; "target" ==> CommitHash.value data.TargetHeadSnapshot ]) job.RebasedCandidateReady
+            "claim" ==> option (fun (data: {| TargetRef: TargetRef; RebasedCommit: CommitHash; ExpectedHead: CommitHash |}) -> createObj [ "target" ==> TargetRef.value data.TargetRef; "commit" ==> CommitHash.value data.RebasedCommit; "expected" ==> CommitHash.value data.ExpectedHead ]) job.PublishClaimed
+            "terminal" ==> option terminal job.Terminal ]
 
-    let tryFindByByname (byname: string) (projection: OrchestratorProjection) =
-        if System.String.IsNullOrWhiteSpace byname then
-            None
-        else
-            let wanted = byname.Trim()
+    let tryFind (id: ManagerJobId) projection = projection.History?job (ManagerJobId.value id) |> optional fromJob
+    let tryFindByByname (name: string) projection = projection.History?jobByName name |> optional fromJob
+    let tryFindByManagerSession (id: SessionId) projection = projection.History?jobBySession (SessionId.value id) |> optional fromJob
+    let activeJobs projection = unbox<obj array> (projection.History?activeJobs ()) |> Array.map fromJob |> Array.toList
+    let tryWorktreeEffect (identity: WorktreeIdentity) projection =
+        projection.History?worktreeEffect (WorktreeIdentity.value identity)
+        |> optional (fun value ->
+            let data = {| ManagerJobId = ManagerJobId.create (text value "id"); WorktreePath = WorktreePath.create (text value "path") |}
+            if text value "kind" = "Requested" then WorktreeEffectStatus.Requested data else WorktreeEffectStatus.Created data)
 
-            let matchesWanted (job: ManagerJobProjection) =
-                System.String.Equals(job.Byname, wanted, System.StringComparison.OrdinalIgnoreCase)
+    let applyEvent (event: obj) projection : Result<OrchestratorProjection, OrchestratorFoldRejection> =
+        let result: obj = projection.History?apply event
+        if unbox<bool> result?ok then Ok { History = result?history }
+        elif text result "error" = "PublishClaimedWithoutRebasedCandidate" then Error OrchestratorFoldRejection.PublishClaimedWithoutRebasedCandidate
+        else Error OrchestratorFoldRejection.PublishClaimedCommitMismatch
 
-            projection.Jobs
-            |> Map.tryPick (fun _ job -> if matchesWanted job then Some job else None)
+    let private record kind id fields projection =
+        let event = createObj ([ "kind" ==> kind; "id" ==> ManagerJobId.value id ] @ fields)
+        match applyEvent event projection with
+        | Ok next -> next
+        | Error error -> invalidOp (OrchestratorFoldRejection.message error)
 
-    let tryWorktreeEffect (identity: WorktreeIdentity) (projection: OrchestratorProjection) =
-        Map.tryFind identity projection.WorktreeEffects
-
+    let requestWorktree identity path id projection =
+        record "WorktreeCreateRequested" id [ "identity" ==> WorktreeIdentity.value identity; "path" ==> WorktreePath.value path ] projection
+    let acceptWorktree identity path id projection =
+        record "WorktreeCreated" id [ "identity" ==> WorktreeIdentity.value identity; "path" ==> WorktreePath.value path ] projection
+    let createJob (job: {| ManagerJobId: ManagerJobId; ManagerSessionId: SessionId; ManagerAgent: string; Byname: string; WorktreeIdentity: WorktreeIdentity; WorktreePath: WorktreePath; TargetRef: TargetRef; TargetBranchFrozen: string |}) projection =
+        record "ManagerJobCreated" job.ManagerJobId [ "session" ==> SessionId.value job.ManagerSessionId; "agent" ==> job.ManagerAgent; "byname" ==> job.Byname; "worktreeIdentity" ==> WorktreeIdentity.value job.WorktreeIdentity; "worktreePath" ==> WorktreePath.value job.WorktreePath; "target" ==> TargetRef.value job.TargetRef; "targetBranchFrozen" ==> job.TargetBranchFrozen ] projection
+    let recordCandidateReady id (payload: {| CandidateCommit: CommitHash |}) projection =
+        record "CandidateReady" id [ "commit" ==> CommitHash.value payload.CandidateCommit ] projection
+    let recordConflictDetected id (payload: {| CandidateCommit: CommitHash; TargetHeadSnapshot: CommitHash; ConflictFiles: string list; DiagnosticsDigest: string |}) projection =
+        record "ConflictDetected" id [ "commit" ==> CommitHash.value payload.CandidateCommit; "target" ==> CommitHash.value payload.TargetHeadSnapshot; "files" ==> Array.ofList payload.ConflictFiles; "digest" ==> payload.DiagnosticsDigest ] projection
+    let recordRebasedCandidateReady id (payload: {| RebasedCommit: CommitHash; TargetHeadSnapshot: CommitHash |}) projection =
+        record "RebasedCandidateReady" id [ "commit" ==> CommitHash.value payload.RebasedCommit; "target" ==> CommitHash.value payload.TargetHeadSnapshot ] projection
+    let recordPublishClaimed id (payload: {| TargetRef: TargetRef; RebasedCommit: CommitHash; ExpectedHead: CommitHash |}) projection =
+        record "PublishClaimed" id [ "target" ==> TargetRef.value payload.TargetRef; "commit" ==> CommitHash.value payload.RebasedCommit; "expected" ==> CommitHash.value payload.ExpectedHead ] projection
+    let recordTerminal id terminal projection =
+        match terminal with
+        | TerminalOutcome.Published payload -> record "Published" id [ "candidate" ==> CommitHash.value payload.CandidateCommit; "head" ==> CommitHash.value payload.ResultingTargetHead ] projection
+        | TerminalOutcome.Failed reason -> record "JobFailed" id [ "reason" ==> reason ] projection
+        | TerminalOutcome.Abandoned -> record "JobAbandoned" id [] projection
     /// PERSIST-009: decide from durable intent plus, only when Requested is
     /// ambiguous, one complete physical worktree observation.
-    let decideWorktreeReconciliation
-        (jobId: ManagerJobId)
-        (identity: WorktreeIdentity)
-        (path: WorktreePath)
-        (observation: WorktreeReconciliationObservation)
-        : WorktreeReconciliationDecision =
-        let sameOwner (recordedJobId: ManagerJobId) (recordedPath: WorktreePath) =
-            recordedJobId = jobId && recordedPath = path
-
-        let reject failure =
-            WorktreeReconciliationDecision.Reject failure
-
-        let reconcileAmbiguousEntries entries =
-            let relevant =
-                entries
-                |> List.filter (fun (observedPath, observedIdentity) ->
-                    observedPath = path || observedIdentity = Some identity)
-
-            let matchesCanonical (observedPath, observedIdentity) =
-                observedPath = path && observedIdentity = Some identity
-
-            if List.isEmpty relevant then
-                WorktreeReconciliationDecision.CreateAfterProvenMissing
-            elif List.forall matchesCanonical relevant then
-                WorktreeReconciliationDecision.AdoptThenRecordCreated
-            else
-                reject WorktreeReconciliationFailure.PhysicalIdentityPathConflict
-
-        match observation with
-        | WorktreeReconciliationObservation.NoDurableEffect -> WorktreeReconciliationDecision.RequestThenCreate
-        | WorktreeReconciliationObservation.CreatedReceipt(recordedJobId, recordedPath) when
-            sameOwner recordedJobId recordedPath
-            ->
-            WorktreeReconciliationDecision.AdoptCreated
-        | WorktreeReconciliationObservation.CreatedReceipt _
-        | WorktreeReconciliationObservation.RequestedConflict _ ->
-            reject WorktreeReconciliationFailure.DurableOwnershipConflict
-        | WorktreeReconciliationObservation.RequestedAmbiguity(recordedJobId, recordedPath, Error error) when
-            not (sameOwner recordedJobId recordedPath)
-            ->
-            reject WorktreeReconciliationFailure.DurableOwnershipConflict
-        | WorktreeReconciliationObservation.RequestedAmbiguity(_, _, Error error) ->
-            reject (WorktreeReconciliationFailure.WorktreeQueryFailed error)
-        | WorktreeReconciliationObservation.RequestedAmbiguity(recordedJobId, recordedPath, Ok entries) when
-            not (sameOwner recordedJobId recordedPath)
-            ->
-            reject WorktreeReconciliationFailure.DurableOwnershipConflict
-        | WorktreeReconciliationObservation.RequestedAmbiguity(_, _, Ok entries) -> reconcileAmbiguousEntries entries
-
-    let requestWorktree
-        (identity: WorktreeIdentity)
-        (path: WorktreePath)
-        (jobId: ManagerJobId)
-        (projection: OrchestratorProjection)
-        =
-        match Map.tryFind identity projection.WorktreeEffects with
-        | Some _ -> projection
-        | None ->
-            { projection with
-                WorktreeEffects =
-                    Map.add
-                        identity
-                        (WorktreeEffectStatus.Requested
-                            {| ManagerJobId = jobId
-                               WorktreePath = path |})
-                        projection.WorktreeEffects }
-
-    let acceptWorktree
-        (identity: WorktreeIdentity)
-        (path: WorktreePath)
-        (jobId: ManagerJobId)
-        (projection: OrchestratorProjection)
-        =
-        let created =
-            WorktreeEffectStatus.Created
-                {| ManagerJobId = jobId
-                   WorktreePath = path |}
-
-        match Map.tryFind identity projection.WorktreeEffects with
-        | Some(WorktreeEffectStatus.Created _) -> projection
+    let decideWorktreeReconciliation (jobId: ManagerJobId) (identity: WorktreeIdentity) (path: WorktreePath) (observation: WorktreeReconciliationObservation) : WorktreeReconciliationDecision =
+        let request = createObj [ "id" ==> ManagerJobId.value jobId; "identity" ==> WorktreeIdentity.value identity; "path" ==> WorktreePath.value path ]
+        let observed =
+            let fields kind id path = [ "kind" ==> kind; "id" ==> ManagerJobId.value id; "path" ==> WorktreePath.value path ]
+            match observation with
+            | WorktreeReconciliationObservation.NoDurableEffect -> createObj [ "kind" ==> "None" ]
+            | WorktreeReconciliationObservation.CreatedReceipt(id, path) -> createObj (fields "Created" id path)
+            | WorktreeReconciliationObservation.RequestedConflict(id, path) -> createObj (fields "Conflict" id path)
+            | WorktreeReconciliationObservation.RequestedAmbiguity(id, path, physical) ->
+                let physical = match physical with
+                               | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+                               | Ok entries -> createObj [ "ok" ==> true; "value" ==> (entries |> List.map (fun (path, identity) -> createObj [ "path" ==> WorktreePath.value path; "identity" ==> (identity |> Option.map WorktreeIdentity.value |> Option.toObj) ]) |> List.toArray) ]
+                createObj (fields "Requested" id path @ [ "physical" ==> physical ])
+        let raw: obj = NativePublication.value?reconcile(request, observed)
+        match unbox<string> raw?kind with
+        | "RequestThenCreate" -> WorktreeReconciliationDecision.RequestThenCreate
+        | "CreateAfterProvenMissing" -> WorktreeReconciliationDecision.CreateAfterProvenMissing
+        | "AdoptThenRecordCreated" -> WorktreeReconciliationDecision.AdoptThenRecordCreated
+        | "AdoptCreated" -> WorktreeReconciliationDecision.AdoptCreated
         | _ ->
-            { projection with
-                WorktreeEffects = Map.add identity created projection.WorktreeEffects }
+            let reason = match unbox<string> raw?reason with
+                         | "WorktreeQueryFailed" -> WorktreeReconciliationFailure.WorktreeQueryFailed raw?error
+                         | "DurableOwnershipConflict" -> WorktreeReconciliationFailure.DurableOwnershipConflict
+                         | _ -> WorktreeReconciliationFailure.PhysicalIdentityPathConflict
+            WorktreeReconciliationDecision.Reject reason
 
-    let tryFindByManagerSession (managerSessionId: SessionId) (projection: OrchestratorProjection) =
-        projection.Jobs
-        |> Map.tryPick (fun _ job ->
-            if job.ManagerSessionId = managerSessionId then
-                Some job
-            else
-                None)
-
-    let activeJobs (projection: OrchestratorProjection) =
-        projection.Jobs
-        |> Map.toList
-        |> List.map snd
-        |> List.filter (fun job -> job.Terminal.IsNone)
-
-    let private effectiveByname (managerAgent: string) (byname: string) =
-        if System.String.IsNullOrWhiteSpace byname then
-            managerAgent
-        else
-            byname
-
-    let createJob
-        (job:
-            {| ManagerJobId: ManagerJobId
-               ManagerSessionId: SessionId
-               ManagerAgent: string
-               Byname: string
-               WorktreeIdentity: WorktreeIdentity
-               WorktreePath: WorktreePath
-               TargetRef: TargetRef
-               TargetBranchFrozen: string |})
-        (projection: OrchestratorProjection)
-        =
-        if Map.containsKey job.ManagerJobId projection.Jobs then
-            projection
-        else
-            { projection with
-                Jobs =
-                    Map.add
-                        job.ManagerJobId
-                        { ManagerJobId = job.ManagerJobId
-                          ManagerSessionId = job.ManagerSessionId
-                          ManagerAgent = job.ManagerAgent
-                          Byname = effectiveByname job.ManagerAgent job.Byname
-                          WorktreeIdentity = job.WorktreeIdentity
-                          WorktreePath = job.WorktreePath
-                          TargetRef = job.TargetRef
-                          TargetBranchFrozen = job.TargetBranchFrozen
-                          CandidateReady = None
-                          ConflictDetected = None
-                          RebasedCandidateReady = None
-                          PublishClaimed = None
-                          Terminal = None }
-                        projection.Jobs }
-
-    let private updateActiveJob
-        (jobId: ManagerJobId)
-        (update: ManagerJobProjection -> ManagerJobProjection)
-        (projection: OrchestratorProjection)
-        =
-        match Map.tryFind jobId projection.Jobs with
-        | Some job when job.Terminal.IsNone ->
-            { projection with
-                Jobs = Map.add jobId (update job) projection.Jobs }
-        | _ -> projection
-
-    let recordCandidateReady
-        (jobId: ManagerJobId)
-        (payload: {| CandidateCommit: CommitHash |})
-        (projection: OrchestratorProjection)
-        =
-        updateActiveJob
-            jobId
-            (fun job ->
-                { job with
-                    CandidateReady = Some payload })
-            projection
-
-    let recordConflictDetected
-        (jobId: ManagerJobId)
-        (payload:
-            {| CandidateCommit: CommitHash
-               TargetHeadSnapshot: CommitHash
-               ConflictFiles: string list
-               DiagnosticsDigest: string |})
-        (projection: OrchestratorProjection)
-        =
-        updateActiveJob
-            jobId
-            (fun job ->
-                { job with
-                    ConflictDetected = Some payload })
-            projection
-
-    let recordRebasedCandidateReady
-        (jobId: ManagerJobId)
-        (payload:
-            {| RebasedCommit: CommitHash
-               TargetHeadSnapshot: CommitHash |})
-        (projection: OrchestratorProjection)
-        =
-        // Latest-event view mirroring Fold: exact replay is idempotent and a
-        // later differing record supersedes. Terminal guard stays in
-        // updateActiveJob so Published still settles the effect.
-        updateActiveJob
-            jobId
-            (fun job ->
-                { job with
-                    RebasedCandidateReady = Some payload })
-            projection
-
-    let recordPublishClaimed
-        (jobId: ManagerJobId)
-        (payload:
-            {| TargetRef: TargetRef
-               RebasedCommit: CommitHash
-               ExpectedHead: CommitHash |})
-        (projection: OrchestratorProjection)
-        =
-        // Latest-event view mirroring Fold: a retried publish with fresh
-        // evidence supersedes the CAS-missed claim. Terminal guard stays in
-        // updateActiveJob so Published still blocks replay.
-        updateActiveJob
-            jobId
-            (fun job ->
-                { job with
-                    PublishClaimed = Some payload })
-            projection
-
-    let recordTerminal (jobId: ManagerJobId) (terminal: TerminalOutcome) (projection: OrchestratorProjection) =
-        updateActiveJob jobId (fun job -> { job with Terminal = Some terminal }) projection
-
-    /// ORCH-007: what a recorded rebased candidate means against the target
-    /// head now.
-    let classifyRebasedCandidate
-        (currentHead: CommitHash option)
-        (rebasedCommit: CommitHash)
-        (targetHeadSnapshot: CommitHash)
-        : RebasedCandidateReality =
-        match currentHead with
-        | None -> RebasedCandidateReality.HeadUnreadable
-        | Some head when head = targetHeadSnapshot -> RebasedCandidateReality.PublishReady
-        | Some _ -> RebasedCandidateReality.NeedsRebase
-
-    /// ORCH-007: what a durable publish claim means against the target head now.
-    /// Already-published is tested first, then unchanged target, then expired.
-    let classifyPublishClaim
-        (currentHead: CommitHash option)
-        (rebasedCommit: CommitHash)
-        (expectedHead: CommitHash)
-        : PublishClaimReality =
-        match currentHead with
-        | None -> PublishClaimReality.HeadUnreadable
-        | Some head when head = rebasedCommit -> PublishClaimReality.AlreadyFastForwarded
-        | Some head when head = expectedHead -> PublishClaimReality.PublishReady
-        | Some _ -> PublishClaimReality.ClaimExpired
+    let classifyRebasedCandidate (currentHead: CommitHash option) (rebasedCommit: CommitHash) (targetHeadSnapshot: CommitHash) : RebasedCandidateReality =
+        match unbox<string> (NativePublication.value?classifyRebased(NativePublication.optional CommitHash.value currentHead, CommitHash.value targetHeadSnapshot)) with
+        | "HeadUnreadable" -> RebasedCandidateReality.HeadUnreadable | "PublishReady" -> RebasedCandidateReality.PublishReady | _ -> RebasedCandidateReality.NeedsRebase
+    let classifyPublishClaim (currentHead: CommitHash option) (rebasedCommit: CommitHash) (expectedHead: CommitHash) : PublishClaimReality =
+        match unbox<string> (NativePublication.value?classifyClaim(NativePublication.optional CommitHash.value currentHead, CommitHash.value rebasedCommit, CommitHash.value expectedHead)) with
+        | "HeadUnreadable" -> PublishClaimReality.HeadUnreadable | "AlreadyFastForwarded" -> PublishClaimReality.AlreadyFastForwarded | "PublishReady" -> PublishClaimReality.PublishReady | _ -> PublishClaimReality.ClaimExpired

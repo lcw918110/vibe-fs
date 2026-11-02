@@ -533,18 +533,3 @@ module OpenCodePortAdapter =
                     let! _ = postJson $"/session/{cId}/abort" {| |}
                     return ()
                 }
-
-    let create (workspaceDirectory: string option) (input: obj) : IOpenCodePort option =
-        if isNull input then
-            None
-        elif not (isNull input?client) && not (isNull input?client?session) then
-            Some(SdkClientPort(input?client, workspaceDirectory) :> IOpenCodePort)
-        elif not (isNull input?serverUrl) then
-            Some(HttpPort(unbox<string> input?serverUrl) :> IOpenCodePort)
-        elif not (isNull input?baseUrl) then
-            Some(HttpPort(unbox<string> input?baseUrl) :> IOpenCodePort)
-        elif not (isNull input?port) then
-            let portNum = unbox<int> input?port
-            Some(HttpPort($"http://127.0.0.1:{portNum}") :> IOpenCodePort)
-        else
-            None

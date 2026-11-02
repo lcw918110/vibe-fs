@@ -3,6 +3,8 @@
 # Ordinary rules include matching paths. A leading ! excludes an exception from earlier includes.
 
 /src/Wanxiangshu/OpenCode/Host/**
+/wanxiangtong/opencode/compaction/**
+/wanxiangtong/opencode/session-transport/**
 /src/Wanxiangshu/Execution/Session/ChatExecution/ProviderRunBinding.fs
 /src/Wanxiangshu/Execution/Session/ChatExecution/ProviderLifecycle.fs
 /src/Wanxiangshu/OpenCode/Codec/**

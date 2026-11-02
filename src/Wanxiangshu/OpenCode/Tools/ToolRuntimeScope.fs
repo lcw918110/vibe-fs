@@ -1109,8 +1109,8 @@ type ToolRuntimeScope
                 AgentProjection.tryFind (SessionId.create sessionText) snapshot.AgentProjections)
             |> Option.bind (fun session -> session.PrefixEpoch)
 
-        match current |> Option.bind (fun epoch -> epoch.LastScopeArchive) with
-        | Some archive when current |> Option.exists (fun epoch -> epoch.EpochId = archive.TargetEpochId) -> Ok archive
+        match current |> Option.bind PrefixEpochProjection.lastScopeArchive with
+        | Some archive when current |> Option.exists (fun epoch -> (PrefixEpochProjection.epochId epoch) = archive.TargetEpochId) -> Ok archive
         | _ -> Error "NoPreviousScope: immediate previous archived Scope is unavailable"
 
     let sendPreviousScopeSteer (recipient: string) (answer: string) (receipt: string) =

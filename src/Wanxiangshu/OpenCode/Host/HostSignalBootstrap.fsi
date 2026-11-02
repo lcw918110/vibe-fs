@@ -39,7 +39,8 @@ module HostSignalBootstrap =
     /// functions are called internally by the binding helpers. Handing them out as
     /// well made the signal stack look like it had six more entry points than it does.
     type WiredSignals =
-        { RegisterOwned: string -> unit
+        { Compaction: OpenCodeCompaction
+          RegisterOwned: string -> unit
           CancelSignals: SessionId seq -> unit
           BindActiveRun: SessionId -> Role -> string option -> unit
           CurrentPhysicalUserMessage: string -> string option

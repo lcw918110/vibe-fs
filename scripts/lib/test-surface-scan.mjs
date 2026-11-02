@@ -276,14 +276,6 @@ export const SURFACE_MANIFEST = [
     kind: 'pure',
   },
   {
-    module: 'Execution/Delegation/Fork/LifecycleSurface.js',
-    owner: 'managed-session-lifecycle',
-    laws: ['MANAGED-SESSION-012'],
-    source: 'src/Wanxiangshu/Execution/Delegation/Fork/LifecycleSurface.fs',
-    representation: 'json',
-    kind: 'pure',
-  },
-  {
     module: 'Participant/Provider/Attempt/Fallback/ProviderFailureSurface.js',
     owner: 'provider-attempt-recovery',
     laws: [

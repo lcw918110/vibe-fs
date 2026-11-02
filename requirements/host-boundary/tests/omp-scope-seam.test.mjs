@@ -1,5 +1,8 @@
+import { PrefixEpochProjection_epochId as prefixEpochId, PrefixEpochProjection_lastScopeArchive as lastScopeArchive, PrefixEpochProjection_scopeQuestionReceipt as scopeQuestionReceipt } from '../../../dist/Context/Prefix/Epoch.js'
+import { PrefixEpochIdModule_value as epochValue } from '../../../dist/Foundation/Identity.js'
 // PRODUCT-RETIRED compat-pass (2026-10-29): several WHAT[scope-progress-*] / standalone resetScope registration cases below are test.skip — estimate/tool is not product contract; see scope-retention.
-import { JournalHandle__get_Journal } from '../../../dist/Persistence/Journal/Surface.js'
+import { JournalHandle__get_Journal, JournalSurface_dispose } from '../../../dist/Persistence/Journal/Surface.js'
+import { releaseAsync as releaseSharedJournal } from '../../../dist/Persistence/Journal/SharedAgentJournal.js'
 // Host physical canary: raw OMP adapter seam / host-shape
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -1363,9 +1366,9 @@ test.skip('WHAT[context-compression-043] OMP resetScope refusal on missing snaps
     const proj2 = AgentProjection_tryFind(SessionIdModule_create(sid), snap2.AgentProjections)
     assert.ok(proj2?.PrefixEpoch, 'PrefixEpoch must exist in projection')
     const epoch = proj2.PrefixEpoch
-    assert.equal(epoch.EpochId?.fields?.[0] ?? epoch.EpochId, 1n, 'epoch id advanced to 1n')
-    assert.ok(epoch.LastScopeArchive, 'LastScopeArchive must exist')
-    const archive = epoch.LastScopeArchive
+    assert.equal(epochValue(prefixEpochId(epoch)), 1n, 'epoch id advanced to 1n')
+    assert.ok(lastScopeArchive(epoch), 'LastScopeArchive must exist')
+    const archive = lastScopeArchive(epoch)
     assert.equal(archive.TargetEpochId?.fields?.[0] ?? archive.TargetEpochId, 1n)
     assert.ok(archive.ArchiveRef, 'ArchiveRef must exist')
 
@@ -1415,7 +1418,7 @@ test.skip('WHAT[context-compression-043] OMP resetScope refusal on missing snaps
     assert.match(replay.content[0].text, /Scope reset. Objective: first verified omp scope/)
     const snap3 = AgentJournalModule_snapshot(JournalHandle__get_Journal(journalHandle))
     const proj3 = AgentProjection_tryFind(SessionIdModule_create(sid), snap3.AgentProjections)
-    assert.equal(proj3?.PrefixEpoch?.EpochId?.fields?.[0] ?? proj3?.PrefixEpoch?.EpochId, 1n, 'idempotent replay must not advance epoch')
+    assert.equal(epochValue(prefixEpochId(proj3.PrefixEpoch)), 1n, 'idempotent replay must not advance epoch')
 
     // -------------------------------------------------------------------------
     // 7. session_shutdown 清理隔离
@@ -1639,13 +1642,47 @@ test('askPreviousScope carrying scope.kind=resetScope commits the reanchor befor
     const snap = AgentJournalModule_snapshot(JournalHandle__get_Journal(journalHandle))
     const proj = AgentProjection_tryFind(SessionIdModule_create(sid), snap.AgentProjections)
     assert.ok(proj?.PrefixEpoch, 'the reanchor must commit a PrefixEpoch — silently dropping it leaves this undefined')
-    assert.equal(proj.PrefixEpoch.EpochId?.fields?.[0] ?? proj.PrefixEpoch.EpochId, 1n, 'the first reanchor advances the epoch to 1n')
-    assert.ok(proj.PrefixEpoch.LastScopeArchive, 'the closed scope must be archived before the new epoch begins')
+    assert.equal(epochValue(prefixEpochId(proj.PrefixEpoch)), 1n, 'the first reanchor advances the epoch to 1n')
+    assert.ok(lastScopeArchive(proj.PrefixEpoch), 'the closed scope must be archived before the new epoch begins')
     assert.equal(outboundViewStore.tryGetSealed(sid), undefined, 'single-drain: the sealed snapshot is consumed by the archive')
-  } finally {
-    if (journalHandle && typeof journalHandle.Dispose === 'function') {
-      try { journalHandle.Dispose() } catch {}
+
+    const priorJournal = JournalHandle__get_Journal(journalHandle)
+    const priorArchive = lastScopeArchive(proj.PrefixEpoch)
+    const priorReceipt = scopeQuestionReceipt('call-reanchor-success-065', proj.PrefixEpoch)
+    assert.equal(typeof priorReceipt, 'string')
+    await env.eventHandlers.get('session_shutdown')({}, liveCtx)
+    JournalSurface_dispose(journalHandle)
+    journalHandle = null
+    // This fixture supplies no-op product disposal. Balance the adapter's
+    // acquired lease so the restart reads the store through a fresh Journal.
+    await releaseSharedJournal(priorJournal)
+
+    const restarted = createOmpTestEnvironment()
+    await activateOnOmp(restarted.mockPi, restarted.mockPlugin, restarted.agentsList)
+    await restarted.eventHandlers.get('session_start')({}, liveCtx)
+    try {
+      const reopened = await acquireSharedForWorkspace(workspace, process.pid, new Date().toISOString())
+      assert.equal(reopened.ok, true)
+      journalHandle = reopened.journal
+      assert.notEqual(JournalHandle__get_Journal(journalHandle), priorJournal, 'reopen must replay into a fresh Journal')
+      const readEpoch = () => AgentProjection_tryFind(SessionIdModule_create(sid), AgentJournalModule_snapshot(JournalHandle__get_Journal(journalHandle)).AgentProjections).PrefixEpoch
+      assert.equal(epochValue(prefixEpochId(readEpoch())), 1n)
+      assert.deepEqual(lastScopeArchive(readEpoch()), priorArchive)
+      assert.equal(scopeQuestionReceipt('call-reanchor-success-065', readEpoch()), priorReceipt)
+      const askAgain = restarted.registeredTools.find(t => t.name === 'askPreviousScope')
+      const repeated = await askAgain.execute('call-reanchor-success-065', { questions: 'Which evidence did the old scope retain?', scope: { kind: 'keepLast' } }, null, null, liveCtx)
+      // The current cold-open Blob path cannot resolve this archived payload.
+      // This case covers durable metadata replay and its controlled refusal,
+      // not successful answer recovery or the tool's cold-open deduplication.
+      assert.match(contentText(repeated.content), /previous Scope blob read failed: event-store payload missing/)
+      assert.equal(repeated.details.answerDelivered, false)
+      assert.equal(scopeQuestionReceipt('call-reanchor-success-065', readEpoch()), priorReceipt)
+    } finally {
+      await restarted.eventHandlers.get('session_shutdown')({}, liveCtx)
+      if (journalHandle) await releaseSharedJournal(JournalHandle__get_Journal(journalHandle))
     }
+  } finally {
+    if (journalHandle) JournalSurface_dispose(journalHandle)
     rmSync(workspace, { recursive: true, force: true })
   }
 })

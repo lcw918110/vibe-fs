@@ -20,6 +20,7 @@ module PluginBoot =
     /// durable state but never repairs old work, mutates the workspace, or calls Host sessions.
     type Boot =
         { Input: obj
+          Transport: OpenCodeTransport.Connection
           PortOpt: IOpenCodePort option
           Journal: AgentJournal option
           Scope: PluginRuntimeScope
@@ -86,7 +87,8 @@ module PluginBoot =
 
             let workspaceDirectory = PathsPort.projectRootOf paths
 
-            let portOpt = OpenCodePortAdapter.create workspaceDirectory input
+            let transport = OpenCodeTransport.openConnection workspaceDirectory input
+            let portOpt = transport.Sending
 
             let! journalResult = PluginHost.createJournal workspaceDirectory
 
@@ -115,6 +117,7 @@ module PluginBoot =
 
             return
                 { Input = input
+                  Transport = transport
                   PortOpt = portOpt
                   Journal = journal
                   Scope = scope

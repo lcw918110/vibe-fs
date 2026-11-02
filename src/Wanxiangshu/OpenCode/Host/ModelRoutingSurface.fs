@@ -925,7 +925,7 @@ module ModelRoutingSurface =
     /// port keeps prompt_async enqueue semantics, including fire-and-forget
     /// observation of the Host run promise.
     let createSdkClientPort (client: obj) : obj =
-        match OpenCodePortAdapter.create None (createObj [ "client", client ]) with
+        match (OpenCodeTransport.openConnection None (createObj [ "client", client ])).Sending with
         | Some port -> PortHandle(port) :> obj
         | None -> invalidArg "client" "OpenCode SDK client has no session API"
 

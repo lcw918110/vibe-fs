@@ -1,5 +1,7 @@
 namespace Wanxiangshu.OpenCode
 
+open Wanxiangshu.Context.Prefix
+
 open Wanxiangshu.Persistence.Journal.JournalOutcome
 #nowarn "3511"
 
@@ -132,23 +134,6 @@ module PluginHooks =
         | _ -> None
 
 
-    /// A read-only consultation projects an immutable view (the delegator's
-    /// latest view or the previous Scope's sealed equivalent view). Host
-    /// compaction cannot shrink it: every next step re-projects the same view.
-    /// So a Host compaction on a temporary session is the observed fact that
-    /// the view does not fit the provider window; the consultation ends there
-    /// and reports that to its caller instead of compacting forever.
-    let private overflowedTemporaries = HashSet<string>()
-
-    let private markTemporaryOverflow (tempId: string) : bool =
-        if PluginTransforms.negotiationIsTemporary tempId then
-            overflowedTemporaries.Add tempId |> ignore
-            true
-        else
-            false
-
-    let private temporaryOverflowed (tempId: string) = overflowedTemporaries.Contains tempId
-
     let private temporaryOverflowError =
         "read-only consultation view exceeds the provider context window; Host compaction cannot shrink a projected consultation view, so the consultation ended"
 
@@ -277,6 +262,7 @@ module PluginHooks =
         }
 
     let private runTemporaryQuestion
+        (compaction: OpenCodeCompaction)
         (session: obj)
         (tempId: string)
         (agentName: string)
@@ -288,7 +274,7 @@ module PluginHooks =
         let retryText = snapshotDenialText tempId + "\n\n" + firstPrompt
 
         let rec run attempt prose =
-            if temporaryOverflowed tempId then
+            if compaction.TemporaryOverflowed tempId then
                 Task.FromResult(Error temporaryOverflowError)
             elif not (PluginTransforms.negotiationIsTemporary tempId) then
                 Task.FromResult(Error "temporary read-only consultation was cancelled")
@@ -305,7 +291,7 @@ module PluginHooks =
                 let! result = tryTemporaryAnswer session tempId payload
 
                 match result with
-                | _ when temporaryOverflowed tempId -> return Error temporaryOverflowError
+                | _ when compaction.TemporaryOverflowed tempId -> return Error temporaryOverflowError
                 | TemporaryAnswer.Replied text -> return Ok text
                 | TemporaryAnswer.Retry -> return! run (attempt + 1) retryText
                 | TemporaryAnswer.Failed error -> return Error error
@@ -350,6 +336,7 @@ module PluginHooks =
         | Previous of string * obj
 
     let private runLinkedTemporary
+        (compaction: OpenCodeCompaction)
         (session: obj)
         (origin: ConsultationOrigin)
         (tempId: string)
@@ -369,17 +356,18 @@ module PluginHooks =
             let questionRun =
                 match linked with
                 | Error reason -> Task.FromResult(Error reason)
-                | Ok() -> runTemporaryQuestion session tempId agentName model promptText
+                | Ok() -> runTemporaryQuestion compaction session tempId agentName model promptText
 
             try
                 return! questionRun
             finally
                 PluginTransforms.negotiationFinishTemporary tempId
-                overflowedTemporaries.Remove tempId |> ignore
+                compaction.FinishTemporary tempId
         // Physical session cleanup is deliberately performed after the runner by createAndRunTemporary.
         }
 
     let private createAndRunTemporary
+        (compaction: OpenCodeCompaction)
         (session: obj)
         (origin: ConsultationOrigin)
         (recipient: string)
@@ -392,7 +380,7 @@ module PluginHooks =
             match created with
             | Error reason -> return Error reason
             | Ok tempId ->
-                let! result = runLinkedTemporary session origin tempId agentName promptText
+                let! result = runLinkedTemporary compaction session origin tempId agentName promptText
                 do! deleteTemporarySession session tempId
                 return result
         }
@@ -400,6 +388,7 @@ module PluginHooks =
     /// The Host temp session contains only the question. Provider transform
     /// inserts the immutable delegator wire before the LLM request.
     let private negotiateBtw
+        (compaction: OpenCodeCompaction)
         (client: obj)
         (roleFor: SessionId -> Role option)
         (delegator: string)
@@ -413,6 +402,7 @@ module PluginHooks =
         | Some _ when isNull session -> Task.FromResult(Error "OpenCode SDK session transport unavailable")
         | Some role ->
             createAndRunTemporary
+                compaction
                 session
                 (ConsultationOrigin.Delegator delegator)
                 recipient
@@ -420,6 +410,7 @@ module PluginHooks =
                 (negotiationPromptText delegator questions)
 
     let private consultPreviousBtw
+        (compaction: OpenCodeCompaction)
         (client: obj)
         (roleFor: SessionId -> Role option)
         (recipient: string)
@@ -433,6 +424,7 @@ module PluginHooks =
         | Some _ when isNull session -> Task.FromResult(Error "OpenCode SDK session transport unavailable")
         | Some role ->
             createAndRunTemporary
+                compaction
                 session
                 (ConsultationOrigin.Previous(recipient, snapshot))
                 recipient
@@ -457,14 +449,14 @@ module PluginHooks =
             let eventPort = host.EventPort
             let chatParams = ChatParamsHook.createWith journal
 
-            let activeCompactingSessions = System.Collections.Generic.HashSet<string>()
+            let compaction = wired.Compaction
             let requestLatency =
                 RequestLatency.create
                     sessionPort
                     host.RootWorkspace
                     eventPort
                     journal
-                    activeCompactingSessions.Contains
+                    compaction.IsCompacting
 
             // Scope retention is the only durable scope store: its annotation
             // stream replays on cold start.
@@ -498,7 +490,7 @@ module PluginHooks =
                 |> Option.bind (fun durable ->
                     AgentProjection.tryFind (SessionId.create sessionId) (AgentJournal.snapshot durable).AgentProjections)
                 |> Option.bind (fun session -> session.PrefixEpoch)
-                |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+                |> Option.map (fun epoch -> string (PrefixEpochProjection.scopeCount epoch))
                 |> Option.defaultValue "0"
 
             let bindRetentionJournal (sessionId: string) =
@@ -678,34 +670,8 @@ module PluginHooks =
                 if not (System.String.IsNullOrWhiteSpace sessionId) then
                     CasebookLifecycle.collector.Collect(sessionId, toolName, toolInput?args, rendered)
 
-            let tryFirstMessageSessionId (outObj: obj) : string option =
-                match isNull outObj || isNull outObj?messages with
-                | true -> None
-                | false ->
-                    let msgs = outObj?messages
-                    let len: int = unbox msgs?length
-                    match len with
-                    | 0 -> None
-                    | _ ->
-                        let first = msgs?(0)
-                        let rawSid = if isNull first?sessionID then first?info?sessionID else first?sessionID
-                        match isNull rawSid with
-                        | true -> None
-                        | false -> Some(string rawSid)
-
-            let isCompactingTransform (inObj: obj) (outObj: obj) : bool =
-                let sidOpt =
-                    let sid1 = sessionStringOf inObj
-                    match String.IsNullOrWhiteSpace sid1 with
-                    | false -> Some sid1
-                    | true -> tryFirstMessageSessionId outObj
-                match sidOpt with
-                | Some sid when not (String.IsNullOrWhiteSpace sid) ->
-                    activeCompactingSessions.Remove(sid)
-                | _ -> false
-
             let isUnmanagedTransform (inObj: obj) (outObj: obj) : bool =
-                isCompactingTransform inObj outObj
+                compaction.TryConsumeHistoryBypass(inObj, outObj)
                 || isExplicitlyUnmanagedAgent inObj
                 || isExplicitlyUnmanagedAgent outObj
 
@@ -830,12 +796,12 @@ module PluginHooks =
                     toolRegistration.Runtime.AttachQuestionNotifier(fun question -> showQuestionToast question)
 
                     toolRegistration.Runtime.AttachNegotiationTransport(
-                        negotiateBtw client roleFor,
+                        negotiateBtw compaction client roleFor,
                         (fun recipient answer receipt ->
                             toolRegistration.Runtime.SendNegotiationSteer(recipient, answer, receipt))
                     )
 
-                    toolRegistration.Runtime.AttachPreviousScopeTransport(consultPreviousBtw client roleFor)
+                    toolRegistration.Runtime.AttachPreviousScopeTransport(consultPreviousBtw compaction client roleFor)
 
                     scope.AttachToolRuntime(toolRegistration.Runtime :> ISessionRuntimeOwner)
 
@@ -1268,91 +1234,16 @@ module PluginHooks =
                         )
                         |> Option.bind Wanxiangshu.Composition.Plugin.ConfigPolicy.settingOfGap
 
-                    scope.RecordCompactionSettingGap settingGap
+                    compaction.RecordSettingGap settingGap
                     syncHostToolLimits config
 
             let config = registeredHook HookKey.Config (unaryHook (box configurePluginHost))
 
-            let sessionIdOfHook (input: obj) : SessionId =
-                let idStr =
-                    if isNull input || isNull input?sessionID then
-                        "<unknown>"
-                    else
-                        unbox<string> input?sessionID
-
-                SessionId.create idStr
-
-            let existingContextOf (output: obj) : string array =
-                if isNull output || isNull output?context then
-                    [||]
-                else
-                    unbox<string array> output?context
-
-            let writeOutputField (output: obj) (field: string) (value: obj) : unit =
-                if not (isNull output) then
-                    output?(field) <- value
-
-            let appendCompactionContext (output: obj) (lines: string list) : unit =
-                let combined = Array.append (existingContextOf output) (Array.ofList lines)
-                writeOutputField output "context" (box combined)
-
-            // Ends the overflowed consultation's Host loop; its prompt then returns.
-            let abortOverflowedTemporary (tempId: string) : unit =
-                let session = if isNull client then null else client?session
-
-                if not (isNull session) then
-                    (task {
-                        try
-                            let! _ = negotiationSdk session "abort" (negotiationSessionPayload tempId [])
-                            return ()
-                        with _ ->
-                            return ()
-                    })
-                    |> ignore<Task<unit>>
-
             let onSessionCompacting (input: obj) (output: obj) : Task<unit> =
-                task {
-                    let sid = sessionIdOfHook input
-
-                    if markTemporaryOverflow (SessionId.value sid) then
-                        Diagnostic.emit
-                            "temporary_consultation_overflow"
-                            [ "session_id", SessionId.value sid; "result", "consultation-ends" ]
-
-                        abortOverflowedTemporary (SessionId.value sid)
-                    else
-                        Diagnostic.emit
-                            "compaction_started"
-                            [ "session_id", SessionId.value sid; "result", "cannot-refuse" ]
-
-                        activeCompactingSessions.Add(SessionId.value sid) |> ignore
-
-                        let! contribution = product.Compaction.OnCompacting sid
-
-                        match contribution with
-                        | Wanxiangshu.Host.Ports.CompactionContribution.Nothing -> ()
-                        | Wanxiangshu.Host.Ports.CompactionContribution.Context lines ->
-                            appendCompactionContext output lines
-                        | Wanxiangshu.Host.Ports.CompactionContribution.ReplacePrompt prompt ->
-                            writeOutputField output "prompt" (box prompt)
-                }
+                compaction.OnCompacting(product.Compaction, PluginTransforms.negotiationIsTemporary, client, input, output)
 
             let onCompactionAutoContinue (input: obj) (output: obj) : Task<unit> =
-                task {
-                    let sid = sessionIdOfHook input
-
-                    if markTemporaryOverflow (SessionId.value sid) then
-                        // The overflowed consultation stops here; its prompt returns
-                        // and the runner reports the overflow to the caller.
-                        writeOutputField output "enabled" (box false)
-                    else
-                        let! verdict = product.Compaction.AutoContinue sid
-
-                        match verdict with
-                        | Wanxiangshu.Host.Ports.ContinueVerdict.Allow -> writeOutputField output "enabled" (box true)
-                        | Wanxiangshu.Host.Ports.ContinueVerdict.Deny _reason ->
-                            writeOutputField output "enabled" (box false)
-                }
+                compaction.OnAutoContinue(product.Compaction, PluginTransforms.negotiationIsTemporary, input, output)
 
             let sessionCompacting =
                 registeredHook HookKey.SessionCompacting (pairedHook (box onSessionCompacting))
@@ -1417,7 +1308,7 @@ module PluginHooks =
                         calibration?clearSession(SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
-                        activeCompactingSessions.Remove(SessionId.value sessionId) |> ignore
+                        compaction.ForgetSession(SessionId.value sessionId)
                         requestLatency.SessionDeleted (SessionId.value sessionId)
                         Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.forget sessionId)

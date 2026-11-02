@@ -1,5 +1,7 @@
 namespace Wanxiangshu.Context.Companion
 
+open Wanxiangshu.Context.Prefix
+
 open System
 open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.Identity
@@ -305,9 +307,9 @@ module ContextFoldSurface =
                 | None -> null
                 | Some epoch ->
                     box
-                        {| EpochId = PrefixEpochId.value epoch.EpochId
-                           ReanchoredRuns = epoch.ReanchoredRuns |> Set.toArray |> Array.map ProviderRunIdentity.value
-                           ReanchoredTenures = epoch.ReanchoredTenures |> Set.toArray |}
+                        {| EpochId = PrefixEpochId.value (PrefixEpochProjection.epochId epoch)
+                           ReanchoredRuns = PrefixEpochProjection.reanchoredRuns epoch |> Array.map ProviderRunIdentity.value
+                           ReanchoredTenures = PrefixEpochProjection.reanchoredTenures epoch |}
                Handles = session.Handles |> Option.map handlesToJs |> Option.toObj
                ProviderFailures = session.ProviderFailures |> Option.map providerFailuresToJs |> Option.toObj
                PromptAuthority = session.PromptAuthority |> Option.map promptAuthorityToJs |> Option.toObj

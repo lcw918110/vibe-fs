@@ -1,5 +1,7 @@
 namespace Wanxiangshu.OpenCode
 
+open Wanxiangshu.Context.Prefix
+
 open Wanxiangshu.Host
 open Wanxiangshu.Context.Scope
 open Wanxiangshu.Foundation.HostSession
@@ -619,7 +621,7 @@ module ToolRegistry =
             |> Option.bind (fun durable ->
                 AgentProjection.tryFind (SessionId.create ctx.SessionId) (AgentJournal.snapshot durable).AgentProjections)
             |> Option.bind (fun session -> session.PrefixEpoch)
-            |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+            |> Option.map (fun epoch -> string (PrefixEpochProjection.scopeCount epoch))
             |> Option.defaultValue "0"
 
         let generatedJsSpecFor (role: Role) =

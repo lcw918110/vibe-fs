@@ -238,7 +238,7 @@ module PluginHostWiring =
             match!
                 PluginHost.createHost
                     boot.WorkspaceDirectory
-                    input
+                    boot.Transport.Snapshot
                     boot.PortOpt
                     (Some boot.FamilyParent)
                     (Some isLifecycleTerminated)

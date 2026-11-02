@@ -1357,8 +1357,8 @@ module Adapter =
             let fact =
                 ContextFact.ScopeReanchored
                     {| SessionId = sessionId
-                       PreviousEpochId = epoch.EpochId
-                       NextEpochId = PrefixEpochId.next epoch.EpochId
+                       PreviousEpochId = (PrefixEpochProjection.epochId epoch)
+                       NextEpochId = PrefixEpochId.next (PrefixEpochProjection.epochId epoch)
                        CallId = toolCallId
                        ArchiveRef = Some archived.BlobRef
                        ArchiveDigest = Some archived.BlobDigest |}
@@ -1370,7 +1370,7 @@ module Adapter =
             | Error failure -> raise (JournalAppendException failure)
 
             outboundViewStore?discardSealed(sid) |> ignore
-            let nextEpochKey = string (Set.count epoch.ReanchoredScopes + 1)
+            let nextEpochKey = string (PrefixEpochProjection.scopeCount epoch + 1)
             let budget = max 0 retentionBudget
             Surface.resetScopeState sid budget
             scopeProgress?reset(sid, nextEpochKey) |> ignore
@@ -1378,7 +1378,7 @@ module Adapter =
             if budget >= 1 then
                 scopeRetention?seed(sid, budget) |> ignore
                 Surface.setRetentionBudget sid budget
-            if not (Set.isEmpty epoch.ReanchoredScopes) then
+            if PrefixEpochProjection.scopeCount epoch > 0 then
                 Surface.beginAskPreviousScope sid
 
             Surface.setHasPreviousScope sid true
@@ -1442,8 +1442,8 @@ module Adapter =
             AgentProjection.tryFind (SessionId.create sid) (AgentJournal.snapshot journal).AgentProjections
             |> Option.bind (fun session -> session.PrefixEpoch)
 
-        match epoch |> Option.bind (fun current -> current.LastScopeArchive) with
-        | Some archive when epoch |> Option.exists (fun current -> current.EpochId = archive.TargetEpochId) ->
+        match epoch |> Option.bind PrefixEpochProjection.lastScopeArchive with
+        | Some archive when epoch |> Option.exists (fun current -> (PrefixEpochProjection.epochId current) = archive.TargetEpochId) ->
             Ok(epoch.Value, archive)
         | _ -> Error "NoPreviousScope"
 
@@ -2863,7 +2863,7 @@ module Adapter =
         =
         let stillCurrent =
             ompPriorArchive journal sid
-            |> Result.map (fun (epoch, _) -> epoch.EpochId = archive.TargetEpochId)
+            |> Result.map (fun (epoch, _) -> (PrefixEpochProjection.epochId epoch) = archive.TargetEpochId)
             |> Result.defaultValue false
 
         let prepared =
@@ -3186,7 +3186,7 @@ module Adapter =
             |> Option.bind (fun journal ->
                 AgentProjection.tryFind (SessionId.create sid) (AgentJournal.snapshot journal).AgentProjections)
             |> Option.bind (fun session -> session.PrefixEpoch)
-            |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+            |> Option.map (fun epoch -> string (PrefixEpochProjection.scopeCount epoch))
             |> Option.defaultValue "0"
 
         let bindRetention (sid: string) =
@@ -3276,7 +3276,7 @@ module Adapter =
 
             let current =
                 ompPriorArchive journal sid
-                |> Result.map (fun (head, _) -> head.EpochId = epoch)
+                |> Result.map (fun (head, _) -> (PrefixEpochProjection.epochId head) = epoch)
                 |> Result.defaultValue false
 
             if current then

@@ -211,7 +211,7 @@ module JournalSurface =
                latestTerminalPresent = XTraceProjection.latestTerminalEvidence state |> Option.isSome |}
 
     let private prefixEpochSliceToJs (epoch: ActivePrefixEpoch) : obj =
-        box {| epochId = PrefixEpochId.value epoch.EpochId |}
+        box {| epochId = PrefixEpochId.value (PrefixEpochProjection.epochId epoch) |}
 
     let private handleIdText (handleId: HandleId) =
         match handleId with
