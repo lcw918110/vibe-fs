@@ -5,17 +5,11 @@ open Wanxiangshu.Composition.Durable
 [<RequireQualifiedAccess>]
 module CanonicalIntegrator =
 
-    /// Journal-only spine: the structural frontier plus the journal fold.
-    /// Every domain rule (Sphinx, JsTransaction, Casebook) lives in
-    /// its owning module and is injected explicitly by composition owners
-    /// through `createWithRules`.
-    let baseRules: IntegrationRule list =
-        [ StructuralIntegration.rule; JournalIntegration.rule ]
+    /// 领域规则由组装层提供；结构 heads 归库内 Integrator。
+    let baseRules: IntegrationRule list = [ JournalIntegration.rule ]
 
-    /// Fail-closed seam precondition: structural heads and the journal fold
-    /// are load-bearing for every store (`TryHeads`, journal resume).
     let private requireBaseRules (program: IntegrationRule list) =
-        [ StructuralIntegration.rule.Name; JournalIntegration.rule.Name ]
+        [ JournalIntegration.rule.Name ]
         |> List.iter (fun name ->
             if program |> List.exists (fun rule -> rule.Name = name) |> not then
                 invalidArg "rules" (sprintf "CanonicalIntegrator program is missing required rule '%s'" name))

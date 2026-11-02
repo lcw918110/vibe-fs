@@ -22,6 +22,7 @@ module ProviderFailureSurface =
     /// current logical identity and budget come from the supplied projection.
     val stopWaitVerdict: alreadyAdmitted: bool -> stopWait: string -> string
     val delegateRetryObservation: verdictName: string -> string
+
     val retryAttempt:
         input: obj -> current: obj -> admit: (obj -> Task<string>) -> redispatch: (obj -> Task<unit>) -> Task<string>
 
@@ -56,6 +57,7 @@ module ProviderFailureSurface =
     val longWorkContinuationPath: role: string -> failure: string -> string
     val longWorkContinuationPathForReason: role: string -> failure: string -> reason: string -> string
     val confirmedFailureIsHardStop: failure: string -> reason: string -> bool
+    val continueConfirmedFailure: handle: JournalHandle -> sessionPort: obj -> eventPort: obj -> input: obj -> Task
 
 
     /// provider-attempt-recovery-026 test seam: classify the same-provider recovery

@@ -1,6 +1,9 @@
 namespace Wanxiangshu.OpenCode
 
+open Wanxiangshu.Context.Prefix
+
 open Wanxiangshu.Persistence.Journal.JournalOutcome
+
 #nowarn "3511"
 
 open System
@@ -72,21 +75,6 @@ open PluginHostInterop
 
 module PluginHooks =
 
-    [<Import("SqliteJournal", "wanxiangli/eventstore")>]
-    let private retentionJournalConstructor: obj = jsNative
-
-    [<Import("createRequire", "node:module")>]
-    let private createRequire (url: string) : obj = jsNative
-
-    [<Emit("import.meta.url")>]
-    let private moduleUrl: string = jsNative
-
-    [<Emit("typeof globalThis.Bun !== 'undefined'")>]
-    let private runningOnBun () : bool = jsNative
-
-    [<Emit("$0($1)")>]
-    let private requireModule (_require: obj) (_name: string) : obj = jsNative
-
     [<Import("join", "node:path")>]
     let private joinPath (left: string) (right: string) : string = jsNative
 
@@ -105,12 +93,6 @@ module PluginHooks =
 
     [<Import("ProviderCalibration", "wanxiangli/provider-calibration")>]
     let private calibration: obj = jsNative
-
-    [<Import("requestLatencyDetector", "wanxiangli/degeneration")>]
-    let private requestLatencyDetector: obj = jsNative
-
-    [<Emit("performance.now()")>]
-    let private performanceNow () : float = jsNative
 
     [<Emit("Object.prototype.hasOwnProperty.call($0, $1)")>]
     let private hasOwnProperty (target: obj) (prop: string) : bool = jsNative
@@ -137,23 +119,6 @@ module PluginHooks =
         | Some run, Some call -> Some(run, call)
         | _ -> None
 
-
-    /// A read-only consultation projects an immutable view (the delegator's
-    /// latest view or the previous Scope's sealed equivalent view). Host
-    /// compaction cannot shrink it: every next step re-projects the same view.
-    /// So a Host compaction on a temporary session is the observed fact that
-    /// the view does not fit the provider window; the consultation ends there
-    /// and reports that to its caller instead of compacting forever.
-    let private overflowedTemporaries = HashSet<string>()
-
-    let private markTemporaryOverflow (tempId: string) : bool =
-        if PluginTransforms.negotiationIsTemporary tempId then
-            overflowedTemporaries.Add tempId |> ignore
-            true
-        else
-            false
-
-    let private temporaryOverflowed (tempId: string) = overflowedTemporaries.Contains tempId
 
     let private temporaryOverflowError =
         "read-only consultation view exceeds the provider context window; Host compaction cannot shrink a projected consultation view, so the consultation ended"
@@ -208,11 +173,9 @@ module PluginHooks =
     let private snapshotPromptText (sessionText: string) (questions: string) =
         questions.TrimEnd() + "\n\n" + snapshotForbidText sessionText
 
-    let private negotiationPromptText (delegator: string) (questions: string) =
-        snapshotPromptText delegator questions
+    let private negotiationPromptText (delegator: string) (questions: string) = snapshotPromptText delegator questions
 
-    let private previousScopePromptText (recipient: string) (questions: string) =
-        snapshotPromptText recipient questions
+    let private previousScopePromptText (recipient: string) (questions: string) = snapshotPromptText recipient questions
 
     [<RequireQualifiedAccess>]
     type private TemporaryAnswer =
@@ -221,25 +184,35 @@ module PluginHooks =
         | Failed of string
 
     let private classifyTemporaryAnswer (text: string) (blocked: bool) =
-        if blocked then TemporaryAnswer.Retry
+        if blocked then
+            TemporaryAnswer.Retry
         elif String.IsNullOrWhiteSpace text then
             TemporaryAnswer.Failed "temporary consultation completed without assistant prose"
-        else TemporaryAnswer.Replied text
+        else
+            TemporaryAnswer.Replied text
 
     // An SDK error without an observed tool-call veto is a transport/admission
     // failure, never an incomplete reply. An independently observed tool veto
     // can still use its bounded clarification retry.
     let private classifyTemporaryFailure (ex: exn) (blocked: bool) =
-        if blocked then TemporaryAnswer.Retry
-        else TemporaryAnswer.Failed ex.Message
+        if blocked then
+            TemporaryAnswer.Retry
+        else
+            TemporaryAnswer.Failed ex.Message
 
     let private temporarySdkError (result: obj) =
         let body = negotiationResponse result
+
         let raw =
-            if not (isNull result) && not (isNull result?error) then result?error
-            elif not (isNull body) && not (isNull body?error) then body?error
-            elif not (isNull body) && not (isNull body?info) then body?info?error
-            else null
+            if not (isNull result) && not (isNull result?error) then
+                result?error
+            elif not (isNull body) && not (isNull body?error) then
+                body?error
+            elif not (isNull body) && not (isNull body?info) then
+                body?info?error
+            else
+                null
+
         if isNull raw then None
         elif isNull raw?message then Some(string raw)
         else Some(string raw?message)
@@ -283,6 +256,7 @@ module PluginHooks =
         }
 
     let private runTemporaryQuestion
+        (compaction: OpenCodeCompaction)
         (session: obj)
         (tempId: string)
         (agentName: string)
@@ -294,7 +268,7 @@ module PluginHooks =
         let retryText = snapshotDenialText tempId + "\n\n" + firstPrompt
 
         let rec run attempt prose =
-            if temporaryOverflowed tempId then
+            if compaction.TemporaryOverflowed tempId then
                 Task.FromResult(Error temporaryOverflowError)
             elif not (PluginTransforms.negotiationIsTemporary tempId) then
                 Task.FromResult(Error "temporary read-only consultation was cancelled")
@@ -311,7 +285,7 @@ module PluginHooks =
                 let! result = tryTemporaryAnswer session tempId payload
 
                 match result with
-                | _ when temporaryOverflowed tempId -> return Error temporaryOverflowError
+                | _ when compaction.TemporaryOverflowed tempId -> return Error temporaryOverflowError
                 | TemporaryAnswer.Replied text -> return Ok text
                 | TemporaryAnswer.Retry -> return! run (attempt + 1) retryText
                 | TemporaryAnswer.Failed error -> return Error error
@@ -356,6 +330,7 @@ module PluginHooks =
         | Previous of string * obj
 
     let private runLinkedTemporary
+        (compaction: OpenCodeCompaction)
         (session: obj)
         (origin: ConsultationOrigin)
         (tempId: string)
@@ -368,24 +343,25 @@ module PluginHooks =
                 | ConsultationOrigin.Delegator delegator ->
                     PluginTransforms.negotiationStartTemporary tempId delegator,
                     PluginTransforms.negotiationModelFor delegator
-                | ConsultationOrigin.Previous (source, metadata) ->
+                | ConsultationOrigin.Previous(source, metadata) ->
                     PluginTransforms.consultationStartPrevious tempId source metadata,
                     PluginTransforms.consultationModelForPrevious source metadata
 
             let questionRun =
                 match linked with
                 | Error reason -> Task.FromResult(Error reason)
-                | Ok() -> runTemporaryQuestion session tempId agentName model promptText
+                | Ok() -> runTemporaryQuestion compaction session tempId agentName model promptText
 
             try
                 return! questionRun
             finally
                 PluginTransforms.negotiationFinishTemporary tempId
-                overflowedTemporaries.Remove tempId |> ignore
+                compaction.FinishTemporary tempId
         // Physical session cleanup is deliberately performed after the runner by createAndRunTemporary.
         }
 
     let private createAndRunTemporary
+        (compaction: OpenCodeCompaction)
         (session: obj)
         (origin: ConsultationOrigin)
         (recipient: string)
@@ -398,7 +374,7 @@ module PluginHooks =
             match created with
             | Error reason -> return Error reason
             | Ok tempId ->
-                let! result = runLinkedTemporary session origin tempId agentName promptText
+                let! result = runLinkedTemporary compaction session origin tempId agentName promptText
                 do! deleteTemporarySession session tempId
                 return result
         }
@@ -406,6 +382,7 @@ module PluginHooks =
     /// The Host temp session contains only the question. Provider transform
     /// inserts the immutable delegator wire before the LLM request.
     let private negotiateBtw
+        (compaction: OpenCodeCompaction)
         (client: obj)
         (roleFor: SessionId -> Role option)
         (delegator: string)
@@ -419,6 +396,7 @@ module PluginHooks =
         | Some _ when isNull session -> Task.FromResult(Error "OpenCode SDK session transport unavailable")
         | Some role ->
             createAndRunTemporary
+                compaction
                 session
                 (ConsultationOrigin.Delegator delegator)
                 recipient
@@ -426,6 +404,7 @@ module PluginHooks =
                 (negotiationPromptText delegator questions)
 
     let private consultPreviousBtw
+        (compaction: OpenCodeCompaction)
         (client: obj)
         (roleFor: SessionId -> Role option)
         (recipient: string)
@@ -439,6 +418,7 @@ module PluginHooks =
         | Some _ when isNull session -> Task.FromResult(Error "OpenCode SDK session transport unavailable")
         | Some role ->
             createAndRunTemporary
+                compaction
                 session
                 (ConsultationOrigin.Previous(recipient, snapshot))
                 recipient
@@ -463,157 +443,10 @@ module PluginHooks =
             let eventPort = host.EventPort
             let chatParams = ChatParamsHook.createWith journal
 
-            // Latency watchdog: per-session request-latency state machine. The
-            // statistics live in the library singleton; every physical effect
-            // is a port. Now is the Node monotonic clock (ms); Schedule wraps
-            // the Node timer port's one-shot delay with a cancellation handle.
-            let latencyTimerPort = NodeTiming.nodeTimerPort ()
-            let latencyObservers = Dictionary<string, string * (unit -> unit)>()
+            let compaction = wired.Compaction
 
-            let latencyPorts: LatencyWatchdogPorts =
-                { Now = performanceNow
-                  Schedule = fun milliseconds callback ->
-                      let handle = latencyTimerPort.Delay(int milliseconds)
-
-                      (task {
-                          do! handle.Delay
-                          callback ()
-                      })
-                      |> ignore<Task<unit>>
-
-                      { new IDisposable with
-                          member _.Dispose() = handle.Cancel() }
-                  Abort = fun sessionId ->
-                      task {
-                          let sid = SessionId.create sessionId
-                          // Recorded before the Host acts: its Aborted terminal
-                          // can arrive before this promise resolves.
-                          Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.record sid
-                          let! outcome = sessionPort.InterruptAttempt sid
-
-                          return
-                              match outcome with
-                              | Ok() -> true
-                              | Error _ ->
-                                  Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.unrecord sid
-                                  false
-                      }
-                  Continue = fun sessionId prompt accepted onLateRefused ->
-                      task {
-                          // Detached is an actual handoff, not an Await with an
-                          // artificial deadline. Physical acceptance owns the
-                          // continuation outcome through the observer callback.
-                          let registrations = ResizeArray<IDisposable>()
-                          let token = Guid.NewGuid().ToString("N")
-                          // DSL-MUTABLE: subscription — dispose this continuation's observers once
-                          let mutable released = false
-                          let release () =
-                              if not released then
-                                  released <- true
-                                  match latencyObservers.TryGetValue sessionId with
-                                  | true, (current, _) when current = token ->
-                                      latencyObservers.Remove sessionId |> ignore
-                                  | _ -> ()
-                                  for registration in registrations do
-                                      registration.Dispose()
-                          latencyObservers[sessionId] <- (token, release)
-
-                          let acceptance: Wanxiangshu.Foundation.HostSession.ContinuationAcceptanceObserver =
-                              { Notify = fun _ ->
-                                    release ()
-                                    accepted ()
-                                AttachDisposable = fun registration ->
-                                    if released then registration.Dispose()
-                                    else registrations.Add registration
-                                Budget = None }
-                          try
-                              let! sent =
-                                  HostSessionNudge.sendContinuationDetachedObservedResult
-                                      sessionPort
-                                      host.RootWorkspace
-                                      (SessionId.create sessionId)
-                                      prompt
-                                      PromptAuthority.ContinuationKind.ProviderRetryAttempt
-                                      None
-                                      journal
-                                      acceptance
-                                      (fun reason ->
-                                          release ()
-                                          onLateRefused reason)
-
-                              return
-                                  match sent with
-                                  | Ok _ -> ""
-                                  | Error reason ->
-                                      release ()
-                                      reason
-                          with error ->
-                              release ()
-                              return error.Message
-                      }
-                  DropObserver = fun sessionId ->
-                      match latencyObservers.TryGetValue sessionId with
-                      | true, (_, release) -> release ()
-                      | _ -> ()
-                  Return = fun sessionId reason ->
-                      let sid = SessionId.create sessionId
-                      let text = "degeneration continuation unavailable: " + reason
-                      // The active profile can close while the interrupt is in
-                      // flight. The parent must still hear Failed: an
-                      // authority-less session stop addresses its live run.
-                      let stop =
-                          if sessionPort.IsManagedChild sid then
-                              match HostSessionNudge.tryActiveProfile journal sid with
-                              | Some owner ->
-                                  Some(
-                                      Wanxiangshu.Foundation.TerminalSignal.TerminalStop.forAuthority
-                                          owner.AuthorityRootUserMessageId
-                                          text
-                                  )
-                              | None -> Some(Wanxiangshu.Foundation.TerminalSignal.TerminalStop.session text)
-                          else
-                              None
-                      match stop with
-                      | Some stop ->
-                          if not (eventPort.NotifyTerminal
-                                      sid
-                                      (Wanxiangshu.Foundation.TerminalSignal.TerminalOutcome.Failed stop)) then
-                              Diagnostic.emit
-                                  "latency-degeneration-return-unobserved"
-                                  [ "session_id", sessionId; "reason", reason ]
-                      | None ->
-                          Diagnostic.emit
-                              "latency-degeneration-return-unowned"
-                              [ "session_id", sessionId; "reason", reason ]
-                  Managed = fun sessionId ->
-                      let sid = SessionId.create sessionId
-                      sessionPort.IsManagedChild sid
-                      && (HostSessionNudge.tryActiveProfile journal sid |> Option.isSome)
-                  Text = fun sessionId ->
-                      ProviderProse.render
-                          (ProviderLanguageBinding.forSessionText sessionId)
-                          RuntimeNudge.LatencyDegeneration
-                          Map.empty
-                  // CTX-014 only admits whitelisted fields; a non-whitelisted
-                  // name makes Diagnostic.emit drop the whole record.
-                  Diagnostic = fun kind reason -> Diagnostic.emit kind [ "reason", reason ] }
-
-            let latencyWatchdog =
-                new LatencyWatchdog(
-                    latencyPorts,
-                    { new RequestLatencyDetector with
-                        member _.ThresholdMs sessionId =
-                            unbox<float> (requestLatencyDetector?ThresholdMs sessionId)
-
-                        member _.ObserveCompleted(sessionId, durationMs) =
-                            requestLatencyDetector?ObserveCompleted (sessionId, durationMs) |> ignore
-
-                        member _.ObserveCensored(sessionId, censoredMs) =
-                            requestLatencyDetector?ObserveCensored (sessionId, censoredMs) |> ignore
-
-                        member _.Forget sessionId =
-                            requestLatencyDetector?Forget sessionId |> ignore }
-                )
+            let requestLatency =
+                RequestLatency.create sessionPort host.RootWorkspace eventPort journal compaction.IsCompacting
 
             // Scope retention is the only durable scope store: its annotation
             // stream replays on cold start.
@@ -623,39 +456,39 @@ module PluginHooks =
             match workspaceDirectory with
             | Some workspace ->
                 let! root = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
-                let directory = joinPath root "wanxiangshu"
-                mkdirSync directory (createObj [ "recursive" ==> true ])
-                let target = joinPath directory "scope-retention.sqlite"
-                let makeJournal = Func<string, obj>(fun _session ->
-                    let loader = createRequire moduleUrl
-                    let sqlite = requireModule loader (if runningOnBun () then "bun:sqlite" else "node:sqlite")
-                    let connection =
-                        if runningOnBun () then createNew sqlite?Database target
-                        else createNew sqlite?DatabaseSync target
-                    try createNew retentionJournalConstructor connection
-                    with _ ->
-                        connection?close() |> ignore
-                        reraise ())
+                mkdirSync (joinPath root "wanxiangshu") (createObj [ "recursive" ==> true ])
+
+                let makeJournal =
+                    Func<string, obj>(fun _session ->
+                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.openScopeJournal root)
+
                 retentionJournalFactory <- Some(box makeJournal)
-                scopeRetention?configureJournal(makeJournal) |> ignore
+                scopeRetention?configureJournal (makeJournal) |> ignore
             | None ->
-                let unavailable = Func<string, obj>(fun _ -> failwith "ScopeRetention requires a verified durable workspace")
-                scopeRetention?configureJournal(unavailable) |> ignore
+                let unavailable =
+                    Func<string, obj>(fun _ -> failwith "ScopeRetention requires a verified durable workspace")
+
+                scopeRetention?configureJournal (unavailable) |> ignore
 
             let scopeEpoch (sessionId: string) : string =
                 journal
                 |> Option.bind (fun durable ->
-                    AgentProjection.tryFind (SessionId.create sessionId) (AgentJournal.snapshot durable).AgentProjections)
+                    AgentProjection.tryFind
+                        (SessionId.create sessionId)
+                        (AgentJournal.snapshot durable).AgentProjections)
                 |> Option.bind (fun session -> session.PrefixEpoch)
-                |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+                |> Option.map (fun epoch -> string (PrefixEpochProjection.scopeCount epoch))
                 |> Option.defaultValue "0"
+
+            let bindRetentionFactory sessionId =
+                match retentionJournalFactory with
+                | Some factory -> scopeRetention?bindSessionJournal (sessionId, factory) |> ignore
+                | None -> scopeRetention?unbindSessionJournal (sessionId) |> ignore
 
             let bindRetentionJournal (sessionId: string) =
                 if not (String.IsNullOrWhiteSpace sessionId) then
-                    match retentionJournalFactory with
-                    | Some factory -> scopeRetention?bindSessionJournal(sessionId, factory) |> ignore
-                    | None -> scopeRetention?unbindSessionJournal(sessionId) |> ignore
-                    scopeRetention?ensureEpoch(sessionId, scopeEpoch sessionId) |> ignore
+                    bindRetentionFactory sessionId
+                    scopeRetention?ensureEpoch (sessionId, scopeEpoch sessionId) |> ignore
 
             let roleFor (sessionId: SessionId) =
                 journal
@@ -703,8 +536,6 @@ module PluginHooks =
                     | _ -> return None
                 }
 
-            let activeCompactingSessions = System.Collections.Generic.HashSet<string>()
-
             let sessionStringOf (target: obj) : string =
                 if isNull target || isNull target?sessionID then
                     ""
@@ -734,8 +565,11 @@ module PluginHooks =
                     |> Option.orElseWith (fun () ->
                         let mode = readTrimmed lastMsg "mode"
                         let infoMode = readTrimmed lastMsg?info "mode"
-                        if mode = Some "compaction" || infoMode = Some "compaction" then Some "compaction"
-                        else None))
+
+                        if mode = Some "compaction" || infoMode = Some "compaction" then
+                            Some "compaction"
+                        else
+                            None))
 
             let tryRequestAgent (candidate: obj) : string option =
                 nonNull candidate
@@ -744,12 +578,17 @@ module PluginHooks =
                         readTrimmed c "agent"
                         |> Option.orElseWith (fun () -> readTrimmed c?info "agent")
                         |> Option.orElseWith (fun () -> readTrimmed c?message "agent")
+
                     let directMode =
                         let m1 = readTrimmed c "mode"
                         let m2 = readTrimmed c?info "mode"
                         let m3 = readTrimmed c?message "mode"
-                        if m1 = Some "compaction" || m2 = Some "compaction" || m3 = Some "compaction" then Some "compaction"
-                        else None
+
+                        if m1 = Some "compaction" || m2 = Some "compaction" || m3 = Some "compaction" then
+                            Some "compaction"
+                        else
+                            None
+
                     directAgent
                     |> Option.orElse directMode
                     |> Option.orElseWith (fun () -> lastMessageAgent c?messages))
@@ -768,14 +607,18 @@ module PluginHooks =
                 [ for language in [ ProviderLanguage.English; ProviderLanguage.SimplifiedChinese ] do
                       for role in [ Role.Manager; Role.Orchestrator; Role.Engineer; Role.DevOps; Role.Plan ] do
                           yield (PromptResources.systemForRole language role).Trim()
+
                       yield (PromptResources.loadBookkeeperSystemFor language).Trim() ]
 
             let ownsSystem (output: obj) : bool =
-                let system: string array = if isNull output?system then [||] else unbox output?system
+                let system: string array =
+                    if isNull output?system then [||] else unbox output?system
+
                 system
                 |> Array.tryHead
                 |> Option.exists (fun text ->
-                    ownedSystemPrompts |> List.exists (fun owned ->
+                    ownedSystemPrompts
+                    |> List.exists (fun owned ->
                         not (String.IsNullOrWhiteSpace owned)
                         && (text = owned || text.StartsWith(owned + "\n", StringComparison.Ordinal))))
 
@@ -799,6 +642,7 @@ module PluginHooks =
 
             let systemTransform (input: obj) (output: obj) : Task<unit> =
                 let temporary = PluginTransforms.negotiationIsTemporary (sessionStringOf input)
+
                 if not temporary && not (ownsSystem output) then
                     Task.FromResult(())
                 else
@@ -829,34 +673,8 @@ module PluginHooks =
                 if not (System.String.IsNullOrWhiteSpace sessionId) then
                     CasebookLifecycle.collector.Collect(sessionId, toolName, toolInput?args, rendered)
 
-            let tryFirstMessageSessionId (outObj: obj) : string option =
-                match isNull outObj || isNull outObj?messages with
-                | true -> None
-                | false ->
-                    let msgs = outObj?messages
-                    let len: int = unbox msgs?length
-                    match len with
-                    | 0 -> None
-                    | _ ->
-                        let first = msgs?(0)
-                        let rawSid = if isNull first?sessionID then first?info?sessionID else first?sessionID
-                        match isNull rawSid with
-                        | true -> None
-                        | false -> Some(string rawSid)
-
-            let isCompactingTransform (inObj: obj) (outObj: obj) : bool =
-                let sidOpt =
-                    let sid1 = sessionStringOf inObj
-                    match String.IsNullOrWhiteSpace sid1 with
-                    | false -> Some sid1
-                    | true -> tryFirstMessageSessionId outObj
-                match sidOpt with
-                | Some sid when not (String.IsNullOrWhiteSpace sid) ->
-                    activeCompactingSessions.Remove(sid)
-                | _ -> false
-
             let isUnmanagedTransform (inObj: obj) (outObj: obj) : bool =
-                isCompactingTransform inObj outObj
+                compaction.TryConsumeHistoryBypass(inObj, outObj)
                 || isExplicitlyUnmanagedAgent inObj
                 || isExplicitlyUnmanagedAgent outObj
 
@@ -981,12 +799,12 @@ module PluginHooks =
                     toolRegistration.Runtime.AttachQuestionNotifier(fun question -> showQuestionToast question)
 
                     toolRegistration.Runtime.AttachNegotiationTransport(
-                        negotiateBtw client roleFor,
+                        negotiateBtw compaction client roleFor,
                         (fun recipient answer receipt ->
                             toolRegistration.Runtime.SendNegotiationSteer(recipient, answer, receipt))
                     )
 
-                    toolRegistration.Runtime.AttachPreviousScopeTransport(consultPreviousBtw client roleFor)
+                    toolRegistration.Runtime.AttachPreviousScopeTransport(consultPreviousBtw compaction client roleFor)
 
                     scope.AttachToolRuntime(toolRegistration.Runtime :> ISessionRuntimeOwner)
 
@@ -1232,7 +1050,7 @@ module PluginHooks =
                     let toolName = toolField toolInput "tool"
                     // latency-degeneration [013]: the model request ended when
                     // it handed this tool over; tool execution is not latency.
-                    latencyWatchdog.ToolStarted sessionId
+                    requestLatency.ToolStarted sessionId
 
                     if PluginTransforms.negotiationIsTemporary sessionId then
                         PluginTransforms.negotiationRecordToolViolation sessionId
@@ -1244,8 +1062,7 @@ module PluginHooks =
                         && (String.IsNullOrWhiteSpace sessionId
                             || not (sessionPort.IsManagedChild(SessionId.create sessionId)))
                     then
-                        invalidOp
-                            "negotiate is only available in delegated child sessions, not user-facing sessions."
+                        invalidOp "negotiate is only available in delegated child sessions, not user-facing sessions."
 
                     // capability-enforcement-002/007: a Host-declared external
                     // (MCP) tool holds no office capability, so it is advertised
@@ -1329,6 +1146,7 @@ module PluginHooks =
             let chatMessageWithNegotiationPolicy (input: obj) (output: obj) : Task<unit> =
                 task {
                     let rawSession = if isNull input then null else input?sessionID
+
                     let temporary =
                         not (isNull rawSession)
                         && PluginTransforms.negotiationIsTemporary (string rawSession)
@@ -1343,6 +1161,7 @@ module PluginHooks =
                     if not temporary && not isFunctional then
                         let pending: Task<unit> =
                             emitJsExpr (originalChatMessage, input, output) "$0($1, $2)"
+
                         do! pending
 
                     let managedChild =
@@ -1351,7 +1170,14 @@ module PluginHooks =
                         && sessionPort.IsManagedChild(SessionId.create (string rawSession))
 
                     let unmanaged = isExplicitlyUnmanagedAgent input
-                    if not unmanaged && not temporary && not managedChild && not (isNull output) && not (isNull output?message) then
+
+                    if
+                        not unmanaged
+                        && not temporary
+                        && not managedChild
+                        && not (isNull output)
+                        && not (isNull output?message)
+                    then
                         let tools = requireUserMessageTools output?message
                         tools?negotiate <- box false
                 }
@@ -1361,7 +1187,13 @@ module PluginHooks =
 
             let rememberModelParams (input: obj) (output: obj) =
                 let unmanaged = isExplicitlyUnmanagedAgent input
-                let currentSession = if isNull input?sessionID then "" else string input?sessionID
+
+                let currentSession =
+                    if isNull input?sessionID then
+                        ""
+                    else
+                        string input?sessionID
+
                 let temporary =
                     not (String.IsNullOrWhiteSpace currentSession)
                     && PluginTransforms.negotiationIsTemporary currentSession
@@ -1373,11 +1205,15 @@ module PluginHooks =
                     emitJsExpr (chatParams, input, output) "$0($1, $2)" |> ignore
 
                 let shouldRememberModel = not temporary && not unmanaged
+
                 if shouldRememberModel then
                     PluginTransforms.negotiationRememberModel input
 
                 let modelSessionId = unbox<string> input?sessionID
-                let shouldRecordModel = not temporary && not unmanaged && not (String.IsNullOrEmpty modelSessionId)
+
+                let shouldRecordModel =
+                    not temporary && not unmanaged && not (String.IsNullOrEmpty modelSessionId)
+
                 if shouldRecordModel then
                     outboundViewStore?recordModel (modelSessionId, input?model) |> ignore
 
@@ -1419,91 +1255,22 @@ module PluginHooks =
                         )
                         |> Option.bind Wanxiangshu.Composition.Plugin.ConfigPolicy.settingOfGap
 
-                    scope.RecordCompactionSettingGap settingGap
+                    compaction.RecordSettingGap settingGap
                     syncHostToolLimits config
 
             let config = registeredHook HookKey.Config (unaryHook (box configurePluginHost))
 
-            let sessionIdOfHook (input: obj) : SessionId =
-                let idStr =
-                    if isNull input || isNull input?sessionID then
-                        "<unknown>"
-                    else
-                        unbox<string> input?sessionID
-
-                SessionId.create idStr
-
-            let existingContextOf (output: obj) : string array =
-                if isNull output || isNull output?context then
-                    [||]
-                else
-                    unbox<string array> output?context
-
-            let writeOutputField (output: obj) (field: string) (value: obj) : unit =
-                if not (isNull output) then
-                    output?(field) <- value
-
-            let appendCompactionContext (output: obj) (lines: string list) : unit =
-                let combined = Array.append (existingContextOf output) (Array.ofList lines)
-                writeOutputField output "context" (box combined)
-
-            // Ends the overflowed consultation's Host loop; its prompt then returns.
-            let abortOverflowedTemporary (tempId: string) : unit =
-                let session = if isNull client then null else client?session
-
-                if not (isNull session) then
-                    (task {
-                        try
-                            let! _ = negotiationSdk session "abort" (negotiationSessionPayload tempId [])
-                            return ()
-                        with _ ->
-                            return ()
-                    })
-                    |> ignore<Task<unit>>
-
             let onSessionCompacting (input: obj) (output: obj) : Task<unit> =
-                task {
-                    let sid = sessionIdOfHook input
-
-                    if markTemporaryOverflow (SessionId.value sid) then
-                        Diagnostic.emit
-                            "temporary_consultation_overflow"
-                            [ "session_id", SessionId.value sid; "result", "consultation-ends" ]
-
-                        abortOverflowedTemporary (SessionId.value sid)
-                    else
-                        Diagnostic.emit
-                            "compaction_started"
-                            [ "session_id", SessionId.value sid; "result", "cannot-refuse" ]
-
-                        activeCompactingSessions.Add(SessionId.value sid) |> ignore
-
-                        let! contribution = product.Compaction.OnCompacting sid
-
-                        match contribution with
-                        | Wanxiangshu.Host.Ports.CompactionContribution.Nothing -> ()
-                        | Wanxiangshu.Host.Ports.CompactionContribution.Context lines ->
-                            appendCompactionContext output lines
-                        | Wanxiangshu.Host.Ports.CompactionContribution.ReplacePrompt prompt ->
-                            writeOutputField output "prompt" (box prompt)
-                }
+                compaction.OnCompacting(
+                    product.Compaction,
+                    PluginTransforms.negotiationIsTemporary,
+                    client,
+                    input,
+                    output
+                )
 
             let onCompactionAutoContinue (input: obj) (output: obj) : Task<unit> =
-                task {
-                    let sid = sessionIdOfHook input
-
-                    if markTemporaryOverflow (SessionId.value sid) then
-                        // The overflowed consultation stops here; its prompt returns
-                        // and the runner reports the overflow to the caller.
-                        writeOutputField output "enabled" (box false)
-                    else
-                        let! verdict = product.Compaction.AutoContinue sid
-
-                        match verdict with
-                        | Wanxiangshu.Host.Ports.ContinueVerdict.Allow -> writeOutputField output "enabled" (box true)
-                        | Wanxiangshu.Host.Ports.ContinueVerdict.Deny _reason ->
-                            writeOutputField output "enabled" (box false)
-                }
+                compaction.OnAutoContinue(product.Compaction, PluginTransforms.negotiationIsTemporary, input, output)
 
             let sessionCompacting =
                 registeredHook HookKey.SessionCompacting (pairedHook (box onSessionCompacting))
@@ -1562,72 +1329,16 @@ module PluginHooks =
                     HostEventEnvelope.trySessionId raw
                     |> Option.iter (fun sessionId ->
                         Surface.clearSessionState (SessionId.value sessionId)
-                        scopeProgress?clear(SessionId.value sessionId) |> ignore
-                        scopeRetention?clear(SessionId.value sessionId) |> ignore
-                        scopeRetention?unbindSessionJournal(SessionId.value sessionId) |> ignore
-                        calibration?clearSession(SessionId.value sessionId) |> ignore
+                        scopeProgress?clear (SessionId.value sessionId) |> ignore
+                        scopeRetention?clear (SessionId.value sessionId) |> ignore
+                        scopeRetention?unbindSessionJournal (SessionId.value sessionId) |> ignore
+                        calibration?clearSession (SessionId.value sessionId) |> ignore
                         PluginTransforms.negotiationForgetSession (SessionId.value sessionId)
                         outboundViewStore?clearSession (SessionId.value sessionId) |> ignore
-                        activeCompactingSessions.Remove(SessionId.value sessionId) |> ignore
-                        latencyWatchdog.Cancel (SessionId.value sessionId)
-                        latencyWatchdog.ForgetDetector (SessionId.value sessionId)
+                        compaction.ForgetSession(SessionId.value sessionId)
+                        requestLatency.SessionDeleted(SessionId.value sessionId)
                         Wanxiangshu.Foundation.TerminalSignal.DegenerationInterrupts.forget sessionId
                         Wanxiangshu.Foundation.TerminalSignal.CompletedContinuationStops.forget sessionId)
-
-            /// The watchdog's boundaries use the exact provider-run identity:
-            /// the assistant message's own id, present on both the provider
-            /// start and the terminal event. The physical user message id
-            /// (assistant parentID) is shared by every provider step of the
-            /// same turn, so it cannot pair one terminal to one attempt; the
-            /// provider run can. Compaction runs are not measured. An idle
-            /// signal with a measurement still in hand means the completion
-            /// event is missing or the interrupt never settled.
-            let settleLatencyWatchdog raw =
-                match HostEventCodec.tryDecodeExactProviderStart raw with
-                | Some observation ->
-                    let sessionId = SessionId.value observation.SessionId
-
-                    if not (activeCompactingSessions.Contains sessionId) then
-                        latencyWatchdog.Begin(
-                            sessionId,
-                            Some(ProviderRunIdentity.value observation.ProviderRun)
-                        )
-                | None -> ()
-
-                // The model also finishes a request when it hands tools to
-                // the Host. Its timer must never cover execution of resetScope.
-                match HostEventCodec.tryDecodeProviderStepEnd raw with
-                | Some(sessionId, _, providerRun) ->
-                    match HostEventCodec.tryDecodeExactProviderTerminal raw with
-                    | Some observation ->
-                        match observation.Outcome with
-                        | Wanxiangshu.Execution.Session.ChatExecution.HostProviderTerminalOutcome.Completed _ ->
-                            latencyWatchdog.Complete(
-                                SessionId.value sessionId,
-                                Some(ProviderRunIdentity.value providerRun)
-                            )
-                        | Wanxiangshu.Execution.Session.ChatExecution.HostProviderTerminalOutcome.Cancelled ExecutionFailure.UserCancelled ->
-                            latencyWatchdog.OnProviderCancelled(
-                                SessionId.value sessionId,
-                                Some(ProviderRunIdentity.value providerRun)
-                            )
-                        | _ ->
-                            latencyWatchdog.Discard(
-                                SessionId.value sessionId,
-                                Some(ProviderRunIdentity.value providerRun)
-                            )
-                    | None ->
-                        // Tool-calls finishes this exact model request, not the Session.
-                        latencyWatchdog.CompleteStep(
-                            SessionId.value sessionId,
-                            Some(ProviderRunIdentity.value providerRun)
-                        )
-                | None -> ()
-
-                match HostEventCodec.tryDecode raw with
-                | Some(SessionIdle sessionId) ->
-                    latencyWatchdog.OnIdle(SessionId.value sessionId)
-                | _ -> ()
 
             let observeEvent raw =
                 task {
@@ -1635,7 +1346,7 @@ module PluginHooks =
                     recordProviderTokenUse raw
                     do! settleUserQuestion raw
                     do! settlePostS3Deliver raw
-                    settleLatencyWatchdog raw
+                    requestLatency.ObserveEvent raw
                     do! wired.ObserveEvent raw
                 }
 
@@ -1645,7 +1356,7 @@ module PluginHooks =
                 let disposeAll () =
                     task {
                         // Idempotent, never throws; cancels any armed timer.
-                        latencyWatchdog.Dispose()
+                        requestLatency.Dispose()
                         do! product.Dispose()
                         do! scope.DisposeAsync()
                     }

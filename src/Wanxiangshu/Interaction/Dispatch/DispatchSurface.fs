@@ -909,8 +909,8 @@ module DispatchSurface =
     /// caller states none, the life is derived from the durable ownership
     /// evidence of the session; a root whose life cannot be proven that way
     /// records no closure kind and so admits no closure.
-    let acceptAgentOwnerRoot
-        (handle: JournalHandle)
+    let private acceptAgentOwnerRootWith
+        (journal: IPromptJournal)
         (session: string)
         (promptKey: string)
         (physicalMessageId: string)
@@ -926,8 +926,7 @@ module DispatchSurface =
                     | text -> Some text
 
             let! result =
-                (PromptDispatcher.forPrompts (PromptJournalAdapter.create handle.Journal))
-                    .AcceptAgentOwnerRoot
+                (PromptDispatcher.forPrompts journal).AcceptAgentOwnerRoot
                     (PromptKey.create promptKey)
                     (SessionId.create session)
                     (PhysicalUserMessageId.create physicalMessageId)
@@ -946,6 +945,30 @@ module DispatchSurface =
                            profile = null
                            error = error |}
         }
+
+    let acceptAgentOwnerRoot (handle: JournalHandle) session promptKey physicalMessageId (agentOwnerLife: obj) =
+        acceptAgentOwnerRootWith
+            (PromptJournalAdapter.create handle.Journal)
+            session
+            promptKey
+            physicalMessageId
+            agentOwnerLife
+
+    let acceptAgentOwnerRootAfterPhysical
+        (handle: JournalHandle)
+        session
+        promptKey
+        physicalMessageId
+        (agentOwnerLife: obj)
+        (afterPhysical: string -> Task)
+        =
+        let journal =
+            afterAppendJournal (PromptJournalAdapter.create handle.Journal) (function
+                | PromptSessionFact.PromptPhysicalAccepted accepted ->
+                    afterPhysical (PromptKey.value accepted.PromptKey)
+                | _ -> Task.FromResult(()) :> Task)
+
+        acceptAgentOwnerRootWith journal session promptKey physicalMessageId agentOwnerLife
 
     /// Registered proof boundary for external ingress: the caller supplies the
     /// exact RootSelection seed, including the deliberate absence of a seed.

@@ -16,10 +16,12 @@ npm run diagnostics:collect -- --run c7555bf6
 npm run diagnostics:collect -- "provider-retry-loop"
 ```
 
+先按仓库构建步骤取得并安装固定的 `wanxiangli` 依赖。采集脚本通过 `wanxiangli/workspace-state` 定位，不要求加载应用 dist。主工作树、linked 工作树及其子目录共用主工作树的状态根；现存非 Git 目录使用自身的 `.Herdchestra`。其它 Git 查询错误、bare 仓库、非法状态目录会报错，先修复原因后重试；不会改用另一个目录或自动迁移旧数据。首次初始化失败会结束采集；扫描关联工作区失败则记录该项错误并继续其它项。
+
 ### 输出规范
-采集结果自动落盘至当前工程 `.diagnostics/` 目录（非 Git 仓库环境存至 `~/.local/state/wanxiang/diagnostics/`）：
+采集结果落盘至上述状态根的 `diagnostics/` 目录：
 ```text
-.diagnostics/incident-YYYYMMDD-HHmmss-[Tag]/
+.Herdchestra/diagnostics/incident-YYYYMMDD-HHmmss-[Tag]/
 ├── summary.md              # 事故全景诊断简报（核心指标、风险预警、对话流切片）
 ├── metadata.json           # 结构化事故元数据（RunID、Session、步数、Agent分布、系统环境）
 ├── process-snapshot.json   # 现场系统进程资源快照（PID、CPU%、RSS物理内存、运行时间）
@@ -38,4 +40,4 @@ npm run diagnostics:collect -- "provider-retry-loop"
 - **步数风暴与死循环预警**：自动监控单会话 Step 步数与角色分布，对超过阈值的异常递归（如 Spin-Lock / Loop-Storm）进行自动标记和警报。
 - **精准生命周期切片**：根据 `run=<runId>` 精确切割当前执行周期日志。
 - **机密数据安全脱敏**：采集配置时自动对所有 API Key 实施掩码处理（仅保留前 4 位和后 4 位）。
-- **版本控制绝对隔离**：事故产物目录 `.diagnostics/` 已配置于 `.gitignore`，严防排查数据污染代码仓库。
+- **版本控制隔离**：状态根初始化时创建自身的 `.gitignore`，内容为 `*`，不修改项目 Git 配置。

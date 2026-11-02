@@ -60,6 +60,11 @@ export function productionSources(root) {
   return result.sort()
 }
 
+function applicationSources(repositoryRoot, sourceRoot) {
+  const adapterRoot = resolve(repositoryRoot, 'wanxiangtong')
+  return [...productionSources(sourceRoot), ...(existsSync(adapterRoot) ? productionSources(adapterRoot) : [])]
+}
+
 function parseAggregate(aggregatePath) {
   if (!aggregatePath || !existsSync(aggregatePath)) {
     // WP2: the aggregate file is optional — the shard graph alone must own
@@ -180,7 +185,7 @@ export function canonicalShardCompileItems(projects, { orderFilePath = null } = 
 export function assertProductionSourcesAssigned({
   repositoryRoot = REPOSITORY_ROOT,
   sourceRoot = resolve(repositoryRoot, 'src/Wanxiangshu'),
-  discoveredSources = new Set(productionSources(sourceRoot)),
+  discoveredSources = new Set(applicationSources(repositoryRoot, sourceRoot)),
   shardImplementations = new Set(),
   aggregate = { missing: true, text: '', implementationFiles: [], signatureFiles: [], references: [] },
 } = {}) {
@@ -269,7 +274,7 @@ export function readCompileShardInventory({
     if (!sameSet(shardImplementations, new Set(aggregate.implementationFiles))) throw new Error('aggregate .fs compile set differs from compile-shard union')
     if (!sameSet(shardSignatures, new Set(aggregate.signatureFiles))) throw new Error('aggregate .fsi compile set differs from compile-shard union')
   }
-  const discoveredSources = new Set(productionSources(sourceRoot))
+  const discoveredSources = new Set(applicationSources(repositoryRoot, sourceRoot))
   assertProductionSourcesAssigned({
     repositoryRoot,
     sourceRoot,

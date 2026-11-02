@@ -18,6 +18,8 @@ module ModelRouting =
     val internal failureOfExecutionAdmissionAcquisition: ExecutionAdmissionAcquisition -> ExecutionFailure option
     val internal seedBoundDevOpsModel: sessionId: SessionId -> value: string -> unit
     val internal capacityOwnership: lease: ExecutionAdmissionLease -> CapacityOwnership
+    val internal executionAdmissionIdentity: lease: ExecutionAdmissionLease -> ExecutionAdmissionExactIdentity
+    val internal awaitQueuedAdmission: node: ExecutionAdmissionQueueNode -> Task<ExecutionAdmissionAcquisition>
 
     val invokeScheduler:
         scheduler: obj ->
@@ -50,7 +52,8 @@ module ModelRouting =
             lease: ExecutionAdmissionLease -> Result<ModelRoutingTarget, ExecutionAdmissionRejection>
 
         member internal ContinueExecutionAdmission:
-            previous: ExecutionAdmissionLease * physicalUserMessageId: string * ?selectedTarget: ModelRoutingTarget -> Task<ExecutionAdmissionAcquisition>
+            previous: ExecutionAdmissionLease * physicalUserMessageId: string * ?selectedTarget: ModelRoutingTarget ->
+                Task<ExecutionAdmissionAcquisition>
 
         member internal RetainContinuationInput:
             previous: ExecutionAdmissionLease * physicalUserMessageId: string -> ModelRoutingTarget
@@ -118,6 +121,7 @@ module ModelRouting =
             sessionId: string * physicalUserMessageId: string -> CapacityTransitionOutcome
 
         member CapacitySnapshot: unit -> CapacityInvariantEvidence
+        member internal HoldsPhysical: sessionId: string * physicalUserMessageId: string -> bool
 
         member EnterProviderStep:
             sessionId: string * physicalUserMessageId: string * visibleProviderRuns: Set<string> * ?requestKey: string ->
@@ -177,7 +181,10 @@ module ModelRouting =
     val internal tryReadExecution: key: ChatExecutionKey -> ExecutionAdmissionLease option
 
     val internal continueExecutionAdmission:
-        previous: ExecutionAdmissionLease -> physicalId: PhysicalUserMessageId -> target: ModelRoutingTarget -> Task<ExecutionAdmissionAcquisition>
+        previous: ExecutionAdmissionLease ->
+        physicalId: PhysicalUserMessageId ->
+        target: ModelRoutingTarget ->
+            Task<ExecutionAdmissionAcquisition>
 
     val internal retainContinuationInput:
         previous: ExecutionAdmissionLease -> key: ChatExecutionKey -> ModelRoutingTarget

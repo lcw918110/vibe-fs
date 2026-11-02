@@ -4,64 +4,6 @@ import test from 'node:test'
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
 
-const { create: createDeadline } = await import('../../../dist/Process/DeadlineSurface.js')
-const {
-  killAckGraceMs,
-  childCreate,
-  childExit,
-  childOnExit,
-  childView,
-  waitForExit,
-  createCancellationToken,
-  cancel,
-} = await import('../../../dist/Process/Surface.js')
-const nowIso = () => new Date().toISOString()
-const within = (promise, ms, label) =>
-  Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      const timer = setTimeout(() => reject(new Error(`${label}: did not settle within ${ms}ms`)), ms)
-      timer.unref?.()
-    }),
-  ])
-const expired = () => createDeadline('2000-01-01T00:00:00Z', 1)
-const killCount = (child) => childView(child).killCount
-
-test('WHAT[process-execution-003] NODE_EXIT_registered_callbacks_run_once_in_registration_order_and_fail_fast', () => {
-  const child = childCreate(undefined)
-  const observed = []
-  childOnExit(child, () => observed.push('first'))
-  childOnExit(child, () => observed.push('second'))
-  childExit(child, 0)
-  assert.deepEqual(observed, ['first', 'second'])
-
-  const failingChild = childCreate(undefined)
-  const afterFailure = []
-  childOnExit(failingChild, () => {
-    afterFailure.push('failing')
-    throw new Error('exit callback failed')
-  })
-  childOnExit(failingChild, () => afterFailure.push('must-not-run'))
-  assert.throws(() => childExit(failingChild, 1), /exit callback failed/)
-  assert.deepEqual(afterFailure, ['failing'])
-})
-test('WHAT[process-execution-003] EXEC_011_A_natural_exit_before_deadline_returns_code_without_kill', async () => {
-  const child = childCreate(undefined)
-  const deadline = createDeadline(nowIso(), 5_000)
-  const wait = waitForExit(child, deadline, createCancellationToken(false))
-
-  setTimeout(() => childExit(child, 42), 20)
-
-  const outcome = await within(wait, 2_000, 'natural exit')
-  assert.deepEqual(outcome, { exitCode: 42, timedOut: false })
-  assert.equal(killCount(child), 0, 'natural exit must not Kill')
-})
-}
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { default: test } = await import("node:test");
-
 const {
   backendCreatePort,
   ptyId,

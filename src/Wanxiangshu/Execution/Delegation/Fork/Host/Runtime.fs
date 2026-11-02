@@ -36,6 +36,28 @@ open Wanxiangshu.Execution.Fission
 open Wanxiangshu.Persistence.Journal
 open Fable.Core
 
+type private ForkCallbackTasks =
+    abstract background: Func<Task> -> Task
+    abstract waitIdle: unit -> Task<obj>
+    abstract close: unit -> Task<obj>
+
+module private ForkCallbackTasks =
+    [<Import("TaskScope", "wanxiangli/task-scope")>]
+    let private constructor: obj = jsNative
+
+    [<Emit("new $0()")>]
+    let private construct (_constructor: obj) : ForkCallbackTasks = jsNative
+
+    let create () = construct constructor
+
+    let complete (waiting: Task<obj>) : Task<unit> =
+        task {
+            let! result = waiting
+
+            if not (unbox<bool> result?ok) then
+                return raise (unbox<exn> result?error)
+        }
+
 
 module private HostForkPendingRunStore =
     [<Import("PendingRunStore", "wanxiangli/handle-lifecycle")>]
@@ -304,23 +326,13 @@ type HostForkRuntime
         Some(Dictionary<string, ResizeArray<PromptAcceptanceScope>>())
 
     let cancelGate = obj ()
-    let ownedWorkGate = obj ()
+    let ownedWork = ForkCallbackTasks.create ()
     // DSL-MUTABLE: single-flight — duplicate joins fail before waiting
     let mutable joinInFlight = false
     // DSL-MUTABLE: single-flight — current parent cancellation episode.
     let mutable cancelTask: Task option = None
     // DSL-MUTABLE: single-flight — process-local observer shutdown.
     let mutable detachTask: Task option = None
-    // DSL-MUTABLE: resource — terminal/failure callback admission latch.
-    let mutable acceptingOwnedWork = true
-    // DSL-MUTABLE: resource — in-flight runtime-owned callback count.
-    let mutable ownedWorkCount = 0
-    // DSL-MUTABLE: single-flight — shared waiter for callback drain.
-    let mutable ownedWorkDrainWaiter: TaskCompletionSource<unit> option = None
-    // DSL-MUTABLE: resource — first runtime-owned callback failure for shutdown propagation.
-    let mutable ownedWorkFailure: exn option = None
-    // DSL-MUTABLE: resource — acknowledgement for observed callbacks without closing admission.
-    let mutable observedWorkWaiter: TaskCompletionSource<unit> option = None
 
     let removePromptAcceptanceScope agentId scope =
         lock gate (fun () ->
@@ -401,33 +413,6 @@ type HostForkRuntime
         for scope in scopes do
             scope.Dispose()
 
-    let observedWorkTask () =
-        match observedWorkWaiter with
-        | Some waiter -> waiter.Task
-        | None ->
-            let waiter =
-                TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-
-            observedWorkWaiter <- Some waiter
-            waiter.Task
-
-    let finishOwnedWork () =
-        lock ownedWorkGate (fun () ->
-            ownedWorkCount <- ownedWorkCount - 1
-
-            if ownedWorkCount = 0 then
-                observedWorkWaiter
-                |> Option.iter (fun waiter -> AsyncSupport.trySetResult waiter () |> ignore)
-
-                observedWorkWaiter <- None
-
-            if not acceptingOwnedWork && ownedWorkCount = 0 then
-                ownedWorkDrainWaiter
-                |> Option.iter (fun waiter -> AsyncSupport.trySetResult waiter () |> ignore))
-
-    let recordOwnedWorkFailure (failure: exn) =
-        lock ownedWorkGate (fun () -> ownedWorkFailure <- Option.orElse ownedWorkFailure (Some failure))
-
     let captureOwnedWorkFailure (work: unit -> Task) : Task<exn option> =
         task {
             try
@@ -437,56 +422,10 @@ type HostForkRuntime
                 return Some ex
         }
 
-    let observeOwnedWork (work: unit -> Task) : Task =
-        task {
-            let! failure = captureOwnedWorkFailure work
-            failure |> Option.iter recordOwnedWorkFailure
-            finishOwnedWork ()
-        }
-        :> Task
-
-    let startOwnedWork (work: unit -> Task) : Task =
-        let admitted =
-            lock ownedWorkGate (fun () ->
-                if not acceptingOwnedWork then
-                    false
-                else
-                    ownedWorkCount <- ownedWorkCount + 1
-                    true)
-
-        if admitted then
-            observeOwnedWork work
-        else
-            Task.FromResult(()) :> Task
-
-    let ownedWorkDrainTask () : Task =
-        match ownedWorkDrainWaiter with
-        | Some waiter -> waiter.Task :> Task
-        | None ->
-            let waiter =
-                TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
-
-            ownedWorkDrainWaiter <- Some waiter
-            waiter.Task :> Task
+    let startOwnedWork (work: unit -> Task) : Task = ownedWork.background (Func<Task>(work))
 
     let stopOwnedWorkAndDrain () : Task =
-        let waiting =
-            lock ownedWorkGate (fun () ->
-                acceptingOwnedWork <- false
-
-                if ownedWorkCount = 0 then
-                    Task.FromResult(()) :> Task
-                else
-                    ownedWorkDrainTask ())
-
-        task {
-            do! waiting
-
-            match lock ownedWorkGate (fun () -> ownedWorkFailure) with
-            | Some failure -> return raise failure
-            | None -> return ()
-        }
-        :> Task
+        ForkCallbackTasks.complete (ownedWork.close ()) :> Task
 
     // DSL-MUTABLE: resource — first prompts deferred until the review barrier
     // has durably opened (GLORY-040: barrier before assignment).
@@ -647,7 +586,10 @@ type HostForkRuntime
         lock gate (fun () ->
             HostForkRunLifecycle.allRuns pendingRuns
             |> List.choose (fun run ->
-                if not run.Finished then Some (run.AgentId, run.ChildId) else None))
+                if not run.Finished then
+                    Some(run.AgentId, run.ChildId)
+                else
+                    None))
 
     member _.SnapshotOutstandingPtyRuns() =
         lock gate (fun () -> HostPtyOwnership.unsettledIds ptyOwnership ptyScopeId)
@@ -782,7 +724,10 @@ type HostForkRuntime
                 for item in drained do
                     let run = item.Run
                     run.Finished <- true
-                    AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "HostDetached") |> ignore
+
+                    AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "HostDetached")
+                    |> ignore
+
                     item.Subscription |> Option.iter (fun s -> subs.Add s)
 
                 children.Clear()
@@ -795,7 +740,8 @@ type HostForkRuntime
 
                 subs |> Seq.toList)
 
-        subscriptions |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
+        subscriptions
+        |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
 
     member private this.DrainCancelledCallbacks(agentIds: string list, retainedAgents: string list) : Task<unit> =
         let cancelled = Set.ofList agentIds
@@ -804,7 +750,8 @@ type HostForkRuntime
         let subscriptions =
             lock gate (fun () -> HostForkRunLifecycle.drainCancelledRuns pendingRuns agentIds)
 
-        subscriptions |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
+        subscriptions
+        |> List.iter (fun (subscription: IDisposable) -> subscription.Dispose())
 
         task {
             if List.isEmpty retainedAgents then
@@ -1173,7 +1120,9 @@ type HostForkRuntime
         | Some childId -> Some childId
         | None -> this.TryChildFromDurable agentId |> Option.map (fun (childId, _, _) -> childId)
 
-    member _.PendingRunCount = lock gate (fun () -> HostForkRunLifecycle.pendingRunCount pendingRuns)
+    member _.PendingRunCount =
+        lock gate (fun () -> HostForkRunLifecycle.pendingRunCount pendingRuns)
+
     member _.PendingCompletionCount = runtime.PendingCompletionCount
     member _.IsCancelled = runtime.IsCancelled
     member internal _.IsCancelling = lock cancelGate (fun () -> cancelTask.IsSome)
@@ -1205,20 +1154,7 @@ type HostForkRuntime
         lock gate (fun () -> HostPtyOwnership.unsettledIds ptyOwnership ptyScopeId |> List.contains id.Value)
 
     member this.AwaitObservedWork() : Task<unit> =
-        let waiting =
-            lock ownedWorkGate (fun () ->
-                if ownedWorkCount = 0 then
-                    Task.FromResult(())
-                else
-                    observedWorkTask ())
-
-        task {
-            do! waiting
-
-            match lock ownedWorkGate (fun () -> ownedWorkFailure) with
-            | Some failure -> return raise failure
-            | None -> return ()
-        }
+        ForkCallbackTasks.complete (ownedWork.waitIdle ())
 
     member this.DrainOwnedWork() : Task<unit> =
         task {

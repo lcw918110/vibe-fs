@@ -46,9 +46,7 @@ module ChildWorkRecovery =
 
     /// Open Fission groups left behind by a previous runtime.
     let private orphanedFissionGroups (projections: AgentProjectionSet) : FissionGroupProjection list =
-        projections.Fission.ActiveByOwner
-        |> Map.toList
-        |> List.choose (fun (_, groupId) -> Map.tryFind groupId projections.Fission.Groups)
+        FissionProjection.activeGroups projections.Fission
         |> List.filter (fun group ->
             match group.Terminal with
             | FissionGroupTerminal.Open -> true

@@ -22,6 +22,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-ledger.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.delegation.execution-delegation-syncdelegate-model.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.dispatch-runtime.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.interaction-dispatch-metadata-codec.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.composition-turn-recovery-workflow.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.interaction-dispatch-opencode-ingresscodec.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.execution-session-recovery-model.fsproj" />
@@ -74,8 +75,6 @@
     <Compile Include="Execution/Delegation/Handle/FoldSurface.fs" />
     <Compile Include="Execution/Delegation/HostTurnObservedSurface.fsi" />
     <Compile Include="Execution/Delegation/HostTurnObservedSurface.fs" />
-    <Compile Include="Execution/Delegation/Fork/LifecycleSurface.fsi" />
-    <Compile Include="Execution/Delegation/Fork/LifecycleSurface.fs" />
     <Compile Include="Execution/Delegation/Fork/Surface.fsi" />
     <Compile Include="Execution/Delegation/Fork/Surface.fs" />
     <Compile Include="Execution/Delegation/Fork/Host/Restart.fsi" />

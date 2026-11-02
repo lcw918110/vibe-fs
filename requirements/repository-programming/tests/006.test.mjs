@@ -35,7 +35,7 @@ const { default: test } = await import("node:test");
 const { mkdtempSync, writeFileSync, rmSync, mkdirSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
-const { createApi, api: apiOf, stagedCount, stagedKinds, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
+const { createApi, api: apiOf, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
 const { generate } = await import("../../../dist/Repository/Programming/Js/GeneratorSurface.js");
 
 const sandbox = () => {
@@ -61,7 +61,6 @@ test('WHAT[repository-programming-006] JS011_sandbox_program_uses_bindings_end_t
     const result = await run(surface.baseClassSource, program, apiOf(binding), 2000, Date.now() + 60_000, 1 << 20)
     assert.equal(result.ok, true)
     assert.deepEqual(JSON.parse(result.value), { before: 'hello world' })
-    assert.equal(stagedCount(binding), 1, 'rewrite recorded in the as-is ledger')
     const disk = apiOf(binding).cat('a.txt')
     assert.equal(disk.text, 'goodbye world')
   } finally {

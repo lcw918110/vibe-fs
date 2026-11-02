@@ -60,7 +60,7 @@ const { default: test } = await import("node:test");
 const { mkdtempSync, writeFileSync, rmSync, mkdirSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
-const { createApi, api: apiOf, stagedCount, stagedKinds, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
+const { createApi, api: apiOf, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
 const { generate } = await import("../../../dist/Repository/Programming/Js/GeneratorSurface.js");
 
 const sandbox = () => {

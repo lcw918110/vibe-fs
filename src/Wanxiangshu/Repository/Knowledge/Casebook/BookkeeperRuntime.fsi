@@ -23,8 +23,7 @@ type ICasebookSessionPort =
     abstract CreateSiblingSession:
         ownerSessionId: SessionId * title: string * agent: string -> Task<Result<SessionId, string>>
 
-/// Physical Bookkeeper leaf: one CreateChildSession per transaction, todowrite-for-bookkeeper
-/// against process-local staging, then AbortSession.
+/// Product prompts and host session effects for a library Bookkeeper transaction.
 module BookkeeperRuntime =
 
     val createRefreshPrompt: q: string -> a: string -> relatedPaths: string list -> diff: string -> string

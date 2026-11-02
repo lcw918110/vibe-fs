@@ -11,10 +11,6 @@ type Observation =
     | GlobResult of pattern: string * paths: string list
     | GrepResult of pattern: string * matches: (string * int * string) list
 
-/// DSL-class: Vocabulary — normalized identity of an observation: same path +
-/// same content (or same result set) dedupe to one identity (CASE-003).
-type ObservationIdentity = private ObservationIdentity of string
-
 /// DSL-class: DurableFact — CASE-002 / KR-002: minimal Case model with dual baselines.
 /// Identity is the stable logical case identity (scoped to invocation).
 type Case =
@@ -52,6 +48,13 @@ type ReplayResult =
     | Fresh
     | Stale
 
+module internal CasebookValues =
+
+    val observationsToNative: observations: Observation list -> obj array
+    val observationsOfNative: values: obj array -> Observation list
+    val caseToNative: case: Case -> obj
+    val caseOfNative: value: obj -> Case
+
 module Observations =
 
     /// CASE-003: normalize — dedupe by identity and fix a canonical order so
@@ -62,36 +65,21 @@ module Observations =
     /// the replayed result set exactly (same normalized set).
     val classifyReplay: stored: Observation list -> replayed: Observation list -> ReplayResult
 
-/// DSL-class: Decision — CASE-008: the CasebookProjection fold. Captured
-/// inserts/replaces a Case; Refreshed replaces Q/A/maintenance/related; Accessed
-/// bumps the derived access order; Evicted removes. Same-Case concurrent
-/// forks surface as DomainConflict at the EventStore layer and converge via
-/// later resolution/refresh/evict events — never via revision/wall_clock LWW.
+/// Converts decoded storage events and reads the immutable Current held by the Integrator.
 module CasebookProjection =
 
-    /// Incremental Current owned by the canonical Integrator. The access counter
-    /// is part of the derived state so boot replay and live integration use the
-    /// exact same single-event rule.
-    type State =
-        { AccessCounter: int64
-          Cases: Map<string, Case> }
+    type State = private State of obj
 
     /// CASE-008: empty projection state.
     val emptyState: State
 
-    /// CASE-008: empty case map (projection shorthand).
-    val empty: Map<string, Case>
-
     /// CASE-008: apply one CasebookEvent to the projection state.
     val apply: state: State -> event: CasebookEvent -> State
 
-    /// CASE-008: LRU eviction — keep the capacity most-recently-accessed
-    /// Cases; the evicted session ids are returned so the caller can append
-    /// Evicted facts (tombstones are events too).
-    /// 从事件存储投影并应用 LRU 淘汰后的案例表（无状态薄读取）。
+    val internal currentNative: store: IEventStore -> obj
+
+    /// Reads the cases visible at the requested capacity without appending events.
     val projectCases: store: IEventStore -> capacity: int -> Map<string, Case>
 
     /// 解析公开 shelfmark 到内部 Case。
     val resolve: store: IEventStore -> capacity: int -> shelfmark: string -> Result<Case option, string>
-
-    val evict: capacity: int -> cases: Map<string, Case> -> Map<string, Case> * string list

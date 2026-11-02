@@ -1,5 +1,7 @@
 namespace Wanxiangshu.Context.Companion
 
+open Wanxiangshu.Context.Prefix
+
 open System
 open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.Identity
@@ -275,12 +277,13 @@ module ContextFoldSurface =
 
     let private guidelinesToJs (state: GuidelineProjectionState) : obj =
         box
-            {| pairCount = List.length state.Pairs
-               callIds = state.CallIds |> Set.toList |> List.toArray
-               placementCount = Set.count state.Placements
-               visibleFromOrdinal = state.VisibleFromOrdinal
+            {| pairCount = GuidelineProjection.pairs state |> List.length
+               callIds = GuidelineProjection.callIds state
+               placementCount = GuidelineProjection.placementCount state
+               visibleFromOrdinal = GuidelineProjection.visibleFromOrdinal state
                pairs =
-                state.Pairs
+                GuidelineProjection.pairs state
+                |> List.rev
                 |> List.map (fun pair ->
                     box
                         {| ordinal = pair.Ordinal
@@ -305,9 +308,11 @@ module ContextFoldSurface =
                 | None -> null
                 | Some epoch ->
                     box
-                        {| EpochId = PrefixEpochId.value epoch.EpochId
-                           ReanchoredRuns = epoch.ReanchoredRuns |> Set.toArray |> Array.map ProviderRunIdentity.value
-                           ReanchoredTenures = epoch.ReanchoredTenures |> Set.toArray |}
+                        {| EpochId = PrefixEpochId.value (PrefixEpochProjection.epochId epoch)
+                           ReanchoredRuns =
+                            PrefixEpochProjection.reanchoredRuns epoch
+                            |> Array.map ProviderRunIdentity.value
+                           ReanchoredTenures = PrefixEpochProjection.reanchoredTenures epoch |}
                Handles = session.Handles |> Option.map handlesToJs |> Option.toObj
                ProviderFailures = session.ProviderFailures |> Option.map providerFailuresToJs |> Option.toObj
                PromptAuthority = session.PromptAuthority |> Option.map promptAuthorityToJs |> Option.toObj

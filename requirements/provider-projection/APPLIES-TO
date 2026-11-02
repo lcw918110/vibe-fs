@@ -13,8 +13,6 @@
 /src/Wanxiangshu/OpenCode/Codec/ProviderWireCapture.fs
 /src/Wanxiangshu/OpenCode/Codec/ProviderWireDecode.fs
 /src/Wanxiangshu/Foundation/LlmFacing.fs
-/src/Wanxiangshu/Foundation/SyntheticToml.fs
-/src/Wanxiangshu/Foundation/SyntheticTomlSurface.fs
 /scripts/checks/provider-projection-boundary.mjs
 /scripts/checks/provider-leak-gate.mjs
 /scripts/checks/llm-facing-format-gate.mjs

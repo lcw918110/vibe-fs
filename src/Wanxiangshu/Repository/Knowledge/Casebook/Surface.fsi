@@ -12,12 +12,6 @@ module CasebookSurface =
 
     val classifyReplay: stored: obj array -> replayed: obj array -> string
 
-    val emptyWorld: unit -> obj
-
-    val applyEvent: world: obj -> event: obj -> obj
-
-    val evict: capacity: int -> cases: obj array -> obj
-
     val fetchCase: store: obj -> capacity: int -> sessionId: string -> Task<obj>
 
     val fetchCaseByIdentity: store: obj -> identity: string -> Task<obj>

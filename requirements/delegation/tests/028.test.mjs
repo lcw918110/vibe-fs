@@ -90,7 +90,6 @@ const SOURCE_BUDGETS = new Map([
   ['delegation-journal-port', 100],
   ['delegation-sync-contract', 100],
   ['delegation-fold', 185],
-  ['delegation-sync-runtime', 185],
   ['delegation-fork-runtime', 185],
 ])
 
@@ -201,12 +200,6 @@ test('WHAT[delegation-028] current compile plans meet declared budgets and sourc
     linkageOwner && spineProject.references.includes(linkageOwner.projectPath),
     'composition-durable-projection must declare a ProjectReference to delegation-linkage-projection',
   )
-  assert.ok(inspectShard('delegation-sync-runtime').sources.includes('Execution/Delegation/SyncDelegate/Wait.fs'))
-  assert.ok(inspectShard('delegation-sync-runtime').sources.includes('Execution/Delegation/SyncDelegate/Store.fs'))
-  assert.ok(inspectShard('delegation-sync-runtime').sources.includes('Execution/Delegation/SyncDelegate/Prompt.fs'))
-  assert.ok(inspectShard('delegation-sync-runtime').sources.includes('Execution/Delegation/SyncDelegate/Workflow.fs'))
-  assert.ok(!inspectShard('delegation-sync-runtime').sources.includes('Execution/Delegation/SyncDelegate/Runtime.fs'))
-  assert.ok(inspectShard('delegation-host-adapter').sources.includes('Execution/Delegation/SyncDelegate/Runtime.fs'))
   assert.ok(inspectShard('delegation-fork-runtime').sources.includes('Execution/Delegation/Fork/Runtime.fs'))
   assert.ok(inspectShard('delegation-host-adapter').sources.includes('Execution/Delegation/Fork/Host/Runtime.fs'))
   assert.ok(inspectShard('delegation-pty-adapter').sources.includes('Execution/Delegation/Fork/Host/Pty.fs'))

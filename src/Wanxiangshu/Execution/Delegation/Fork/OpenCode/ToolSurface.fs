@@ -875,7 +875,7 @@ module ForkToolSurface =
             recorded.Options.Metadata
             |> Option.defaultWith (fun () -> invalidOp "Actual managed Host prompt has no correlation metadata")
 
-        let value: obj = metadata?(PromptMetadataField.PromptKeyField)
+        let value: obj = metadata?(PromptMetadataCodec.PromptKeyField)
         let isString: bool = emitJsExpr value "typeof $0 === 'string'"
 
         if not isString || String.IsNullOrWhiteSpace(unbox<string> value) then
@@ -982,6 +982,22 @@ module ForkToolSurface =
     let detachToolRuntime (value: obj) : Task =
         let harness = unbox<ForkHarness> value
         harness.Scope.DisposeAsync()
+
+    let captureOwnerWork (value: obj) (owner: string) : obj =
+        let harness = unbox<ForkHarness> value
+
+        match harness.Scope.RuntimeFor(managerContext harness owner) with
+        | Ok runtime -> box runtime
+        | Error error -> failwith error
+
+    let trackOwnerWork (value: obj) (work: unit -> Task) : unit =
+        (unbox<HostForkRuntime> value).TrackOwnedWork work
+
+    let awaitOwnerObservedWork (value: obj) : Task<unit> =
+        (unbox<HostForkRuntime> value).AwaitObservedWork()
+
+    let detachOwnerWork (value: obj) : Task =
+        (unbox<HostForkRuntime> value).DetachAndDrain()
 
     let durableLifecycleByname (value: obj) (owner: string) (byname: string) : obj =
         let harness = unbox<ForkHarness> value

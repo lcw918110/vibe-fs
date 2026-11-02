@@ -5,12 +5,9 @@ open Wanxiangshu.Foundation
 
 type XTraceProjectionState =
     private
-        { Opening: XTraceOpeningEvidence option
-          Parts: XTracePartRef list
-          Terminals: XTraceTerminalRef list
-          Bridge: WanxiangliTrace.ProjectionBridge }
+        { History: WanxiangliTrace.History }
 
-and internal XTracePartRef =
+type internal XTracePartRef =
     { Cursor: XTraceCursor
       Provenance: string
       Generation: int
@@ -25,7 +22,7 @@ and internal XTracePartRef =
       TextRef: BlobRef
       TextDigest: BlobDigest }
 
-and internal XTraceTerminalRef =
+type internal XTraceTerminalRef =
     { TextRef: BlobRef
       TextDigest: BlobDigest
       ProviderRun: ProviderRunIdentity
@@ -60,6 +57,9 @@ type XTraceFoldRejection =
 
 module XTraceProjection =
     val empty: XTraceProjectionState
+    val internal history: state: XTraceProjectionState -> WanxiangliTrace.History
+    val internal nativePart: part: XTracePartRef -> obj
+    val internal provenanceFromMetadata: metadata: obj -> string
     val internal parts: state: XTraceProjectionState -> XTracePartRef list
     val internal partCount: state: XTraceProjectionState -> int
     val internal terminalCount: state: XTraceProjectionState -> int

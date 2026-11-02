@@ -1,9 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
-import {readFileSync} from 'node:fs'
 import * as codec from '../../../dist/OpenCode/Host/HostSignalSurface.js'
-import {LatencyWatchdogFactory_createObservedLatencyWatchdog as create} from '../../../dist/OpenCode/Host/LatencyWatchdog.js'
+import {LatencyWatchdogFactory_createObservedLatencyWatchdog as create} from '../../../dist/wanxiangtong/opencode/request-latency/LatencyWatchdog.js'
 
 const flush = async () => {
   for (let index = 0; index < 12; index++) await Promise.resolve()
@@ -166,15 +165,4 @@ test('WHAT[latency-degeneration-010] physical AbortError is not the superseded t
   assert.equal(cancelled?.providerRun, 'provider-run')
   assert.equal(superseded?.failure, 'Superseded')
 
-  const source = readFileSync(
-    new URL('../../../src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs', import.meta.url),
-    'utf8',
-  )
-  const wiring = source.slice(
-    source.indexOf('let settleLatencyWatchdog raw ='),
-    source.indexOf('let observeEvent raw ='),
-  )
-  assert.match(wiring,
-    /HostProviderTerminalOutcome\.Cancelled ExecutionFailure\.UserCancelled\s*->\s*latencyWatchdog\.OnProviderCancelled/)
-  assert.match(wiring, /\| _ ->\s*latencyWatchdog\.Discard/)
 })

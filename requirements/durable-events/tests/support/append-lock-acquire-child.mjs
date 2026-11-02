@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire, syncBuiltinESMExports } from 'node:module'
-import lockfile from 'proper-lockfile'
+
+// 沿主体实际消费的公开入口解析，注入与锁库使用同一份 CommonJS 依赖。
+const requireFromLibrary = createRequire(import.meta.resolve('wanxiangli/file-lock'))
+const lockfilePath = requireFromLibrary.resolve('proper-lockfile')
+const lockfile = requireFromLibrary('proper-lockfile')
 
 const [mode, commonDir, writerId, scenario, requestJson] = process.argv.slice(2)
 const request = JSON.parse(requestJson)
@@ -36,8 +40,8 @@ async function cold() {
 
 async function measure() {
   assert.equal(writerId, request.sourceWriterId)
-  const require = createRequire(import.meta.url)
-  const retry = require(require.resolve('retry', { paths: [path.dirname(require.resolve('proper-lockfile'))] }))
+  const requireFromLockfile = createRequire(lockfilePath)
+  const retry = requireFromLockfile('retry')
   const originalOperation = retry.operation
   const originals = {
     mkdirSync: fs.mkdirSync, appendFileSync: fs.appendFileSync, openSync: fs.openSync,

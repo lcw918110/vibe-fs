@@ -26,7 +26,6 @@ module ProcessEventLog =
           FileNames: string list
           LastActivityMs: float }
 
-    val processAwareFs: obj
     val acquireStoreLock: commonDir: string -> Task<StoreFileGate>
     val withStoreLock<'T> : commonDir: string -> work: (unit -> Task<'T>) -> Task<'T>
     val create: commonDir: string -> writerId: string -> ProcessEventLog
@@ -41,20 +40,17 @@ module ProcessEventLog =
     val append:
         log: ProcessEventLog -> events: EventEnvelope list -> Result<PhysicalAppendCompletion, PhysicalAppendFailure>
 
-    val readLastCompleteLine: path: string -> Result<string option, string>
     val writerPhysicalMetadata: commonDir: string -> WriterPhysicalMetadata list
 
-    /// durable-events-006/013/017: deterministic inventory of every writer file
-    /// (name + canonical file identity) without reading historical content.
-    val physicalInventory: commonDir: string -> string
-
-    val internal withSegmentCap: cap: int -> work: (unit -> 'T) -> 'T
-    val internal withSegmentCapTask: cap: int -> work: (unit -> Task<'T>) -> Task<'T>
-    val internal convergeWriterFiles: commonDir: string -> writerId: string -> Result<unit, string>
+    val internal lockDirectory: commonDir: string -> string
+    val internal eventsDirectory: commonDir: string -> string
+    val internal validateWriterRoot: commonDir: string -> unit
+    val internal translateCause: cause: exn -> exn
+    val internal appendFaultValue: value: obj -> AppendFault
+    val internal convergeWriterFiles: commonDir: string -> writerId: string -> segmentCap: int -> Result<unit, string>
 
     [<Literal>]
     val DefaultSegmentCapBytes: int = 67108864
 
     val readStreamsAt: commonDir: string -> nowMs: float -> Result<(string * EventEnvelope list) list, StorageInvalid>
     val readStreams: commonDir: string -> Result<(string * EventEnvelope list) list, StorageInvalid>
-    val payloadDigest: content: byte[] -> string

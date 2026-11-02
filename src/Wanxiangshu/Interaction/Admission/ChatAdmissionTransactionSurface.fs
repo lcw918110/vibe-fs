@@ -23,6 +23,26 @@ open Wanxiangshu.Persistence.Journal
 
 module TransactionSurface =
 
+    let private leaseForScenario (identity: ExecutionAdmissionExactIdentity) =
+        task {
+            let runtime = ModelRouting.ModelRoutingRuntime(null)
+
+            let! acquisition =
+                runtime.AcquireExecutionAdmission(
+                    identity.SessionId,
+                    identity.PhysicalUserMessageId,
+                    identity.Role,
+                    identity.Participant,
+                    ModelExecutionPurpose.Normal,
+                    None,
+                    hostTarget = identity.Target
+                )
+
+            match acquisition with
+            | ExecutionAdmissionAcquisition.Admitted lease -> return lease
+            | _ -> return invalidOp "transaction scenario did not acquire its admission"
+        }
+
     let private requiredText fieldName (value: obj) =
         if isNull value then
             invalidArg fieldName $"missing {fieldName}"
@@ -262,14 +282,7 @@ module TransactionSurface =
                   Participant = AcceptedChatExecutionEvidence.participant evidence
                   Target = target }
 
-            let lease =
-                ExecutionAdmissionLease.Create(
-                    obj (),
-                    CapacityCreditId.first,
-                    CapacityLeaseId.first,
-                    CapacityFence.first,
-                    exactIdentity
-                )
+            let! lease = leaseForScenario exactIdentity
 
             let ports: ChatAdmissionTransactionPorts =
                 { Accept =
@@ -569,14 +582,7 @@ module TransactionSurface =
                   Participant = AcceptedChatExecutionEvidence.participant acceptedEvidence
                   Target = target }
 
-            let lease =
-                ExecutionAdmissionLease.Create(
-                    obj (),
-                    CapacityCreditId.first,
-                    CapacityLeaseId.first,
-                    CapacityFence.first,
-                    exactIdentity
-                )
+            let! lease = leaseForScenario exactIdentity
 
             let managed: ChatAdmissionIntent.ManagedIntent =
                 if failureKind = "PluginReplay" then

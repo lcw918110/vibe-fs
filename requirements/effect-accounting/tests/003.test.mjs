@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { withDispatch, dispatch, journal } from './support/dispatch.mjs'
+import { GitWorktrees } from 'wanxiangli/git'
 
 test('WHAT[effect-accounting-003] physical send sees its exact intent already recoverable from the production journal', async () => {
   await withDispatch(async ({ open, send }) => {
@@ -80,19 +81,15 @@ test('WHAT[effect-accounting-003] worktree creation is blocked when the Worktree
 
     let createCalls = 0
     const git = {
+      Worktrees: new GitWorktrees(base, async ({ args }) => {
+        if (args[0] === 'worktree' && args[1] === 'add') createCalls += 1
+        return { code: 0, stdout: '', stderr: '' }
+      }),
       IsDirty: async () => ({ ok: true, value: [] }),
       FreezeTargetBranch: async () => ({ ok: true, value: 'refs/heads/main' }),
-      ListManagerBranches: async () => ({ ok: true, value: [] }),
-      DeleteBranch: async () => ({ ok: true }),
       HasRebaseHead: async () => false,
       ReadHead: async () => ({ ok: true, value: 'head' }),
       GetTargetHead: async () => ({ ok: true, value: 'target-head' }),
-      CreateWorktree: async () => {
-        createCalls += 1
-        return { ok: true, value: `manager/${writer}` }
-      },
-      ListWorktrees: async () => ({ ok: true, value: [] }),
-      RemoveWorktree: async () => ({ ok: true }),
     }
     const host = hostSurface.create({
       sessions: failingSessions(),
@@ -135,27 +132,23 @@ test('WHAT[effect-accounting-003] the worktree intent is durable before the phys
       let createCalls = 0
       let removeCalls = 0
       const git = {
+        Worktrees: new GitWorktrees(base, async ({ args }) => {
+          if (args[0] === 'worktree' && args[1] === 'add') {
+            createCalls += 1
+            const cases = worktreeCases(base, writer)
+            coldReads.push({
+              requested: cases.includes('WorktreeCreateRequested'),
+              created: cases.includes('WorktreeCreated'),
+            })
+          }
+          if (args[0] === 'worktree' && args[1] === 'remove') removeCalls += 1
+          return { code: 0, stdout: '', stderr: '' }
+        }),
         IsDirty: async () => ({ ok: true, value: [] }),
         FreezeTargetBranch: async () => ({ ok: true, value: 'refs/heads/main' }),
-        ListManagerBranches: async () => ({ ok: true, value: [] }),
-        DeleteBranch: async () => ({ ok: true }),
         HasRebaseHead: async () => false,
         ReadHead: async () => ({ ok: true, value: 'head' }),
         GetTargetHead: async () => ({ ok: true, value: 'target-head' }),
-        CreateWorktree: async () => {
-          createCalls += 1
-          const cases = worktreeCases(base, writer)
-          coldReads.push({
-            requested: cases.includes('WorktreeCreateRequested'),
-            created: cases.includes('WorktreeCreated'),
-          })
-          return { ok: true, value: `manager/${writer}` }
-        },
-        ListWorktrees: async () => ({ ok: true, value: [] }),
-        RemoveWorktree: async () => {
-          removeCalls += 1
-          return { ok: true }
-        },
       }
       const host = hostSurface.create({
         sessions: failingSessions(),

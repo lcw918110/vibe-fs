@@ -6,8 +6,8 @@ test('WHAT[semantic-trace-007] durable materialization survives reopening with e
   const trace = await import('../../../dist/Context/Trace/SemanticTraceSurface.js')
   await withReopenableJournal(async (handle, reopen) => {
     const messages = [
-      { role: 'user', parts: [trace.semanticText('原话\r\n"task" <tag> /path')] },
-      { role: 'assistant', parts: [trace.semanticToolCall('todowrite-for-engineer', '{"program":"await this.cat(\'a\')"}'), trace.semanticToolResult('line 1\nline 2\n')] },
+      { role: 'user', parts: [trace.semanticText('原话\r\n\uFEFF\u0000"task" <tag> /path')] },
+      { role: 'assistant', parts: [trace.semanticReasoning('考虑过的步骤'), trace.semanticToolCall('todowrite-for-engineer', '{"program":"await this.cat(\'a\')"}'), trace.semanticToolResult('line 1\nline 2\n'), trace.semanticMedia('image/png', '')] },
     ]
     assert.equal((await trace.captureProjection(handle, 'raw-history', { messages })).ok, true)
     const before = await trace.currentProjection(handle, 'raw-history')

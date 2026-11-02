@@ -2,14 +2,13 @@ namespace Wanxiangshu.Foundation
 
 [<RequireQualifiedAccess>]
 module LlmFacing =
-    type DataBlock = private DataBlock of string
+    type DataBlock = interface end
+    type Document = interface end
 
-    type OriginalMaterial = private OriginalMaterial of content: string * metadata: DataBlock
-
-    type Document =
-        private
-            { Instructions: string list
-              Data: DataBlock list }
+    [<RequireQualifiedAccess>]
+    module DataTypes =
+        type Value = interface end
+        type Field = interface end
 
     val empty: Document
     val instructions: texts: string list -> Document
@@ -27,16 +26,8 @@ module LlmFacing =
 
     [<RequireQualifiedAccess>]
     module Data =
-        type Value =
-            | Null
-            | Bool of bool
-            | Integer of int64
-            | Float of float
-            | String of string
-            | Array of Value list
-            | Object of (string * Value) list
-
-        type Field = private Field of string
+        type Value = DataTypes.Value
+        type Field = DataTypes.Field
 
         val stringField: name: string -> value: string -> DataBlock
         val intField: name: string -> value: int -> DataBlock
@@ -53,10 +44,3 @@ module LlmFacing =
         val structuredValue: value: Value -> DataBlock list
         val rootStructuredValue: value: Value -> DataBlock list
         val ofJs: value: obj -> Value
-
-        val fileEffects:
-            rewritten: string list ->
-            created: string list ->
-            removed: string list ->
-            moved: (string * string) list ->
-                DataBlock list

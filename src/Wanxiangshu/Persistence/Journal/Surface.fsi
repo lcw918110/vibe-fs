@@ -16,6 +16,10 @@ module JournalSurface =
     val mapAppendFailure: value: obj -> obj
     /// 解析并初始化主工作树的本机状态根，不改 Git 配置。
     val initializeStateRoot: workspace: string -> Task<string>
+    val stateRoot: workspace: string -> Task<string>
+    val stateRootSync: workspace: string -> string
+    val enqueueRecovery: handle: JournalHandle -> recover: (unit -> Task) -> unit
+    val runOrAwaitRecovery: handle: JournalHandle -> Task
 
     val bootWithWriterId:
         commonDir: string -> writerId: string -> runtimeId: string -> processId: int -> startedAt: string -> Task<obj>
@@ -23,7 +27,7 @@ module JournalSurface =
     val boot: commonDir: string -> runtimeId: string -> processId: int -> startedAt: string -> Task<obj>
     val acquireSharedForWorkspace: workspace: string -> processId: int -> startedAt: string -> Task<obj>
     /// interaction-authority-018: append one exact HumanRoot/Manager logical-run closure through the shared journal owner.
-    val appendAuthorityLogicalRunClosed: commonDir: string -> sessionId: string -> retirementId: string -> Task<unit>
+    val appendAuthorityLogicalRunClosed: stateRoot: string -> sessionId: string -> retirementId: string -> Task<unit>
     val appendAuthorityTerminalSource: handle: JournalHandle -> sessionId: string -> fact: obj -> Task<obj>
     val dispose: handle: JournalHandle -> unit
     val runtimeId: handle: JournalHandle -> string

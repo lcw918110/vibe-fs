@@ -4,7 +4,7 @@ import test from 'node:test'
 const { default: assert } = await import("node:assert/strict");
 const { default: test } = await import("node:test");
 const HostBoundarySurface = await import("../../../dist/OpenCode/Host/HostBoundarySurface.js");
-const HostMessageProjection = await import("../../../dist/OpenCode/Host/HostMessageProjection.js");
+const HostMessageProjection = await import("../../../dist/wanxiangtong/opencode/provider-request/MessageProjection.js");
 
 const sanitizeMessage = HostMessageProjection.sanitizeMessage
 const sanitizeMessages = HostBoundarySurface.sanitizeMessages
@@ -97,24 +97,3 @@ test('WHAT[host-boundary-011] HOST_030_non_array_parts_projects_safely_to_empty_
   assert.deepEqual(Array.from(userStringParts.parts), [{ type: 'text', text: '#' }])
 })
 }
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { readFileSync } = await import("node:fs");
-const { resolve } = await import("node:path");
-const { default: test } = await import("node:test");
-
-const root = resolve(import.meta.dirname, '../../..')
-const read = (path) => readFileSync(resolve(root, path), 'utf8')
-
-
-test('WHAT[host-boundary-011] HostMessageProjection owns sanitizeOutputMessages entry point', () => {
-  const projection = read('src/Wanxiangshu/OpenCode/Host/HostMessageProjection.fs')
-  const pt = read('src/Wanxiangshu/OpenCode/Plugin/PluginTransforms.fs')
-
-  assert.match(projection, /let\s+sanitizeOutputMessages/)
-  assert.match(projection, /replaceMessagesInPlace/)
-  assert.match(pt, /HostMessageProjection\.sanitizeOutputMessages/)
-})
-}
-

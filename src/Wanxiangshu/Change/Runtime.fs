@@ -1,5 +1,7 @@
 namespace Wanxiangshu.Change
 
+open Fable.Core
+open Fable.Core.JsInterop
 open System.IO
 open System.Threading.Tasks
 open FsToolkit.ErrorHandling
@@ -10,51 +12,41 @@ open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Git
 open Wanxiangshu.Persistence.Journal
 
-module private OrchestratorRuntimeDecisions =
-    /// Durable terminal fact closes the job permanently (GLORY-068).
-    let requireActiveJob (record: ManagerJobProjection) : Result<ManagerJobProjection, string> =
-        match record.Terminal with
-        | Some _ -> Error(sprintf "Manager job is no longer active: %s" (ManagerJobId.value record.ManagerJobId))
-        | None -> Ok record
+module internal ManagerWorktreePolicy =
+    let private shortBranch (reference: string) =
+        let prefix = "refs/heads/"
 
-    let mapTaskError (mapper: 'error -> 'mapped) (operation: Task<Result<'value, 'error>>) =
-        task {
-            let! result = operation
-            return Result.mapError mapper result
-        }
+        if reference.StartsWith(prefix, System.StringComparison.Ordinal) then
+            reference.Substring prefix.Length
+        else
+            reference
 
-    let releaseWorktreeOnError (worktree: WorktreeResource) (operation: Task<Result<'value, 'error>>) =
-        task {
-            match! operation with
-            | Ok value -> return Ok value
-            | Error error ->
-                let! _ = worktree.Release()
-                return Error error
-        }
+    let managerBranchOf (jobId: string) = "manager/" + jobId
 
-    /// `AdoptCreated` re-enters an admission whose `WorktreeCreated` is already
-    /// durable, so it owes no second fact. Every other reconciliation still owes
-    /// the fact for the physical worktree it just acquired.
-    let pendingWorktreeCreatedFact (decision: WorktreeReconciliationDecision) fact =
-        match decision with
-        | WorktreeReconciliationDecision.AdoptCreated -> None
-        | _ -> Some fact
+    let staleWorktrees (entries: (string * string option) list) (owned: string list) =
+        let owners = Set.ofList owned
 
-    /// A journaled admission has durable worktree evidence, so a failed manager
-    /// start leaves the physical worktree for recovery. Without a journal nothing
-    /// records the worktree, so failure must release it.
-    let releaseWorktreeUnlessJournaled journalPort worktree operation =
-        journalPort
-        |> Option.map (fun _ -> operation)
-        |> Option.defaultWith (fun () -> operation |> releaseWorktreeOnError worktree)
+        entries
+        |> List.choose (fun (path, branch) ->
+            match branch with
+            | Some reference ->
+                let name = shortBranch reference
 
-/// Runtime owner for ManagerJob resources. Every job runs the sequential
-/// direct-CE OrchestratorProgram workflow; the mailbox contains only final post-FF verdicts.
-///
-/// ORCH-006's `ManagerJobCreated` is the only writer here, and it is written after
-/// the Manager fork returns a `SessionId` but before the program awaits it. That
-/// ordering is what makes a crash recoverable in either direction: no fact means no
-/// job, and a fact means a live Manager whose session is known.
+                if
+                    name.StartsWith("manager/", System.StringComparison.Ordinal)
+                    && not (Set.contains name owners)
+                then
+                    Some path
+                else
+                    None
+            | None -> None)
+
+    let staleBranches (branches: string list) (owned: string list) =
+        let owners = Set.ofList owned
+
+        branches
+        |> List.filter (fun reference -> not (Set.contains (shortBranch reference) owners))
+
 type Orchestrator
     (
         observer: IWaitObserver,
@@ -65,254 +57,98 @@ type Orchestrator
         ?journal: OrchestratorJournalPort,
         ?lockRepoPath: string
     ) =
-
     let mailbox = VerdictMailbox(observer)
-    let journalPort = journal
 
     let gatePath =
         IntegrationGate.lockPath (defaultArg lockRepoPath repoPath) (TargetRef.value targetRef)
 
-    let appendFact stream fact =
-        taskResult {
-            match journalPort with
-            | None -> return ()
+    let append stream fact =
+        task {
+            match journal with
+            | None -> return Ok()
             | Some port ->
-                let! _ = port.AppendFact stream fact
-                return ()
+                let! result = port.AppendFact stream fact
+                return result |> Result.map ignore
         }
 
     let snapshot () =
-        journalPort
+        journal
         |> Option.map (fun port -> port.Snapshot())
         |> Option.defaultValue Fold.empty
 
-    let acquirePublishGate () =
+    let acquireGate () =
         task {
             let! gate = IntegrationGate.acquire gatePath
             return { Release = fun () -> gate.Release() }
         }
 
-    let programDeps: OrchestratorProgramDeps =
+    let deps: OrchestratorProgramDeps =
         { Git = git
           Relay = relay
-          AppendFact = appendFact
+          AppendFact = append
           Snapshot = snapshot
-          AcquirePublishGate = acquirePublishGate }
+          AcquirePublishGate = acquireGate }
 
-    let startPublication (job: ManagerJob) =
-        mailbox.StartJob()
+    let resource (worktree: WorktreeResource) =
+        createObj
+            [ "identity" ==> WorktreeIdentity.value worktree.Identity
+              "path" ==> WorktreePath.value worktree.Path
+              "release" ==> (fun () -> worktree.Release() |> ChangeInterop.mapTask id)
+              "markDurable" ==> (fun () -> worktree.MarkDurable()) ]
 
-        task {
-            let! verdict = OrchestratorProgram.run programDeps job
+    let worktrees =
+        createObj
+            [ "create"
+              ==> (fun identity path target ->
+                  git.Worktrees.Create(
+                      WorktreeIdentity.create identity,
+                      WorktreePath.create path,
+                      TargetRef.create target
+                  )
+                  |> ChangeInterop.mapTask resource)
+              "adopt"
+              ==> (fun identity path ->
+                  git.Worktrees.Adopt(WorktreeIdentity.create identity, WorktreePath.create path)
+                  |> resource)
+              "list"
+              ==> (fun () ->
+                  git.Worktrees.List()
+                  |> ChangeInterop.mapTask (fun entries ->
+                      entries
+                      |> List.map (fun (path, identity) ->
+                          createObj
+                              [ "path" ==> WorktreePath.value path
+                                "identity" ==> (identity |> Option.map WorktreeIdentity.value |> Option.toObj) ])
+                      |> List.toArray)) ]
 
-            mailbox.Publish verdict
-        }
-        |> ignore
+    let effects =
+        createObj
+            [ "publication" ==> ChangeInterop.collaborators deps
+              "worktrees" ==> worktrees
+              "repoPath" ==> repoPath
+              "durable" ==> journal.IsSome
+              "isDirty"
+              ==> (fun path -> git.IsDirty(WorktreePath.create path) |> ChangeInterop.mapTask List.toArray)
+              "createSession"
+              ==> (fun (request: obj) ->
+                  relay.CreateManagerSession
+                      { JobId = ManagerJobId.create request?id
+                        ManagerAgent = request?agent
+                        Worktree = WorktreePath.create request?path
+                        RootRequest = request?prompt
+                        ExpectedToolCalls =
+                          if isNull request?expectedToolCalls then
+                              None
+                          else
+                              Some(unbox<int> request?expectedToolCalls) }
+                  |> ChangeInterop.mapTask SessionId.value)
+              "activate"
+              ==> (fun id -> relay.ActivateManager(ManagerJobId.create id) |> ChangeInterop.mapTask ignore)
+              "startJob" ==> (fun () -> mailbox.StartJob())
+              "publish" ==> (fun raw -> mailbox.Publish(ChangeInterop.verdict raw))
+              "formatError" ==> (fun (error: exn) -> sprintf "%A" error) ]
 
-    let defaultWorktreePath (jobId: ManagerJobId) =
-        WorktreePath.create (Path.Combine(Path.GetTempPath(), sprintf "wanxiangshu-%s" (ManagerJobId.value jobId)))
-
-    /// ORCH-004: a new ManagerJob.
-    ///
-    /// `managerAgent` is required and never defaulted. ORCH-003 keeps one Manager per
-    /// job for its whole life, and PROMPT-008 forbids rebuilding a managed name from
-    /// a role — the managed agent name lives here and nowhere else.
-    let forkManagerCore
-        (jobId: ManagerJobId)
-        (managerAgent: string)
-        (byname: string)
-        (prompt: string)
-        (expectedToolCalls: int option)
-        (worktreePath: WorktreePath option)
-        : Task<Result<OrchestratorHandle, OrchestratorVerdict>> =
-        taskResult {
-            let integration failurePrefix error =
-                OrchestratorVerdict.IntegrationFailed(jobId, sprintf "%s: %s" failurePrefix error)
-
-            let! blocking =
-                git.IsDirty(WorktreePath.create repoPath)
-                |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to inspect target cleanliness")
-
-            do!
-                match blocking with
-                | [] -> Ok()
-                | paths ->
-                    Error(OrchestratorVerdict.RejectedDirty(sprintf "Worktree is dirty: %s" (String.concat ", " paths)))
-
-            let path = defaultArg worktreePath (defaultWorktreePath jobId)
-            // PERSIST-009: effect identity is deterministic before git runs.
-            let identity = WorktreeCommands.identityOf jobId
-
-            let requestFact =
-                OrchestratorFact.WorktreeCreateRequested
-                    {| ManagerJobId = jobId
-                       WorktreeIdentity = identity
-                       WorktreePath = path |}
-
-            let durableEffect =
-                (snapshot ()).AgentProjections.Orchestrator
-                |> OrchestratorProjection.tryWorktreeEffect identity
-
-            let! observation =
-                match durableEffect with
-                | None ->
-                    Task.FromResult WorktreeReconciliationObservation.NoDurableEffect
-                    |> TaskResultCE.ofTask
-                | Some(WorktreeEffectStatus.Created receipt) ->
-                    Task.FromResult(
-                        WorktreeReconciliationObservation.CreatedReceipt(receipt.ManagerJobId, receipt.WorktreePath)
-                    )
-                    |> TaskResultCE.ofTask
-                | Some(WorktreeEffectStatus.Requested request) when
-                    request.ManagerJobId <> jobId || request.WorktreePath <> path
-                    ->
-                    Task.FromResult(
-                        WorktreeReconciliationObservation.RequestedConflict(request.ManagerJobId, request.WorktreePath)
-                    )
-                    |> TaskResultCE.ofTask
-                | Some(WorktreeEffectStatus.Requested request) ->
-                    task {
-                        let! physical = git.ListWorktrees()
-
-                        return
-                            WorktreeReconciliationObservation.RequestedAmbiguity(
-                                request.ManagerJobId,
-                                request.WorktreePath,
-                                physical
-                            )
-                    }
-                    |> TaskResultCE.ofTask
-
-            let decision =
-                OrchestratorProjection.decideWorktreeReconciliation jobId identity path observation
-
-            let reconciliationFailure failure =
-                match failure with
-                | WorktreeReconciliationFailure.DurableOwnershipConflict ->
-                    "Durable worktree intent conflicts with the requested job or path"
-                | WorktreeReconciliationFailure.WorktreeQueryFailed error ->
-                    sprintf "Failed to query requested worktree ambiguity: %s" error
-                | WorktreeReconciliationFailure.PhysicalIdentityPathConflict ->
-                    "Physical worktree identity/path evidence conflicts with the durable request"
-
-            do!
-                match decision with
-                | WorktreeReconciliationDecision.RequestThenCreate ->
-                    appendFact StreamId.Workspace requestFact
-                    |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to persist worktree request")
-                | WorktreeReconciliationDecision.Reject failure ->
-                    Error(integration "Worktree reconciliation rejected" (reconciliationFailure failure))
-                    |> Task.FromResult
-                | _ -> Ok() |> Task.FromResult
-
-            let acquireWorktree () =
-                match decision with
-                | WorktreeReconciliationDecision.RequestThenCreate
-                | WorktreeReconciliationDecision.CreateAfterProvenMissing ->
-                    // The isolated worktree is created from the frozen target
-                    // ref: it sees that ref's committed content, and the main
-                    // worktree's unrelated drafts stay where they are.
-                    WorktreeResource.Create(git, jobId, path, targetRef)
-                    |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to create worktree")
-                | WorktreeReconciliationDecision.AdoptThenRecordCreated
-                | WorktreeReconciliationDecision.AdoptCreated ->
-                    Ok(WorktreeResource.Adopt(git, identity, path)) |> Task.FromResult
-                | WorktreeReconciliationDecision.Reject failure ->
-                    Error(integration "Worktree reconciliation rejected" (reconciliationFailure failure))
-                    |> Task.FromResult
-
-            let persistWorktreeCreated createdFact =
-                appendFact StreamId.Workspace createdFact
-                |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to persist worktree created")
-
-            let recordWorktreeCreated (worktree: WorktreeResource) =
-                OrchestratorFact.WorktreeCreated
-                    {| ManagerJobId = jobId
-                       WorktreeIdentity = worktree.Identity
-                       WorktreePath = path |}
-                |> OrchestratorRuntimeDecisions.pendingWorktreeCreatedFact decision
-                |> Option.map persistWorktreeCreated
-                |> Option.defaultWith (fun () -> Ok() |> Task.FromResult)
-                |> OrchestratorRuntimeDecisions.releaseWorktreeOnError worktree
-
-            let createManagerSession (worktree: WorktreeResource) =
-                taskResult {
-                    // The Manager session is created before the job fact because
-                    // ORCH-006 persists its SessionId. Its first prompt remains
-                    // deferred until ManagerJobCreated is durable.
-                    let! managerSessionId =
-                        relay.CreateManagerSession
-                            { JobId = jobId
-                              ManagerAgent = managerAgent
-                              Worktree = path
-                              RootRequest = prompt
-                              ExpectedToolCalls = expectedToolCalls }
-                        |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to create manager session")
-
-                    let fact =
-                        OrchestratorFact.ManagerJobCreated
-                            {| ManagerJobId = jobId
-                               ManagerSessionId = managerSessionId
-                               ManagerAgent = managerAgent
-                               Byname = byname
-                               WorktreeIdentity = worktree.Identity
-                               WorktreePath = path
-                               TargetRef = targetRef
-                               TargetBranchFrozen = TargetRef.value targetRef |}
-
-                    do!
-                        appendFact StreamId.Workspace fact
-                        |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to persist manager job")
-
-                    let job =
-                        { JobId = jobId
-                          ManagerSessionId = managerSessionId
-                          ManagerAgent = managerAgent
-                          TargetRef = targetRef
-                          Worktree = worktree }
-
-                    return job
-                }
-
-            return!
-                task {
-                    let! admissionGate = IntegrationGate.acquire gatePath
-
-                    let! outcome =
-                        task {
-                            try
-                                return!
-                                    taskResult {
-                                        let! worktree = acquireWorktree ()
-                                        do! recordWorktreeCreated worktree
-                                        journalPort |> Option.iter (fun _ -> worktree.MarkDurable())
-
-                                        return!
-                                            createManagerSession worktree
-                                            |> OrchestratorRuntimeDecisions.releaseWorktreeUnlessJournaled
-                                                journalPort
-                                                worktree
-                                    }
-                            with ex ->
-                                return Error(integration "Manager admission failed" ex.Message)
-                        }
-
-                    do! admissionGate.Release()
-
-                    return!
-                        taskResult {
-                            let! job = outcome
-
-                            do!
-                                relay.ActivateManager jobId
-                                |> OrchestratorRuntimeDecisions.mapTaskError (integration "Failed to activate manager")
-
-                            startPublication job
-                            return job.Handle
-                        }
-                }
-
-        }
+    let native = createNew (import "ChangeRuntime" "wanxiangli/change") effects
 
     member _.ForkManager
         (
@@ -323,26 +159,44 @@ type Orchestrator
             ?byname: string,
             ?expectedToolCalls: int
         ) =
-        let providerByname =
+        let byname =
             match byname with
-            | Some value when not (System.String.IsNullOrWhiteSpace value) -> value.Trim()
+            | Some name when not (System.String.IsNullOrWhiteSpace name) -> name.Trim()
             | _ -> managerAgent
 
-        forkManagerCore jobId managerAgent providerByname prompt expectedToolCalls worktreePath
+        let id = ManagerJobId.value jobId
 
-    /// ORCH-007: resume a persisted job. The worktree is adopted by its durable
-    /// identity, never recreated, and the Manager is the one the fact names.
-    member _.RecoverManagerJob(record: ManagerJobProjection) =
-        let worktree =
-            WorktreeResource.Adopt(git, record.WorktreeIdentity, record.WorktreePath)
+        let path =
+            worktreePath
+            |> Option.map WorktreePath.value
+            |> Option.defaultWith (fun () -> Path.Combine(Path.GetTempPath(), sprintf "wanxiangshu-%s" id))
 
-        startPublication
-            { JobId = record.ManagerJobId
-              ManagerSessionId = record.ManagerSessionId
-              ManagerAgent = record.ManagerAgent
-              TargetRef = record.TargetRef
-              Worktree = worktree }
+        let request =
+            createObj
+                [ "id" ==> id
+                  "agent" ==> managerAgent
+                  "byname" ==> byname
+                  "prompt" ==> prompt
+                  "path" ==> path
+                  "identity" ==> ManagerWorktreePolicy.managerBranchOf id
+                  "target" ==> TargetRef.value targetRef
+                  "expectedToolCalls"
+                  ==> (expectedToolCalls |> Option.map box |> Option.defaultValue null) ]
 
-    /// EXEC-019: bounded FIFO batch with local interrupt (≠ lifecycle Cancel).
+        task {
+            let! result = unbox<Task<obj>> (native?start (request))
+
+            if unbox<bool> result?ok then
+                return
+                    Ok
+                        { JobId = jobId
+                          WorktreePath = WorktreePath.create result?value?path }
+            else
+                return Error(ChangeInterop.verdict result?error)
+        }
+
+    member _.RecoverManagerJob(record: ManagerJobProjection) : unit =
+        native?recover (OrchestratorProjection.toJob record)
+
     member _.JoinPublishedBatch(maxCount: int, interrupt: Task<JoinInterruptReason>) =
         mailbox.JoinAvailable(maxCount, interrupt)

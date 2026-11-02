@@ -5,7 +5,7 @@ open System.Threading.Tasks
 
 /// Cross-process publish serialization represented as one disposable resource.
 type IntegrationGate =
-    new: releaseFn: obj -> IntegrationGate
+    new: lease: obj -> IntegrationGate
     member Release: unit -> Task<unit>
     interface IAsyncDisposable
 

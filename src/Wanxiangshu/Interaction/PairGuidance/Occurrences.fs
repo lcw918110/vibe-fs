@@ -101,17 +101,28 @@ module PairGuidanceOccurrences =
         }
 
     let private entryOrdinal (entry: obj) : int64 =
-        if isNull entry?ordinal then int64 (string entry?Ordinal) else int64 (string entry?ordinal)
+        if isNull entry?ordinal then
+            int64 (string entry?Ordinal)
+        else
+            int64 (string entry?ordinal)
 
     let private entryCallId (entry: obj) : string =
-        if isNull entry?callId then string entry?CallId else string entry?callId
+        if isNull entry?callId then
+            string entry?CallId
+        else
+            string entry?callId
 
     let private entryMarkerText (entry: obj) : string =
-        if isNull entry?markerText then string entry?MarkerText else string entry?markerText
+        if isNull entry?markerText then
+            string entry?MarkerText
+        else
+            string entry?markerText
 
     let private unboxEntry (entry: obj) : PairGuidanceOccurrence option =
-        if isNull entry then None
-        elif not (isNull entry?raw) then Some(unbox<PairGuidanceOccurrence> entry?raw)
+        if isNull entry then
+            None
+        elif not (isNull entry?raw) then
+            Some(unbox<PairGuidanceOccurrence> entry?raw)
         else
             Some
                 { Ordinal = entryOrdinal entry
@@ -122,6 +133,7 @@ module PairGuidanceOccurrences =
 
     let private readMemory (key: string) : PairGuidanceOccurrence list =
         let entries: obj array = pairGuidanceMemoryStore?read (key)
+
         entries
         |> Option.ofObj
         |> Option.defaultValue [||]
@@ -179,99 +191,63 @@ module PairGuidanceOccurrences =
         | TranscriptGap.After addr -> "After:" + TranscriptMessageAddress.value addr
 
     let private occupiedEntry (pair: PairGuidanceOccurrence) : obj =
-        box {| callGapKey = gapKey pair.CallGap; resultGapKey = gapKey pair.ResultGap |}
+        box
+            {| callGapKey = gapKey pair.CallGap
+               resultGapKey = gapKey pair.ResultGap |}
 
-    let private nextOrdinal (history: PairGuidanceOccurrence list) : int64 =
-        let mapped = history |> List.toArray |> Array.map box
-        pairGuidanceMemoryStore?nextOrdinal (mapped)
+    [<Import("PairGuidanceOccurrences", "wanxiangli/pair-hint")>]
+    let private occurrencesClass: obj = jsNative
 
-    let private occupied (visible: PairGuidanceOccurrence list) (callGap: TranscriptGap) (resultGap: TranscriptGap) : bool =
-        let mapped = visible |> List.map occupiedEntry |> List.toArray
-        pairGuidanceMemoryStore?isOccupied (mapped, gapKey callGap, gapKey resultGap)
+    let private occurrences = createNew occurrencesClass ()
 
-    let private formatOrphanError (orphaned: string list) : string =
-        sprintf
-            "synthetic messages without durable record (callId %s, HOST-013)"
-            (String.Join(", ", orphaned |> List.truncate 3))
+    let private entryObject (entry: PairGuidanceOccurrence) =
+        createObj
+            [ "ordinal" ==> entry.Ordinal
+              "callId" ==> entry.CallId
+              "markerText" ==> entry.MarkerText
+              "metadata" ==> box (entry.CallGap, entry.ResultGap) ]
 
-    let private orphanCheck (ledger: PairGuidanceLedger) (transcript: PairGuidanceTranscript) =
-        let hist = ledger.History |> List.toArray |> Array.map box
-        let syn = transcript.SyntheticCallIds |> List.toArray
-        let orphaned: string list =
-            pairGuidanceMemoryStore?findOrphanedCallIds (hist, syn)
-            |> unbox<string array>
-            |> Array.toList
-        Result.requireTrue (formatOrphanError orphaned) (List.isEmpty orphaned)
+    let private occurrenceFrom (entry: obj) : PairGuidanceOccurrence =
+        let callGap, resultGap = unbox<TranscriptGap * TranscriptGap> entry?metadata
 
-    /// The product's own prose about a failed append.
-    let private describeAppendFailure (failure: PairGuidanceAppendError) =
-        match failure with
-        | PairGuidanceAppendError.JournalRejected reason -> reason
+        { Ordinal = entry?ordinal
+          CallId = entry?callId
+          MarkerText = entry?markerText
+          CallGap = callGap
+          ResultGap = resultGap }
 
-    let private replayOccurrence
-        (render: PairGuidanceOccurrence list -> Result<'Wire, string>)
-        (visible: PairGuidanceOccurrence list)
-        : Task<Result<'Wire * bool, string>> =
-        task {
-            match render visible with
-            | Ok replayed -> return Ok(replayed, false)
-            | Error e -> return Error e
-        }
+    let private resultObject =
+        function
+        | Ok value -> createObj [ "ok" ==> true; "value" ==> value ]
+        | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
 
-    let private appendOccurrenceResult
-        (rendered: 'Wire)
-        (ledger: PairGuidanceLedger)
-        (candidate: PairGuidanceOccurrence)
-        : Task<Result<'Wire * bool, string>> =
-        task {
-            let! appendResult = ledger.Append candidate
-
-            match appendResult with
-            | Ok() -> return Ok(rendered, true)
-            | Error failure -> return Error(describeAppendFailure failure)
-        }
-
-    let private commitNewOccurrence
-        (render: PairGuidanceOccurrence list -> Result<'Wire, string>)
-        (ledger: PairGuidanceLedger)
-        (candidate: PairGuidanceOccurrence)
-        : Task<Result<'Wire * bool, string>> =
-        match render (ledger.Visible @ [ candidate ]) with
-        | Error e -> Task.FromResult(Error e)
-        | Ok rendered -> appendOccurrenceResult rendered ledger candidate
-
-    let private commitAt
-        (ledger: PairGuidanceLedger)
-        (sessionId: string option)
-        (markerText: string)
-        (render: PairGuidanceOccurrence list -> Result<'Wire, string>)
-        (callGap: TranscriptGap)
-        (resultGap: TranscriptGap)
-        : Task<Result<'Wire * bool, string>> =
-        if occupied ledger.Visible callGap resultGap || skipRequested () then
-            replayOccurrence render ledger.Visible
-        else
-            let ordinal = nextOrdinal ledger.History
-
-            let candidate =
-                { Ordinal = ordinal
-                  CallId = stableCallId sessionId ordinal
-                  MarkerText = markerText
-                  CallGap = callGap
-                  ResultGap = resultGap }
-
-            commitNewOccurrence render ledger candidate
-
-    /// Internal transcripts never carry a new occurrence, whatever the host decoded.
-    let private placementOf
-        (internalTranscript: bool)
-        (transcript: PairGuidanceTranscript)
-        : Result<(TranscriptGap * TranscriptGap) option, string> =
-        if internalTranscript then
-            Ok None
+    let private placementObject internalSession (transcript: PairGuidanceTranscript) =
+        if internalSession || transcript.InternalAuthor then
+            null
         else
             transcript.Carrier
+            |> Result.map (
+                Option.map (fun (callGap, resultGap) ->
+                    createObj
+                        [ "callGapKey" ==> gapKey callGap
+                          "resultGapKey" ==> gapKey resultGap
+                          "metadata" ==> box (callGap, resultGap) ])
+                >> Option.defaultValue null
+            )
             |> Result.mapError (fun () -> "guidance carrier without transcript address (HOST-013)")
+            |> resultObject
+
+    let private occurrenceFailure (error: obj) =
+        if unbox<string> error?kind = "Orphaned" then
+            let ids: string array = error?callIds
+
+            Error(
+                sprintf
+                    "synthetic messages without durable record (callId %s, HOST-013)"
+                    (String.Join(", ", ids |> Array.truncate 3))
+            )
+        else
+            Error(unbox<string> error?cause)
 
     let occur
         (ledger: PairGuidanceLedger)
@@ -281,13 +257,39 @@ module PairGuidanceOccurrences =
         (transcript: PairGuidanceTranscript)
         (render: PairGuidanceOccurrence list -> Result<'Wire, string>)
         : Task<Result<'Wire * bool, string>> =
-        taskResult {
-            do! orphanCheck ledger transcript
-            let! placement = placementOf (internalSession || transcript.InternalAuthor) transcript
+        task {
+            let input =
+                createObj
+                    [ "history" ==> (ledger.History |> List.map entryObject |> List.toArray)
+                      "visible" ==> (ledger.Visible |> List.map entryObject |> List.toArray)
+                      "occupied" ==> (ledger.Visible |> List.map occupiedEntry |> List.toArray)
+                      "syntheticCallIds" ==> List.toArray transcript.SyntheticCallIds
+                      "placement" ==> placementObject internalSession transcript
+                      "skipNew" ==> skipRequested ()
+                      "sessionKey" ==> transcriptKey sessionId
+                      "markerText" ==> markerText ]
 
-            match placement with
-            | None ->
-                let! replayed = render ledger.Visible
-                return (replayed, false)
-            | Some(callGap, resultGap) -> return! commitAt ledger sessionId markerText render callGap resultGap
+            let renderNative =
+                Func<obj array, obj>(fun entries ->
+                    entries |> Array.map occurrenceFrom |> Array.toList |> render |> resultObject)
+
+            let appendNative =
+                Func<obj, Task<obj>>(fun entry ->
+                    task {
+                        let! result = ledger.Append(occurrenceFrom entry)
+
+                        return
+                            result
+                            |> Result.map box
+                            |> Result.mapError (fun (PairGuidanceAppendError.JournalRejected reason) -> reason)
+                            |> resultObject
+                    })
+
+            let! (result: obj) = occurrences?occur (input, renderNative, appendNative)
+
+            if unbox<bool> result?ok then
+                let value: obj = result?value
+                return Ok(unbox<'Wire> value?wire, unbox<bool> value?appended)
+            else
+                return occurrenceFailure result?error
         }

@@ -283,12 +283,6 @@ const caseRec = (sessionId, q, a, observations) => ({
   observations,
   lastAccessOrder: 0,
 })
-const project = (events) =>
-  events.reduce((world, event) => {
-    const result = casebook.applyEvent(world, event)
-    assert.equal(result.ok, true, JSON.stringify(result.error))
-    return result.world
-  }, casebook.emptyWorld())
 const openStore = () => {
   const dir = mkdtempSync(join(tmpdir(), 'wxs-casebook-surface-'))
   return {

@@ -20,7 +20,7 @@ module PluginHost =
 
     val createHost:
         workspaceDirectory: string option ->
-        input: obj ->
+        snapshotPort: ISessionSnapshotPort option ->
         portOpt: IOpenCodePort option ->
         familyParent: (SessionId -> SessionId option) option ->
         isLifecycleTerminated: (SessionId -> bool) option ->

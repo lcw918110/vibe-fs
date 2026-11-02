@@ -6,6 +6,8 @@ open System.Threading.Tasks
 /// transaction state to wanxiangli/casebook.
 module CasebookBookkeeperSurface =
 
+    val renderSuccess: languageName: string -> value: obj -> string
+
     val createRefreshPrompt: input: obj -> string
 
     val setRuntime: port: obj -> ownerDescriptors: obj -> obj

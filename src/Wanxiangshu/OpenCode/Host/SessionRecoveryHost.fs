@@ -151,8 +151,7 @@ type SessionRecoveryHost
             Task.FromResult(ProviderPhysicalObservation.ProviderTerminal(started, disposition))
         | ChatExecutionRecoveryLifecycleEvent.SessionDeleted _ ->
             Task.FromResult(ProviderPhysicalObservation.ProviderAbsent state.key)
-        | _ when state.terminalDisposition.IsSome ->
-            Task.FromResult(ProviderPhysicalObservation.ReceiptMissing)
+        | _ when state.terminalDisposition.IsSome -> Task.FromResult(ProviderPhysicalObservation.ReceiptMissing)
         | _ -> providerFromTranscript messagesFor state
 
     let lifecycleCancellation (event: ChatExecutionRecoveryLifecycleEvent) =
@@ -548,11 +547,32 @@ type SessionRecoveryHost
                 |> List.filter (fun state -> state.key.SessionId = sessionId)
 
             for state in states do
-                do!
-                    recoverState messagesFor ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded state
+                do! recoverState messagesFor ChatExecutionRecoveryLifecycleEvent.PluginRuntimeReloaded state
 
             pulseDrain sessionId
         }
+
+    let removeFailedReload key work =
+        lock reloadGate (fun () ->
+            match sessionReloads.TryGetValue key with
+            | true, registered when obj.ReferenceEquals(registered, work) -> sessionReloads.Remove key |> ignore
+            | _ -> ())
+
+    let startReload key sessionId =
+        let mutable work: Task = null
+
+        work <-
+            (task {
+                try
+                    do! reloadSessionWork sessionId
+                with error ->
+                    removeFailedReload key work
+                    raise error
+            }
+            :> Task)
+
+        sessionReloads.[key] <- work
+        work
 
     /// Start or join THIS session's load-phase reload sweep. The session's own
     /// leftover executions (resources, unknowns, settlements) are decided before
@@ -567,26 +587,7 @@ type SessionRecoveryHost
         lock reloadGate (fun () ->
             match sessionReloads.TryGetValue key with
             | true, work -> work
-            | false, _ ->
-                let mutable work: Task = null
-
-                work <-
-                    (task {
-                        try
-                            do! reloadSessionWork sessionId
-                        with error ->
-                            lock reloadGate (fun () ->
-                                match sessionReloads.TryGetValue key with
-                                | true, registered when obj.ReferenceEquals(registered, work) ->
-                                    sessionReloads.Remove key |> ignore
-                                | _ -> ())
-
-                            raise error
-                    }
-                    :> Task)
-
-                sessionReloads.[key] <- work
-                work)
+            | false, _ -> startReload key sessionId)
 
     /// The session ids that still owe a load-phase reload decision — the same
     /// set the process-wide sweep would visit, one id per session.

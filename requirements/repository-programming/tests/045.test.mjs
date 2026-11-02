@@ -6,8 +6,6 @@ import { join } from 'node:path'
 import {
   createApi,
   api as apiOf,
-  stagedCount,
-  stagedKinds,
 } from '../../../dist/Repository/Programming/Js/RuntimeSurface.js'
 
 const sandbox = () => {
@@ -117,7 +115,7 @@ test('WHAT[repository-programming-045] mkdir creates one directory and refuses c
   }
 })
 
-test('WHAT[repository-programming-045] write creates a missing file and mkdir is not a staged mutation', () => {
+test('WHAT[repository-programming-045] write creates a missing file in a created directory', () => {
   const { dir, cleanup } = sandbox()
   try {
     const binding = createApi(dir)
@@ -125,8 +123,6 @@ test('WHAT[repository-programming-045] write creates a missing file and mkdir is
     const written = apiOf(binding).write('generated/version.txt', '1.2.3\n')
     assert.equal(written.ok, true)
     assert.equal(readFileSync(join(dir, 'generated', 'version.txt'), 'utf8'), '1.2.3\n')
-    assert.equal(stagedCount(binding), 1)
-    assert.deepEqual(stagedKinds(binding), ['Create'])
   } finally {
     cleanup()
   }

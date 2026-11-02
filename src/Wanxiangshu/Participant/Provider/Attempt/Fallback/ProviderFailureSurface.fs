@@ -604,7 +604,7 @@ module ProviderFailureSurface =
         | Some RetryVerdict.ReceiptUnknown -> "ReceiptUnknown"
         | Some RetryVerdict.WaitDenied -> "WaitDenied"
         | Some RetryVerdict.Dispatched -> "Dispatched"
-        | Some (RetryVerdict.Terminal _) -> "Terminal"
+        | Some(RetryVerdict.Terminal _) -> "Terminal"
 
     let delegateRetryObservation (verdictName: string) : string =
         let verdict =
@@ -616,8 +616,9 @@ module ProviderFailureSurface =
             | other -> RetryVerdict.Terminal other
 
         match Retry.observeDelegateRetry verdict with
-        | Ok () -> "Ok"
+        | Ok() -> "Ok"
         | Error reason -> "Error:" + reason
+
     /// Record one confirmed provider failure through the production ledger using
     /// an opaque JournalHandle. Only `ExecutionFailurePolicy` may licence the
     /// advance against the single `ProviderFailureBudget.DefaultBudget`, and no
@@ -826,8 +827,10 @@ module ProviderFailureSurface =
     /// overflow, exhausted credits / spending limit) never earns a continuation:
     /// resending cannot succeed.
     let longWorkContinuationPathForReason (role: string) (failure: string) (reason: string) : string =
-        if ProviderRecoveryWorkflow.isHardStopReason reason then ""
-        else longWorkContinuationPath role failure
+        if ProviderRecoveryWorkflow.isHardStopReason reason then
+            ""
+        else
+            longWorkContinuationPath role failure
 
     /// Whether confirmed-failure recovery stops the turn outright: no retry, no
     /// continuation, no missing-report nudge.
@@ -839,6 +842,37 @@ module ProviderFailureSurface =
             | other -> invalidArg "failure" $"unsupported failure '{other}'"
 
         ProviderRecoveryWorkflow.isHardStop failureKind reason
+
+    let continueConfirmedFailure (handle: JournalHandle) (sessionPort: obj) (eventPort: obj) (input: obj) : Task =
+        let turn: ReconciledTurn =
+            { SessionId = SessionId.create (text input?session)
+              PhysicalUserMessageId = PhysicalUserMessageId.create (text input?physicalMessage)
+              AuthorityRootUserMessageId = AuthorityRootUserMessageId.create (text input?authorityRoot)
+              ProviderRun = ProviderRunIdentity.create (text input?providerRun)
+              Role = Roles.tryParseRole (text input?role)
+              Directory = None
+              Parts = [||]
+              Finish = None
+              ErrorName = None
+              Model = None
+              Outcome = ReconcileProgram.TurnFailed(text input?error)
+              Observation = None }
+
+        let failure =
+            match text input?failure with
+            | "ProviderTransient" -> ExecutionFailure.ProviderTransient
+            | "ProviderPermanent" -> ExecutionFailure.ProviderPermanent
+            | other -> invalidArg "failure" other
+
+        ProviderRecoveryWorkflow.continueAfterConfirmedFailure
+            (unbox sessionPort)
+            null
+            (unbox eventPort)
+            (Some handle.Journal)
+            turn
+            failure
+            (text input?error)
+            (text input?continuationPrompt)
 
 
     /// provider-attempt-recovery-026 test seam: classify the same-provider recovery

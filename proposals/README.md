@@ -6,6 +6,8 @@
 
 ## 一、现行约束与已实施的设计
 
+本次累计拆分的施工与待处理限制见[第五批完整职责与宿主适配计划](第五批完整职责与宿主适配计划-2026-11-02.md#本轮施工记录2026-11-02)；前置批次见该计划引用的记录。[剩余职责预估](主程序剩余职责与最终骨架预估-2026-11-01.md)仅作路线参考，不代表新的施工授权。
+
 | 文档 | 性质 | 为什么还在 |
 | --- | --- | --- |
 | [todowrite：命名程序与 program/runtime 公开面](todowrite-program-runtime-clean-break-2026-10-24.md) | 设计记录，已按现行代码校正 | `name/program/intent`、一条请求期限、call/park/unpark、program 与 runtime 的包边界。现行合同以 `requirements/repository-programming/WHAT.md` 与 `wanxiangli/src/program/AGENTS.md` 为准。 |

@@ -29,20 +29,16 @@
 
 万象通只消费万象理的 npm 公开入口（`exports` 与 `.d.ts`）；本仓与万象通都可直接消费万象理。万象理不认识万象通，也不认识本仓。适配层可以拥有翻译所需的状态，但不复制领域账本。
 
+适配不限于字段改名：它负责输入形状、事件次序、宿主协议状态与回执含义的正确解释，不代替领域对象决定业务结果。超时不能翻译成「外部效果未发生」，日志重放也不能翻译成「可以再次请求 provider」。宿主试验失败时，先区分环境、版本、权限、适配错误与能力缺失，再判断哪项设计前提需要调整。
+
 ## 现在在哪里
 
-本目录目前只有说明，没有宿主适配程序。宿主代码仍在原处：
+`opencode/provider-request/` 解释请求消息、system 和临时咨询的投影视图；产品能力的组合仍在 `PluginTransformComposition`。`opencode/request-latency/` 解释请求边界，并拥有延迟计时、打断及续发观察者。两者由主插件真实调用，随主程序构建和分发，不是新的 npm 包。
 
-- `src/Wanxiangshu/OpenCode/`：编解码、hook、信号、工具面与插件入口。
-- `src/Wanxiangshu/Omp/`、`src/Wanxiangshu/Composition/Omp/`：omp 扩展适配。
-- `src/Wanxiangshu/Composition/Plugin/`：插件装配（OpenCode 入口侧的启动接线）。
-- `src/Wanxiangshu/Foundation/`（如 `HostModel.fs`、`HostSessionPort.fs`）、`src/Wanxiangshu/Composition/Turn/`：仍混有宿主接线与宿主专名。
-- `scripts/`：宿主侧辅助脚本。
+`opencode/compaction/` 拥有压缩请求标记、首轮配置观察和快照协调；Prefix 的已提交世代仍由核持有，事实追加由产品连接器完成。`opencode/session-transport/` 选择一次 SDK/HTTP 连接能力，提供发送、会话目录与快照视图；工作接纳、家族归属和交付决定仍由产品对象负责。
 
-核侧 `wanxiangli/src/host-omp/` 已不存在（现行 `src/` 下无 `host-*` 目录）。
-
-这些是现状，不是已经完成的三层切换。
+其余 OpenCode 入口和工具仍在 `src/Wanxiangshu/OpenCode/`，omp 适配仍在 `src/Wanxiangshu/Omp/`；宿主侧辅助脚本仍在 `scripts/`。这些残留尚未完成三层切换。
 
 **程序待改：** 按真实调用路径识别宿主翻译、领域状态和无用桥接，过闸后经授权再迁移或删除。不能仅按文件名搬迁，也不能假定历史原型已具备生产行为。核侧出现的宿主专有语义同样需要沿实际接口核查，不能靠目录命名判断。
 
-当前闸门要求先盘点、纠偏、调结构和清理支撑程序；负责人未明示通过前，不开新的业务职责迁移。没有实际行为的空壳不应放在这里。
+后续迁移仍须遵守根规则的闸门和当前工作授权；这里已有的迁动不代替对其他候选的判断。没有实际行为的空壳不应放在这里。

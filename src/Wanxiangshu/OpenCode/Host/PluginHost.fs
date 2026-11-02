@@ -83,7 +83,7 @@ module PluginHost =
 
     let createHost
         (workspaceDirectory: string option)
-        (input: obj)
+        (snapshotPort: ISessionSnapshotPort option)
         (portOpt: IOpenCodePort option)
         (familyParent: (SessionId -> SessionId option) option)
         (isLifecycleTerminated: (SessionId -> bool) option)
@@ -126,7 +126,6 @@ module PluginHost =
                     ?isUserQuestionWaiting = isUserQuestionWaiting
                 )
 
-            let snapshotPort = SessionSnapshotPort.create workspaceDirectory input
 
             return Ok(eventPort, sessionPort :> ISessionHostPort, snapshotPort, terminalKey, Some finalSource)
         }

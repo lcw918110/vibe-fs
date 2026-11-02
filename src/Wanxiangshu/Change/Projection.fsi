@@ -68,9 +68,7 @@ type WorktreeReconciliationDecision =
     | AdoptCreated
     | Reject of WorktreeReconciliationFailure
 
-type OrchestratorProjection =
-    { Jobs: Map<ManagerJobId, ManagerJobProjection>
-      WorktreeEffects: Map<WorktreeIdentity, WorktreeEffectStatus> }
+type OrchestratorProjection
 
 [<RequireQualifiedAccess>]
 type RebasedCandidateReality =
@@ -186,6 +184,10 @@ module PublicationLaw =
         merge: Result<CommitHash, string> -> candidate: CommitHash -> targetMovedError: string -> FastForwardOutcome
 
 module OrchestratorProjection =
+    val native: OrchestratorProjection -> obj
+    val fromJob: obj -> ManagerJobProjection
+    val toJob: ManagerJobProjection -> obj
+    val applyEvent: obj -> OrchestratorProjection -> Result<OrchestratorProjection, OrchestratorFoldRejection>
     val empty: OrchestratorProjection
     val tryFind: ManagerJobId -> OrchestratorProjection -> ManagerJobProjection option
     val tryFindByByname: string -> OrchestratorProjection -> ManagerJobProjection option

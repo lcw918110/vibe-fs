@@ -95,12 +95,12 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
  */
 export const SURFACE_MANIFEST = [
   {
-    module: 'OpenCode/Host/LatencyWatchdog.js',
+    module: 'wanxiangtong/opencode/request-latency/LatencyWatchdog.js',
     owner: 'latency-degeneration',
     laws: ['latency-degeneration-001', 'latency-degeneration-002', 'latency-degeneration-003',
       'latency-degeneration-004', 'latency-degeneration-005', 'latency-degeneration-008',
       'latency-degeneration-009', 'latency-degeneration-010', 'latency-degeneration-011'],
-    source: 'src/Wanxiangshu/OpenCode/Host/LatencyWatchdog.fs',
+    source: 'wanxiangtong/opencode/request-latency/LatencyWatchdog.fs',
     representation: 'opaque-capability',
     kind: 'resource',
   },
@@ -276,14 +276,6 @@ export const SURFACE_MANIFEST = [
     kind: 'pure',
   },
   {
-    module: 'Execution/Delegation/Fork/LifecycleSurface.js',
-    owner: 'managed-session-lifecycle',
-    laws: ['MANAGED-SESSION-012'],
-    source: 'src/Wanxiangshu/Execution/Delegation/Fork/LifecycleSurface.fs',
-    representation: 'json',
-    kind: 'pure',
-  },
-  {
     module: 'Participant/Provider/Attempt/Fallback/ProviderFailureSurface.js',
     owner: 'provider-attempt-recovery',
     laws: [
@@ -412,14 +404,6 @@ export const SURFACE_MANIFEST = [
     kind: 'pure',
   },
   {
-    module: 'Foundation/SyntheticTomlSurface.js',
-    owner: 'provider-projection',
-    laws: ['PROVIDER-PROJECTION-008', 'PROVIDER-PROJECTION-010', 'PROVIDER-PROJECTION-012'],
-    source: 'src/Wanxiangshu/Foundation/SyntheticTomlSurface.fs',
-    representation: 'json',
-    kind: 'pure',
-  },
-  {
     module: 'Host/Contract/ToolResultBound.js',
     owner: 'host-boundary',
     laws: ['HOST-BOUNDARY-015'],
@@ -459,14 +443,6 @@ export const SURFACE_MANIFEST = [
     kind: 'resource',
   },
 
-  {
-    module: 'Process/LargeGateSurface.js',
-    owner: 'process-execution',
-    laws: ['PROC-016'],
-    source: 'src/Wanxiangshu/Process/LargeGateSurface.fs',
-    representation: 'opaque-capability',
-    kind: 'resource',
-  },
   {
     module: 'Repository/Knowledge/Casebook/Surface.js',
     owner: 'knowledge-reuse',
@@ -1104,6 +1080,14 @@ export const SURFACE_MANIFEST = [
     kind: 'resource',
   },
   {
+    module: 'OpenCode/Host/HostBoundarySurface.js',
+    owner: 'host-boundary',
+    laws: ['HOST-BOUNDARY-011'],
+    source: 'src/Wanxiangshu/OpenCode/Host/HostBoundarySurface.fs',
+    representation: 'json',
+    kind: 'pure',
+  },
+  {
     module: 'OpenCode/Host/PairProgrammingThoughtSurface.js',
     owner: 'provider-projection',
     laws: ['PROVIDER-PROJECTION-010'],
@@ -1202,10 +1186,10 @@ export const SURFACE_MANIFEST = [
     kind: 'resource',
   },
   {
-    module: 'OpenCode/Host/HostMessageProjection.js',
+    module: 'wanxiangtong/opencode/provider-request/MessageProjection.js',
     owner: 'host-boundary',
     laws: ['HOST-BOUNDARY-011'],
-    source: 'src/Wanxiangshu/OpenCode/Host/HostMessageProjection.fs',
+    source: 'wanxiangtong/opencode/provider-request/MessageProjection.fs',
     representation: 'json',
     kind: 'resource',
   },
@@ -1461,14 +1445,6 @@ export const SURFACE_MANIFEST = [
     source: 'src/Wanxiangshu/Change/Host/Surface.fs',
     representation: 'opaque-capability',
     kind: 'resource',
-  },
-  {
-    module: 'Foundation/ParallelSurface.js',
-    owner: 'structured-workflow',
-    laws: ['STRUCTURED-WORKFLOW-010'],
-    source: 'src/Wanxiangshu/Foundation/ParallelSurface.fs',
-    representation: 'opaque-capability',
-    kind: 'pure',
   },
   {
     module: 'Foundation/FsToolkitFableCompat.js',

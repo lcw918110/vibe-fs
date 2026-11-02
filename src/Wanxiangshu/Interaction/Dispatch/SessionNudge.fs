@@ -103,6 +103,54 @@ module HostSessionNudge =
                         onAccepted
         }
 
+    let private refusalObservingPort (sessionPort: ISessionHostPort) (onRefused: string -> unit) =
+        let observeVerdict =
+            function
+            | Wanxiangshu.Host.Ports.DeliveryVerdict.Refused reason -> onRefused reason
+            | _ -> ()
+
+        let observeOutcome =
+            function
+            | Wanxiangshu.Foundation.Outcome.SendOutcome.Retryable reason
+            | Wanxiangshu.Foundation.Outcome.SendOutcome.Fatal reason -> onRefused reason
+            | _ -> ()
+
+        { new IDispatchSessionPort with
+            member _.SendPrompt(sessionId, request, metadata, late) =
+                let listener verdict : Task =
+                    task {
+                        observeVerdict verdict
+
+                        match late with
+                        | Some original -> do! original verdict
+                        | None -> ()
+                    }
+                    :> Task
+
+                let sending =
+                    sessionPort.SendPrompt(
+                        sessionId,
+                        request.Text,
+                        DispatchSessionPort.toHostOptions request metadata (Some listener)
+                    )
+
+                (task {
+                    try
+                        let! result = sending
+                        observeOutcome result
+                    with _ ->
+                        ()
+                })
+                |> ignore<Task<unit>>
+
+                sending
+
+            member _.SubscribeFutureTerminal(sessionId, listener) =
+                sessionPort.SubscribeFutureTerminal(sessionId, listener)
+
+            member _.SubscribeTerminal(sessionId, listener) =
+                sessionPort.SubscribeTerminal(sessionId, listener) }
+
     /// Detached continuation with two independent observations: durable
     /// physical acceptance and a later definite Host refusal. Neither waits
     /// for the other; external OutcomeUnknown remains honestly unproven.
@@ -123,43 +171,9 @@ module HostSessionNudge =
             | false, None, _ -> return Error "No journal: a continuation cannot be claimed"
             | false, Some _, None -> return Error "No active authority profile"
             | false, Some durable, Some profile ->
-                let port =
-                    { new IDispatchSessionPort with
-                        member _.SendPrompt(sessionId, request, metadata, late) =
-                            let listener verdict : Task =
-                                task {
-                                    match verdict with
-                                    | Wanxiangshu.Host.Ports.DeliveryVerdict.Refused reason ->
-                                        onRefused reason
-                                    | _ -> ()
-                                    match late with
-                                    | Some original -> do! original verdict
-                                    | None -> ()
-                                } :> Task
-                            let sending =
-                                sessionPort.SendPrompt(
-                                    sessionId,
-                                    request.Text,
-                                    DispatchSessionPort.toHostOptions request metadata (Some listener)
-                                )
-                            // The initial Host send verdict is also asynchronous.
-                            // Observe it independently; never delay PromptDispatcher.
-                            (task {
-                                try
-                                    let! result = sending
-                                    match result with
-                                    | Wanxiangshu.Foundation.Outcome.SendOutcome.Retryable reason
-                                    | Wanxiangshu.Foundation.Outcome.SendOutcome.Fatal reason ->
-                                        onRefused reason
-                                    | _ -> ()
-                                with _ -> ()
-                            }) |> ignore<Task<unit>>
-                            sending
-                        member _.SubscribeFutureTerminal(sessionId, listener) =
-                            sessionPort.SubscribeFutureTerminal(sessionId, listener)
-                        member _.SubscribeTerminal(sessionId, listener) =
-                            sessionPort.SubscribeTerminal(sessionId, listener) }
+                let port = refusalObservingPort sessionPort onRefused
                 let rt = PromptDispatcher.forPrompts (PromptJournalAdapter.create durable)
+
                 return!
                     rt.SendContinuation
                         port

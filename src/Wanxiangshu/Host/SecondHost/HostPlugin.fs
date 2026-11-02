@@ -433,11 +433,7 @@ module HostPlugin =
             else
                 questions.Trim()
 
-        "<btw>\n"
-        + cleaned
-        + "\n\n"
-        + snapshotForbidText delegator
-        + "\n</btw>"
+        "<btw>\n" + cleaned + "\n\n" + snapshotForbidText delegator + "\n</btw>"
 
     let private extractQuestions (args: CanonicalJsonText) : string =
         let (CanonicalJsonText raw) = args
@@ -473,7 +469,23 @@ module HostPlugin =
               "recipient", recipient
               "delegator", delegator
               "stage", stage
-              "reason", (if String.IsNullOrWhiteSpace reason then "unspecified" else reason) ]
+              "reason",
+              (if String.IsNullOrWhiteSpace reason then
+                   "unspecified"
+               else
+                   reason) ]
+
+    let private confirmNegotiationDelivery sid delegator receipt =
+        let confirmed =
+            Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer receipt sid
+
+        if not confirmed then
+            negotiationDeliveryFailed
+                receipt
+                sid
+                delegator
+                "confirm-steer"
+                "steer delivered but the receipt was not confirmed (unknown, settled or stale)"
 
     let private processNegotiationDelivery
         (transport: INegotiationTransport)
@@ -492,17 +504,7 @@ module HostPlugin =
             let! deliverRes = transport.DeliverAndObserve steerReq
 
             match deliverRes with
-            | Ok() ->
-                let confirmed =
-                    Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer readyReceipt sid
-
-                if not confirmed then
-                    negotiationDeliveryFailed
-                        readyReceipt
-                        sid
-                        delegator
-                        "confirm-steer"
-                        "steer delivered but the receipt was not confirmed (unknown, settled or stale)"
+            | Ok() -> confirmNegotiationDelivery sid delegator readyReceipt
             | Error reason -> negotiationDeliveryFailed readyReceipt sid delegator "deliver-steer" reason
         }
 
@@ -539,7 +541,13 @@ module HostPlugin =
                         if isDynamicOk prep then
                             Some prep
                         else
-                            negotiationDeliveryFailed receipt sid delegator "prepare-reply" (dynamicField prep "reason")
+                            negotiationDeliveryFailed
+                                receipt
+                                sid
+                                delegator
+                                "prepare-reply"
+                                (dynamicField prep "reason")
+
                             None)
 
                 match prepOpt with
@@ -581,6 +589,7 @@ module HostPlugin =
             failureOutcome "Negotiation refused: delegator context is not available for ephemeral turn."
         else
             launchNegotiationBackground transport sid questions delegator receipt
+
             successOutcome (
                 "Clarification requested (receipt "
                 + receipt

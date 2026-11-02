@@ -1,23 +1,56 @@
 namespace Wanxiangshu.Change.Host
 
 open System
-open System.Threading
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Git
 open Wanxiangshu.Process
 
-/// Git command plumbing for the production Orchestrator host.
+/// 宿主进程输出适配；候选准备由公开库负责。
 module OrchestratorGit =
 
-    let private estimate =
-        { EstimatedRuntime = RuntimeSeconds 30.0
-          EstimatedOutput = OutputBytes 65536L
-          EstimatedMemory = EstimatedMemory.Medium }
+    [<Import("runProcess", "wanxiangli/runtime")>]
+    let private runProcess (request: obj) : Task<obj> = jsNative
 
-    /// A spooled outcome still carries the complete output. Returning "" for it
-    /// made a large `git grep` for conflict markers or a long unmerged-path list
-    /// look empty. The spool file merges both channels in arrival order, so the
-    /// full text is returned as stdout; the file is removed once read.
+    [<RequireQualifiedAccess>]
+    type private ProcessError =
+        | TimeoutExceeded of duration: TimeSpan
+        | SpawnFailed of reason: string
+        | ProcessCancelled of reason: string
+        | ExecutionFailed of reason: string
+
+    let private errorOf (value: obj) : ProcessError =
+        match unbox<string> value?kind with
+        | "TimeoutExceeded" -> ProcessError.TimeoutExceeded(TimeSpan.FromMilliseconds(unbox<float> value?durationMs))
+        | "SpawnFailed" -> ProcessError.SpawnFailed(unbox value?reason)
+        | "ProcessCancelled" -> ProcessError.ProcessCancelled(unbox value?reason)
+        | "ExecutionFailed" -> ProcessError.ExecutionFailed(unbox value?reason)
+        | kind -> invalidOp $"unknown process error kind: {kind}"
+
+    let private requestOf (cmd: Command) : obj =
+        let environment =
+            cmd.Environment
+            |> Option.map (fun values ->
+                values
+                |> Map.toSeq
+                |> Seq.map (fun (name, value) -> name, box value)
+                |> createObj)
+            |> Option.defaultValue null
+
+        createObj
+            [ "command"
+              ==> createObj
+                      [ "fileName" ==> cmd.FileName
+                        "args" ==> List.toArray cmd.Arguments
+                        "cwd" ==> Option.toObj cmd.WorkingDirectory
+                        "env" ==> environment
+                        "stdin" ==> Option.toObj cmd.Stdin ]
+              "estimate"
+              ==> createObj [ "runtimeSeconds" ==> 30.0; "outputBytes" ==> 65536L; "memory" ==> "medium" ]
+              "context" ==> createObj [ "hardLimitMs" ==> 3600000.0 ] ]
+
+    /// spool 保存完整输出，读取后清理文件。
     let private readSpooled (path: string) : Task<string> =
         task {
             try
@@ -27,129 +60,26 @@ module OrchestratorGit =
                 Spool.delete path
         }
 
+    let private readOutcome (outcome: obj) =
+        task {
+            let code: int = unbox outcome?exitCode
+
+            match unbox<string> outcome?kind with
+            | "Completed" -> return (code, unbox outcome?stdout, unbox outcome?stderr)
+            | "Spooled" ->
+                let! stdout = readSpooled (unbox outcome?spoolPath)
+                return (code, stdout, "")
+            | kind -> return invalidOp $"unknown process outcome kind: {kind}"
+        }
+
     let run (cmd: Command) : Task<int * string * string> =
         task {
-            let ctx =
-                { WorkingDirectory = cmd.WorkingDirectory
-                  HardLimit = ProcessEstimate.DefaultHardLimit }
+            let! result = runProcess (requestOf cmd)
 
-            let! res = ProcessRunner.run cmd estimate ctx CancellationToken.None
-
-            match res with
-            | Ok(ProcessOutcome.Completed(code, stdout, stderr, _)) -> return (code, stdout, stderr)
-            | Ok(ProcessOutcome.Spooled(code, path, _, _)) ->
-                let! stdout = readSpooled path
-                return (code, stdout, "")
-            | Error err -> return (1, "", sprintf "%A" err)
-        }
-
-    let command (dir: string) (args: string list) : Command =
-        { FileName = GitSubject.Executable
-          Arguments = args
-          WorkingDirectory = Some dir
-          Environment = None
-          Stdin = None
-          PtyOptions = None }
-
-    /// True when an in-progress rebase is present (rebase-merge / rebase-apply,
-    /// never a stale REBASE_HEAD; ORCH-003). One reader: WorktreeCommands.
-    let hasRebaseHead (runner: Command -> Task<int * string * string>) (worktree: string) : Task<bool> =
-        WorktreeCommands.rebaseInProgress runner worktree
-
-    /// After a manager terminal: stage everything, then either continue an
-    /// in-flight rebase or create the candidate commit.
-    ///
-    /// Stage first (`git add -A`), then refuse leftover unmerged paths / conflict
-    /// markers. Checking unmerged *before* add rejected a resolved file that was
-    /// still unstaged (ORCH-003 conflict resume: Coder rewrote the file; Manager
-    /// joined; finalize must stage then continue).
-    let private continueRebase
-        (runner: Command -> Task<int * string * string>)
-        (worktree: string)
-        : Task<Result<unit, string>> =
-        task {
-            let! contCode, _, contErr = runner (command worktree [ "-c"; "core.editor=true"; "rebase"; "--continue" ])
-
-            if contCode = 0 then
-                return Ok()
+            if not (unbox<bool> result?ok) then
+                return (1, "", sprintf "%A" (errorOf result?error))
             else
-                return Error(sprintf "git rebase --continue failed: %s" contErr)
-        }
-
-    // semantic-decorator-owner: change-integration
-    // semantic-decorator-WHAT: change-integration-003
-    // semantic-decorator-trace-relation: delete stale REBASE_HEAD exactly once before the single candidate commit attempt
-    // semantic-decorator-proof: requirements/change-integration/tests/git-operations.test.mjs::WHAT[change-integration-003] GIT_candidate_commit_deletes_stale_rebase_head_before_commit_and_surfaces_failure
-    // semantic-decorator-failure-policy: ignore stale-ref deletion outcome; surface commit stderr unless git reports nothing to commit
-    // semantic-decorator-cancel-policy: cancellation is owned by the injected command runner and stops before the next command
-    // semantic-decorator-deadline-policy: each command uses the runner deadline; no sequence-level deadline extension
-    // semantic-decorator-invocation-bound: 2
-    let private commitCandidate
-        (runner: Command -> Task<int * string * string>)
-        (managerId: string)
-        (worktree: string)
-        : Task<Result<unit, string>> =
-        task {
-            let! _ = runner (command worktree [ "update-ref"; "-d"; "REBASE_HEAD" ])
-
-            let! commitCode, commitOut, commitErr =
-                runner (command worktree [ "commit"; "-m"; sprintf "candidate: %s" managerId ])
-
-            if commitCode = 0 then
-                return Ok()
-            elif (commitOut + commitErr).Contains("nothing to commit") then
-                return Ok()
-            else
-                return Error(sprintf "git commit failed: %s" commitErr)
-        }
-
-    let private finalizeCommitOrRebase
-        (runner: Command -> Task<int * string * string>)
-        (managerId: string)
-        (worktree: string)
-        : Task<Result<unit, string>> =
-        task {
-            let! hasRb = hasRebaseHead runner worktree
-
-            if hasRb then
-                return! continueRebase runner worktree
-            else
-                return! commitCandidate runner managerId worktree
-        }
-
-    let private refuseConflictMarkers
-        (runner: Command -> Task<int * string * string>)
-        (managerId: string)
-        (worktree: string)
-        : Task<Result<unit, string>> =
-        task {
-            let! grepCode, grepOut, _ =
-                runner (command worktree [ "grep"; "-I"; "-n"; "-E"; "^<<<<<<< |^>>>>>>> "; "--"; "." ])
-
-            // git grep exit 0 = matches, 1 = no match, >1 = error
-            if grepCode = 0 && not (String.IsNullOrWhiteSpace grepOut) then
-                return Error(sprintf "conflict markers remain in worktree:\n%s" (grepOut.Trim()))
-            elif grepCode > 1 then
-                return Error "conflict-marker scan failed"
-            else
-                return! finalizeCommitOrRebase runner managerId worktree
-        }
-
-    let private afterGitAdd
-        (runner: Command -> Task<int * string * string>)
-        (managerId: string)
-        (worktree: string)
-        : Task<Result<unit, string>> =
-        task {
-            let! unmergedCode, unmergedOut, unmergedErr =
-                runner (command worktree [ "diff"; "--name-only"; "--diff-filter=U" ])
-
-            if unmergedCode <> 0 then
-                return Error(sprintf "conflict scan failed: %s" unmergedErr)
-            elif not (String.IsNullOrWhiteSpace unmergedOut) then
-                return Error(sprintf "unmerged paths remain after stage: %s" (unmergedOut.Trim()))
-            else
-                return! refuseConflictMarkers runner managerId worktree
+                return! readOutcome result?value
         }
 
     let finalizeWorktree
@@ -157,11 +87,4 @@ module OrchestratorGit =
         (managerId: string)
         (worktree: string)
         : Task<Result<unit, string>> =
-        task {
-            let! addCode, _, addErr = runner (command worktree [ "add"; "-A" ])
-
-            if addCode <> 0 then
-                return Error(sprintf "git add failed: %s" addErr)
-            else
-                return! afterGitAdd runner managerId worktree
-        }
+        GitOperations.prepareWorktree runner worktree (sprintf "candidate: %s" managerId)

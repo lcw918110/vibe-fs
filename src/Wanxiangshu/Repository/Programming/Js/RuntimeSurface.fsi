@@ -2,9 +2,7 @@ namespace Wanxiangshu.Repository.Programming.Js
 
 open System.Threading.Tasks
 
-/// JS runtime owner boundary for bindings and sandbox execution. The mutable
-/// as-is write ledger (persisted at each edit/write call) and sandbox failure
-/// union remain opaque; observations cross as plain result objects.
+/// 通过实际文件能力和程序入口驱动受控调用。
 [<RequireQualifiedAccess>]
 module JsRuntimeSurface =
 
@@ -18,8 +16,7 @@ module JsRuntimeSurface =
     /// Test hook: install a process-live delegation host for one session.
     /// The delegate callback takes `(name, payload, carry)`; every
     /// other callback returns a data envelope object (never prose).
-    val installDelegationHost:
-        sessionId: string -> delegation: obj -> fission: obj -> horizon: obj -> unit
+    val installDelegationHost: sessionId: string -> delegation: obj -> fission: obj -> horizon: obj -> unit
 
     val clearDelegationHost: sessionId: string -> unit
     /// Test hook: the raw value handed over through delivery.
@@ -42,9 +39,6 @@ module JsRuntimeSurface =
     val deliveredViewOf: sessionId: string -> obj
     val deliveredFenceOf: sessionId: string -> obj
     val clearDeliveredValue: sessionId: string -> unit
-    val stagedCount: handle: obj -> int
-    val stagedKinds: handle: obj -> string array
-    val readPaths: handle: obj -> string array
 
     val run:
         baseClassSource: string ->

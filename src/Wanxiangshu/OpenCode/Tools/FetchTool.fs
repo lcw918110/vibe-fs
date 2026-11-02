@@ -63,48 +63,6 @@ module FetchTool =
     let private unavailable language =
         ToolResultText.tomlObjectWithInstructions [ prose language Path.Unavailable ] []
 
-    let private observeMutationFailure (owner: CasebookSettlementOwner) (error: CasebookMutationError) =
-        match error with
-        | CasebookMutationError.AppendFailure failure -> owner.Observe failure |> ignore
-        | _ -> ()
-
-    let private touchAccess owner workspaceRoot store identity =
-        task {
-            match! CasebookLifecycle.touchAccess workspaceRoot store identity with
-            | Ok() -> ()
-            | Error error -> observeMutationFailure owner error
-        }
-
-    /// Serve the maintained body of a case reported as changed, or stay stale.
-    let private serveMaintained owner language workspaceRoot store identity (cachedAnswer: string) =
-        task {
-            let! latest = CasebookWorkflow.fetchCase store 256 identity
-
-            match latest with
-            | Ok(Some updated) ->
-                do! touchAccess owner workspaceRoot store identity
-                return refreshed language updated.A
-            | _ -> return stale language cachedAnswer
-        }
-
-    /// Maintain the case from the provided diff, then serve the maintained body.
-    let private refreshFromDiff owner language workspaceRoot store identity (cachedAnswer: string) =
-        task {
-            let! changed = CasebookBookkeeper.refreshStale store workspaceRoot identity
-
-            match changed with
-            | Ok true -> return! serveMaintained owner language workspaceRoot store identity cachedAnswer
-            | Ok false ->
-                do! touchAccess owner workspaceRoot store identity
-                return fresh language cachedAnswer
-            | Error error ->
-                observeMutationFailure owner error
-                return stale language cachedAnswer
-        }
-
-    let private handleResolvedCase owner language workspaceRoot store (case: Case) =
-        refreshFromDiff owner language workspaceRoot store case.Identity case.A
-
     let private runFetch
         (owner: CasebookSettlementOwner)
         (language: ProviderLanguage)
@@ -113,10 +71,16 @@ module FetchTool =
         (shelfmark: string)
         : System.Threading.Tasks.Task<string> =
         task {
-            match CasebookProjection.resolve store 256 shelfmark with
-            | Error _ -> return unavailable language
-            | Ok None -> return noCase language
-            | Ok(Some case) -> return! handleResolvedCase owner language workspaceRoot store case
+            let notifyFailure failure = owner.Observe failure |> ignore
+            let! result = CasebookServiceBinding.fetch workspaceRoot store shelfmark notifyFailure
+
+            match unbox<string> result?kind with
+            | "unavailable" -> return unavailable language
+            | "missing" -> return noCase language
+            | "fresh" -> return fresh language (unbox result?answer)
+            | "refreshed" -> return refreshed language (unbox result?answer)
+            | "stale" -> return stale language (unbox result?answer)
+            | kind -> return invalidOp $"unknown casebook fetch kind: {kind}"
         }
 
     let private getOrCreateFlightWork
@@ -127,7 +91,10 @@ module FetchTool =
         (shelfmark: string)
         : System.Threading.Tasks.Task<string> =
         let factory = fun () -> box (runFetch owner language workspaceRoot store shelfmark)
-        let promise = fetchFlightRegistry?getOrCreate (workspaceRoot, shelfmark, box store, factory)
+
+        let promise =
+            fetchFlightRegistry?getOrCreate (workspaceRoot, shelfmark, box store, factory)
+
         unbox<System.Threading.Tasks.Task<string>> promise
 
     let spec

@@ -18,6 +18,17 @@ module JsWorkflowSurface =
         store: obj ->
             Task<obj>
 
+    val runWithRecord:
+        workspaceRoot: string ->
+        role: string ->
+        language: string ->
+        program: string ->
+        deadlineMs: int ->
+        deadlineEpochMs: int64 ->
+        outputBoundBytes: int ->
+        record: (string -> string -> Task<obj>) ->
+            Task<obj>
+
     val runObserved:
         workspaceRoot: string ->
         role: string ->

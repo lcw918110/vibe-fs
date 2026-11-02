@@ -9,6 +9,8 @@ open Wanxiangshu.Change
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Execution.Delegation.Fork.Host
+open Wanxiangshu.Execution.Delegation
+open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Foundation.Outcome
@@ -24,6 +26,135 @@ open Wanxiangshu.Repository.Programming.Js
 /// data; completion and error unions remain inside the renderer owner.
 [<RequireQualifiedAccess>]
 module JoinSurface =
+    let returnedMaterialView (encoded: string) : obj =
+        let stored =
+            ReturnedMaterial.encode (ReturnedMaterial.body encoded) (ReturnedMaterial.carry encoded)
+
+        box
+            {| stored = stored
+               wire = ReturnedMaterial.render stored
+               bodyWire = ReturnedMaterial.renderBody stored |}
+
+    let completionMaterialRoundTrip
+        (session: string)
+        (report: string)
+        (material: string array)
+        (sha256: string -> string)
+        (completedAt: DateTimeOffset)
+        : Task<obj> =
+        task {
+            let run = ProviderRunIdentity.create "returned-material-run"
+            let call = ToolCallId.create "returned-material-call"
+
+            try
+                let values = material |> Array.map (fun text -> box {| text = text |})
+                JsDeliveredValues.recordFencedView session run call (Some(box values))
+                let owned = JsDeliveredValues.ownsCell session run call
+
+                let mismatch =
+                    JsDeliveredValues.tryTakeMaterialForCall
+                        session
+                        run
+                        (ToolCallId.create "another-call")
+                        (Some report)
+
+                let retained = JsDeliveredValues.ownsCell session run call
+
+                let stored =
+                    JsDeliveredValues.tryTakeMaterialForCall session run call (Some report)
+                    |> Option.get
+
+                let consumed = not (JsDeliveredValues.ownsCell session run call)
+                let child = SessionId.create session
+                let root = AuthorityRootUserMessageId.create "returned-material-root"
+
+                let outcome =
+                    AgentCompletion.completed session child "returned-material-run" Role.Engineer root run stored None
+
+                let completionBody =
+                    HandleCompletionCodec.encodeOutcome "returned-material-run" outcome
+
+                let reference = BlobRef.create "returned-material-completion"
+
+                let completion: HandleCompletion =
+                    { Kind = HandleCompletionKind.Terminal
+                      CompletionRef = Some reference
+                      CompletionDigest = Some(BlobDigest.create (sha256 completionBody)) }
+
+                let handle = HandleId.Agent(AgentHandleId.create session)
+
+                let record: HandleRecord =
+                    { Handle = handle
+                      ChildSessionId = child
+                      TargetAgent = "Ada"
+                      Byname = "Ada"
+                      CanonicalRole = Role.Engineer
+                      Ownership = HandleOwnership.DurableParentHandle
+                      Lifecycle = HandleLifecycle.CompletedAwaitingJoin completion
+                      CreationOrder = 0
+                      LastCompletion = Some completion
+                      Work =
+                        Some
+                            { Handle = handle
+                              ChildSessionId = child
+                              AuthorityRoot = root } }
+
+                let calls = ResizeArray<string>()
+                let reads = ResizeArray<string>()
+                let digests = ResizeArray<string>()
+
+                let unused () =
+                    failwith "completion reading must not call another journal capability"
+
+                let journal: AgentJournalPort =
+                    { AppendExecutionFact = fun _ _ -> unused ()
+                      HandleProjection = fun _ -> unused ()
+                      ReadBlob =
+                        fun value ->
+                            calls.Add "read"
+                            reads.Add(BlobRef.value value)
+                            Task.FromResult(Ok completionBody)
+                      WriteBlob = fun _ -> unused ()
+                      RefreshProjection = unused
+                      Sha256 =
+                        fun body ->
+                            calls.Add "digest"
+                            digests.Add body
+                            sha256 body
+                      AppendAuthorityTerminalSource = fun _ _ -> unused () }
+
+                let! read = HandleCompletionCodec.tryRead journal record session completedAt
+                let restored = read |> Result.defaultWith failwith |> Option.get
+
+                let payload =
+                    match restored.Outcome with
+                    | AgentCompleted value -> value
+                    | _ -> failwith "expected the completed outcome"
+
+                return
+                    box
+                        {| owned = owned
+                           mismatch = Option.isNone mismatch
+                           retained = retained
+                           consumed = consumed
+                           stored = stored
+                           completionBody = completionBody
+                           calls = calls.ToArray()
+                           reads = reads.ToArray()
+                           digests = digests.ToArray()
+                           agentName = restored.AgentName
+                           role = Roles.roleLabel restored.Role
+                           completedAt = restored.CompletedAt
+                           view = payload.View
+                           child = payload.ChildSessionId |> Option.map SessionId.value |> Option.defaultValue ""
+                           runId = payload.RunId
+                           body = ReturnedMaterial.body payload.View |> List.head
+                           returned = ReturnedMaterial.entries payload.View |}
+            finally
+                JsDeliveredValues.clear session
+                JsDeliveredValues.clearReturned session
+        }
+
     [<Import("PendingRunStore", "wanxiangli/handle-lifecycle")>]
     let private pendingRunStoreClass: obj = jsNative
 
@@ -48,6 +179,26 @@ module JoinSurface =
     let private requiredRunId (value: obj) : string option =
         let runId = text value
         if String.IsNullOrWhiteSpace runId then None else Some runId
+
+    [<Emit("Array.isArray($0)")>]
+    let private isArray (value: obj) : bool = jsNative
+
+    let private returnedTexts (entries: obj) =
+        if not (isArray entries) then
+            invalidArg "entries" "returned must be an array of text entries"
+
+        (unbox<obj array> entries)
+        |> Array.map (fun entry ->
+            if emitJsExpr entry "$0 === null || typeof $0 !== 'object'" then
+                invalidArg "entries" "each returned entry must have a text string"
+
+            let text: obj = entry?text
+
+            if jsTypeof text <> "string" then
+                invalidArg "entries" "each returned entry must have a text string"
+
+            unbox<string> text)
+        |> Array.toList
 
     let private agentItem (value: obj) : JoinItem option =
         let agentId = text (value?agentId)
@@ -79,7 +230,7 @@ module JoinSurface =
                 if isNull (value?returned) then
                     []
                 else
-                    ReturnedMaterial.carry (ReturnedMaterial.ofEntries value?returned)
+                    returnedTexts value?returned
 
             Some(
                 AgentItem(
@@ -331,12 +482,15 @@ module JoinSurface =
               ==> (fun (sessionId: string) ->
                   attemptCounter <- attemptCounter + 1
                   let attemptId = sprintf "test-attempt-%d" attemptCounter
-                  registry?acquire(sessionId, attemptId) |> ignore
+                  registry?acquire (sessionId, attemptId) |> ignore
                   let completion = TaskCompletionSource<JoinInterruptReason>()
+
                   let interrupt =
                       { Wait = completion.Task
                         Signal = fun reason -> AsyncSupport.trySetResult completion reason |> ignore }
+
                   activeInterrupts.[sessionId] <- interrupt
+
                   createObj
                       [ "result"
                         ==> task {
@@ -347,7 +501,7 @@ module JoinSurface =
                         "abort" ==> (fun () -> interrupt.Signal JoinInterruptReason.OperatorAbort)
                         "dispose"
                         ==> (fun () ->
-                            registry?release(sessionId, attemptId) |> ignore
+                            registry?release (sessionId, attemptId) |> ignore
                             activeInterrupts.Remove sessionId |> ignore) ])
               "signal"
               ==> (fun (arg1: obj, arg2: obj) ->
@@ -357,12 +511,13 @@ module JoinSurface =
                           string arr.[0], string arr.[1]
                       else
                           string arg1, string arg2
-                  let verdict: obj = registry?signalVisibleUserMessage(sid, mid)
+
+                  let verdict: obj = registry?signalVisibleUserMessage (sid, mid)
+
                   if not (isNull verdict) && unbox<bool> verdict?woken then
                       match activeInterrupts.TryGetValue sid with
                       | true, interrupt -> interrupt.Signal JoinInterruptReason.UserMessageArrived
-                      | false, _ -> ()
-              ) ]
+                      | false, _ -> ()) ]
 
     // Production JoinTool.renderJoined releases PTY ownership tracks once a
     // batch is delivered; the probe keeps the same discipline so PtyRuns
@@ -443,7 +598,9 @@ module JoinSurface =
                   Finished = false }
 
             let pending: obj = emitJsExpr pendingRunStoreClass "new $0()"
-            pending?register(run.AgentId, run.Token, SessionId.value childId, string run.Role, run) |> ignore
+
+            pending?register (run.AgentId, run.Token, SessionId.value childId, string run.Role, run)
+            |> ignore
 
             JsDeliveredValues.recordFencedView (SessionId.value childId) providerRun toolCallId (Some carry)
 

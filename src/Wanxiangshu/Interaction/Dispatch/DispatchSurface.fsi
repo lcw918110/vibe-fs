@@ -180,6 +180,15 @@ module DispatchSurface =
         agentOwnerLife: obj ->
             Task<obj>
 
+    val acceptAgentOwnerRootAfterPhysical:
+        handle: JournalHandle ->
+        session: string ->
+        promptKey: string ->
+        physicalMessageId: string ->
+        agentOwnerLife: obj ->
+        afterPhysical: (string -> Task) ->
+            Task<obj>
+
     /// Registered proof boundary for external ingress: the caller supplies the
     /// exact RootSelection seed, including the deliberate absence of a seed.
     val acceptHumanRootSelection:

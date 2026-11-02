@@ -86,7 +86,7 @@ type SyncDelegateRetryPort =
 module internal SyncDelegateInternals =
     /// The response belongs to the accepted terminal, not the reusable session
     /// or its historical delivered view. Reasoning and tool material are excluded.
-    let captureResponse (call: SyncDelegateCall) (turn: ReconciledTurn) =
+    let response (turn: ReconciledTurn) =
         let response =
             { SessionId = turn.SessionId
               PhysicalUserMessageId = turn.PhysicalUserMessageId
@@ -94,8 +94,7 @@ module internal SyncDelegateInternals =
               ProviderRun = turn.ProviderRun
               FormalText = CompletedTurnClassifier.partsText turn.Parts }
 
-        for invocation in call.Invocations do
-            invocation.CaptureResponse |> Option.iter (fun capture -> capture response)
+        response
 
     /// D2: the durable delivery witness of this turn, read through the fence
     /// subset reader. The witness is the settlement of record: it carries the
@@ -168,43 +167,14 @@ module internal SyncDelegateInternals =
                      Some assistant)
         | _ -> None
 
-    let private settleExactCall
-        (noteDelegateIfRole: SyncDelegateCall -> SessionId -> string -> unit)
-        (store: SyncDelegateCallStore)
-        (call: SyncDelegateCall)
-        (turn: ReconciledTurn)
-        (record: string)
-        : unit =
-        match store.TryPopExactCall call with
-        | Some exact ->
-            captureResponse exact turn
-            noteDelegateIfRole exact turn.SessionId (ReturnedMaterial.render record)
-            AsyncSupport.trySetResult exact.Answer (Ok record) |> ignore
-        | None -> ()
-
-    let private settleDeliveredFromParts
-        (journal: AgentJournal option)
-        (noteDelegateIfRole: SyncDelegateCall -> SessionId -> string -> unit)
-        (store: SyncDelegateCallStore)
-        (call: SyncDelegateCall)
-        (turn: ReconciledTurn)
-        : string option =
+    let readDelivery (journal: AgentJournal option) (turn: ReconciledTurn) : string option =
         // WHAT[context-compression-037]: the fallback body prose handed to the
         // parent is the terminal turn's formal text; reasoning and tool parts
         // never travel with it.
         let assistant = CompletedTurnClassifier.partsText turn.Parts
 
-        let resolved =
-            durableWitnessView journal turn
-            |> Option.orElseWith (fun () -> fencedMaterial turn assistant)
-
-        match resolved with
-        | Some record ->
-            // Claim the call before settling it: a concurrent terminal cannot
-            // discharge the same work unit twice.
-            settleExactCall noteDelegateIfRole store call turn record
-            Some record
-        | _ -> None
+        durableWitnessView journal turn
+        |> Option.orElseWith (fun () -> fencedMaterial turn assistant)
 
     let private naturalStopBody (prose: string) : string list =
         if System.String.IsNullOrWhiteSpace prose then
@@ -212,55 +182,10 @@ module internal SyncDelegateInternals =
         else
             [ prose ]
 
-    /// EXEC-031 / delegation-024: the delivered view is the settlement. A turn
-    /// that completed without a fenced delivery has not discharged the
-    /// obligation: the call keeps its live seat in the store and its wait stays
-    /// open, so the delegate stays active, the unresolved obligation stays
-    /// visible, and the parent can keep waiting instead of receiving a
-    /// terminal that never happened. An undelivered completion is never a
-    /// (LC-004) is settled here as "still owed".
-    let settleCompletedFromParts
-        (journal: AgentJournal option)
-        (noteDelegateIfRole: SyncDelegateCall -> SessionId -> string -> unit)
-        (store: SyncDelegateCallStore)
-        (call: SyncDelegateCall)
-        (turn: ReconciledTurn)
-        : bool =
-        match settleDeliveredFromParts journal noteDelegateIfRole store call turn with
-        | Some _ -> true
-        | None when Array.isEmpty turn.Parts -> false
-        | None ->
-            // context-compression [037]: a natural stop returns the completed turn's
-            // assistant prose as body material — no snapshot messages, no session table.
-            let prose = CompletedTurnClassifier.partsText turn.Parts
-
-            let record = ReturnedMaterial.encode (naturalStopBody prose) []
-
-            settleExactCall noteDelegateIfRole store call turn record
-            true
-
-    /// D1: a delegate child that was interrupted after it delivered. The
-    /// interruption is not the failure of the delivery: a committed delivery
-    /// settles the call with the delivered view. An interrupted child that
-    /// delivered nothing keeps the current observation-only behaviour — the
-    /// call stays live and no terminal is invented.
-    let settleAbortedFromParts
-        (journal: AgentJournal option)
-        (noteDelegateIfRole: SyncDelegateCall -> SessionId -> string -> unit)
-        (store: SyncDelegateCallStore)
-        (call: SyncDelegateCall)
-        (turn: ReconciledTurn)
-        : bool =
-        match settleDeliveredFromParts journal noteDelegateIfRole store call turn with
-        | Some _ -> true
-        | None ->
-            Diagnostic.emit
-                "sync-delegate-aborted-without-delivery"
-                [ "session_id", SessionId.value turn.SessionId
-                  "role", SyncDelegate.roleLabel call.Role
-                  "result", "interrupted without a delivered view; the obligation stays open" ]
-
-            false
+    let naturalMaterial (turn: ReconciledTurn) =
+        CompletedTurnClassifier.partsText turn.Parts
+        |> naturalStopBody
+        |> fun body -> ReturnedMaterial.encode body []
 
 module private RuntimeDeferredInterop =
     [<Import("deferredInspectionStore", "wanxiangli/delegate-batch")>]
@@ -480,7 +405,7 @@ type SyncDelegateRuntime
             let requireLiveCall () =
                 match store.TryPeekCallByDelegate call.Delegate with
                 | Some active when
-                    Object.ReferenceEquals(active, call)
+                    Object.ReferenceEquals(active.Raw, call.Raw)
                     && not (call.Invocations |> List.exists (fun invocation -> invocation.IsCancelled()))
                     ->
                     Ok()
@@ -517,7 +442,7 @@ type SyncDelegateRuntime
                         call.AcceptedPhysical <- Some physical
                         call.AcceptedAuthorityRoot <- Some root
                         call.TerminalFailureScope <- Some scope
-                        AsyncSupport.trySetResult call.AdmissionRoot (Some root) |> ignore
+                        call.Admit root
                 )
 
             let activeDelegateProfile =
@@ -594,7 +519,7 @@ type SyncDelegateRuntime
                     Error
                         "sync delegate rejected: attached delegate active authority does not match its exact owner identity"
 
-            let! admissionRoot = call.AdmissionRoot.Task |> TaskResultCE.ofTask
+            let! admissionRoot = call.AdmissionRoot |> TaskResultCE.ofTask
 
             match admissionRoot with
             | Some _ -> return ()
@@ -625,16 +550,6 @@ type SyncDelegateRuntime
             sendObservedDelegatePrompt call request
         else
             sendDelegatePromptCore call request None
-
-    let finishObservedInvocation observe (response: SyncDelegateTerminalResponse option) result =
-        match result with
-        | Error reason ->
-            observe (SyncDelegateObservedAdmission.NotDispatched reason)
-            Error reason
-        | Ok _ ->
-            response
-            |> Option.map Ok
-            |> Option.defaultValue (Error "Completed delegation did not supply a terminal response")
 
     let deps: SyncDelegateWorkflow.Dependencies =
         { Attached = attached
@@ -685,138 +600,81 @@ type SyncDelegateRuntime
         then
             noteDelegateAnswer (sessionKey turnSessionId) record
 
-    let handleCompletedCall (turn: ReconciledTurn) (call: SyncDelegateCall) =
+    let captureTerminal (observation: obj) =
+        let turn: ReconciledTurn = observation?original
+
         task {
-            // Completion marker for ManagerLife. HandleTurn
-            // does not use Terminal to build the inspect payload;
-            // the terminal record comes from the delivered view or captured session view.
             match! XTraceCapture.captureTerminalWithReceipt (Some journal) turn with
-            // delegation-031: the terminal trace write is settlement evidence, not
-            // the completion itself. WriterUnavailable/WriteUnknown means the
-            // child physically finished but the evidence did not commit:
-            // deliver the earned completion from the turn's own parts (neither
-            // forgotten nor re-executed); the checkpoint stays pending-evidence.
             | Error(XTraceCaptureError.StorageAppendFailed(JournalAppendFailure.WriterUnavailable _))
             | Error(XTraceCaptureError.StorageAppendFailed(JournalAppendFailure.WriteUnknown _))
             | Error(XTraceCaptureError.StorageAppendFailed(JournalAppendFailure.NoNewWriteReleaseFailed _)) ->
-                return SyncDelegateInternals.settleCompletedFromParts (Some journal) noteDelegateIfRole store call turn
+                return createObj [ "kind" ==> "pending" ]
             | Error error ->
-                // A capture that cannot be written is a real failure of this
-                // call: claim it and fail it.
-                store.TryPopExactCall call
-                |> Option.iter (fun exact ->
-                    store.FailCall(exact, sprintf "sync delegate terminal trace capture failed: %A" error))
-
-                return true
-            | Ok _ ->
-                return SyncDelegateInternals.settleCompletedFromParts (Some journal) noteDelegateIfRole store call turn
+                return
+                    createObj
+                        [ "kind" ==> "failed"
+                          "error" ==> sprintf "sync delegate terminal trace capture failed: %A" error ]
+            | Ok _ -> return createObj [ "kind" ==> "captured" ]
         }
 
-    /// Actual acceptance observers bind attempts to the concrete invocation
-    /// before transport. Session-wide continuation categories carry no call ownership.
-    let belongsToCall (call: SyncDelegateCall) (turn: ReconciledTurn) =
-        call.AcceptedAuthorityRoot = Some turn.AuthorityRootUserMessageId
-        && call.Acceptance.Owns turn.PhysicalUserMessageId
+    let turnObservation (turn: ReconciledTurn) (failure: ExecutionFailure option) =
+        let outcome, error =
+            match turn.Outcome with
+            | ReconcileProgram.TurnCompleted -> "completed", ""
+            | ReconcileProgram.TurnAborted reason -> "aborted", reason
+            | ReconcileProgram.TurnFailed reason -> "failed", reason
+            | _ -> "ongoing", ""
 
-    /// The turn belongs to this call's work unit: the admitted authority root
-    /// and an accepted physical attempt. No store mutation — the caller decides
-    /// whether the turn settles the call or only observes it.
-    let matchesAcceptance (call: SyncDelegateCall) (turn: ReconciledTurn) : Task<bool> =
-        task {
-            let! expectedRoot = call.AdmissionRoot.Task
+        createObj
+            [ "session" ==> SessionId.value turn.SessionId
+              "physical" ==> PhysicalUserMessageId.value turn.PhysicalUserMessageId
+              "root" ==> AuthorityRootUserMessageId.value turn.AuthorityRootUserMessageId
+              "outcome" ==> outcome
+              "error" ==> error
+              "hasFailure" ==> failure.IsSome
+              "failure" ==> failure
+              "hasParts" ==> not (Array.isEmpty turn.Parts)
+              "naturalMaterial" ==> SyncDelegateInternals.naturalMaterial turn
+              "response" ==> SyncDelegateInternals.response turn
+              "original" ==> turn ]
 
-            return expectedRoot = Some turn.AuthorityRootUserMessageId && belongsToCall call turn
-        }
+    let terminalEffects =
+        createObj
+            [ "captureTerminal" ==> captureTerminal
+              "readDelivery"
+              ==> (fun (observation: obj) ->
+                  let turn: ReconciledTurn = observation?original
+                  let material = SyncDelegateInternals.readDelivery (Some journal) turn
 
-    let popIfAcceptanceMatches
-        (store: SyncDelegateCallStore)
-        (turn: ReconciledTurn)
-        (call: SyncDelegateCall)
-        : Task<SyncDelegateCall option> =
-        task {
-            let! matches = matchesAcceptance call turn
+                  if material.IsNone && unbox<string> observation?outcome = "aborted" then
+                      Diagnostic.emit
+                          "sync-delegate-aborted-without-delivery"
+                          [ "session_id", SessionId.value turn.SessionId
+                            "role", turn.Role |> Option.map Roles.roleLabel |> Option.defaultValue ""
+                            "result", "interrupted without a delivered view; the obligation stays open" ]
 
-            return if matches then store.TryPopExactCall call else None
-        }
+                  DelegateValues.nullable id material)
+              "noteAnswer"
+              ==> (fun (raw: obj) (observation: obj) (record: string) ->
+                  let turn: ReconciledTurn = observation?original
+                  noteDelegateIfRole (SyncDelegateCall raw) turn.SessionId (ReturnedMaterial.render record))
+              "retry"
+              ==> (fun (_: obj) (observation: obj) ->
+                  task {
+                      let turn: ReconciledTurn = observation?original
+                      let failure: ExecutionFailure option = observation?failure
 
-    /// The live call this turn belongs to. The call is not claimed here: an
-    /// undelivered completion must leave it live (delegation-024), so the
-    /// settlement decides whether the call is closed.
-    let tryFindReadyCall (store: SyncDelegateCallStore) (turn: ReconciledTurn) : Task<SyncDelegateCall option> =
-        let candidate =
-            store.TryPeekCallByDelegate turn.SessionId
-            |> Option.filter (fun call ->
-                call.Invocations
-                |> List.forall (fun invocation -> invocation.StartCursor.IsSome))
+                      let source =
+                          { SessionId = turn.SessionId
+                            PhysicalUserMessageId = turn.PhysicalUserMessageId
+                            AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
+                            ProviderRun = turn.ProviderRun }
 
-        match candidate with
-        | Some call ->
-            task {
-                let! matches = matchesAcceptance call turn
+                      let! result =
+                          retry turn (bindContinuationAcceptance source) failure.Value (unbox observation?error)
 
-                return if matches then Some call else None
-            }
-        | None -> Task.FromResult None
-
-    let failMatchingTerminalCall (turn: ReconciledTurn) error call =
-        task {
-            let! matchingCall = popIfAcceptanceMatches store turn call
-
-            return
-                matchingCall
-                |> Option.map (fun exact ->
-                    store.FailCall(exact, sprintf "SyncDelegate run failed: %s" error)
-                    true)
-                |> Option.defaultValue false
-        }
-
-    let handleCompletedRoleTurn (turn: ReconciledTurn) =
-        task {
-            match! tryFindReadyCall store turn with
-            | Some call -> return! handleCompletedCall turn call
-            | None -> return false
-        }
-
-    /// D1: a delegate child that was interrupted. The interruption is not the
-    /// failure of the delivery: when the child had already delivered, the
-    /// delivery settles the owner's call with the delivered view. An
-    /// interrupted child that delivered nothing stays observation only — the
-    /// call keeps its live seat and no terminal is invented.
-    ///
-    /// No terminal trace is captured here: the turn did not complete, and a
-    /// completion was never earned.
-    let handleAbortedRoleTurn (turn: ReconciledTurn) =
-        task {
-            match! tryFindReadyCall store turn with
-            | Some call ->
-                return SyncDelegateInternals.settleAbortedFromParts (Some journal) noteDelegateIfRole store call turn
-            | None -> return false
-        }
-
-    /// One confirmed provider failure for a pending call. The injected retry
-    /// decorator owns policy, budget admission and physical re-entry (delegation-023):
-    /// a single transient failure never fails the call; only a terminal verdict
-    /// does. Turns outside this invocation's accepted attempts stay ordinary.
-    let rec handleFailedAttemptTurn (turn: ReconciledTurn) (failure: ExecutionFailure option) error =
-        task {
-            match store.TryPeekCallByDelegate turn.SessionId with
-            | Some call when belongsToCall call turn && failure.IsSome ->
-                return! settleFailedAttempt turn failure.Value error call
-            | _ -> return false
-        }
-
-    and settleFailedAttempt (turn: ReconciledTurn) (failure: ExecutionFailure) error (call: SyncDelegateCall) =
-        task {
-            let source =
-                { SessionId = turn.SessionId
-                  PhysicalUserMessageId = turn.PhysicalUserMessageId
-                  AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
-                  ProviderRun = turn.ProviderRun }
-
-            match! retry turn (bindContinuationAcceptance source) failure error with
-            | Ok() -> return true
-            | Error reason -> return! failMatchingTerminalCall turn reason call
-        }
+                      return DelegateValues.resultToNative result
+                  }) ]
 
     let singletonResult taskResult =
         task {
@@ -910,31 +768,33 @@ type SyncDelegateRuntime
             prepareProviderPrompt: unit -> Task<LlmFacing.Document>,
             ?isCancelled: unit -> bool
         ) : Task<Result<string, string>> =
+        let pending =
+            SyncDelegateWorkflow.invokeResponse
+                store
+                deps
+                (SessionId.create ownerSessionKey)
+                role
+                charge
+                prepareProviderPrompt
+                (defaultArg isCancelled (fun () -> false))
+
         task {
-            // DSL-MUTABLE: resource — exact terminal response for this invocation.
-            let response = ref None
+            let! result = pending
 
-            let! result =
-                SyncDelegateWorkflow.invoke
-                    store
-                    deps
-                    (SessionId.create ownerSessionKey)
-                    role
-                    charge
+            let formalText (response: obj) =
+                if isNullOrUndefined response then
                     None
-                    None
-                    prepareProviderPrompt
-                    None
-                    (Some(fun terminal -> response.Value <- Some terminal.FormalText))
-                    (defaultArg isCancelled (fun () -> false))
-                |> singletonResult
+                else
+                    Some((unbox<SyncDelegateTerminalResponse> response).FormalText)
 
-            return
-                result
-                |> Result.bind (fun _ ->
-                    match response.Value with
-                    | Some text when not (String.IsNullOrWhiteSpace text) -> Ok text
-                    | _ -> Error "Completed delegation did not supply a formal response")
+            if not (unbox<bool> result?ok) then
+                return Error(unbox result?error)
+            else
+                return
+                    formalText result?value
+                    |> Option.filter (String.IsNullOrWhiteSpace >> not)
+                    |> Option.map Ok
+                    |> Option.defaultValue (Error "Completed delegation did not supply a formal response")
         }
 
     member _.ValidateObservedOwner(ownerSessionId: SessionId) : Result<unit, string> =
@@ -949,40 +809,27 @@ type SyncDelegateRuntime
             prepareProviderPrompt: unit -> Task<LlmFacing.Document>,
             ?isCancelled: unit -> bool
         ) : SyncDelegateObservedExecution =
-        let admission =
-            TaskCompletionSource<SyncDelegateObservedAdmission>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let invocation =
+            SyncDelegateWorkflow.invokeObserved
+                store
+                deps
+                ownerSessionId
+                charge
+                prepareProviderPrompt
+                (defaultArg isCancelled (fun () -> false))
 
-        let observe outcome =
-            AsyncSupport.trySetResult admission outcome |> ignore
-        // DSL-MUTABLE: resource — exact causal terminal captured for this invocation.
-        let response = ref None
+        let completion: Task<obj> = invocation?completion
 
-        let completion =
+        { Admission = unbox<Task<SyncDelegateObservedAdmission>> invocation?admission
+          Completion =
             task {
-                try
-                    let! result =
-                        SyncDelegateWorkflow.invoke
-                            store
-                            deps
-                            ownerSessionId
-                            SyncDelegateRole.Engineer
-                            charge
-                            None
-                            None
-                            prepareProviderPrompt
-                            (Some observe)
-                            (Some(fun terminal -> response.Value <- Some terminal))
-                            (defaultArg isCancelled (fun () -> false))
-                        |> singletonResult
+                let! result = completion
 
-                    return finishObservedInvocation observe response.Value result
-                with error ->
-                    observe (SyncDelegateObservedAdmission.NotDispatched error.Message)
-                    return Error error.Message
-            }
-
-        { Admission = admission.Task
-          Completion = completion }
+                if unbox<bool> result?ok then
+                    return Ok(unbox<SyncDelegateTerminalResponse> result?value)
+                else
+                    return Error(unbox result?error)
+            } }
 
     member _.InvokeBatchPrepared
         (
@@ -1015,16 +862,16 @@ type SyncDelegateRuntime
             // missing role would leave the caller's answer pending forever.
             match turn.Role, turn.Outcome with
             | Some(Role.Inspector | Role.Coder | Role.Engineer | Role.DevOps), ReconcileProgram.TurnCompleted ->
-                return! handleCompletedRoleTurn turn
+                return! DelegateValues.handleTurn store.Raw (turnObservation turn failure) terminalEffects
             // D1: the delivery transform interrupts the delivering delegate
             // child, so a child that already delivered ends as TurnAborted.
             // The interruption is not a failure of the delivery: the same
             // settlement as a completed turn is attempted, and a child that
             // delivered nothing stays observation only.
             | Some(Role.Inspector | Role.Coder | Role.Engineer | Role.DevOps), ReconcileProgram.TurnAborted _ ->
-                return! handleAbortedRoleTurn turn
+                return! DelegateValues.handleTurn store.Raw (turnObservation turn failure) terminalEffects
             | Some(Role.Inspector | Role.Coder | Role.Engineer | Role.DevOps), ReconcileProgram.TurnFailed error ->
-                return! handleFailedAttemptTurn turn failure error
+                return! DelegateValues.handleTurn store.Raw (turnObservation turn failure) terminalEffects
             | _ ->
                 // TurnInProgress and TurnNeedsContinuation remain child-local;
                 // a turn outside this call's accepted attempts is not ours.
@@ -1054,20 +901,14 @@ type SyncDelegateRuntime
     /// completion is delivered from the turn, never dropped, never re-executed.
     /// An undelivered turn keeps the call live (delegation-024).
     member _.SettleCompletedFromTurn(turn: ReconciledTurn) : bool =
-        store.TryPeekCallByDelegate turn.SessionId
-        |> Option.filter (fun call ->
-            call.AcceptedAuthorityRoot = Some turn.AuthorityRootUserMessageId
-            && belongsToCall call turn)
-        |> Option.map (fun call ->
-            SyncDelegateInternals.settleCompletedFromParts (Some journal) noteDelegateIfRole store call turn)
-        |> Option.defaultValue false
+        DelegateValues.settle store.Raw (turnObservation turn None) terminalEffects
 
     member _.AwaitAssignmentReady(sessionId: SessionId) : Task<bool> =
         match store.TryPeekCallByDelegate sessionId with
         | None -> Task.FromResult false
         | Some call ->
             task {
-                let! root = call.AdmissionRoot.Task
+                let! root = call.AdmissionRoot
                 return root.IsSome
             }
 
@@ -1105,7 +946,8 @@ type SyncDelegateRuntime
 
         cleanupDelegateDraft (sessionKey sessionId)
 
-        RuntimeDeferredInterop.deferredStore?clearSession (sessionKey sessionId) |> ignore
+        RuntimeDeferredInterop.deferredStore?clearSession (sessionKey sessionId)
+        |> ignore
 
     member _.Dispose() =
         let retiredDelegates = store.ClearAll()

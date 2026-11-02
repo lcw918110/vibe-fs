@@ -6,7 +6,6 @@ open System.Threading.Tasks
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Foundation.HostSession
-open Wanxiangshu.Foundation.HostSession
 
 [<AutoOpen>]
 module PromptDispatcherSend =
@@ -151,14 +150,3 @@ module PromptDispatcherSend =
             awaitMode: PromptDispatcher.AwaitMode ->
             physicalAdmission: (unit -> Result<unit, QuiescencePermitFailure>) ->
                 Task<PromptDispatcher.SendAttemptOutcome>
-
-        /// Settle a detached PromptKey from the transport's eventual typed
-        /// verdict (the DetachedSendListener rail + the caller-visible
-        /// sendTask). Refused abandons the claim; OutcomeUnknown leaves it
-        /// pending on durable evidence; OwnedSettled is a no-op.
-        member internal SettleDetachedSend:
-            key: PromptKey ->
-            sessionId: SessionId ->
-            verdict: DetachedSendVerdict ->
-            onFailure: (string -> Task) option ->
-                Task

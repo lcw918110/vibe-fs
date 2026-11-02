@@ -7,7 +7,6 @@
     <WanxiangshuOwnerLocalityKind>adapter</WanxiangshuOwnerLocalityKind>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="Wanxiangshu.Owner.action-affordance.runtime-platform-git-subject.fsproj"/>
     <Compile Include="Persistence/Journal/RuntimePath.fsi"/>
     <Compile Include="Persistence/Journal/RuntimePath.fs"/>
   </ItemGroup>

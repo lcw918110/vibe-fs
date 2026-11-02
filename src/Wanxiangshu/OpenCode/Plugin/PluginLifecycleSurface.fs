@@ -13,7 +13,7 @@ module PluginLifecycleSurface =
 
     let acquireHostTerminal (workspace: string) : Task<obj> =
         task {
-            let! result = PluginHost.createHost (Some workspace) (createObj []) None None None None
+            let! result = PluginHost.createHost (Some workspace) None None None None None
 
             match result with
             | Error reason -> return invalidOp reason

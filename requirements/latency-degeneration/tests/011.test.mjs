@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
-import {LatencyWatchdogFactory_createObservedLatencyWatchdog as create} from '../../../dist/OpenCode/Host/LatencyWatchdog.js'
+import {LatencyWatchdogFactory_createObservedLatencyWatchdog as create} from '../../../dist/wanxiangtong/opencode/request-latency/LatencyWatchdog.js'
 
 const flush = async () => {for (let i = 0; i < 16; i++) await Promise.resolve()}
 

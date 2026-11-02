@@ -15,10 +15,7 @@ import { generate } from '../../../dist/Repository/Programming/Js/GeneratorSurfa
 import {
   api as runtimeApi,
   createApi as createRuntimeApi,
-  readPaths as runtimeReadPaths,
   run as runRuntime,
-  stagedCount,
-  stagedKinds,
 } from '../../../dist/Repository/Programming/Js/RuntimeSurface.js'
 
 const sandbox = () => {
@@ -85,9 +82,6 @@ test('WHAT[repository-programming-023] JS_EDIT_only_surface_has_private_snapshot
     )
 
     assert.equal(outcome.ok, true)
-    assert.equal(stagedCount(handle), 1)
-    assert.deepEqual(stagedKinds(handle), ['Rewrite'])
-    assert.deepEqual(runtimeReadPaths(handle), [])
     assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), 'beta\n', 'runtime surface persists as-is')
   } finally {
     cleanup()

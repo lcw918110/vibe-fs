@@ -49,6 +49,42 @@ export function checkSourceDependency(directory = root) {
   return source
 }
 
+// 目标由本次交付预先给出；不从当前安装结果反推目标。
+export function checkCandidateDependency(directory = root, {
+  expectedSha = process.env.WANXIANGLI_EXPECTED_SHA,
+} = {}) {
+  if (expectedSha !== undefined && !/^[0-9a-f]{40}$/.test(expectedSha)) {
+    throw new Error('WANXIANGLI_EXPECTED_SHA must be a full lowercase Git SHA')
+  }
+  const source = checkSourceDependency(directory)
+  const entry = git(directory, ['ls-files', '--stage', '--', 'wanxiangli'])
+  const matched = /^160000 ([0-9a-f]{40}) 0\twanxiangli$/.exec(entry)
+  if (!matched) throw new Error('wanxiangli must have one resolved gitlink in the index')
+  const sha = git(source, ['rev-parse', 'HEAD'])
+  if (sha !== matched[1]) throw new Error(`wanxiangli checkout ${sha} does not match gitlink ${matched[1]}`)
+  if (expectedSha !== undefined && sha !== expectedSha) {
+    throw new Error(`wanxiangli candidate ${sha} does not match expected ${expectedSha}`)
+  }
+  if (git(source, ['status', '--porcelain', '--untracked-files=all'])) {
+    throw new Error('wanxiangli candidate checkout has uncommitted files')
+  }
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'))
+  const lock = JSON.parse(fs.readFileSync(path.join(directory, 'package-lock.json'), 'utf8'))
+  const sourcePackage = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'))
+  const linked = lock.packages?.['node_modules/wanxiangli']
+  if (manifest.bundleDependencies?.length !== 1 || manifest.bundleDependencies[0] !== 'wanxiangli'
+    || lock.packages?.['']?.dependencies?.wanxiangli !== 'file:wanxiangli'
+    || linked?.resolved !== 'wanxiangli' || linked?.link !== true
+    || lock.packages?.wanxiangli?.version !== sourcePackage.version) {
+    throw new Error('wanxiangli manifest, source version and package-lock link must agree')
+  }
+  const installed = path.join(directory, 'node_modules/wanxiangli')
+  if (!fs.existsSync(installed) || fs.realpathSync(installed) !== fs.realpathSync(source)) {
+    throw new Error('Installed wanxiangli must resolve to the selected candidate checkout')
+  }
+  return { source, sha, version: sourcePackage.version }
+}
+
 // 开发更新是显式 Git 操作；构建和运行不会悄悄联网换版本。
 export function updateSourceDependency(directory = root) {
   let source = path.join(directory, 'wanxiangli')

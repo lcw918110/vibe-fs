@@ -95,6 +95,7 @@ module PluginRecoveryWiring =
 
             ignore observed
             ignore retirementBlockers
+
             Wanxiangshu.Foundation.Diagnostic.emit
                 "plan-delivery-recovery-retired"
                 [ "work_id", workId
@@ -123,12 +124,14 @@ module PluginRecoveryWiring =
         ignore gitCommonDir
         ignore snapshots
         ignore retirementBlockers
+
         Wanxiangshu.Foundation.Diagnostic.emit
             "plan-delivery-recovery-retired"
             [ "work_id", workId
               "operation_id", operationId
               "exec_session_id", execSessionId
               "reason", "review is the only lifecycle entry" ]
+
         Task.FromResult(()) :> Task
 
     let private discoverUnboundDelivery
@@ -250,10 +253,9 @@ module PluginRecoveryWiring =
 
     let attach (boot: PluginBoot.Boot) : unit =
         let scope = boot.Scope
-        let snapshotPort = SessionSnapshotPort.create boot.WorkspaceDirectory boot.Input
+        let snapshotPort = boot.Transport.Snapshot
 
-        let discoveryPort =
-            SessionSnapshotPort.createSessionPort boot.WorkspaceDirectory boot.Input
+        let discoveryPort = boot.Transport.SessionCatalog
 
         let retirementBlockers sessionId =
             scope.RetirementBlockersFor sessionId |> List.toArray
@@ -294,6 +296,32 @@ module PluginRecoveryWiring =
                     scope.MarkRestartGuidancePending()
                 })
 
+        let reloadPendingSession sessionId =
+            task {
+                try
+                    do! scope.ReloadChatSession sessionId
+                    return None
+                with error ->
+                    Wanxiangshu.Foundation.Diagnostic.emit
+                        "load-session-recovery-failed"
+                        [ "session_id", SessionId.value sessionId; "reason", error.Message ]
+
+                    return Some error
+            }
+
+        let reloadPendingSessions () =
+            task {
+                let mutable firstFailure: exn option = None
+
+                for sessionId in scope.PendingChatRecoverySessions() do
+                    let! failure = reloadPendingSession sessionId
+                    firstFailure <- firstFailure |> Option.orElse failure
+
+                match firstFailure with
+                | Some error -> raise error
+                | None -> ()
+            }
+
         /// Host-observation recovery that must never block a handoff: delivery
         /// reconciliation and the boot-time reload sweep, sliced per session. Each
         /// session's sweep is single-flight on the recovery host, so an admission
@@ -323,22 +351,7 @@ module PluginRecoveryWiring =
                         // time. A sweep's failure is isolated to its own session (other
                         // sessions still settle), emitted as a diagnostic, and re-raised
                         // at the end so the background failure slot keeps the first one.
-                        let mutable firstFailure: exn option = None
-
-                        for sessionId in scope.PendingChatRecoverySessions() do
-                            try
-                                do! scope.ReloadChatSession sessionId
-                            with error ->
-                                if firstFailure.IsNone then firstFailure <- Some error
-
-                                Wanxiangshu.Foundation.Diagnostic.emit
-                                    "load-session-recovery-failed"
-                                    [ "session_id", SessionId.value sessionId
-                                      "reason", error.Message ]
-
-                        match firstFailure with
-                        | Some error -> raise error
-                        | None -> ()
+                        do! reloadPendingSessions ()
                     | None -> ()
                 })
 

@@ -41,7 +41,7 @@ module internal SyncDelegateWorkflow =
     val invoke:
         store: SyncDelegateCallStore ->
         deps: Dependencies ->
-        ownerSessionId: SessionId ->
+        owner: SessionId ->
         role: SyncDelegateRole ->
         charge: string ->
         expectedToolCalls: int option ->
@@ -51,3 +51,22 @@ module internal SyncDelegateWorkflow =
         captureResponse: (SyncDelegateTerminalResponse -> unit) option ->
         isCancelled: (unit -> bool) ->
             Task<Result<SyncDelegateInvocationResult, string>>
+
+    val invokeResponse:
+        store: SyncDelegateCallStore ->
+        deps: Dependencies ->
+        owner: SessionId ->
+        role: SyncDelegateRole ->
+        charge: string ->
+        prepare: (unit -> Task<LlmFacing.Document>) ->
+        isCancelled: (unit -> bool) ->
+            Task<obj>
+
+    val invokeObserved:
+        store: SyncDelegateCallStore ->
+        deps: Dependencies ->
+        owner: SessionId ->
+        charge: string ->
+        prepare: (unit -> Task<LlmFacing.Document>) ->
+        isCancelled: (unit -> bool) ->
+            obj

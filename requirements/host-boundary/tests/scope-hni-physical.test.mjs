@@ -1,9 +1,11 @@
+import { PrefixEpochProjection_epochId as prefixEpochId, PrefixEpochProjection_lastScopeArchive as lastScopeArchive, PrefixEpochProjection_scopeQuestionReceipt as scopeQuestionReceipt } from '../../../dist/Context/Prefix/Epoch.js'
+import { PrefixEpochIdModule_value as epochValue } from '../../../dist/Foundation/Identity.js'
 // PRODUCT-RETIRED compat-pass (2026-10-29): standalone resetScope tool (c7a80d58) and remainingScopeTurnsEstimate billing are not product contract; affected cases are test.skip, steer asserts follow scope-steer/missing-estimate (newScopeRetentionBudget). See scope-retention.
 import { JournalHandle__get_Journal } from '../../../dist/Persistence/Journal/Surface.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createWith } from '../../../dist/OpenCode/Host/ProviderSystemTransform.js'
-import { normalTransform, DeliveryAdjudication } from '../../../dist/OpenCode/Plugin/PluginTransforms.js'
+import { createWith } from '../../../dist/wanxiangtong/opencode/provider-request/SystemProjection.js'
+import { normalTransform, DeliveryAdjudication } from '../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js'
 import { resetScopeState, clearSessionState, turnBudget, isScopeInitialized, isPreviousScopePending } from '../../../dist/Context/Scope/Surface.js'
 import { ofArray } from '../../../dist/fable_modules/fable-library-js.5.13.0/List.js'
 import { SessionMessage, SessionToolPart, SnapshotToolPartState } from '../../../dist/Foundation/HostSessionSnapshot.js'
@@ -178,7 +180,7 @@ test('WHAT[delegation-negotiation-001] the Host records only the question while 
     negotiationStartTemporary, negotiationProjectSystem,
     negotiationProjectMessages, negotiationIsTemporary,
     negotiationFinishTemporary, negotiationForgetSession,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   const parent = 'ses-neg-parent-001', temporary = 'ses-neg-grandchild-001'
   const prefix = [
     { info: { id: 'u1', sessionID: parent, role: 'user' }, parts: [{ type: 'text', text: 'Existing instruction' }] },
@@ -218,7 +220,7 @@ test('WHAT[delegation-negotiation-001] the Host records only the question while 
 
 test('WHAT[context-compression-047] OpenCode previous-Scope consultation uses the source session current model, not a stale archived one', async () => {
   const { negotiationRememberModel, negotiationForgetSession, consultationModelForPrevious } =
-    await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+    await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   const source = 'ses-previous-model-047'
   negotiationForgetSession(source)
   const archived = { model: { providerID: 'lazy', modelID: 'default' }, system: ['old system'] }
@@ -234,7 +236,7 @@ test('WHAT[context-compression-047] OpenCode previous-Scope consultation project
   const {
     negotiationRememberMessages, negotiationForgetSession, consultationStartPrevious,
     negotiationProjectMessages, negotiationFinishTemporary,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   const source = 'ses-previous-view-047'
   const temporary = 'ses-previous-view-047-temp'
   negotiationForgetSession(source)
@@ -263,7 +265,7 @@ test('WHAT[delegation-negotiation-001] a vetoed temporary tool call keeps its de
     negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
     negotiationStartTemporary, negotiationProjectMessages,
     negotiationFinishTemporary, negotiationForgetSession,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   const parent = 'ses-neg-trailing-parent', temporary = 'ses-neg-trailing-temp'
   const prefix = [{ info: { id: 'pu', sessionID: parent, role: 'user' }, parts: [{ type: 'text', text: 'Parent task' }] }]
   negotiationRememberSystem({ sessionID: parent }, { system: ['system'] })
@@ -290,7 +292,7 @@ test('WHAT[delegation-negotiation-001] temporary session tool calls are forbidde
     negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
     negotiationStartTemporary, negotiationFinishTemporary, negotiationForgetSession,
     negotiationToolViolationCount,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   await withExecutablePlugin(async (hooks) => {
     const parent = 'ses-neg-tool-parent', temp = 'ses-neg-tool-temp'
     negotiationRememberSystem({ sessionID: parent }, { system: ['system'] })
@@ -358,7 +360,7 @@ test('WHAT[delegation-negotiation-003] OpenCode registered provider hooks replay
   const {
     negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
     negotiationStartTemporary, negotiationFinishTemporary, negotiationForgetSession,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   await withExecutablePlugin(async (hooks) => {
     const parent = 'ses-btw-hook-parent', temp = 'ses-btw-hook-grandchild'
     const original = [
@@ -400,7 +402,7 @@ test('WHAT[delegation-negotiation-004] registered negotiate sends ephemeral BTW 
   const {
     negotiationRememberSystem, negotiationRememberMessages,
     negotiationRememberModel, negotiationForgetSession,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
 
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const parent = 'ses-negotiate-real-parent', child = 'ses-negotiate-real-child'
@@ -530,7 +532,7 @@ test('WHAT[delegation-negotiation-007] detached queue receipt cannot masquerade 
   const {
     negotiationRememberSystem, negotiationRememberMessages,
     negotiationRememberModel, negotiationForgetSession,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
     const parent = 'ses-neg-queued-parent', child = 'ses-neg-queued-child'
     await acceptAuthorityRoot(runtime, parent, 'manager')
@@ -963,7 +965,7 @@ test.skip('WHAT[context-compression-043] OpenCode resetScope commits durable arc
     const sessionProj1 = AgentProjection_tryFind(SessionIdModule_create(sid), snap1.AgentProjections)
     const epoch1 = sessionProj1?.PrefixEpoch
     assert.ok(epoch1, 'PrefixEpoch must exist in projection')
-    assert.equal(epoch1.EpochId?.fields?.[0] ?? epoch1.EpochId, 1n, 'first reset advances epoch to 1n')
+    assert.equal(epochValue(prefixEpochId(epoch1)), 1n, 'first reset advances epoch to 1n')
 
     // 4. Verify single-drain semantics: sealed snapshot must have been discarded from store
     const drained = outboundViewStore.tryGetSealed(sid)
@@ -1005,7 +1007,7 @@ test.skip('WHAT[context-compression-043] OpenCode resetScope commits durable arc
     assert.equal(String(outcomeReplay), 'Scope reset. Objective: first verified scope objective')
     const snapReplay = AgentJournalModule_snapshot(JournalHandle__get_Journal(runtime.journal))
     const sessionProjReplay = AgentProjection_tryFind(SessionIdModule_create(sid), snapReplay.AgentProjections)
-    assert.equal(sessionProjReplay?.PrefixEpoch?.EpochId?.fields?.[0] ?? sessionProjReplay?.PrefixEpoch?.EpochId, 1n, 'replay must not advance epoch')
+    assert.equal(epochValue(prefixEpochId(sessionProjReplay.PrefixEpoch)), 1n, 'replay must not advance epoch')
   })
 })
 
@@ -1185,7 +1187,7 @@ test('WHAT[delegation-negotiation-035] temporary SDK chat admission is isolated 
     negotiationRememberSystem, negotiationRememberMessages, negotiationRememberModel,
     negotiationStartTemporary, negotiationIsTemporary,
     negotiationFinishTemporary, negotiationForgetSession,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   const routing = await import('../../../dist/OpenCode/Host/ModelRoutingSurface.js')
   await withExecutablePlugin(async (hooks, _dir, _created, runtime) => {
     const parent = 'ses-ephemeral-source-035', temp = 'ses-ephemeral-child-035'
@@ -1229,7 +1231,7 @@ test('WHAT[delegation-negotiation-036] a temporary SDK lease rejection never bec
   const {
     negotiationRememberSystem, negotiationRememberMessages,
     negotiationRememberModel, negotiationForgetSession,
-  } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   await withExecutablePlugin(async (hooks,_dir,_created,runtime) => {
     const parent='ses-lease-error-parent-036', child='ses-lease-error-child-036'
     await acceptAuthorityRoot(runtime,parent,'manager')
@@ -1274,7 +1276,7 @@ test('WHAT[delegation-negotiation-037] thrown temporary provider admission/capac
   const { bindDelegation,clearSessionState } = await import('../../../dist/Context/Scope/Surface.js')
   const { negotiationRememberSystem,negotiationRememberMessages,
     negotiationRememberModel,negotiationForgetSession } =
-    await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+    await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   await withExecutablePlugin(async (hooks,_dir,_created,runtime)=>{
     const parent='ses-capacity-parent-037', child='ses-capacity-child-037'
     await acceptAuthorityRoot(runtime,parent,'manager')
@@ -1319,7 +1321,7 @@ test('WHAT[delegation-negotiation-038] a normally completed empty SDK reply term
   const { bindDelegation,clearSessionState } = await import('../../../dist/Context/Scope/Surface.js')
   const { negotiationRememberSystem,negotiationRememberMessages,
     negotiationRememberModel,negotiationForgetSession } =
-    await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+    await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   await withExecutablePlugin(async (hooks,_dir,_created,runtime)=>{
     const parent='ses-empty-parent-038', child='ses-empty-child-038'
     await acceptAuthorityRoot(runtime,parent,'manager')

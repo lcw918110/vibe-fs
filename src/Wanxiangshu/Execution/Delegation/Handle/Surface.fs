@@ -29,7 +29,7 @@ module HandleSurface =
         | HandleLifecycle.Abandoned _ -> "Abandoned"
         | HandleLifecycle.Retired -> "Retired"
 
-    let private snapshot projection =
+    let private snapshot (projection: AgentLinkageProjection) =
         match Map.tryFind handle projection.Handles with
         | None -> null
         | Some record ->

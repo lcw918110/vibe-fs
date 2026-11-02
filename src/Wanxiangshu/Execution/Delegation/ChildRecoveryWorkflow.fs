@@ -161,14 +161,16 @@ module ChildRecoveryWorkflow =
         (ports: Ports)
         (physical: PhysicalUserMessageId)
         : Result<AuthorityRootUserMessageId, string> =
-        match ports.AcceptedRoot with
-        | None -> Error "restart terminal has no durable Accepted source"
-        | Some read ->
-            match read ports.ChildSession physical with
+        let acceptedRoot =
+            function
             | None -> Error "restart terminal has no durable Accepted for its exact physical message"
             | Some accepted when accepted.PhysicalUserMessageId <> physical ->
                 Error "durable Accepted does not answer the assistant's exact physical message"
             | Some accepted -> Ok accepted.AuthorityRoot
+
+        match ports.AcceptedRoot with
+        | None -> Error "restart terminal has no durable Accepted source"
+        | Some read -> read ports.ChildSession physical |> acceptedRoot
 
     let private admittedRoot (ports: Ports) (authorityRoot: AuthorityRootUserMessageId) : Result<unit, string> =
         let work =
@@ -179,46 +181,44 @@ module ChildRecoveryWorkflow =
         match ports.Journal with
         | None -> Error "restart terminal has no durable journal to prove its canonical work"
         | Some journal ->
-            match HandleProjection.tryAdmittedWork work (journal.HandleProjection ports.ParentId) with
-            | Ok _ -> Ok()
-            | Error _ -> Error "durable Accepted root has no matching canonical admitted work"
+            HandleProjection.tryAdmittedWork work (journal.HandleProjection ports.ParentId)
+            |> Result.map ignore
+            |> Result.mapError (fun _ -> "durable Accepted root has no matching canonical admitted work")
 
     let private terminalFromMessages (ports: Ports) (assistant: SessionMessage) : ChildSnapshotEvidence =
         // The assistant's parent is the exact physical message it answers.
         // The last user message may be a retry whose physical id is not the
         // Authority Root; only the durable Accepted record knows the root.
-        match assistant.ParentId with
-        | None -> ChildSnapshotEvidence.Unreadable "terminal assistant has no exact physical parent message"
-        | Some parentId ->
-            let physical = PhysicalUserMessageId.create parentId
+        let authority =
+            assistant.ParentId
+            |> Option.map (PhysicalUserMessageId.create >> acceptedRootForPhysical ports)
+            |> Option.defaultValue (Error "terminal assistant has no exact physical parent message")
+            |> Result.bind (fun root -> admittedRoot ports root |> Result.map (fun () -> root))
 
-            match acceptedRootForPhysical ports physical with
-            | Error reason -> ChildSnapshotEvidence.Unreadable reason
-            | Ok authorityRoot ->
-                match admittedRoot ports authorityRoot with
-                | Error reason -> ChildSnapshotEvidence.Unreadable reason
-                | Ok() when not (deliveryWitnessed ports authorityRoot assistant) ->
-                    ChildSnapshotEvidence.Unreadable "restart terminal has no durable delivery witness"
-                | Ok() ->
-                    let runId = "run-restored-" + ports.AgentId
-                    let view = textOfParts assistant.Parts
+        match authority with
+        | Error reason -> ChildSnapshotEvidence.Unreadable reason
+        | Ok authorityRoot when not (deliveryWitnessed ports authorityRoot assistant) ->
+            ChildSnapshotEvidence.Unreadable "restart terminal has no durable delivery witness"
+        | Ok authorityRoot ->
+            let runId = "run-restored-" + ports.AgentId
+            let view = textOfParts assistant.Parts
 
-                    let agentOutcome =
-                        AgentCompletion.completed
-                            ports.AgentId
-                            ports.ChildSession
-                            runId
-                            ports.Role
-                            authorityRoot
-                            (ProviderRunIdentity.create assistant.Id)
-                            view
-                            None
+            let agentOutcome =
+                AgentCompletion.completed
+                    ports.AgentId
+                    ports.ChildSession
+                    runId
+                    ports.Role
+                    authorityRoot
+                    (ProviderRunIdentity.create assistant.Id)
+                    view
+                    None
 
-                    let body = HandleCompletionCodec.encodeOutcome runId agentOutcome
+            let body = HandleCompletionCodec.encodeOutcome runId agentOutcome
 
-                    ChildSnapshotEvidence.Terminal(
-                        TerminalEvidence.completed ports.AgentId ports.Handle ports.ChildSession body
-                    )
+            ChildSnapshotEvidence.Terminal(
+                TerminalEvidence.completed ports.AgentId ports.Handle ports.ChildSession body
+            )
 
     let private snapshotFromMessages (ports: Ports) (messages: SessionMessage list) : ChildSnapshotEvidence =
         match lastByRole messages "assistant" with

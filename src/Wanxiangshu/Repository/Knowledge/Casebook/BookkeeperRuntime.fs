@@ -1,13 +1,11 @@
 namespace Wanxiangshu.Repository.Knowledge.Casebook
 
 open System
-open System.Collections.Generic
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
-open Wanxiangshu.Foundation.Outcome
 open Wanxiangshu.Interaction.Authority
 open Wanxiangshu.Participant.Persona
 open Wanxiangshu.Participant.Provider
@@ -26,8 +24,7 @@ type ICasebookSessionPort =
     abstract CreateSiblingSession:
         ownerSessionId: SessionId * title: string * agent: string -> Task<Result<SessionId, string>>
 
-/// Physical Bookkeeper leaf: one CreateChildSession per transaction, todowrite-for-bookkeeper
-/// against process-local staging, then AbortSession.
+/// Product prompts and host session effects for a library Bookkeeper transaction.
 module BookkeeperRuntime =
 
     [<Import("bookkeeperStaging", "wanxiangli/casebook")>]
@@ -35,6 +32,14 @@ module BookkeeperRuntime =
 
     [<Import("bookkeeperLedger", "wanxiangli/casebook")>]
     let private bookkeeperLedger: obj = jsNative
+
+    [<Import("BookkeeperTransaction", "wanxiangli/casebook")>]
+    let private transactionClass: obj = jsNative
+
+    [<Emit("new $0($1, $2)")>]
+    let private construct (cls: obj) (staging: obj) (ledger: obj) : obj = jsNative
+
+    let private transactions = construct transactionClass staging bookkeeperLedger
 
     type private Runtime =
         { Port: ICasebookSessionPort
@@ -145,135 +150,81 @@ module BookkeeperRuntime =
     // DSL-MUTABLE: resource — host-side session port and active owner resolution.
     let mutable private runtime: Runtime option = None
 
-    /// Host-effect coordination.
-    module private Coordination =
+    module private SessionEffects =
 
-        let retire (sessions: ICasebookSessionPort) (childId: SessionId) : Task<unit> =
-            task {
-                try
-                    let! _ = sessions.AbortSession childId
-                    ()
-                with _ ->
-                    ()
+        let private unitResult (result: Result<unit, string>) : obj =
+            match result with
+            | Ok() -> createObj [ "ok" ==> true ]
+            | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
 
-                bookkeeperLedger?unbind (SessionId.value childId)
-            }
-
-        let awaitCompletion
-            (sessions: ICasebookSessionPort)
-            (txId: string)
-            (childId: SessionId)
-            (completion: TaskCompletionSource<Result<unit, string>>)
-            (disposeSub: unit -> unit)
-            : Task<Result<string * string, string>> =
-            task {
-                let! waited = completion.Task
-                disposeSub ()
-
-                match waited with
-                | Error err ->
-                    staging?abort (txId) |> ignore
-                    do! retire sessions childId
-                    return Error err
-                // LC-029: the staged transaction starts with the initial
-                // Q/A, so a terminal that never wrote through it has not
-                // delivered. Keep waiting instead of passing the original
-                // values off as this run's commitment.
-                | Ok() when unbox<bool> (staging?touched (txId)) ->
-                    let taken = unbox<Result<string * string, string>> (staging?take (txId))
-                    do! retire sessions childId
-                    return taken
-                | Ok() ->
-                    staging?abort (txId) |> ignore
-                    do! retire sessions childId
-                    return Error "bookkeeper program did not write the staged case"
-            }
-
-        let sendBookkeeperPrompt
-            (sessions: ICasebookSessionPort)
-            (txId: string)
-            (childId: SessionId)
-            (completion: TaskCompletionSource<Result<unit, string>>)
-            (disposeSub: unit -> unit)
-            (promptText: string)
-            (agent: string)
-            : Task<Result<string * string, string>> =
-            task {
-                let! res = sessions.SendPrompt(childId, promptText, agent)
-
-                match res with
-                | Error reason ->
-                    disposeSub ()
-                    staging?abort (txId) |> ignore
-                    do! retire sessions childId
-                    return Error reason
-                | Ok() -> return! awaitCompletion sessions txId childId completion disposeSub
-            }
-
-        let runChild
+        let create
             (runtime: Runtime)
             (identitySeed: PromptAuthority.IdentitySeed)
             (txId: string)
-            (childId: SessionId)
             (kind: BookkeeperRequest)
             (ownerSessionId: SessionId)
             (q: string)
             (a: string)
             (observations: Observation list)
             (extraTranscript: string option)
-            : Task<Result<string * string, string>> =
-            task {
-                let sessions = runtime.Port
-                let childKey = SessionId.value childId
-                let ownerKey = SessionId.value ownerSessionId
-                bookkeeperLedger?bind (childKey, txId, ownerKey)
-
-                let completion =
-                    TaskCompletionSource<Result<unit, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
-
-                bookkeeperLedger?registerCompletion (childKey, txId, completion)
-
-                // DSL-MUTABLE: subscription — bookkeeper terminal subscription
-                let mutable subscription: System.IDisposable option = None
-
-                subscription <-
-                    Some(
-                        sessions.SubscribeTerminal(
-                            childId,
-                            (fun _ outcome ->
-                                match outcome with
-                                | Ok() -> AsyncSupport.trySetResult completion (Ok()) |> ignore
-                                | Error err -> AsyncSupport.trySetResult completion (Error err) |> ignore)
+            : obj =
+            let openSession () =
+                task {
+                    let! opened =
+                        runtime.Port.CreateSiblingSession(
+                            ownerSessionId,
+                            "bookkeeper:" + txId,
+                            Decisions.canonicalAgent
                         )
+
+                    return
+                        match opened with
+                        | Ok childId -> createObj [ "ok" ==> true; "value" ==> SessionId.value childId ]
+                        | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+                }
+
+            let subscribe (childId: string) (complete: obj -> unit) =
+                let subscription =
+                    runtime.Port.SubscribeTerminal(
+                        SessionId.create childId,
+                        (fun _ outcome -> complete (unitResult outcome))
                     )
 
-                let disposeSub () =
-                    subscription |> Option.iter (fun active -> active.Dispose())
-                    subscription <- None
-                    bookkeeperLedger?removeCompletion (childKey)
+                fun () -> subscription.Dispose()
 
+            let prepare (_childId: string) =
                 let activeOwner = runtime.ResolveActiveOwner ownerSessionId
 
                 match PromptAuthority.validateInheritedIdentitySeedAgainstActiveOwner activeOwner identitySeed with
                 | Error rejection ->
-                    disposeSub ()
-                    staging?abort (txId) |> ignore
-                    do! retire sessions childId
-                    return Error(sprintf "bookkeeper identity seed rejected: %A" rejection)
+                    createObj
+                        [ "ok" ==> false
+                          "error" ==> sprintf "bookkeeper identity seed rejected: %A" rejection ]
                 | Ok participantIdentity ->
-                    let promptText = Decisions.envelope kind ownerKey q a observations extraTranscript
-                    bookkeeperLedger?authorize (childKey, ParticipantIdentity.selectedAgent participantIdentity, promptText) |> ignore
+                    let promptText =
+                        Decisions.envelope kind (SessionId.value ownerSessionId) q a observations extraTranscript
 
-                    return!
-                        sendBookkeeperPrompt
-                            sessions
-                            txId
-                            childId
-                            completion
-                            disposeSub
-                            promptText
-                            (ParticipantIdentity.selectedAgent participantIdentity)
-            }
+                    createObj
+                        [ "ok" ==> true
+                          "value"
+                          ==> createObj
+                                  [ "agent" ==> ParticipantIdentity.selectedAgent participantIdentity
+                                    "text" ==> promptText ] ]
+
+            let send (childId: string) (agent: string) (text: string) =
+                task {
+                    let! sent = runtime.Port.SendPrompt(SessionId.create childId, text, agent)
+                    return unitResult sent
+                }
+
+            createObj
+                [ "open" ==> openSession
+                  "subscribe"
+                  ==> Func<string, (obj -> unit), (unit -> unit)>(fun childId complete -> subscribe childId complete)
+                  "prepare" ==> prepare
+                  "send"
+                  ==> Func<string, string, string, Task<obj>>(fun childId agent text -> send childId agent text)
+                  "abort" ==> (SessionId.create >> runtime.Port.AbortSession) ]
 
         let activeOwnerProfile (runtime: Runtime) (ownerSessionId: SessionId) =
             match runtime.ResolveActiveOwner ownerSessionId with
@@ -299,31 +250,24 @@ module BookkeeperRuntime =
                 | Error error -> return Error error
                 | Ok identitySeed ->
                     let txId = Guid.NewGuid().ToString("N")
-                    staging?beginTransaction (txId, q, a) |> ignore
 
-                    match!
-                        runtime.Port.CreateSiblingSession(
-                            ownerSessionId,
-                            "bookkeeper:" + txId,
-                            Decisions.canonicalAgent
-                        )
-                    with
-                    | Error error ->
-                        staging?abort (txId) |> ignore
-                        return Error error
-                    | Ok childId ->
-                        return!
-                            runChild
-                                runtime
-                                identitySeed
-                                txId
-                                childId
-                                kind
-                                ownerSessionId
-                                q
-                                a
-                                observations
-                                extraTranscript
+                    let request =
+                        createObj
+                            [ "txId" ==> txId
+                              "ownerId" ==> SessionId.value ownerSessionId
+                              "question" ==> q
+                              "answer" ==> a ]
+
+                    let effects =
+                        create runtime identitySeed txId kind ownerSessionId q a observations extraTranscript
+
+                    let! result = unbox<Task<obj>> (transactions?run (request, effects))
+
+                    if unbox<bool> result?ok then
+                        let value: obj = result?value
+                        return Ok(unbox value?question, unbox value?answer)
+                    else
+                        return Error(unbox result?error)
             }
 
     let setPort
@@ -343,8 +287,7 @@ module BookkeeperRuntime =
     let bindSession (sessionId: string) (txId: string) (ownerSessionId: string) : unit =
         bookkeeperLedger?bind (sessionId, txId, ownerSessionId)
 
-    let unbindSession (sessionId: string) : unit =
-        bookkeeperLedger?unbind (sessionId)
+    let unbindSession (sessionId: string) : unit = bookkeeperLedger?unbind (sessionId)
 
     let tryConsumePromptAuthorization
         (sessionId: SessionId)
@@ -379,8 +322,9 @@ module BookkeeperRuntime =
         : Task<Result<string * string, string>> =
         task {
             let activeRuntime = lock runtimeGate (fun () -> runtime)
+
             match activeRuntime with
             | None -> return Error "bookkeeper runtime unavailable"
             | Some active ->
-                return! Coordination.runWithRuntime active kind ownerSessionId q a observations extraTranscript
+                return! SessionEffects.runWithRuntime active kind ownerSessionId q a observations extraTranscript
         }

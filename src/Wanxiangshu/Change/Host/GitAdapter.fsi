@@ -6,8 +6,6 @@ open Wanxiangshu.Process
 module OrchestratorGit =
     val run: cmd: Command -> Task<int * string * string>
 
-    val command: dir: string -> args: string list -> Command
-
     val finalizeWorktree:
         runner: (Command -> Task<int * string * string>) ->
         managerId: string ->

@@ -9,7 +9,7 @@ module CasebookBookkeeperRefreshSurface =
 
     let refreshStale (store: obj) (root: string) (sessionId: string) : Task<obj> =
         task {
-            match! CasebookBookkeeper.refreshStale (storeOf store) root sessionId with
+            match! CasebookServiceBinding.refresh root (storeOf store) sessionId with
             | Ok value -> return box {| ok = true; value = value |}
             | Error error -> return CasebookAppendSurface.mutationErrorToJs error
         }

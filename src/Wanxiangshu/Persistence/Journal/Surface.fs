@@ -56,6 +56,11 @@ module JournalSurface =
     let initializeStateRoot (workspace: string) : Task<string> =
         RuntimePath.initializeStateRoot workspace
 
+    let stateRoot (workspace: string) = RuntimePath.stateRoot workspace
+    let stateRootSync (workspace: string) = RuntimePath.stateRootSync workspace
+    let enqueueRecovery (handle: JournalHandle) (recover: unit -> Task) = handle.Journal.EnqueueRecovery recover
+    let runOrAwaitRecovery (handle: JournalHandle) = handle.Journal.RunOrAwaitRecovery()
+
     let private str (value: obj) : string =
         if isNull value then "" else string value
 
@@ -211,7 +216,7 @@ module JournalSurface =
                latestTerminalPresent = XTraceProjection.latestTerminalEvidence state |> Option.isSome |}
 
     let private prefixEpochSliceToJs (epoch: ActivePrefixEpoch) : obj =
-        box {| epochId = PrefixEpochId.value epoch.EpochId |}
+        box {| epochId = PrefixEpochId.value (PrefixEpochProjection.epochId epoch) |}
 
     let private handleIdText (handleId: HandleId) =
         match handleId with
@@ -312,12 +317,13 @@ module JournalSurface =
 
     let private guidelinesToJs (state: GuidelineProjectionState) : obj =
         box
-            {| pairCount = List.length state.Pairs
-               callIds = state.CallIds |> Set.toList |> List.toArray
-               placementCount = Set.count state.Placements
-               visibleFromOrdinal = state.VisibleFromOrdinal
+            {| pairCount = GuidelineProjection.pairs state |> List.length
+               callIds = GuidelineProjection.callIds state
+               placementCount = GuidelineProjection.placementCount state
+               visibleFromOrdinal = GuidelineProjection.visibleFromOrdinal state
                pairs =
-                state.Pairs
+                GuidelineProjection.pairs state
+                |> List.rev
                 |> List.map (fun pair ->
                     box
                         {| ordinal = pair.Ordinal
@@ -456,7 +462,8 @@ module JournalSurface =
     /// repeats the one already recorded is a no-op, so repeated transforms
     /// stay idempotent; a closure that conflicts with the recorded one is
     /// refused, so it can never release the identity binding.
-    let appendAuthorityLogicalRunClosed (commonDir: string) (sessionId: string) (retirementId: string) : Task<unit> =
+    /// stateRoot 已由调用方解析；这里仅访问已打开的共享日志，不重新解释 workspace。
+    let appendAuthorityLogicalRunClosed (stateRoot: string) (sessionId: string) (retirementId: string) : Task<unit> =
         task {
             let session = SessionId.create sessionId
 
@@ -469,13 +476,7 @@ module JournalSurface =
                 : Task<Result<AgentJournal, FoldRejection>> =
                 failwith "authority closure refused: no shared journal runtime for this common dir"
 
-            let! runtimeDir =
-                task {
-                    try
-                        return! RuntimePath.forWorkspace commonDir
-                    with _ ->
-                        return RuntimePath.forStateRoot commonDir
-                }
+            let runtimeDir = RuntimePath.forStateRoot stateRoot
 
             let! acquired =
                 SharedAgentJournal.acquire runtimeDir 0 (DateTimeOffset.Parse "1970-01-01T00:00:00Z") refuseMissingEntry

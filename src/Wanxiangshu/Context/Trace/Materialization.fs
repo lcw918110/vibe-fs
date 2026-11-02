@@ -2,6 +2,7 @@ namespace Wanxiangshu.Context.Trace
 
 open System
 open System.Threading.Tasks
+open Fable.Core.JsInterop
 open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
@@ -52,36 +53,31 @@ module XTraceMaterialization =
             | _ -> return! Error "XTrace original Host tool result identity is ambiguous"
         }
 
-    let private semanticPart (part: XTracePartRef) (body: string) =
-        match part.Kind with
-        | "text" -> Ok(ProviderProjection.SemanticText body)
-        | "reasoning" -> Ok(ProviderProjection.SemanticReasoning body)
-        | "tool_call" ->
-            part.ToolName
-            |> Option.map (fun name -> ProviderProjection.SemanticToolCall(name, body))
-            |> Result.requireSome "XTrace tool_call is missing its tool name"
-        | "tool_result" -> Ok(ProviderProjection.SemanticToolResult body)
-        | "media_omitted" ->
-            let mediaType = if String.IsNullOrWhiteSpace body then None else Some body
-            Ok(ProviderProjection.SemanticMedia(mediaType, ""))
-        | kind -> Error(sprintf "XTrace contains an unknown semantic part kind: %s" kind)
+    let private readBody (journal: AgentJournal) =
+        Func<string, Task<obj>>(fun reference ->
+            task {
+                let! result = journal.Writer.BlobWriter.Read(BlobRef.create reference)
 
-    let private readSemanticPart
-        (journal: AgentJournal)
-        (part: XTracePartRef)
-        : Task<Result<ProviderProjection.SemanticPart, string>> =
+                return
+                    match result with
+                    | Ok body -> createObj [ "ok" ==> true; "value" ==> body ]
+                    | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+            })
+
+    let private readResult (pending: Task<obj>) : Task<Result<obj array, string>> =
         task {
-            let! body = journal.Writer.BlobWriter.Read part.TextRef
+            let! result = pending
 
             return
-                body
-                |> Result.mapError (fun error ->
-                    sprintf "XTrace materialization could not read %s: %s" (BlobRef.value part.TextRef) error)
-                |> Result.bind (semanticPart part)
+                if unbox<bool> result?ok then
+                    Ok(unbox<obj array> result?value)
+                else
+                    Error(unbox<string> result?error)
         }
 
     let private readTurn
         (journal: AgentJournal)
+        (history: WanxiangliTrace.History)
         (_turn, parts: XTracePartRef list)
         : Task<Result<ProviderProjection.SemanticMessage, string>> =
         taskResult {
@@ -93,7 +89,14 @@ module XTraceMaterialization =
                 |> Option.map (fun part -> part.Role)
                 |> Option.defaultValue "user"
 
-            let! semanticParts = ordered |> TaskResultList.traverseM (readSemanticPart journal)
+            let! items =
+                history.read (ordered |> List.map XTraceProjection.nativePart |> List.toArray, readBody journal)
+                |> readResult
+
+            let semanticParts =
+                items
+                |> Array.map (fun item -> WanxiangliTrace.semanticFromNative item?part)
+                |> Array.toList
 
             return
                 { ProviderProjection.SemanticMessage.Role = role
@@ -102,23 +105,26 @@ module XTraceMaterialization =
 
     let private projectionFromParts
         (journal: AgentJournal)
+        (xTrace: XTraceProjectionState)
         (parts: XTracePartRef list)
         : Task<Result<ProviderProjection.ProviderSemanticProjection, string>> =
         taskResult {
             let turns = parts |> List.groupBy (fun part -> part.Turn) |> List.sortBy fst
 
-            let! messages = turns |> TaskResultList.traverseM (readTurn journal)
+            let! messages =
+                turns
+                |> TaskResultList.traverseM (readTurn journal (XTraceProjection.history xTrace))
+
             return { empty with Messages = messages }
         }
 
-    /// Rebuild the current reanchor generation from durable XTrace only.
-    /// Blob failure is a proof failure, not permission to silently omit history.
+    /// 从已保存的材料重建当前宿主 generation。
     let currentProjection
         (journal: AgentJournal)
         (xTrace: XTraceProjectionState)
         : Task<Result<ProviderProjection.ProviderSemanticProjection, string>> =
         XTraceProjection.currentGenerationParts (XTraceProjection.parts xTrace)
-        |> projectionFromParts journal
+        |> projectionFromParts journal xTrace
 
     /// Canonical current-generation semantic projection restricted to a
     /// trace-owned half-open interval.
@@ -131,35 +137,26 @@ module XTraceMaterialization =
 
         XTraceProjection.currentGenerationParts (XTraceProjection.parts xTrace)
         |> List.filter (fun part -> XTraceRange.contains part.Cursor range)
-        |> projectionFromParts journal
+        |> projectionFromParts journal xTrace
 
-    let private readItem (journal: AgentJournal) (part: XTracePartRef) : Task<Result<XTraceItem, string>> =
-        taskResult {
-            let! semantic = readSemanticPart journal part
-
-            return
-                { Cursor = part.Cursor
-                  Provenance = part.Provenance
-                  Role = part.Role
-                  Part = semantic }
-        }
-
-    /// Resolve one range to the owner model used by deterministic rendering.
-    /// Missing/corrupt blobs fail closed rather than silently shortening proof.
+    /// 读取固定区间，并保留既有的字节分块还原。
     let materializeRange
         (journal: AgentJournal)
         (range: XTraceRange)
         (xTrace: XTraceProjectionState)
         : Task<Result<XTraceItem list, string>> =
         task {
-            XTraceProjection.traceIntervalOfRange range xTrace |> ignore
+            let! resolved =
+                (XTraceProjection.history xTrace)
+                    .materialize (WanxiangliTrace.rangeObject range, readBody journal)
+                |> readResult
 
-            let selected =
-                XTraceProjection.parts xTrace
-                |> List.filter (fun part -> XTraceRange.contains part.Cursor range)
-
-            let! resolved = selected |> TaskResultList.traverseM (readItem journal)
-            return resolved |> Result.map (WanxiangliTrace.materializeItemsInRange range)
+            return
+                resolved
+                |> Result.map (
+                    Array.map (WanxiangliTrace.itemFromNative XTraceProjection.provenanceFromMetadata)
+                    >> Array.toList
+                )
         }
 
     let renderRange

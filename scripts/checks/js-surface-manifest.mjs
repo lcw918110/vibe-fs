@@ -34,6 +34,7 @@ export const lawIds = (text, owner) =>
 
 const sourceCompileStem = (source) => {
   const prefix = 'src/Wanxiangshu/'
+  if (source.startsWith('wanxiangtong/') && source.endsWith('.fs')) return '../../' + source.slice(0, -'.fs'.length)
   if (!source.startsWith(prefix) || !source.endsWith('.fs')) return undefined
   return source.slice(prefix.length, -'.fs'.length)
 }
@@ -134,7 +135,7 @@ export const validateSurfaceManifest = (manifest = SURFACE_MANIFEST, root = proc
     }
     const compileStem = sourceCompileStem(entry.source ?? '')
     if (!compileStem) {
-      fail(`${label}: source must be a src/Wanxiangshu .fs path`)
+      fail(`${label}: source must be an application .fs path`)
     } else {
       // compileStem is already repo-root-relative under src/Wanxiangshu/.
       const rel = `${compileStem}.fs`.replace(/\\/g, '/')

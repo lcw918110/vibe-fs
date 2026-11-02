@@ -3,10 +3,6 @@
 # Ordinary rules include matching paths. A leading ! excludes an exception from earlier includes.
 
 /src/Wanxiangshu/Process/ProcessRequest.fs
-/src/Wanxiangshu/Process/ProcessRunner.fs
-/src/Wanxiangshu/Process/ProcessOutput.fs
-/src/Wanxiangshu/Process/NodeProcessHost.fs
-/src/Wanxiangshu/Process/NodeProcessWait.fs
 /src/Wanxiangshu/Process/Pty.fs
 /src/Wanxiangshu/Process/PtyApi.fs
 /src/Wanxiangshu/Process/PtyBackend.fs
@@ -14,6 +10,4 @@
 /src/Wanxiangshu/Process/PtySupervisor.fs
 /src/Wanxiangshu/Process/PtyTypes.fs
 /src/Wanxiangshu/Process/Spool.fs
-/src/Wanxiangshu/Process/LargeGate.fs
-/src/Wanxiangshu/Process/LargeGateSurface.fs
 /src/Wanxiangshu/Host/Contract/ToolResultBound.fs

@@ -64,3 +64,38 @@ test('WHAT[host-boundary-036] functional ingress preserves host tools and conten
     }
   })
 })
+
+test('OpenCode registered compaction hooks and snapshot callbacks share the session lifecycle', async () => {
+  const { JournalSurface_snapshot } = await import('../../../dist/Persistence/Journal/Surface.js')
+  await withExecutablePlugin(async (hooks, _directory, _created, runtime) => {
+    const model = { providerID: 'fixture', modelID: 'engineer-model' }
+    const sessionID = 'compaction-shared-snapshot'
+    const other = 'compaction-other-session'
+    const user = { id: 'compaction-shared-input', sessionID, role: 'user', agent: 'engineer', model }
+    await hooks['chat.message']({ sessionID, messageID: user.id, agent: 'engineer', model },
+      { message: user, parts: [{ type: 'text', text: 'Continue the assignment.' }] })
+    await hooks['experimental.session.compacting']({ sessionID }, { context: [] })
+    await hooks['experimental.session.compacting']({ sessionID: other }, { context: [] })
+    const output = { messages: [{ info: user, parts: [{ type: 'text', text: 'Original transcript.' }] }] }
+    const original = output.messages
+    await hooks['experimental.chat.messages.transform']({}, output)
+    assert.equal(output.messages, original)
+    const continuation = {}
+    await hooks['experimental.compaction.autocontinue']({ sessionID }, continuation)
+    assert.equal(continuation.enabled, true)
+    const compacted = { id: 'compaction-shared-run', sessionID, parentID: user.id, role: 'assistant', agent: 'compaction', summary: true, finish: 'stop', time: { created: 1, completed: 2 } }
+    runtime.pushHostMessage(sessionID, { info: compacted, parts: [] })
+    await hooks.event({ event: { type: 'message.updated', properties: { info: compacted } } })
+    const deadline = Date.now() + 2000
+    while (JournalSurface_snapshot(runtime.journal).sessionProjections[sessionID]?.prefixEpoch?.epochId !== 1n && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 5))
+    }
+    assert.equal(JournalSurface_snapshot(runtime.journal).sessionProjections[sessionID].prefixEpoch.epochId, 1n)
+    const otherOutput = { messages: [{ info: { ...user, sessionID: other }, parts: [] }] }
+    const otherMessages = otherOutput.messages
+    await hooks['experimental.chat.messages.transform']({}, otherOutput)
+    assert.equal(otherOutput.messages, otherMessages, 'one session snapshot does not consume the other session bypass')
+    await hooks.event({ event: { type: 'message.updated', properties: { info: compacted } } })
+    assert.equal(JournalSurface_snapshot(runtime.journal).sessionProjections[sessionID].prefixEpoch.epochId, 1n)
+  })
+})

@@ -45,7 +45,7 @@ module ChildRecovery =
         let failed (agentId: string) (handle: HandleId) (childSession: SessionId) (body: string) : TerminalEvidence =
             ProvenFailed(agentId, handle, childSession, body)
 
-    /// Completion blob finality (schemaVersion=3). No aborted.
+    /// Completion blob finality (schemaVersion=4). No aborted.
     type CompletedPayload =
         { RunId: string
           View: string
@@ -177,7 +177,7 @@ module ChildRecovery =
     /// RecoveryInFlight avoids dsl-ownership behaviour-bool tokens (*Pending/*Running).
     [<RequireQualifiedAccess>]
     type HostObservation =
-        
+
         | ParentCancelled
         | DeadlineExceeded
         | HostSessionGone
@@ -260,7 +260,7 @@ module ChildRecovery =
 
     let private observationName (observation: HostObservation) =
         match observation with
-        
+
         | HostObservation.ParentCancelled -> "ParentCancelled"
         | HostObservation.DeadlineExceeded -> "DeadlineExceeded"
         | HostObservation.HostSessionGone -> "HostSessionGone"

@@ -34,6 +34,8 @@ module OrchestratorHostSurface =
 
     val forkManagerJob: handle: obj -> jobId: string -> managerAgent: string -> prompt: string -> Task<obj>
 
+    val joinPublishedAvailable: handle: obj -> maxCount: int -> interrupt: obj -> Task<obj>
+
     /// Exercise the production candidate-finalization sequence through a plain
     /// JavaScript command port without exposing Command or Result internals.
     val finalizeWorktree: runner: obj -> managerId: string -> worktree: string -> Task<obj>

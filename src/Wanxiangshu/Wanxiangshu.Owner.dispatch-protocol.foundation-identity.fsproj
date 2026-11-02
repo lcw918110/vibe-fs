@@ -9,8 +9,6 @@
   <ItemGroup>
     <Compile Include="Foundation/Identity.fsi"/>
     <Compile Include="Foundation/Identity.fs"/>
-    <Compile Include="Foundation/PromptMetadataField.fsi"/>
-    <Compile Include="Foundation/PromptMetadataField.fs"/>
     <Compile Include="Foundation/Quiescence.fsi"/>
     <Compile Include="Foundation/Quiescence.fs"/>
   </ItemGroup>

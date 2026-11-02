@@ -80,11 +80,9 @@ test('WHAT[host-boundary-026] host session contract compiles independently witho
     'OpenCode/Host/HookPolicy.fs',
     'OpenCode/Host/HookPolicySurface.fs',
     'OpenCode/Host/Sessions.fs',
-    'OpenCode/Host/SessionSnapshotPort.fs',
     'OpenCode/Host/SessionSnapshotSurface.fs',
     'OpenCode/Host/SessionQuiescenceGate.fs',
     'OpenCode/Host/QuiescenceSurface.fs',
-    'OpenCode/Host/HostMessageProjection.fs',
     'OpenCode/Host/HostSessionContext.fs',
     'OpenCode/Host/HostBoundarySurface.fs',
     'OpenCode/Host/HostSessionContextSurface.fs',
@@ -95,8 +93,6 @@ test('WHAT[host-boundary-026] host session contract compiles independently witho
   }
 
   const forbiddenProcessRuntime = [
-    'Process/ProcessRunner.fs',
-    'Process/NodeProcessHost.fs',
     'Process/ProcessRequest.fs',
     'Process/JsSandbox.fs',
     'OpenCode/Tools/PtyTool.fs',
@@ -226,7 +222,6 @@ test('WHAT[host-boundary-026] Host source ownership follows subsystem inventory 
   const sessionRuntime = requireShard('host-session-runtime')
   assert.ok(sessionRuntime.compile.includes('OpenCode/Host/SessionQuiescenceGate.fs'))
   assert.ok(sessionRuntime.compile.includes('OpenCode/Host/QuiescenceSurface.fs'))
-  assert.ok(sessionRuntime.compile.includes('OpenCode/Host/HostMessageProjection.fs'))
   assert.ok(sessionRuntime.compile.includes('OpenCode/Host/HostSessionContext.fs'))
 
 

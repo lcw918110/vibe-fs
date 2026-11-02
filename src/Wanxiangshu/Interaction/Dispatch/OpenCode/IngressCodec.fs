@@ -8,6 +8,7 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
+open Wanxiangshu.Interaction.Dispatch
 
 /// Decodes the raw chat.message hook payload before authority policy sees it.
 module PromptIngressCodec =
@@ -211,7 +212,9 @@ module PromptIngressCodec =
              |> List.choose agentOf
              |> List.exists (fun agent -> agent.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
           ModeIsCompaction =
-            ([ readString message "mode"; readString input "mode"; readString (childObject input "info") "mode" ]
+            ([ readString message "mode"
+               readString input "mode"
+               readString (childObject input "info") "mode" ]
              |> List.choose id
              |> List.exists (fun mode -> mode.Equals("compaction", StringComparison.OrdinalIgnoreCase)))
           HasParts = messageParts.Length > 0
@@ -270,10 +273,10 @@ module PromptIngressCodec =
     /// recovery: the write side moves, the read side keeps matching nothing, and
     /// every plugin prompt starts looking like UnknownOrigin.
     let private promptKeyOf (input: obj) (output: obj) =
-        [ metadataCarrier input PromptMetadataField.PromptKeyField
+        [ metadataCarrier input PromptMetadataCodec.PromptKeyField
           yield!
               parts output
-              |> Array.map (fun part -> metadataCarrier part PromptMetadataField.PromptKeyField)
+              |> Array.map (fun part -> metadataCarrier part PromptMetadataCodec.PromptKeyField)
               |> Array.toList ]
         |> consolidateText
 

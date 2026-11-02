@@ -7,9 +7,7 @@
     <WanxiangshuCompileShard>bounded-parallel</WanxiangshuCompileShard>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Foundation/Parallel.fsi"/>
-    <Compile Include="Foundation/Parallel.fs"/>
-    <Compile Include="Foundation/ParallelSurface.fsi"/>
-    <Compile Include="Foundation/ParallelSurface.fs"/>
+    <Compile Include="Foundation/Defer.fsi"/>
+    <Compile Include="Foundation/Defer.fs"/>
   </ItemGroup>
 </Project>

@@ -39,6 +39,8 @@ type RetryPorts =
       Redispatch: ProviderRecoveryAuthorization -> RetryAttempt -> Task<RetryVerdict> }
 
 module Retry =
+    val internal fromNativeVerdict: value: obj -> RetryVerdict
+    val internal toNativeVerdict: verdict: RetryVerdict -> obj
     /// The single retry decision: pure policy, then admitted redispatch or a typed terminal.
     val attempt: ports: RetryPorts -> input: RetryAttempt -> Task<RetryVerdict>
 

@@ -1,115 +1,72 @@
 namespace Wanxiangshu.Change
 
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation.Identity
-open Wanxiangshu.Mission.Work
-open Wanxiangshu.Foundation
 
 module OrchestratorFactFold =
-
-    let private foldRebasedCandidateReady
-        (payload:
-            {| ManagerJobId: ManagerJobId
-               RebasedCommit: CommitHash
-               TargetHeadSnapshot: CommitHash |})
-        (projection: OrchestratorProjection)
-        : Result<OrchestratorProjection, OrchestratorFoldRejection> =
-        // Journal is append-only: the projection keeps the latest appended
-        // RebasedCandidateReady as the current view. Exact replay is
-        // idempotent; a later differing event supersedes because the prior
-        // CAS/target observation proved that attempt did not land.
-        Ok(
-            OrchestratorProjection.recordRebasedCandidateReady
-                payload.ManagerJobId
-                {| RebasedCommit = payload.RebasedCommit
-                   TargetHeadSnapshot = payload.TargetHeadSnapshot |}
-                projection
-        )
-
-    let private foldPublishClaimed
-        (payload:
-            {| ManagerJobId: ManagerJobId
-               TargetRef: TargetRef
-               RebasedCommit: CommitHash
-               ExpectedHead: CommitHash |})
-        (projection: OrchestratorProjection)
-        : Result<OrchestratorProjection, OrchestratorFoldRejection> =
-        match
-            OrchestratorProjection.tryFind payload.ManagerJobId projection
-            |> Option.bind (fun job -> job.RebasedCandidateReady)
-        with
-        | None -> Error OrchestratorFoldRejection.PublishClaimedWithoutRebasedCandidate
-        | Some rebasedReady ->
-            if payload.RebasedCommit <> rebasedReady.RebasedCommit then
-                Error OrchestratorFoldRejection.PublishClaimedCommitMismatch
-            else
-                // Latest appended claim is the current view: a retried publish
-                // under a fresh certificate carries a new ExpectedHead and
-                // evidence, which supersedes the CAS-missed attempt.
-                Ok(
-                    OrchestratorProjection.recordPublishClaimed
-                        payload.ManagerJobId
-                        {| TargetRef = payload.TargetRef
-                           RebasedCommit = payload.RebasedCommit
-                           ExpectedHead = payload.ExpectedHead |}
-                        projection
-                )
-
     let fold
         (orchestrator: OrchestratorProjection)
         (fact: OrchestratorFactCases)
         : Result<OrchestratorProjection, OrchestratorFoldRejection> =
-        match fact with
-        | OrchestratorFactCases.ManagerJobCreated payload -> Ok(OrchestratorProjection.createJob payload orchestrator)
-        | OrchestratorFactCases.CandidateReady payload ->
-            Ok(
-                OrchestratorProjection.recordCandidateReady
-                    payload.ManagerJobId
-                    {| CandidateCommit = payload.CandidateCommit |}
-                    orchestrator
-            )
-        | OrchestratorFactCases.ConflictDetected payload ->
-            Ok(
-                OrchestratorProjection.recordConflictDetected
-                    payload.ManagerJobId
-                    {| CandidateCommit = payload.CandidateCommit
-                       TargetHeadSnapshot = payload.TargetHeadSnapshot
-                       ConflictFiles = payload.ConflictFiles
-                       DiagnosticsDigest = payload.DiagnosticsDigest |}
-                    orchestrator
-            )
-        | OrchestratorFactCases.RebasedCandidateReady payload -> foldRebasedCandidateReady payload orchestrator
-        | OrchestratorFactCases.PublishClaimed payload -> foldPublishClaimed payload orchestrator
-        | OrchestratorFactCases.Published payload ->
-            Ok(
-                OrchestratorProjection.recordTerminal
-                    payload.ManagerJobId
-                    (TerminalOutcome.Published
-                        {| CandidateCommit = payload.CandidateCommit
-                           ResultingTargetHead = payload.ResultingTargetHead |})
-                    orchestrator
-            )
-        | OrchestratorFactCases.JobFailed payload ->
-            Ok(
-                OrchestratorProjection.recordTerminal
-                    payload.ManagerJobId
-                    (TerminalOutcome.Failed payload.Reason)
-                    orchestrator
-            )
-        | OrchestratorFactCases.JobAbandoned payload ->
-            Ok(OrchestratorProjection.recordTerminal payload.ManagerJobId TerminalOutcome.Abandoned orchestrator)
-        | OrchestratorFactCases.WorktreeCreateRequested payload ->
-            Ok(
-                OrchestratorProjection.requestWorktree
-                    payload.WorktreeIdentity
-                    payload.WorktreePath
-                    payload.ManagerJobId
-                    orchestrator
-            )
-        | OrchestratorFactCases.WorktreeCreated payload ->
-            Ok(
-                OrchestratorProjection.acceptWorktree
-                    payload.WorktreeIdentity
-                    payload.WorktreePath
-                    payload.ManagerJobId
-                    orchestrator
-            )
+        let event kind id fields =
+            createObj ([ "kind" ==> kind; "id" ==> ManagerJobId.value id ] @ fields)
+
+        let wire =
+            match fact with
+            | OrchestratorFactCases.ManagerJobCreated value ->
+                event
+                    "ManagerJobCreated"
+                    value.ManagerJobId
+                    [ "session" ==> SessionId.value value.ManagerSessionId
+                      "agent" ==> value.ManagerAgent
+                      "byname" ==> value.Byname
+                      "worktreeIdentity" ==> WorktreeIdentity.value value.WorktreeIdentity
+                      "worktreePath" ==> WorktreePath.value value.WorktreePath
+                      "target" ==> TargetRef.value value.TargetRef
+                      "targetBranchFrozen" ==> value.TargetBranchFrozen ]
+            | OrchestratorFactCases.CandidateReady value ->
+                event "CandidateReady" value.ManagerJobId [ "commit" ==> CommitHash.value value.CandidateCommit ]
+            | OrchestratorFactCases.ConflictDetected value ->
+                event
+                    "ConflictDetected"
+                    value.ManagerJobId
+                    [ "commit" ==> CommitHash.value value.CandidateCommit
+                      "target" ==> CommitHash.value value.TargetHeadSnapshot
+                      "files" ==> List.toArray value.ConflictFiles
+                      "digest" ==> value.DiagnosticsDigest ]
+            | OrchestratorFactCases.RebasedCandidateReady value ->
+                event
+                    "RebasedCandidateReady"
+                    value.ManagerJobId
+                    [ "commit" ==> CommitHash.value value.RebasedCommit
+                      "target" ==> CommitHash.value value.TargetHeadSnapshot ]
+            | OrchestratorFactCases.PublishClaimed value ->
+                event
+                    "PublishClaimed"
+                    value.ManagerJobId
+                    [ "target" ==> TargetRef.value value.TargetRef
+                      "commit" ==> CommitHash.value value.RebasedCommit
+                      "expected" ==> CommitHash.value value.ExpectedHead ]
+            | OrchestratorFactCases.Published value ->
+                event
+                    "Published"
+                    value.ManagerJobId
+                    [ "candidate" ==> CommitHash.value value.CandidateCommit
+                      "head" ==> CommitHash.value value.ResultingTargetHead ]
+            | OrchestratorFactCases.JobFailed value ->
+                event "JobFailed" value.ManagerJobId [ "reason" ==> value.Reason ]
+            | OrchestratorFactCases.JobAbandoned value -> event "JobAbandoned" value.ManagerJobId []
+            | OrchestratorFactCases.WorktreeCreateRequested value ->
+                event
+                    "WorktreeCreateRequested"
+                    value.ManagerJobId
+                    [ "identity" ==> WorktreeIdentity.value value.WorktreeIdentity
+                      "path" ==> WorktreePath.value value.WorktreePath ]
+            | OrchestratorFactCases.WorktreeCreated value ->
+                event
+                    "WorktreeCreated"
+                    value.ManagerJobId
+                    [ "identity" ==> WorktreeIdentity.value value.WorktreeIdentity
+                      "path" ==> WorktreePath.value value.WorktreePath ]
+
+        OrchestratorProjection.applyEvent wire orchestrator
