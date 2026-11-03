@@ -61,7 +61,12 @@ export function productionSources(root) {
 }
 
 function applicationSources(repositoryRoot, sourceRoot) {
-  const adapterRoot = resolve(repositoryRoot, 'wanxiangtong')
+  // The adapter tree is a sibling of the application source root, not of
+  // whatever repository the caller happens to name: shard projects include
+  // `../../wanxiangtong/...` relative to `src/Wanxiangshu`. Resolving it from
+  // `repositoryRoot` made every isolated fixture also claim the real repo's
+  // adapter sources and fail coverage against its own shard set.
+  const adapterRoot = resolve(sourceRoot, '../../wanxiangtong')
   return [...productionSources(sourceRoot), ...(existsSync(adapterRoot) ? productionSources(adapterRoot) : [])]
 }
 

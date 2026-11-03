@@ -517,8 +517,30 @@ module PluginTransforms =
             emitJsExpr rewritten "delete $0.providerPayload; delete $0.responseId" |> ignore
             rewritten
 
+    /// A request-only steer row carries no Host address: `steering` is true,
+    /// it speaks for an agent, and it has no `info.id`.
+    let private isAnonymousScopeSteerRow (message: obj) : bool =
+        not (isNull message)
+        && scopeText (scopeField (scopeField message "info") "role") = "user"
+        && scopeText (scopeField message "steering") = "true"
+        && scopeText (scopeField message "attribution") = "agent"
+        && isNull (scopeField (scopeField message "info") "id")
+        && isNull (scopeField message "id")
+
+    /// Append the request-only steer, replacing any steer an earlier pass on the
+    /// same request array already left at the tail. A host transform may see one
+    /// array twice; the provider must still see exactly one steer.
     let private openCodeScopeSteer (messages: obj array) (prose: string) (strong: bool) : obj array =
-        let last = messages |> Array.tryLast |> Option.defaultValue null
+        let withoutSteer =
+            let tail =
+                messages |> Array.rev |> Array.takeWhile isAnonymousScopeSteerRow |> Array.length
+
+            if tail = 0 then
+                messages
+            else
+                messages |> Array.take (messages.Length - tail)
+
+        let last = withoutSteer |> Array.tryLast |> Option.defaultValue null
         let originalInfo = scopeField last "info"
         let sessionId = scopeField originalInfo "sessionID"
         let info = createObj [ "role", box "user"; "sessionID", sessionId ]
@@ -531,7 +553,7 @@ module PluginTransforms =
                   "attribution", box "agent"
                   "strong", box strong ]
 
-        Array.append messages [| steer |]
+        Array.append withoutSteer [| steer |]
 
     /// Collapse a retracted beat's assistant message to one text part (removeLast projection).
     /// Match keys: message/info id, responseId, providerRunId, and any tool-call /

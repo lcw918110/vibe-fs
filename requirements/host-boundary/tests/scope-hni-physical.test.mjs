@@ -90,7 +90,7 @@ test('WHAT[context-compression-039] repeated OpenCode transform does not duplica
 
 test('WHAT[host-boundary-011] repeated provider projection keeps synthetic separators out of transcript anchoring', async () => {
   const pair = await import('../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js')
-  const projection = await import('../../../dist/OpenCode/Host/HostMessageProjection.js')
+  const projection = await import('../../../dist/wanxiangtong/opencode/provider-request/MessageProjection.js')
   const sid = 'ses_scope_repeat_separator_011'
   clearSessionState(sid)
   const messages = [user('u-repeat-separator', 'work', 1)]

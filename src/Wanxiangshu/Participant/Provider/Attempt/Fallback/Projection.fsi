@@ -28,6 +28,9 @@ module ProviderFailureProjection =
     val forAuthority:
         logicalRunId: LogicalRunId -> authorityRoot: AuthorityRootUserMessageId -> ProviderFailureProjection
 
+    /// The single host→library state mapping; the durable budget adapter reuses it.
+    val toLibraryState: current: ProviderFailureProjection -> obj
+
     val applyFailure:
         identity: FailedProviderAttemptIdentity ->
         consecutiveFailureCount: int ->
