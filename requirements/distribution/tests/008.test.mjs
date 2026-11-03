@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
   REPO_ROOT,
   deriveExpectedClosure,
-  parsePackResult,
+  packDeclaredClosure,
   validateArchiveEntries,
   validateArtifact,
 } from '../../../scripts/verify-package.mjs'
@@ -94,18 +94,19 @@ integrationTest('WHAT[distribution-008] repository runtime resources include bot
 integrationTest(
   'WHAT[distribution-008] GAP-210: every declared resource is available from the exact installed artifact',
   async () => {
-    const { execFileSync } = await import('node:child_process')
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wxs-package-008-'))
     try {
       const expectedClosure = deriveExpectedClosure({ root })
-      const packJson = execFileSync(
-        'npm',
-        ['pack', '--json', '--ignore-scripts', '--pack-destination', runDir],
-        { cwd: root, encoding: 'utf8' },
-      )
-      const filename = parsePackResult(packJson, 'wanxiangshu').filename
-      const tarball = path.join(runDir, filename)
-      assert.ok(fs.existsSync(tarball), `packed tarball must exist: ${filename}`)
+      // Packing the real repository root would ship the `wanxiangli`
+      // submodule's own dependency install: npm always includes a nested
+      // `node_modules`, whatever the `files` whitelist says. Staging the
+      // declared closure keeps the archive equal to what it is checked against.
+      const { tarballPath: tarball } = await packDeclaredClosure({
+        root,
+        runDir,
+        expectedClosure,
+      })
+      assert.ok(fs.existsSync(tarball), `packed tarball must exist: ${path.basename(tarball)}`)
 
       const validation = await validateArchiveEntries(tarball, expectedClosure)
       assert.deepEqual(
