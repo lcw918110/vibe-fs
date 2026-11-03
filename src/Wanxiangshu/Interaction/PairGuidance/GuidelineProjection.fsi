@@ -10,11 +10,7 @@ type PairProgrammingGuideline =
       CallGap: TranscriptGap
       ResultGap: TranscriptGap }
 
-type GuidelineProjectionState =
-    { Pairs: PairProgrammingGuideline list
-      CallIds: Set<string>
-      Placements: Set<string>
-      VisibleFromOrdinal: int64 }
+type GuidelineProjectionState
 
 [<RequireQualifiedAccess>]
 type GuidelineFoldRejection =
@@ -27,6 +23,9 @@ module GuidelineProjection =
     val pairs: GuidelineProjectionState -> PairProgrammingGuideline list
     val visiblePairs: GuidelineProjectionState -> PairProgrammingGuideline list
     val nextOrdinal: GuidelineProjectionState -> int64
+    val visibleFromOrdinal: GuidelineProjectionState -> int64
+    val callIds: GuidelineProjectionState -> string array
+    val placementCount: GuidelineProjectionState -> int
     val applyReanchor: GuidelineProjectionState -> GuidelineProjectionState
     val restoreVisibilityFloor: int64 -> GuidelineProjectionState -> GuidelineProjectionState
 

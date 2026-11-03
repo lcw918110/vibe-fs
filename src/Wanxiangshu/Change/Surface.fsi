@@ -52,12 +52,6 @@ module ChangeSurface =
 
     val gitRebase: git: obj -> path: string -> targetRef: string -> Task<obj>
 
-    val gitRebaseContinue: git: obj -> Task<obj>
-
-    val gitStageAll: git: obj -> Task<obj>
-
-    val gitCandidateCommit: git: obj -> msg: string -> Task<obj>
-
     val gitFfMerge:
         git: obj -> path: string -> targetRef: string -> expectedHead: string -> pinnedCandidate: string -> Task<obj>
 
@@ -117,6 +111,16 @@ module ChangeSurface =
 
     val fireVerdictInterrupt: handle: obj -> reason: string -> unit
 
+    val rejectVerdictInterrupt: handle: obj -> error: obj -> unit
+
     val verdictMailboxJoinAvailable: mailbox: obj -> maxCount: int -> interrupt: obj -> Task<obj>
 
     val verdictMaxBatch: unit -> int
+    val managerBranchOf: job: string -> string
+    val staleManagerWorktrees: entries: obj array -> owned: string array -> string array
+    val staleManagerBranches: branches: string array -> owned: string array -> string array
+    val lifecycleJob: journal: Wanxiangshu.Persistence.Journal.JournalHandle -> id: string -> obj
+    val createLifecycle: journal: Wanxiangshu.Persistence.Journal.JournalHandle -> options: obj -> obj
+    val startLifecycle: runtime: obj -> id: string -> agent: string -> prompt: string -> path: string -> Task<obj>
+    val recoverLifecycle: runtime: obj -> job: obj -> unit
+    val collectLifecycle: runtime: obj -> Task<obj>

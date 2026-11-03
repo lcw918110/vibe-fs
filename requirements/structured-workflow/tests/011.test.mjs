@@ -486,7 +486,7 @@ test('WHAT[structured-workflow-011] shared gravity wells are split by knowledge 
   assert.deepEqual(sources(outcome), ['src/Wanxiangshu/Foundation/Outcome.fs', 'src/Wanxiangshu/Foundation/OutcomeSurface.fs'])
   assert.deepEqual(sources(canonical), ['src/Wanxiangshu/Host/CanonicalJson.fs', 'src/Wanxiangshu/OpenCode/Codec/CanonicalJsonSurface.fs'])
   assert.deepEqual(sources(taskResult), ['src/Wanxiangshu/Foundation/FsToolkitFableCompat.fs', 'src/Wanxiangshu/Foundation/TaskResult.fs'])
-  assert.deepEqual(sources(parallel), ['src/Wanxiangshu/Foundation/Parallel.fs', 'src/Wanxiangshu/Foundation/ParallelSurface.fs'])
+  assert.deepEqual(sources(parallel), ['src/Wanxiangshu/Foundation/Defer.fs'])
   assert.deepEqual(sources(asyncSupport), ['src/Wanxiangshu/Foundation/AsyncSupport.fs'])
   assert.deepEqual(sources(fission), ['src/Wanxiangshu/Execution/Fission/Facts.fs'])
 

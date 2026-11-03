@@ -4,6 +4,7 @@ open System.Threading.Tasks
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Foundation.Identity
+open Wanxiangshu.Git
 open Wanxiangshu.Mission.Work
 open Wanxiangshu.Persistence.Journal
 
@@ -21,16 +22,12 @@ type OrchestratorHandle =
 
 type GitPort =
     { IsDirty: WorktreePath -> Task<Result<string list, string>>
-      CreateWorktree: ManagerJobId -> WorktreePath -> TargetRef -> Task<Result<WorktreeIdentity, string>>
+      Worktrees: GitWorktrees
       FreezeTargetBranch: unit -> Task<Result<TargetRef, string>>
       Rebase: WorktreePath -> TargetRef -> Task<Result<unit, string>>
       FfMerge: WorktreePath -> TargetRef -> CommitHash -> CommitHash -> Task<Result<CommitHash, string>>
       ConflictedFiles: WorktreePath -> Task<Result<string list, string>>
-      RemoveWorktree: WorktreePath -> Task<Result<unit, string>>
       HasRebaseHead: WorktreePath -> Task<bool>
-      ListWorktrees: unit -> Task<Result<(WorktreePath * WorktreeIdentity option) list, string>>
-      ListManagerBranches: unit -> Task<Result<WorktreeIdentity list, string>>
-      DeleteBranch: WorktreeIdentity -> Task<Result<unit, string>>
       ReadHead: WorktreePath -> Task<Result<CommitHash, string>>
       GetTargetHead: TargetRef -> Task<Result<CommitHash, string>> }
 

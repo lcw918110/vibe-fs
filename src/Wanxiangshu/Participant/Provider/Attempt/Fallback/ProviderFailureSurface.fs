@@ -846,6 +846,37 @@ module ProviderFailureSurface =
 
         ProviderRecoveryWorkflow.isHardStop failureKind reason
 
+    let continueConfirmedFailure (handle: JournalHandle) (sessionPort: obj) (eventPort: obj) (input: obj) : Task =
+        let turn: ReconciledTurn =
+            { SessionId = SessionId.create (text input?session)
+              PhysicalUserMessageId = PhysicalUserMessageId.create (text input?physicalMessage)
+              AuthorityRootUserMessageId = AuthorityRootUserMessageId.create (text input?authorityRoot)
+              ProviderRun = ProviderRunIdentity.create (text input?providerRun)
+              Role = Roles.tryParseRole (text input?role)
+              Directory = None
+              Parts = [||]
+              Finish = None
+              ErrorName = None
+              Model = None
+              Outcome = ReconcileProgram.TurnFailed(text input?error)
+              Observation = None }
+
+        let failure =
+            match text input?failure with
+            | "ProviderTransient" -> ExecutionFailure.ProviderTransient
+            | "ProviderPermanent" -> ExecutionFailure.ProviderPermanent
+            | other -> invalidArg "failure" other
+
+        ProviderRecoveryWorkflow.continueAfterConfirmedFailure
+            (unbox sessionPort)
+            null
+            (unbox eventPort)
+            (Some handle.Journal)
+            turn
+            failure
+            (text input?error)
+            (text input?continuationPrompt)
+
 
     /// provider-attempt-recovery-026 test seam: classify the same-provider recovery
     /// verdict for one confirmed failure against the journal's live authority

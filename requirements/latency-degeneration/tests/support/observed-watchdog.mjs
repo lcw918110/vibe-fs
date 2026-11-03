@@ -1,4 +1,4 @@
-import { LatencyWatchdogFactory_createObservedLatencyWatchdog as create } from '../../../../dist/OpenCode/Host/LatencyWatchdog.js'
+import { LatencyWatchdogFactory_createObservedLatencyWatchdog as create } from '../../../../dist/wanxiangtong/opencode/request-latency/LatencyWatchdog.js'
 
 export const flush = async () => {
   for (let i = 0; i < 16; i++) await Promise.resolve()

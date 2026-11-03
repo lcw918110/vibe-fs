@@ -71,6 +71,10 @@ module ForkToolSurface =
     val nextPromptAdmittedWithReceipt: value: obj -> receipt: string -> unit
     val cancelOwnerChildren: value: obj -> owner: string -> Task
     val detachToolRuntime: value: obj -> Task
+    val captureOwnerWork: value: obj -> owner: string -> obj
+    val trackOwnerWork: value: obj -> work: (unit -> Task) -> unit
+    val awaitOwnerObservedWork: value: obj -> Task<unit>
+    val detachOwnerWork: value: obj -> Task
     val durableLifecycleByname: value: obj -> owner: string -> byname: string -> obj
     val executeJoin: value: obj -> owner: string -> Task<string>
     val executeHorizon: value: obj -> owner: string -> Task<string>

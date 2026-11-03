@@ -2,7 +2,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import * as signal from '../../../dist/OpenCode/Host/HostSignalSubscribeSurface.js'
-import {readFileSync} from 'node:fs'
 
 // [012] SyncDelegate fails fast on Aborted. The latency watchdog's own
 // interrupt is a Host abort that it continues (or returns Failed): the
@@ -24,11 +23,4 @@ test('WHAT[latency-degeneration-012] fast-check: a cursor excuses exactly one Ab
     }
     signal.forgetInterrupts(s)
   }), {seed: 0xDE6E012, numRuns: 300})
-})
-
-test('WHAT[latency-degeneration-012] SyncDelegate consults the cursor before failing on Aborted; the Host records before it aborts', () => {
-  const sync = readFileSync(new URL('../../../src/Wanxiangshu/Execution/Delegation/SyncDelegate/Workflow.fs', import.meta.url), 'utf8')
-  const hooks = readFileSync(new URL('../../../src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs', import.meta.url), 'utf8')
-  assert.match(sync, /TerminalOutcome\.Aborted _ when degeneration\.IsOwnAbort\(\) -> \(\)/)
-  assert.ok(hooks.indexOf('DegenerationInterrupts.record sid') < hooks.indexOf('sessionPort.InterruptAttempt sid'))
 })

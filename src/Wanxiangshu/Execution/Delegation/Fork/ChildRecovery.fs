@@ -45,7 +45,7 @@ module ChildRecovery =
         let failed (agentId: string) (handle: HandleId) (childSession: SessionId) (body: string) : TerminalEvidence =
             ProvenFailed(agentId, handle, childSession, body)
 
-    /// Completion blob finality (schemaVersion=3). No aborted.
+    /// Completion blob finality (schemaVersion=4). No aborted.
     type CompletedPayload =
         { RunId: string
           View: string

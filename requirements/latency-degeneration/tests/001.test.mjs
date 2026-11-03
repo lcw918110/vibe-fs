@@ -4,7 +4,7 @@ import * as HostSignalSurface from '../../../dist/OpenCode/Host/HostSignalSurfac
 import {
   LatencyWatchdogFactory_createLatencyWatchdog as createLatencyWatchdog,
   LatencyWatchdog,
-} from '../../../dist/OpenCode/Host/LatencyWatchdog.js'
+} from '../../../dist/wanxiangtong/opencode/request-latency/LatencyWatchdog.js'
 
 import { fakeDetector, makePorts, tick, wireHostEvents } from './support/watchdog.mjs'
 

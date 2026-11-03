@@ -52,15 +52,17 @@
 
 ## [012] 事务 As-Is 逐笔落盘与单一 EventStore 记账
 
-一次调用只有一个事务。每笔 `write`（以及 `rm`/`mv`）在调用发生时立即经 MutationFs 原子写盘（单笔文件层原子，跨笔不回滚）；`run()` 成功结束前磁盘已经反映已发生的每笔写入。程序以任何方式终止或挂起（throw、超时、输出超限）时，那一刻之前已落盘的改动保持为事实分界线，之后的未发生。
+一次调用只有一个事务。每笔 `write`（以及 `rm`/`mv`）在调用发生时立即经 runtime/FileSession 执行文件操作（单笔文件层原子，跨笔不回滚）；`run()` 成功结束前磁盘已经反映已发生的每笔写入。程序以任何方式终止或挂起（throw、超时、输出超限）时，那一刻之前已落盘的改动保持为事实分界线，之后的未发生。
 
-持久化 Prepare 与 Commit 只进入统一 EventStore，不另建专有文件或存储。记账时机：每笔的 Prepared 在写盘前发起（调用时序、TransactionId 成对，写失败留下无 Committed 配对的 Prepared 作中断证据），Committed 在该笔写盘成功后发起；物理落账由程序终局的结算（settleLedger）await 全部 append 完成，成功路径保证 Prepared/Committed 成对排空。单笔的物理落账发生在该笔写盘之后的同一事件循环回合（微任务），只有进程级死亡才可能丢失末笔审计。
+持久化 Prepare 与 Commit 只进入统一 EventStore，不另建专有文件或存储。记账时机：每笔的 Prepared 在写盘前发起（调用时序、TransactionId 成对，写失败留下无 Committed 配对的 Prepared 作中断证据），Committed 在该笔写盘成功后发起；物理落账由程序终局的结算等待全部已发起 append。发起不表示已落盘，不承诺同一事件循环回合内完成；物理效果和记录提交分别报告。
 
 ## [013] 写前校验、提交计划与 durable 记账失败映射
 
 写前校验作为实现单元保持精确形状并短路：重复的修改意图最先报 `DUPLICATE_MUTATION_TARGET`，缺失目标按快照校验报 `FILE_CHANGED`，全部通过才继续。提交计划（commitPlan）输出精确的执行序列（rewrite 携带 expectedCurrent，create 携带文本），成功时把计划内全部目标写入；计划内某笔写失败时以 `TRANSACTION_COMMIT_FAILED` 失败，并按计划内还原序把已写目标还原——该还原是实现单元自身的语义，工作流主路径仍按 [012] 的 as-is 逐笔落盘。
 
 durable 记账追加失败时（Prepare 或 Commit 阶段的各失败形态），程序结果为 Failed，给稳定码 `TRANSACTION_PREPARE_*`/`TRANSACTION_COMMIT_*`，不报告成功；按 [012]/[029] 的 as-is 语义，已落盘的文件效果如实上报且不回滚。失败不重试追加、不换新事务身份，并携带原事件 id、事务 id 与原始 cause；Prepared 失败后 pending 投影为空（记账未完成），Committed 失败后原 Prepared 仍留在 pending。
+
+追加任务以 Promise 拒绝时，结算仍等待其余已发起记录；按发起顺序保留首个失败。结构化拒绝沿用原 code/reason，普通异常使用 `PROGRAM_FAILED`。失败结果继续列出已落地的 rewritten/created/removed/moved，不重试追加或回滚物理效果。
 
 EventStore 端口的坏输入防御先结算物理事实（append、fsync、close、release 的确切计数与落盘字节），再经唯一的语义熔断（`js-transaction-semantic-cut`）以 SIGKILL 终止；对 Release 阶段的坏输入，最终报告保留原请求事件身份。
 
@@ -72,7 +74,7 @@ EventStore 端口的坏输入防御先结算物理事实（append、fsync、clos
 
 Prepare 已入账而无 Committed 是中断审计证据：pending 投影保留该记录，跨 EventStore 重开仍可见。重开只观察证据，不自动重放、回滚或补交事务，磁盘保持中断时已落盘的状态。
 
-物理写失败以 `TRANSACTION_COMMIT_FAILED` 失败，失败笔之前的 as-is 已落盘改动保留。新时序下：写成功的笔保有完整的 Prepared/Committed 配对；写失败的笔留 Prepared 作中断审计证据——中断证据即无 Committed 配对的 Prepared。程序以返回值非法等方式失败时，此前已写成功的笔同样保有完整配对，不留 pending。每笔写入经 MutationFs 单笔原子落盘，重开不盲目重试模糊的半完成提交。
+物理写失败以 `TRANSACTION_COMMIT_FAILED` 失败，失败笔之前的 as-is 已落盘改动保留。新时序下：写成功的笔保有完整的 Prepared/Committed 配对；写失败的笔留 Prepared 作中断审计证据——中断证据即无 Committed 配对的 Prepared。程序以返回值非法等方式失败时，此前已写成功的笔同样保有完整配对，不留 pending。每笔写入经 runtime/FileSession 落盘，重开不盲目重试模糊的半完成提交。
 
 CAS 还原（rollbackPlan：restore 与 removeCreated，逆序）保留为实现单元，还原时按 expectedCurrent 比对、不覆盖第三方已改内容；TransactionStore 不提供手动历史读取接口。
 
@@ -208,7 +210,7 @@ rm/mv 与 edit/write 同属 as-is 逐笔落盘路径：程序在 rm/mv 已落盘
 
 ## [043] rm/mv 双语资源与四层接线契约
 
-rm/mv 的成员文案是 zh-CN.md/en.md 成对双语资源（`tool/js-program/rm`、`tool/js-program/mv`），两语言陈述同一契约要素——签名、POSIX 语义、as-is 即时生效、EXDEV 拒绝且不留两侧并存中间态——且不携带未替换占位符。四层接线保持同构：JsFragmentRegistry 的 rm/mv fragment（含 `js.rm`/`js.mv` RuntimeBindingKey）、ToolsBindings 的成员绑定、Description 的资源路径与 capability 条件规则块、ToolHost 的双语装载。底层文件系统效果与稳定失败映射归 MutationFs 原语（removePath/movePath），不在成员绑定内二次定义。
+rm/mv 的成员文案是 zh-CN.md/en.md 成对双语资源（`tool/js-program/rm`、`tool/js-program/mv`），两语言陈述同一契约要素——签名、POSIX 语义、as-is 即时生效、EXDEV 拒绝且不留两侧并存中间态——且不携带未替换占位符。四层接线保持同构：JsFragmentRegistry 的 rm/mv fragment（含 `js.rm`/`js.mv` RuntimeBindingKey）、ToolsBindings 的成员绑定、Description 的资源路径与 capability 条件规则块、ToolHost 的双语装载。底层文件系统效果与稳定失败映射归 `wanxiangli/runtime` 的 FileSession，不在成员绑定内二次定义。
 
 ## [044] rm/mv 失败码的 reason 稳定与成对上报
 

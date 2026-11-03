@@ -5,13 +5,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import * as dispatcher from '../../../dist/Interaction/Dispatch/Dispatcher.js'
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.js'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
+const runtimePath = { stateRoot: journal.JournalSurface_stateRoot }
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
-import * as identity from '../../../dist/Foundation/Identity.js'
-import * as adapter from '../../../dist/Composition/Durable/PromptJournalAdapter.js'
 import * as personas from '../../../dist/Participant/Persona/Surface.js'
 
 // AcceptPhysicalAgentOwnerRoot validates the owner's identity seed twice: once
@@ -44,9 +42,6 @@ import * as personas from '../../../dist/Participant/Persona/Surface.js'
 //
 // Run: node --test requirements/dispatch-protocol/tests/016.test.mjs
 // (single-file command shape unverified; DevOps builds dist and runs it).
-
-const FResult = (result) =>
-  result.tag === 0 ? { ok: true, value: result.fields[0] } : { ok: false, error: result.fields[0] }
 
 const withSharedJournal = async (label, action) => {
   const directory = mkdtempSync(join(tmpdir(), `wxs-dispatch-\${label}-`))
@@ -114,7 +109,7 @@ const closeOwner = async (handle, session, directory) => {
   assert.equal(view.Delivered, true)
   const retirement = Array.from(view.Retirements ?? []).at(-1)
   assert.equal(retirement.Outcome, 'Completed')
-  await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirement.RetirementId)
+  await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, retirement.RetirementId)
   assert.equal(dispatch.projectionObservation(handle, session).activeLogicalRun, null)
 }
 
@@ -137,42 +132,19 @@ test('WHAT[dispatch-protocol-016] a root accept re-validates its owner after Pro
     const landed = Promise.withResolvers()
     const gate = Promise.withResolvers()
     landed.promise.catch(() => {}) // keep an unnotified failure from warning while the test is already failing
-    const inner = adapter.PromptJournalAdapter_create(handle.journal)
-    const holdingJournal = {
-      get RuntimeId() { return inner.RuntimeId },
-      ProjectionFor: (sessionId) => inner.ProjectionFor(sessionId),
-      OwnershipEvidenceFor: (sessionId) => inner.OwnershipEvidenceFor(sessionId),
-      HandleForChild: (sessionId) => inner.HandleForChild(sessionId),
-      ChatAcceptancePersistence: () => inner.ChatAcceptancePersistence(),
-      async Append(sessionId, providerRun, fact) {
-        const result = await inner.Append(sessionId, providerRun, fact)
-        if (sessionId.fields[0] === child && fact.cases()[fact.tag] === 'PromptPhysicalAccepted') {
-          if (result.tag === 1) {
-            landed.reject(new Error('physical acceptance append failed: ' + JSON.stringify(result.fields[0])))
-            return result
-          }
-          // The physical acceptance is durably on the journal. Hold the
-          // persist's await so the second validation sees what the test does
-          // next.
-          held = true
-          landed.resolve()
-          await gate.promise
-        }
-        return result
+    let held = false
+    const accepting = dispatch.acceptAgentOwnerRootAfterPhysical(
+      handle, child, sent.key, physical, null,
+      async key => {
+        assert.equal(key, sent.key)
+        held = true
+        landed.resolve()
+        await gate.promise
       },
-    }
-    const runtime = dispatcher.forPrompts(holdingJournal)
-    const accepting = dispatcher.Runtime__AcceptAgentOwnerRoot(
-      runtime,
-      new identity.PromptKey(sent.key),
-      new identity.SessionId(child),
-      new identity.PhysicalUserMessageId(physical),
-      undefined,
     )
     // Failure exit: if the accept settles before the physical acceptance was
     // ever held (e.g. the first validation rejects), surface that real failure
     // through landed instead of hanging the test on this promise.
-    let held = false
     accepting.then(
       (value) => { if (!held) landed.reject(new Error('accept settled before PromptPhysicalAccepted was held: ' + JSON.stringify(value))) },
       (error) => { if (!held) landed.reject(error) },
@@ -189,7 +161,7 @@ test('WHAT[dispatch-protocol-016] a root accept re-validates its owner after Pro
       gate.resolve()
     }
 
-    const accepted = FResult(await accepting)
+    const accepted = await accepting
     assert.equal(accepted.ok, false, 'the second validation must run after the physical acceptance persists')
     assert.match(accepted.error, /AgentOwnerRoot identity seed rejected/)
     assert.match(accepted.error, /OwnerAuthorityNotActive/)
@@ -204,13 +176,7 @@ test('WHAT[dispatch-protocol-016] a root accept re-validates its owner after Pro
     assert.equal(coldView.physicalLandingCount, 1)
     assert.equal(dispatch.projectionObservation(cold, child).pendingClaims.length, 0)
 
-    const replay = FResult(await dispatcher.Runtime__AcceptAgentOwnerRoot(
-      dispatcher.forPrompts(adapter.PromptJournalAdapter_create(cold.journal)),
-      new identity.PromptKey(sent.key),
-      new identity.SessionId(child),
-      new identity.PhysicalUserMessageId(physical),
-      undefined,
-    ))
+    const replay = await dispatch.acceptAgentOwnerRoot(cold, child, sent.key, physical, null)
     assert.equal(replay.ok, false, 'a replayed accept must fail closed once the owner is closed')
     assert.match(replay.error, /OwnerAuthorityNotActive/)
     assert.equal(dispatch.projectionObservation(cold, child).activeLogicalRun, null)

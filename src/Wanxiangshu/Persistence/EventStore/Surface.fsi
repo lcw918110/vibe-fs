@@ -8,6 +8,12 @@ open System.Threading.Tasks
 module Surface =
     val appendErrorToJs: error: AppendError -> obj
 
+    val createPhysicalWriter: stateRoot: string * writerId: string -> obj
+    val physicalWriterPath: writer: obj -> string
+    val appendPhysicalWriter: writer: obj * events: obj array -> obj
+    val acquirePhysicalStoreLock: stateRoot: string -> Task<obj>
+    val releasePhysicalStoreLock: held: obj -> Task<unit>
+
     /// Create a process-local writer capability. The caller owns its lifecycle.
     val create: commonDir: string * writerId: string -> EventStoreHandle
 

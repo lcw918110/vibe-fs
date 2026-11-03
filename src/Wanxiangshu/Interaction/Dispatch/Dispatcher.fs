@@ -864,10 +864,4 @@ module PromptDispatcher =
         member internal _.Metadata (key: PromptKey) (origin: string) (logicalRunId: LogicalRunId option) =
             PromptMetadataCodec.create key origin logicalRunId
 
-        /// EXEC-003 requires a terminal listener to exist before a prompt is sent.
-        /// This registers the subscription without reacting to it; the reacting
-        /// listener belongs to whoever awaits the agent.
-        member internal _.SubscribeNoOp (port: IDispatchSessionPort) (sessionId: SessionId) =
-            port.SubscribeTerminal(sessionId, (fun _ _ -> ()))
-
     let forPrompts (journal: IPromptJournal) = Runtime(journal)

@@ -1,374 +1,266 @@
 namespace Wanxiangshu.Execution.Delegation.Fork
 
+open System
+open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Execution.Session
 open Wanxiangshu.Execution.Session.Wait
-
-open System
-open System.Threading
-open System.Threading.Tasks
-open Wanxiangshu.Execution.Agent
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 
 type ForkCompletionMailbox = ICompletionMailbox<AgentHandleId, PtyJoinItem, JoinInterruptReason, MailboxWakeReason>
 
-module private ForkRuntimeControl =
-    let runChildWork
-        (workOpt: (unit -> Task<AgentCompletionOutcome>) option)
-        (childRunner: string -> Role -> string option -> Task<AgentCompletionOutcome>)
-        (agentId: string)
-        (role: Role)
-        (promptOpt: string option)
-        =
-        match workOpt with
-        | Some work -> work ()
-        | None -> childRunner agentId role promptOpt
+type private IChildRunSet =
+    abstract fork: obj -> string
+    abstract restore: obj -> unit
+    abstract bindChildSession: string * string -> unit
+    abstract markInterrupted: string * string -> unit
+    abstract cancelAgent: string -> unit
+    abstract awaitAgent: string * int option -> Task<obj>
+    abstract list: unit -> obj
+    abstract registerPty: obj -> unit
+    abstract unregisterPty: string -> unit
+    abstract publishPtyCompletion: string * PtyJoinItem -> unit
+    abstract pulseAgentHandle: string -> unit
+    abstract pulseWake: unit -> unit
+    abstract waitForWake: unit -> Task<MailboxWakeReason>
+    abstract waitForSignal: Task<JoinInterruptReason> -> Task<MailboxWakeReason>
+    abstract drainAgentWakes: int -> string array
+    abstract drainPtyCompletions: int -> PtyJoinItem array
+    abstract isCancelled: bool
+    abstract activeRunCount: int
+    abstract pendingCompletionCount: int
+    abstract pendingPtyCount: int
+    abstract close: unit -> unit
 
-    let publishAgentCompletion
-        (mailbox: ForkCompletionMailbox)
-        (terminalListener: RunCompletion -> unit)
-        (childRun: ChildRun)
-        (agentId: string)
-        (completion: RunCompletion)
-        =
-        childRun.Completion.TrySet(completion) |> ignore
-        mailbox.PulseAgent(AgentHandleId.create agentId)
+module private ChildRunValues =
+    [<Import("ChildRunSet", "wanxiangli/handle-lifecycle")>]
+    let library: obj = jsNative
 
-        try
-            terminalListener completion
-        with _ ->
-            ()
+    [<Emit("new $0($1)")>]
+    let construct (_class: obj) (_options: obj) : IChildRunSet = jsNative
 
-    let forkCreatedOrNudged (isNew: bool) (agentId: string) =
-        if isNew then
-            ForkResult.Created agentId
+    [<Emit("$0 == null")>]
+    let absent (_value: obj) : bool = jsNative
+
+    let optional convert value =
+        value |> Option.map (convert >> box) |> Option.defaultValue null
+
+    let fromOptional convert value =
+        if absent value then
+            None
         else
-            ForkResult.Nudged agentId
+            Some(convert (unbox<string> value))
 
-    let awaitPendingNoTimeout (pending: Task<RunCompletion>) =
-        task {
-            let! value = pending
-            return Ok value
-        }
+    let role (value: obj) =
+        Roles.tryParseRole (unbox value) |> Option.get
 
-    let awaitPendingWithTimeout
-        (raceExit: Task -> int -> Task<bool>)
-        (agentId: string)
-        (pending: Task<RunCompletion>)
-        (ms: int)
-        =
-        task {
-            let! completedFirst = raceExit (pending :> Task) ms
+    let outcome =
+        function
+        | AgentCompleted value ->
+            createObj
+                [ "kind" ==> "completed"
+                  "view" ==> value.View
+                  "childSessionId" ==> optional SessionId.value value.ChildSessionId
+                  "authorityRoot"
+                  ==> optional AuthorityRootUserMessageId.value value.AuthorityRoot
+                  "providerRun" ==> optional ProviderRunIdentity.value value.ProviderRun
+                  "directory" ==> optional id value.Directory ]
+        | AgentFailed value ->
+            createObj
+                [ "kind" ==> "failed"
+                  "code" ==> value.Code
+                  "message" ==> value.Message
+                  "childSessionId" ==> optional SessionId.value value.ChildSessionId ]
+        | AgentAbandoned(_, reason) -> createObj [ "kind" ==> "abandoned"; "reason" ==> reason ]
 
-            if completedFirst then
-                let! value = pending
-                return Ok value
-            else
-                return Error(sprintf "await agent timed out: %s" agentId)
-        }
+    let completion (value: obj) : RunCompletion =
+        let data: obj = value?outcome
 
-    let awaitKnownAgent
-        (raceExit: Task -> int -> Task<bool>)
-        (agentId: string)
-        (pending: Task<RunCompletion>)
-        (timeoutMs: int option)
-        =
-        match timeoutMs with
-        | None -> awaitPendingNoTimeout pending
-        | Some ms when ms <= 0 -> Task.FromResult(Error(sprintf "await agent timed out: %s" agentId))
-        | Some ms -> awaitPendingWithTimeout raceExit agentId pending ms
+        let converted =
+            match (data?kind: string) with
+            | "completed" ->
+                AgentCompleted
+                    { AgentId = data?agentId
+                      RunId = data?runId
+                      Role = role data?role
+                      ChildSessionId = fromOptional SessionId.create data?childSessionId
+                      AuthorityRoot = fromOptional AuthorityRootUserMessageId.create data?authorityRoot
+                      ProviderRun = fromOptional ProviderRunIdentity.create data?providerRun
+                      View = data?view
+                      Directory = fromOptional id data?directory }
+            | "failed" ->
+                AgentFailed
+                    { AgentId = data?agentId
+                      RunId = data?runId
+                      Role = Some(role data?role)
+                      ChildSessionId = fromOptional SessionId.create data?childSessionId
+                      Code = data?code
+                      Message = data?message }
+            | _ -> AgentAbandoned(data?agentId, data?reason)
 
-    let tryCleanupAgent (cleanupPort: string -> unit) (id: string) =
-        try
-            cleanupPort id
-        with _ ->
-            ()
+        { RunId = value?runId
+          AgentName = value?agentName
+          Role = role value?role
+          Outcome = converted
+          CompletedAt = value?completedAt }
 
-    let cleanupAgentIds (cleanupPort: string -> unit) (ids: string list) =
-        for id in ids do
-            tryCleanupAgent cleanupPort id
+    let agent (value: obj) : AgentRecord =
+        let status =
+            match (value?status: string) with
+            | "Busy" -> AgentStatus.Busy
+            | "Interrupted" -> AgentStatus.Interrupted
+            | "Closed" -> AgentStatus.Closed
+            | _ -> AgentStatus.Idle
 
-/// Runtime for managing child agent runs and PTY sessions.
-///
-/// Uses a Map<AgentId, ChildRun> for agent tracking (replacing the previous
-/// Dictionary<AgentId, AgentRecord> + Queue pattern) and dual-channel mailbox:
-/// agent wake-only + PTY PtyJoinItem queue (GREEN-5).
-///
-/// All public members are thread-safe (lockObj synchronizes map/mailbox access).
+        { AgentId = value?agentId
+          Agent = value?agent
+          Role = role value?role
+          Status = status
+          CurrentRunId = fromOptional id value?currentRunId
+          TerminalStatusLabel = fromOptional id value?terminalStatusLabel
+          CompletionCellSettled = value?completionCellSettled
+          ChildSessionId = fromOptional SessionId.create value?childSessionId }
+
+    let pty (value: obj) : PtyRecord =
+        { PtyId = value?ptyId
+          Command = value?command
+          StartedAt = value?startedAt }
+
+    let mailbox (value: ForkCompletionMailbox) =
+        createObj
+            [ "pulseAgent" ==> (fun (id: string) -> value.PulseAgent(AgentHandleId.create id))
+              "publishPty" ==> (fun (item: obj) -> value.PublishPty(unbox item))
+              "pulseWake" ==> (fun () -> value.PulseWake())
+              "waitForWake" ==> (fun () -> value.WaitForWake())
+              "waitForSignal"
+              ==> (fun (interrupt: Task<JoinInterruptReason>) -> value.WaitForSignal interrupt)
+              "drainAgents"
+              ==> (fun (count: int) -> value.DrainAgents count |> List.map AgentHandleId.value |> List.toArray)
+              "drainPtys" ==> (fun (count: int) -> value.DrainPtys count |> List.toArray)
+              "cancel" ==> (fun () -> value.Cancel())
+              "isCancelled" ==> (fun () -> value.IsCancelled)
+              "pendingCount" ==> (fun () -> value.PendingCount)
+              "pendingPtyCount" ==> (fun () -> value.PendingPtyCount) ]
+
 type private ForkRuntimeBackendState
-    (
-        createMailbox: obj -> ForkCompletionMailbox,
-        clock: IClockPort,
-        raceExit: Task -> int -> Task<bool>,
-        ?runner: string -> Role -> string option -> Task<AgentCompletionOutcome>,
-        ?listener: RunCompletion -> unit,
-        ?cleanup: string -> unit
-    ) =
-
-    let childRunner =
-        defaultArg runner (fun agentId role prompt ->
-            Task.FromResult(AgentCompletion.ofSimpleText agentId "run-local" role (defaultArg prompt "ok")))
-
-    let terminalListener = defaultArg listener ignore
-    let cleanupPort = defaultArg cleanup ignore
-    let clockPort = clock
-
-    // DSL-MUTABLE: resource — live child agent registry under lockObj
-    let mutable agents: Map<string, ChildRun> = Map.empty
-    // DSL-MUTABLE: resource — live pty registry under lockObj
-    let mutable ptys: Map<string, PtyRecord> = Map.empty
-    let lockObj = obj ()
-
-    let mailbox = createMailbox lockObj
-
-    let cancelAllAgents () =
-        lock lockObj (fun () ->
-            for run in agents |> Map.toSeq |> Seq.map snd do
-                ChildRun.cancel run
-
-            agents |> Map.toSeq |> Seq.map fst |> Seq.toList)
-
-    /// Start a new child run: create the ChildRun and return a thunk that
-    /// executes the work. Agent completion settles the cell + pulses wake only;
-    /// durable projection (Host path) is the join fact source.
-    let startRun
-        (agentId: string)
-        (agentName: string)
-        (role: Role)
-        (promptOpt: string option)
-        (workOpt: (unit -> Task<AgentCompletionOutcome>) option)
-        =
-        let promptVal = defaultArg promptOpt ""
-        let runId = "run-" + Guid.NewGuid().ToString("N").Substring(0, 8)
-
-        let childRun =
-            ChildRun.create agentId runId agentName role promptVal (clockPort.UtcNow())
-
-        let runTask () =
-            task {
-                let work (_ct: CancellationToken) =
-                    task {
-                        try
-                            return! ForkRuntimeControl.runChildWork workOpt childRunner agentId role promptOpt
-                        with ex ->
-                            return AgentCompletion.ofSimpleError agentId runId role ex.Message
-                    }
-
-                let! result = ChildRunProgram.run childRun work childRun.Cancellation.Token clockPort.UtcNow
-
-                // P0-RECOVERY-JOIN-001: ParentCancelled → durable HandleAbandoned
-                // (cancelChildren). Do not mint aborted cell / SetResult.
-                // Join surfaces Abandoned via projection, not HandleCompleted(ABORTED).
-                let completionOpt =
-                    match result with
-                    | Error AgentError.ParentCancelled -> None
-                    | Ok value -> Some value
-                    | Error(AgentError.InvalidFork message)
-                    | Error(AgentError.HostFailure message)
-                    | Error(AgentError.SessionDead message) ->
-                        Some(ChildRun.makeFailed childRun message (clockPort.UtcNow()))
-
-                match completionOpt with
-                | None -> ()
-                | Some completion ->
-                    ForkRuntimeControl.publishAgentCompletion mailbox terminalListener childRun agentId completion
-            }
-
-        childRun, runTask
-
-    let startReplacementRun
-        (agentId: string)
-        (agentName: string)
-        (role: Role)
-        (prompt: string option)
-        (runWork: (unit -> Task<AgentCompletionOutcome>) option)
-        =
-        let isNew = not (agents |> Map.containsKey agentId)
-        let childRun, runTask = startRun agentId agentName role prompt runWork
-        agents <- agents |> Map.add agentId childRun
-        runTask () |> ignore
-        ForkRuntimeControl.forkCreatedOrNudged isNew agentId
-
-    // -----------------------------------------------------------------------
-    // Public API — Fork
-    // -----------------------------------------------------------------------
-
-    /// Fork a new run for the given agent. Returns:
-    ///   - Created  for a brand-new agent
-    ///   - Nudged   for an existing agent (busy or idle)
-    ///   - NotFound if the runtime is cancelled
-    member this.Fork
-        (agentId: string, role: Role, agent: string, ?prompt: string, ?runWork: unit -> Task<AgentCompletionOutcome>)
-        : ForkResult =
-        // PROMPT-008: the managed agent name is required, never defaulted.
-        // Rebuilding or inventing a name from a role is forbidden; the selected
-        // name flows into the completion record and the Host send boundary as
-        // chosen by the caller.
-        let agentName = agent.Trim()
-
-        lock lockObj (fun () ->
-            let existing = agents |> Map.tryFind agentId
-
-            if mailbox.IsCancelled then
-                ForkResult.NotFound agentId
-            elif existing |> Option.exists ChildRun.isActive then
-                // Busy agent: nudge only, no new run created.
-                ForkResult.Nudged agentId
+    (createMailbox: obj -> ForkCompletionMailbox, clock: IClockPort, raceExit: Task -> int -> Task<bool>) =
+    let defaultRun (input: obj) =
+        let prompt =
+            if ChildRunValues.absent input?prompt then
+                "ok"
             else
-                // New agent OR idle existing agent with completed run:
-                // replace the old ChildRun and start a fresh run.
-                startReplacementRun agentId agentName role prompt runWork)
+                (input?prompt: string)
 
-    // -----------------------------------------------------------------------
-    // Public API — Join / signal / drain (EXEC-017 / EXEC-018 / GREEN-5)
-    // -----------------------------------------------------------------------
+        AgentCompletion.ofSimpleText (input?agentId) "run-local" (ChildRunValues.role input?role) prompt
+        |> ChildRunValues.outcome
+        |> Task.FromResult
 
-    /// EXEC-018: wait for completion/cancel signal or typed local interrupt.
-    member _.WaitForSignal(interrupt: Task<JoinInterruptReason>) : Task<MailboxWakeReason> =
-        mailbox.WaitForSignal interrupt
-
-    /// Wake on Publish/Pulse/Cancel only. Outer layer races journal + user interrupt.
-    member _.WaitForWake() : Task<MailboxWakeReason> = mailbox.WaitForWake()
-
-    /// Drop pending wake waiters (spurious CompletionMayBeAvailable). Safe: re-drain.
-    member _.PulseWake() : unit = mailbox.PulseWake()
-
-    /// Agent wake only — never carries completion payload (GREEN-5).
-    member _.PulseAgentHandle(handle: AgentHandleId) : unit = mailbox.PulseAgent handle
-
-    /// PTY physical result (EXEC-015).
-    member _.PublishPtyCompletion(item: PtyJoinItem) : unit =
-        let id = PtyJoinItem.ptyId item
-
-        let owned = lock lockObj (fun () -> ptys |> Map.containsKey id)
-
-        if owned then
-            mailbox.PublishPty item
-
-    /// Drain agent wake tokens (no payload). Callers re-read Journal.
-    member _.DrainAgentWakes(maxCount: int) : AgentHandleId list = mailbox.DrainAgents maxCount
-
-    /// EXEC-018: bounded drain of PTY fact queue.
-    member _.DrainPtyCompletions(maxCount: int) : PtyJoinItem list = mailbox.DrainPtys maxCount
-
-    // -----------------------------------------------------------------------
-    // Public API — PTY management
-    // -----------------------------------------------------------------------
-
-    member _.RegisterPty(pty: PtyRecord) : unit =
-        lock lockObj (fun () -> ptys <- ptys |> Map.add pty.PtyId pty)
-
-    member _.UnregisterPty(ptyId: string) : unit =
-        lock lockObj (fun () -> ptys <- ptys |> Map.remove ptyId)
-
-    // -----------------------------------------------------------------------
-    // Public API — agent lifecycle for restart recovery
-    // -----------------------------------------------------------------------
-
-    member _.Restore(agentId: string, role: Role, agent: string) : unit =
-        let agentName = agent.Trim()
-
-        lock lockObj (fun () ->
-            if not (Map.containsKey agentId agents) then
-                agents <- ForkRecovery.restore agentId agentName role (clockPort.UtcNow()) agents)
-
-    member internal _.Clock = clockPort
-
-    member _.MarkInterrupted(agentId: string, reason: string) : unit =
-        lock lockObj (fun () -> agents <- ForkRecovery.markInterrupted agentId reason agents)
-
-    member _.BindChildSession(agentId: string, childSessionId: SessionId) : unit =
-        lock lockObj (fun () -> agents <- ForkRecovery.bindChildSession agentId childSessionId agents)
-
-    /// Internal targeted completion handle. Model-visible join remains join-any.
-    /// Optional timeoutMs races the completion cell via the injected raceExit capability.
-    member _.AwaitAgent(agentId: string, ?timeoutMs: int) : Task<Result<RunCompletion, string>> =
-        let completion =
-            lock lockObj (fun () -> agents |> Map.tryFind agentId |> Option.map (fun run -> run.Completion.Await))
-
-        match completion with
-        | None -> Task.FromResult(Error(sprintf "Unknown agent id: %s" agentId))
-        | Some pending -> ForkRuntimeControl.awaitKnownAgent raceExit agentId pending timeoutMs
-
-    /// Cancel one agent run without tearing down the whole runtime mailbox.
-    member _.CancelAgent(agentId: string) : unit =
-        lock lockObj (fun () ->
-            match agents |> Map.tryFind agentId with
-            | Some run -> ChildRun.cancel run
-            | None -> ())
-
-    // -----------------------------------------------------------------------
-    // Public API — List
-    // -----------------------------------------------------------------------
-
-    /// Returns (agentRecords, ptyRecords) derived from the current state.
-    member _.List() : AgentRecord list * PtyRecord list =
-        lock lockObj (fun () ->
-            let agentList =
-                agents
-                |> Map.toList
-                |> List.map (fun (agentId, run) -> ChildRunProjection.toRecord mailbox.IsCancelled agentId run)
-
-            let ptyList = ptys |> Map.toList |> List.map snd
-            (agentList, ptyList))
-
-    // -----------------------------------------------------------------------
-    // Public API — status queries
-    // -----------------------------------------------------------------------
-
-    member _.IsCancelled = mailbox.IsCancelled
-
-    member _.ActiveRunCount =
-        lock lockObj (fun () -> agents |> Map.filter (fun _ run -> ChildRun.isActive run) |> Map.count)
-
-    member _.PendingCompletionCount = mailbox.PendingCount
-    member _.PendingPtyCount = mailbox.PendingPtyCount
-
-    // -----------------------------------------------------------------------
-    // Public API — Cancel / Close
-    // -----------------------------------------------------------------------
-
-    /// Cancel all active runs, drain pending waiters. PTY records remain until
-    /// physical exit settles their ownership lease (CUT-04).
-    member _.Cancel() : unit =
-        if mailbox.Cancel() then
-            cancelAllAgents () |> ForkRuntimeControl.cleanupAgentIds cleanupPort
-
-    member this.Close() : unit = this.Cancel()
+    let native =
+        ChildRunValues.construct
+            ChildRunValues.library
+            (createObj
+                [ "mailbox" ==> ChildRunValues.mailbox (createMailbox (obj ()))
+                  "now" ==> (fun () -> clock.UtcNow())
+                  "mintRunId"
+                  ==> (fun () -> "run-" + Guid.NewGuid().ToString("N").Substring(0, 8))
+                  "raceExit" ==> (fun (pending: Task) (ms: int) -> raceExit pending ms)
+                  "runDefault" ==> (fun (input: obj) -> defaultRun input) ])
 
     interface IForkRuntimeBackend with
-        member this.Fork(agentId, role, agent, prompt, runWork) =
-            this.Fork(agentId, role, agent, ?prompt = prompt, ?runWork = runWork)
+        member _.Fork(agentId, role, agent, prompt, runWork) =
+            let run =
+                runWork
+                |> Option.map (fun work ->
+                    box (fun (_input: obj) ->
+                        task {
+                            let! value = work ()
+                            return ChildRunValues.outcome value
+                        }))
+                |> Option.defaultValue null
 
-        member this.WaitForSignal interrupt = this.WaitForSignal interrupt
-        member this.WaitForWake() = this.WaitForWake()
-        member this.PulseWake() = this.PulseWake()
-        member this.PulseAgentHandle handle = this.PulseAgentHandle handle
-        member this.PublishPtyCompletion item = this.PublishPtyCompletion item
-        member this.DrainAgentWakes maxCount = this.DrainAgentWakes maxCount
-        member this.DrainPtyCompletions maxCount = this.DrainPtyCompletions maxCount
-        member this.RegisterPty pty = this.RegisterPty pty
-        member this.UnregisterPty ptyId = this.UnregisterPty ptyId
-        member this.Restore(agentId, role, agent) = this.Restore(agentId, role, agent)
-        member this.MarkInterrupted(agentId, reason) = this.MarkInterrupted(agentId, reason)
+            let result: string =
+                native.fork (
+                    createObj
+                        [ "agentId" ==> agentId
+                          "agent" ==> agent
+                          "role" ==> Roles.roleLabel role
+                          "prompt" ==> ChildRunValues.optional id prompt
+                          "run" ==> run ]
+                )
 
-        member this.BindChildSession(agentId, childSessionId) =
-            this.BindChildSession(agentId, childSessionId)
+            match result with
+            | "Created" -> ForkResult.Created agentId
+            | "Nudged" -> ForkResult.Nudged agentId
+            | _ -> ForkResult.NotFound agentId
 
-        member this.AwaitAgent(agentId, timeoutMs) =
-            this.AwaitAgent(agentId, ?timeoutMs = timeoutMs)
+        member _.WaitForSignal interrupt = native.waitForSignal interrupt
+        member _.WaitForWake() = native.waitForWake ()
+        member _.PulseWake() = native.pulseWake () |> ignore
 
-        member this.CancelAgent agentId = this.CancelAgent agentId
-        member this.List() = this.List()
-        member this.IsCancelled = this.IsCancelled
-        member this.ActiveRunCount = this.ActiveRunCount
-        member this.PendingCompletionCount = this.PendingCompletionCount
-        member this.PendingPtyCount = this.PendingPtyCount
-        member this.Cancel() = this.Cancel()
+        member _.PulseAgentHandle handle =
+            native.pulseAgentHandle (AgentHandleId.value handle) |> ignore
+
+        member _.PublishPtyCompletion item =
+            native.publishPtyCompletion (PtyJoinItem.ptyId item, item) |> ignore
+
+        member _.DrainAgentWakes maxCount =
+            native.drainAgentWakes maxCount
+            |> Array.map AgentHandleId.create
+            |> Array.toList
+
+        member _.DrainPtyCompletions maxCount =
+            native.drainPtyCompletions maxCount |> Array.toList
+
+        member _.RegisterPty pty =
+            native.registerPty (
+                createObj
+                    [ "ptyId" ==> pty.PtyId
+                      "command" ==> pty.Command
+                      "startedAt" ==> pty.StartedAt ]
+            )
+            |> ignore
+
+        member _.UnregisterPty ptyId = native.unregisterPty (ptyId) |> ignore
+
+        member _.Restore(agentId, role, agent) =
+            native.restore (createObj [ "agentId" ==> agentId; "agent" ==> agent; "role" ==> Roles.roleLabel role ])
+            |> ignore
+
+        member _.MarkInterrupted(agentId, reason) =
+            native.markInterrupted (agentId, reason) |> ignore
+
+        member _.BindChildSession(agentId, childSessionId) =
+            native.bindChildSession (agentId, SessionId.value childSessionId) |> ignore
+
+        member _.AwaitAgent(agentId, timeoutMs) =
+            task {
+                let! value = native.awaitAgent (agentId, timeoutMs)
+
+                return
+                    if (value?ok: bool) then
+                        Ok(ChildRunValues.completion value?value)
+                    else
+                        Error(value?error)
+            }
+
+        member _.CancelAgent agentId = native.cancelAgent (agentId) |> ignore
+
+        member _.List() =
+            let value = native.list ()
+
+            ((value?agents: obj array) |> Array.map ChildRunValues.agent |> Array.toList,
+             (value?ptys: obj array) |> Array.map ChildRunValues.pty |> Array.toList)
+
+        member _.IsCancelled = native.isCancelled
+        member _.ActiveRunCount = native.activeRunCount
+        member _.PendingCompletionCount = native.pendingCompletionCount
+        member _.PendingPtyCount = native.pendingPtyCount
+        member _.Cancel() = native.close () |> ignore
 
 [<RequireQualifiedAccess>]
 module ForkRuntimeBackend =
-
     let create
         (clock: IClockPort)
         (raceExit: Task -> int -> Task<bool>)

@@ -4,6 +4,7 @@ import * as authority from '../../../dist/Interaction/Authority/RuntimeSurface.j
 import * as dispatch from '../../../dist/Interaction/Dispatch/DispatchSurface.js'
 import * as executionStatus from '../../../dist/Execution/Session/ChatExecution/StatusSurface.js'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
+const runtimePath = { stateRoot: journal.JournalSurface_stateRoot }
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
 import { rootFor, rootSelection, withJournal, withSharedJournal, acceptOwner, hostPort } from './support/authority.mjs'
 
@@ -30,7 +31,7 @@ const completeManagerLife = async (handle, session, directory) => {
   assert.equal(view.ActiveId ?? null, null)
   const retirement = Array.from(view.Retirements ?? []).at(-1)
   assert.equal(retirement.Outcome, 'Completed')
-  await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, session, retirement.RetirementId)
+  await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), session, retirement.RetirementId)
   assert.equal(dispatch.projectionObservation(handle, session).activeLogicalRun, null)
 }
 

@@ -174,10 +174,8 @@ module JsTransaction =
         let result = api?rollbackPlan (mutationsToJs mutations)
         unbox<obj array> (result?value) |> Array.toList |> List.map rollbackOf
 
-/// DSL-class: DurableFact — JS-015: the durable mutation kind. Rewrite/Create
-/// keep the legacy shape; Remove records the deleted path (rollback recreates
-/// an empty file or empty directory); Move records from → to (rollback
-/// renames back).
+/// Persisted mutation kind. Remove records a path, not the removed bytes;
+/// Move records the destination in OriginalText. This is not an undo log.
 [<RequireQualifiedAccess>]
 type JsDurableMutationKind =
     | Rewrite
@@ -185,13 +183,12 @@ type JsDurableMutationKind =
     | Remove
     | Move
 
-/// DSL-class: DurableFact — JS-015: one mutation as persisted in a prepared
-/// transaction, sufficient to undo it after a crash (original text for
-/// rewrites, absence for creates).
+/// One mutation recorded in a Prepared event. A pending record alone does not
+/// establish whether the physical operation completed.
 type JsDurableMutation =
     {
         Path: string
-        /// Some = rewrite (rollback restores this text); None = create.
+        /// Previous text for Rewrite; destination for Move; absent for Create/Remove.
         OriginalText: string option
         NewText: string
         Kind: JsDurableMutationKind

@@ -9,8 +9,7 @@
 /src/Wanxiangshu/Enforcer/Continuation.fs
 /src/Wanxiangshu/Host/CompactionPolicy.fs
 /src/Wanxiangshu/Host/Contract/CompactionPolicySurface.fs
-/src/Wanxiangshu/OpenCode/Host/HostCompactionGate.fs
-/src/Wanxiangshu/OpenCode/Host/HostCompactionObserver.fs
+/wanxiangtong/opencode/compaction/**
 /src/Wanxiangshu/OpenCode/Host/PluginRuntimeScope.fs
 /src/Wanxiangshu/Interaction/PairGuidance/**
 /src/Wanxiangshu/Host/Domain/PairGuidance.fs

@@ -1,408 +1,111 @@
 namespace Wanxiangshu.Foundation
 
-/// Canonical boundary for every synthetic byte shown to an LLM.
-///
-/// Callers classify meaning; this module owns representation:
-/// - material the current agent should act on or reason under is Instruction Plane;
-/// - material that is only reference data is Data Plane.
-///
-/// The distinction is about the receiver's use, not provenance. A child work
-/// record handed to its parent can therefore be instruction even though it is
-/// factual text. Callers never assemble comments, TOML fields, tables, blank-line
-/// separators, or multiple rendered documents themselves.
-/// OriginalMaterial separately preserves already-read content verbatim; only
-/// its source metadata is synthesized through the Data Plane.
+open Fable.Core
+
+/// F# 调用边界；文档、值编码和布局由 wanxiangli/llm-text 拥有。
 [<RequireQualifiedAccess>]
 module LlmFacing =
+    type DataBlock = interface end
+    type Document = interface end
 
-    type DataBlock = private DataBlock of string
+    [<RequireQualifiedAccess>]
+    module DataTypes =
+        type Value = interface end
+        type Field = interface end
 
-    type OriginalMaterial = private OriginalMaterial of content: string * metadata: DataBlock
+    type private Library =
+        abstract empty: unit -> Document
+        abstract instructions: string array -> Document
+        abstract instruction: string -> Document
+        abstract instructionsOnly: Document -> Document
+        abstract withInstructions: string array * Document -> Document
+        abstract withInstruction: string * Document -> Document
+        abstract withData: DataBlock array * Document -> Document
+        abstract combine: Document array -> Document
+        abstract render: Document -> string
+        abstract renderInstruction: string -> string
+        abstract renderInstructions: string array -> string
+        abstract normalizeNewlines: string -> string
+        abstract byteCount: string -> int
+        abstract ofJs: obj -> DataTypes.Value
+        abstract structuredValue: DataTypes.Value -> DataBlock array
+        abstract rootStructuredValue: DataTypes.Value -> DataBlock array
+        abstract stringField: string * string -> DataBlock
+        abstract intField: string * int -> DataBlock
+        abstract int64Field: string * int64 -> DataBlock
+        abstract boolField: string * bool -> DataBlock
+        abstract stringMember: string * string -> DataTypes.Field
+        abstract intMember: string * int -> DataTypes.Field
+        abstract int64Member: string * int64 -> DataTypes.Field
+        abstract floatMember: string * float -> DataTypes.Field
+        abstract boolMember: string * bool -> DataTypes.Field
+        abstract table: string * DataTypes.Field array -> DataBlock
+        abstract tableArray: string * DataTypes.Field array -> DataBlock
+        abstract textTables: string * string array -> DataBlock array
 
-    type Document =
-        private
-            { Instructions: string list
-              Data: DataBlock list }
+    [<Import("LlmText", "wanxiangli/llm-text")>]
+    let private libraryClass: obj = jsNative
 
-    let empty: Document = { Instructions = []; Data = [] }
+    [<Emit("new $0()")>]
+    let private construct (cls: obj) : Library = jsNative
 
-    let instructions (texts: string list) : Document = { Instructions = texts; Data = [] }
+    let private library = construct libraryClass
+    let empty = library.empty ()
 
-    let instruction (text: string) : Document = instructions [ text ]
+    let instructions texts =
+        library.instructions (List.toArray texts)
 
-    /// Delegation clean-break: keep every current instruction and discard all reference-plane history.
-    let instructionsOnly (document: Document) : Document = { document with Data = [] }
+    let instruction text = library.instruction text
+    let instructionsOnly document = library.instructionsOnly document
 
-    let withInstructions (texts: string list) (document: Document) : Document =
-        { document with
-            Instructions = document.Instructions @ texts }
+    let withInstructions texts document =
+        library.withInstructions (List.toArray texts, document)
 
-    let withInstruction (text: string) (document: Document) : Document = withInstructions [ text ] document
+    let withInstruction text document =
+        library.withInstruction (text, document)
 
-    let withData (blocks: DataBlock list) (document: Document) : Document =
-        { document with
-            Data = document.Data @ blocks }
+    let withData blocks document =
+        library.withData (List.toArray blocks, document)
 
-    let combine (documents: Document list) : Document =
-        documents
-        |> List.fold
-            (fun acc document ->
-                { Instructions = acc.Instructions @ document.Instructions
-                  Data = acc.Data @ document.Data })
-            empty
+    let combine documents =
+        library.combine (List.toArray documents)
 
-    let render (document: Document) : string =
-        let body = document.Data |> List.map (fun (DataBlock block) -> block)
-        SyntheticToml.document document.Instructions body
+    let render document = library.render document
+    let renderInstruction text = library.renderInstruction text
 
-    let renderInstruction (text: string) : string = instruction text |> render
+    let renderInstructions texts =
+        library.renderInstructions (List.toArray texts)
 
-    let renderInstructions (texts: string list) : string = instructions texts |> render
-
-    let normalizeNewlines = SyntheticToml.normalizeNewlines
-
-    let byteCount = SyntheticToml.byteCount
+    let normalizeNewlines text = library.normalizeNewlines text
+    let byteCount text = library.byteCount text
 
     [<RequireQualifiedAccess>]
     module Data =
+        type Value = DataTypes.Value
+        type Field = DataTypes.Field
+        let ofJs (value: obj) : Value = library.ofJs value
 
-        open Fable.Core
+        let structuredValue value =
+            library.structuredValue value |> List.ofArray
 
-        let private block text = DataBlock text
+        let rootStructuredValue value =
+            library.rootStructuredValue value |> List.ofArray
 
-        /// JSON-compatible reference-data tree. This is the public semantic
-        /// value algebra; SyntheticToml's encoder AST never crosses this owner.
-        type Value =
-            | Null
-            | Bool of bool
-            | Integer of int64
-            | Float of float
-            | String of string
-            | Array of Value list
-            | Object of (string * Value) list
+        let stringField name value = library.stringField (name, value)
+        let intField name value = library.intField (name, value)
+        let int64Field name value = library.int64Field (name, value)
+        let boolField name value = library.boolField (name, value)
+        let stringMember name value = library.stringMember (name, value)
+        let intMember name value = library.intMember (name, value)
+        let int64Member name value = library.int64Member (name, value)
+        let floatMember name value = library.floatMember (name, value)
+        let boolMember name value = library.boolMember (name, value)
 
-        [<Emit("$0 === null")>]
-        let private jsNull (value: obj) : bool = jsNative
+        let table name fields =
+            library.table (name, List.toArray fields)
 
-        [<Emit("typeof $0")>]
-        let private jsType (value: obj) : string = jsNative
+        let tableArray name fields =
+            library.tableArray (name, List.toArray fields)
 
-        [<Emit("Array.isArray($0)")>]
-        let private jsIsArray (value: obj) : bool = jsNative
-
-        [<Emit("Number.isInteger($0)")>]
-        let private jsIsInteger (value: obj) : bool = jsNative
-
-        [<Emit("Number.isFinite($0)")>]
-        let private jsIsFinite (value: obj) : bool = jsNative
-
-        [<Emit("Object.keys($0)")>]
-        let private jsKeys (value: obj) : string array = jsNative
-
-        [<Emit("$0[$1]")>]
-        let private jsGet (target: obj) (key: obj) : obj = jsNative
-
-        [<Emit("$0.length")>]
-        let private jsLength (target: obj) : int = jsNative
-
-        let private maxSafeInteger = 9007199254740991.0
-
-        let private ofJsNumber (value: obj) : Value =
-            let num: float = unbox value
-
-            if jsIsInteger value && abs num <= maxSafeInteger then
-                Value.Integer(int64 num)
-            else
-                Value.Float num
-
-        let rec ofJs (value: obj) : Value =
-            if jsNull value then
-                Value.Null
-            elif jsType value = "boolean" then
-                Value.Bool(unbox value)
-            elif jsType value = "string" then
-                Value.String(unbox value)
-            elif jsType value = "number" then
-                ofJsNumber value
-            elif jsIsArray value then
-                Value.Array [ for i in 0 .. jsLength value - 1 -> ofJs (jsGet value i) ]
-            elif jsType value = "object" then
-                let keys = jsKeys value
-                Value.Object [ for k in keys -> k, ofJs (jsGet value k) ]
-            else
-                Value.Null
-
-        let rec private isPrimitiveTree =
-            function
-            | Value.Bool _
-            | Value.Integer _
-            | Value.Float _
-            | Value.String _ -> true
-            | Value.Array values -> List.forall isPrimitiveTree values
-            | Value.Null
-            | Value.Object _ -> false
-
-        let rec private renderInline =
-            function
-            | Value.Bool value -> SyntheticToml.renderBool value
-            | Value.Integer value -> SyntheticToml.renderInt value
-            | Value.Float value -> SyntheticToml.renderFloat value
-            | Value.String value -> SyntheticToml.renderString value
-            | Value.Array values -> "[" + String.concat ", " (List.map renderInline values) + "]"
-            | Value.Null
-            | Value.Object _ -> "false"
-
-        let private formatPath segments =
-            segments |> List.map SyntheticToml.renderKey |> String.concat "."
-
-        let rec private structuredBlocks value =
-            let rec encodeObject path fields =
-                let present =
-                    fields
-                    |> List.choose (fun (name, item) ->
-                        match item with
-                        | Value.Null -> None
-                        | _ -> Some(name, item))
-
-                let localFields, nested =
-                    present
-                    |> List.fold
-                        (fun (local, nested) (name, item) ->
-                            match item with
-                            | Value.Object row -> local, nested @ encodeObject (path @ [ name ]) row
-                            | Value.Array items when
-                                not (List.isEmpty items)
-                                && List.forall
-                                    (function
-                                    | Value.Object _ -> true
-                                    | _ -> false)
-                                    items
-                                ->
-                                let rows =
-                                    items
-                                    |> List.collect (function
-                                        | Value.Object row -> encodeObjectRow (path @ [ name ]) row
-                                        | _ -> [])
-
-                                local, nested @ rows
-                            | Value.Null -> local, nested
-                            | _ ->
-                                local
-                                @ [ SyntheticToml.field (SyntheticToml.renderKey name) (renderInline item) ],
-                                nested)
-                        ([], [])
-
-                let self =
-                    match localFields, nested with
-                    | [], [] -> [ SyntheticToml.tableEntry (formatPath path) [] |> block ]
-                    | [], _ -> []
-                    | _, _ -> [ SyntheticToml.tableEntry (formatPath path) localFields |> block ]
-
-                self @ nested
-
-            and encodeObjectRow path fields =
-                let present =
-                    fields
-                    |> List.choose (fun (name, item) ->
-                        match item with
-                        | Value.Null -> None
-                        | _ -> Some(name, item))
-
-                let localFields, nested =
-                    present
-                    |> List.fold
-                        (fun (local, nested) (name, item) ->
-                            match item with
-                            | Value.Object row -> local, nested @ encodeObject (path @ [ name ]) row
-                            | Value.Array items when
-                                not (List.isEmpty items)
-                                && List.forall
-                                    (function
-                                    | Value.Object _ -> true
-                                    | _ -> false)
-                                    items
-                                ->
-                                let rows =
-                                    items
-                                    |> List.collect (function
-                                        | Value.Object row -> encodeObjectRow (path @ [ name ]) row
-                                        | _ -> [])
-
-                                local, nested @ rows
-                            | Value.Null -> local, nested
-                            | _ ->
-                                local
-                                @ [ SyntheticToml.field (SyntheticToml.renderKey name) (renderInline item) ],
-                                nested)
-                        ([], [])
-
-                (SyntheticToml.tableArrayEntry (formatPath path) localFields |> block) :: nested
-
-            match value with
-            | Value.Null -> []
-            | Value.Bool _
-            | Value.Integer _
-            | Value.Float _
-            | Value.String _ -> [ SyntheticToml.field "data" (renderInline value) |> block ]
-            | Value.Array [] -> [ SyntheticToml.field "data" "[]" |> block ]
-            | Value.Array items when
-                List.forall
-                    (function
-                    | Value.Object _ -> true
-                    | _ -> false)
-                    items
-                ->
-                items
-                |> List.collect (function
-                    | Value.Object row -> encodeObjectRow [ "data" ] row
-                    | _ -> [])
-            | Value.Array items -> [ SyntheticToml.field "data" (renderInline (Value.Array items)) |> block ]
-            | Value.Object fields -> encodeObject [ "data" ] fields
-
-        let rec private rootBlocks value =
-            let rec encodeObject path fields =
-                let present =
-                    fields
-                    |> List.choose (fun (name, item) ->
-                        match item with
-                        | Value.Null -> None
-                        | _ -> Some(name, item))
-
-                let localFields, nested =
-                    present
-                    |> List.fold
-                        (fun (local, nested) (name, item) ->
-                            match item with
-                            | Value.Object row -> local, nested @ encodeObject (path @ [ name ]) row
-                            | Value.Array items when
-                                not (List.isEmpty items)
-                                && List.forall
-                                    (function
-                                    | Value.Object _ -> true
-                                    | _ -> false)
-                                    items
-                                ->
-                                let rows =
-                                    items
-                                    |> List.collect (function
-                                        | Value.Object row -> encodeObjectRow (path @ [ name ]) row
-                                        | _ -> [])
-
-                                local, nested @ rows
-                            | Value.Null -> local, nested
-                            | _ ->
-                                local
-                                @ [ SyntheticToml.field (SyntheticToml.renderKey name) (renderInline item) ],
-                                nested)
-                        ([], [])
-
-                let self =
-                    match path, localFields with
-                    | [], [] -> []
-                    | [], fields -> fields |> List.map block
-                    | p, fields -> [ SyntheticToml.tableEntry (formatPath p) fields |> block ]
-
-                self @ nested
-
-            and encodeObjectRow path fields =
-                let present =
-                    fields
-                    |> List.choose (fun (name, item) ->
-                        match item with
-                        | Value.Null -> None
-                        | _ -> Some(name, item))
-
-                let localFields, nested =
-                    present
-                    |> List.fold
-                        (fun (local, nested) (name, item) ->
-                            match item with
-                            | Value.Object row -> local, nested @ encodeObject (path @ [ name ]) row
-                            | Value.Array items when
-                                not (List.isEmpty items)
-                                && List.forall
-                                    (function
-                                    | Value.Object _ -> true
-                                    | _ -> false)
-                                    items
-                                ->
-                                let rows =
-                                    items
-                                    |> List.collect (function
-                                        | Value.Object row -> encodeObjectRow (path @ [ name ]) row
-                                        | _ -> [])
-
-                                local, nested @ rows
-                            | Value.Null -> local, nested
-                            | _ ->
-                                local
-                                @ [ SyntheticToml.field (SyntheticToml.renderKey name) (renderInline item) ],
-                                nested)
-                        ([], [])
-
-                (SyntheticToml.tableArrayEntry (formatPath path) localFields |> block) :: nested
-
-            match value with
-            | Value.Null -> []
-            | Value.Object fields -> encodeObject [] fields
-            | Value.Array [] -> []
-            | other -> structuredBlocks other
-
-        let stringField name value =
-            SyntheticToml.field name (SyntheticToml.renderString value) |> block
-
-        let intField name (value: int) =
-            SyntheticToml.field name (string value) |> block
-
-        let int64Field name (value: int64) =
-            SyntheticToml.field name (string value) |> block
-
-        let boolField name (value: bool) =
-            SyntheticToml.field name (SyntheticToml.renderBool value) |> block
-
-        let private fieldString name value =
-            SyntheticToml.field name (SyntheticToml.renderString value)
-
-        let private fieldInt name (value: int) = SyntheticToml.field name (string value)
-
-        let private fieldInt64 name (value: int64) = SyntheticToml.field name (string value)
-
-        let private fieldFloat name (value: float) =
-            SyntheticToml.field name (SyntheticToml.renderFloat value)
-
-        let private fieldBool name (value: bool) =
-            SyntheticToml.field name (SyntheticToml.renderBool value)
-
-        type Field = private Field of string
-
-        let stringMember name value = fieldString name value |> Field
-
-        let intMember name value = fieldInt name value |> Field
-
-        let int64Member name value = fieldInt64 name value |> Field
-
-        let floatMember name value = fieldFloat name value |> Field
-
-        let boolMember name value = fieldBool name value |> Field
-
-        let table name (fields: Field list) =
-            fields
-            |> List.map (fun (Field field) -> field)
-            |> SyntheticToml.tableEntry name
-            |> block
-
-        let tableArray name (fields: Field list) =
-            fields
-            |> List.map (fun (Field field) -> field)
-            |> SyntheticToml.tableArrayEntry name
-            |> block
-
-        let textTables name (texts: string list) =
-            texts |> List.map (fun text -> tableArray name [ stringMember "text" text ])
-
-        let structuredValue (value: Value) = structuredBlocks value
-
-        let rootStructuredValue (value: Value) = rootBlocks value
-
-        let fileEffects rewritten created removed moved =
-            SyntheticToml.encodeFs rewritten created removed moved |> List.map block
+        let textTables name texts =
+            library.textTables (name, List.toArray texts) |> List.ofArray

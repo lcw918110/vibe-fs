@@ -42,7 +42,7 @@ import {
 } from '../../../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { sanitizeMessage } from '../../../../../dist/OpenCode/Host/HostMessageProjection.js';
+import { sanitizeMessage } from '../../../../../dist/OpenCode/Host/HostBoundarySurface.js';
 
 /**
  * The Host's own rendering of an assistant row that carries no content at all.

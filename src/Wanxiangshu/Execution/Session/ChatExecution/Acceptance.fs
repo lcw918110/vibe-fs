@@ -133,7 +133,7 @@ type internal ManagedChatExecutionFlight() =
         // DSL-MUTABLE: single-flight
         let mutable marker: Task = null
 
-        let finishIfCurrent () =
+        let finishCurrent () =
             let cur: obj = inner?get (rid, sid, msgId)
 
             if Object.ReferenceEquals(cur, marker) then
@@ -147,7 +147,7 @@ type internal ManagedChatExecutionFlight() =
                     try
                         return! operation ()
                     finally
-                        finishIfCurrent ()
+                        finishCurrent ()
                 })
 
         marker <- started :> Task

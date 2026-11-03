@@ -60,6 +60,7 @@ module ProviderFailureSurface =
     val longWorkContinuationPath: role: string -> failure: string -> string
     val longWorkContinuationPathForReason: role: string -> failure: string -> reason: string -> string
     val confirmedFailureIsHardStop: failure: string -> reason: string -> bool
+    val continueConfirmedFailure: handle: JournalHandle -> sessionPort: obj -> eventPort: obj -> input: obj -> Task
 
 
     /// provider-attempt-recovery-026 test seam: classify the same-provider recovery

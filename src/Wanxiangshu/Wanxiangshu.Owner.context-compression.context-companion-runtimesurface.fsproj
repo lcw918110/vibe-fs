@@ -24,9 +24,10 @@
     <ProjectReference Include="Wanxiangshu.Owner.durable-composition.durable-trace-capture.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.semantic-trace.context-trace-model.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.session-ontology.execution-session-association.fsproj" />
-    <Compile Include="OpenCode/Host/HostCompactionGate.fsi" />
-    <Compile Include="OpenCode/Host/HostCompactionGate.fs" />
-    <Compile Include="OpenCode/Host/HostCompactionObserver.fsi" />
-    <Compile Include="OpenCode/Host/HostCompactionObserver.fs" />
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-neutral-ports.fsproj" />
+    <Compile Include="Context/Prefix/PrefixReanchor.fsi" />
+    <Compile Include="Context/Prefix/PrefixReanchor.fs" />
+    <Compile Include="../../wanxiangtong/opencode/compaction/OpenCodeCompaction.fsi" />
+    <Compile Include="../../wanxiangtong/opencode/compaction/OpenCodeCompaction.fs" />
   </ItemGroup>
 </Project>

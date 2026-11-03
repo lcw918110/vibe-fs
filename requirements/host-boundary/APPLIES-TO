@@ -3,6 +3,8 @@
 # Ordinary rules include matching paths. A leading ! excludes an exception from earlier includes.
 
 /src/Wanxiangshu/OpenCode/Host/**
+/wanxiangtong/opencode/compaction/**
+/wanxiangtong/opencode/session-transport/**
 /src/Wanxiangshu/Execution/Session/ChatExecution/ProviderRunBinding.fs
 /src/Wanxiangshu/Execution/Session/ChatExecution/ProviderLifecycle.fs
 /src/Wanxiangshu/OpenCode/Codec/**
@@ -37,7 +39,7 @@
 /src/Wanxiangshu/OpenCode/Host/EventsSurface.fs
 /src/Wanxiangshu/OpenCode/Host/FissionHostSurface.fs
 /src/Wanxiangshu/OpenCode/Host/HostBoundarySurface.fs
-/src/Wanxiangshu/OpenCode/Host/HostMessageProjection.fs
+/wanxiangtong/opencode/provider-request/MessageProjection.fs
 /src/Wanxiangshu/OpenCode/Host/HostSessionContext.fs
 /src/Wanxiangshu/OpenCode/Host/HostSessionContextSurface.fs
 /src/Wanxiangshu/OpenCode/Host/HostSignalSubscribeSurface.fs
@@ -50,7 +52,7 @@
 /src/Wanxiangshu/OpenCode/Host/PluginHostInterop.fs
 /src/Wanxiangshu/OpenCode/Host/PluginRecoveryScope.fs
 /src/Wanxiangshu/OpenCode/Host/PluginSessionScope.fs
-/src/Wanxiangshu/OpenCode/Host/ProviderSystemTransform.fs
+/wanxiangtong/opencode/provider-request/SystemProjection.fs
 /src/Wanxiangshu/OpenCode/Host/QuiescenceSurface.fs
 /src/Wanxiangshu/OpenCode/Host/ReliabilityDiagnostics.fs
 /src/Wanxiangshu/OpenCode/Host/ReliabilityDiagnosticsSurface.fs

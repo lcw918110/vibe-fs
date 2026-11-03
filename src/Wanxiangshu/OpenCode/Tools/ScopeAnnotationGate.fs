@@ -34,12 +34,84 @@ module ScopeAnnotationGate =
         if isNullish value then "" else string value
 
     let private asInt (value: obj) (fallback: int) : int =
-        if isNullish value then
-            fallback
-        else
+        let parse () =
             match System.Int32.TryParse(string value) with
             | true, n -> n
             | _ -> fallback
+
+        if isNullish value then fallback else parse ()
+
+    let private runTextOf (ctx: HostToolContext) callText =
+        ctx.ProviderRunId
+        |> Option.map ProviderRunIdentity.value
+        |> Option.defaultValue callText
+
+    let private currentEpoch epochOf ctx =
+        let value = epochOf ctx
+        if String.IsNullOrWhiteSpace value then "0" else value
+
+    let private validateReset (ctx: HostToolContext) runText scope =
+        let goal = asString (field scope "newScopeGoal")
+        let budget = asInt (field scope "newScopeRetentionBudget") 0
+        let oldV = asString (field scope "oldScopeVerboseVerbatim")
+
+        if String.IsNullOrWhiteSpace goal then
+            Error "resetScope requires newScopeGoal"
+        elif budget < 1 then
+            Error "resetScope requires newScopeRetentionBudget in 1..48"
+        else
+            resetRuns[ctx.SessionId] <- runText
+
+            Ok(
+                createObj
+                    [ "ok" ==> true
+                      "reanchor" ==> true
+                      "remaining" ==> budget
+                      "goal" ==> goal.Trim()
+                      "oldVerbatim" ==> oldV.Trim() ]
+            )
+
+    let private updateBudget session (remaining: obj) =
+        let set () =
+            try
+                Surface.setRetentionBudget session (unbox<int> remaining)
+            with _ ->
+                ()
+
+        if not (isNullish remaining) then
+            set ()
+
+    let private acceptReceipt session (receipt: obj) =
+        let reason () =
+            if isNullish receipt then
+                "scope annotation refused"
+            else
+                string receipt?reason
+
+        if isNullish receipt || not (unbox<bool> receipt?ok) then
+            Error(reason ())
+        else
+            updateBudget session receipt?remaining
+            Ok receipt
+
+    let private resetInRun session runText =
+        match resetRuns.TryGetValue session with
+        | true, run -> run = runText
+        | _ -> false
+
+    let private applyCall toolName scope (ctx: HostToolContext) epochOf call =
+        let callText = ToolCallId.value call
+        let runText = runTextOf ctx callText
+        let epoch = currentEpoch epochOf ctx
+        let kind = asString (field scope "kind")
+
+        if kind = "resetScope" then
+            validateReset ctx runText scope
+        elif kind = "meToo" && resetInRun ctx.SessionId runText then
+            Ok(createObj [ "ok" ==> true; "kind" ==> "meToo"; "reanchor" ==> false ])
+        else
+            scopeRetention?apply (ctx.SessionId, epoch, toolName, runText, callText, runText, scope)
+            |> acceptReceipt ctx.SessionId
 
     /// Apply the required `scope` argument. Returns Error prose on refusal.
     /// For resetScope, validation-only here — durable archive is ScopeReset.commit.
@@ -51,77 +123,10 @@ module ScopeAnnotationGate =
         : Result<obj, string> =
         let scope = field args.Raw "scope"
 
-        if isNullish scope then
-            Error "scope annotation required on every tool call (see common law «Scope»)"
-        else
-            match ctx.ToolCallId with
-            | None -> Error "scope annotation requires tool call id"
-            | Some call ->
-                let callText = ToolCallId.value call
-
-                let runText =
-                    match ctx.ProviderRunId with
-                    | Some run -> ProviderRunIdentity.value run
-                    | None -> callText
-
-                let beatId = runText
-
-                let epoch =
-                    let e = epochOf ctx
-                    if String.IsNullOrWhiteSpace e then "0" else e
-
-                let kind = asString (field scope "kind")
-                // resetScope: validate fields without mutating retention on the
-                // old epoch — ScopeReset.commit seeds the new epoch.
-                if kind = "resetScope" then
-                    let goal = asString (field scope "newScopeGoal")
-                    let budget = asInt (field scope "newScopeRetentionBudget") 0
-                    let oldV = asString (field scope "oldScopeVerboseVerbatim")
-
-                    if String.IsNullOrWhiteSpace goal then
-                        Error "resetScope requires newScopeGoal"
-                    elif budget < 1 then
-                        Error "resetScope requires newScopeRetentionBudget in 1..48"
-                    else
-                        resetRuns[ctx.SessionId] <- runText
-
-                        Ok(
-                            createObj
-                                [ "ok" ==> true
-                                  "reanchor" ==> true
-                                  "remaining" ==> budget
-                                  "goal" ==> goal.Trim()
-                                  "oldVerbatim" ==> oldV.Trim() ]
-                        )
-                elif
-                    kind = "meToo"
-                    && (match resetRuns.TryGetValue ctx.SessionId with
-                        | true, run -> run = runText
-                        | _ -> false)
-                then
-                    Ok(createObj [ "ok" ==> true; "kind" ==> "meToo"; "reanchor" ==> false ])
-                else
-                    let receipt: obj =
-                        scopeRetention?apply (ctx.SessionId, epoch, toolName, runText, callText, beatId, scope)
-
-                    if isNullish receipt || not (unbox<bool> receipt?ok) then
-                        let reason =
-                            if isNullish receipt then
-                                "scope annotation refused"
-                            else
-                                string receipt?reason
-
-                        Error reason
-                    else
-                        let rem = receipt?remaining
-
-                        if not (isNullish rem) then
-                            try
-                                Surface.setRetentionBudget ctx.SessionId (unbox<int> rem)
-                            with _ ->
-                                ()
-
-                        Ok receipt
+        match isNullish scope, ctx.ToolCallId with
+        | true, _ -> Error "scope annotation required on every tool call (see common law «Scope»)"
+        | _, None -> Error "scope annotation requires tool call id"
+        | false, Some call -> applyCall toolName scope ctx epochOf call
 
     /// Tools that clear a consultation gate (first negotiate, first
     /// askPreviousScope after a reset). A resetScope annotation on one of them
@@ -144,15 +149,8 @@ module ScopeAnnotationGate =
         | None -> ()
         | Some call ->
             let callText = ToolCallId.value call
-
-            let runText =
-                match ctx.ProviderRunId with
-                | Some run -> ProviderRunIdentity.value run
-                | None -> callText
-
-            let epoch =
-                let e = epochOf ctx
-                if String.IsNullOrWhiteSpace e then "0" else e
+            let runText = runTextOf ctx callText
+            let epoch = currentEpoch epochOf ctx
 
             scopeRetention?apply (ctx.SessionId, epoch, toolName, runText, callText, runText, field args.Raw "scope")
             |> ignore
@@ -178,11 +176,30 @@ module ScopeAnnotationGate =
                 // A refused reset decided nothing; siblings fall back to the ordinary rule.
                 resetRuns.Remove ctx.SessionId |> ignore
                 return Error reason
-            | Ok _ ->
-                if not replay then
-                    decideResetTurn toolName args ctx epochOf
-
+            | Ok _ when not replay ->
+                decideResetTurn toolName args ctx epochOf
                 return Ok()
+            | Ok _ -> return Ok()
+        }
+
+    let private runAfterReset commit inner args ctx =
+        task {
+            let! committed = commit ()
+
+            match committed with
+            | Error reason -> return reason
+            | Ok() -> return! inner args ctx
+        }
+
+    let private runBeforeReset commit inner args ctx =
+        task {
+            let! result = inner args ctx
+            let! committed = commit ()
+
+            return
+                committed
+                |> Result.map (fun () -> result)
+                |> Result.defaultWith (fun reason -> result + "\n\n" + reason)
         }
 
     let wrap
@@ -194,25 +211,14 @@ module ScopeAnnotationGate =
         : HostToolArguments -> HostToolContext -> Task<string> =
         fun args ctx ->
             task {
+                let reset receipt () =
+                    commitReset toolName args ctx epochOf journalOpt snapshotPort receipt
+
                 match apply toolName args ctx epochOf with
                 | Error reason -> return reason
-                | Ok receipt ->
-                    if unbox<bool> (receipt?reanchor) = true then
-                        if unlocksReset toolName then
-                            let! result = inner args ctx
-                            let! committed = commitReset toolName args ctx epochOf journalOpt snapshotPort receipt
-
-                            match committed with
-                            | Ok() -> return result
-                            | Error reason -> return result + "\n\n" + reason
-                        else
-                            let! committed = commitReset toolName args ctx epochOf journalOpt snapshotPort receipt
-
-                            match committed with
-                            | Error reason -> return reason
-                            | Ok() -> return! inner args ctx
-                    else
-                        return! inner args ctx
+                | Ok receipt when unbox<bool> (receipt?reanchor) <> true -> return! inner args ctx
+                | Ok receipt when unlocksReset toolName -> return! runBeforeReset (reset receipt) inner args ctx
+                | Ok receipt -> return! runAfterReset (reset receipt) inner args ctx
             }
 
     let injectArgument (factory: HostToolFactory) (spec: ToolSpec) : ToolSpec =

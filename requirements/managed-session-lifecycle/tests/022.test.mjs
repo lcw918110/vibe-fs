@@ -220,7 +220,7 @@ const withCompletedEngineer = async (action, { beforeCreate } = {}) => {
       await hooks.event({ event: { type: 'message.updated', properties: { info: assistant.info } } })
       await hooks.event({ event: { type: 'session.idle', properties: { sessionID: sent.child } } })
       const result = await invocation
-      assert.equal(result.ok, true, result.reason)
+      assert.equal(result.ok, true, JSON.stringify(result, (_key, value) => typeof value === 'bigint' ? String(value) : value))
       assert.equal(typeof result.view, 'string')
       assert.ok(result.view.trim().length > 0)
       assert.ok(result.view.includes(answer))

@@ -9,9 +9,11 @@ import { sandbox, createCase, deferred, casebook, eventStore, index, parse } fro
 import * as fetchSurface from '../../../dist/Repository/Knowledge/Casebook/FetchSurface.js'
 import * as settlements from '../../../dist/Repository/Knowledge/Casebook/SettlementSurface.js'
 import * as bookkeeper from '../../../dist/Repository/Knowledge/Casebook/BookkeeperSurface.js'
+import * as language from '../../../dist/Participant/Provider/LanguageSurface.js'
+import { withPreference } from '../../provider-language/tests/support/language-fixtures.mjs'
 import { CANONICAL_Q, CANONICAL_A, installBookkeeperRuntime, scriptedBookkeeperPort } from './support/bookkeeper-session-support.mjs'
 
-test('WHAT[knowledge-reuse-011] overlapping fetches join one actual in-flight maintenance and receive the same result', async () => {
+test('WHAT[knowledge-reuse-011] overlapping fetches share one actual maintenance and the first caller language', async () => {
   const local = sandbox()
   const reached = deferred()
   const release = deferred()
@@ -24,16 +26,33 @@ test('WHAT[knowledge-reuse-011] overlapping fetches join one actual in-flight ma
     const send = port.SendPrompt
     port.SendPrompt = async (...args) => { reached.resolve(); await release.promise; return send(...args) }
     installBookkeeperRuntime(port, [identity])
-    first = local.fetch(shelfmark)
-    await reached.promise
-    second = local.fetch(shelfmark)
-    assert.equal(createCalls.length, 1)
-    release.resolve()
-    assert.equal(await first, await second)
-    assert.equal(createCalls.length, 1)
+    await withPreference('en', async () => {
+      language.refreshGlobalLanguage()
+      first = local.fetch(shelfmark)
+      await Promise.race([
+        reached.promise,
+        first.then(() => assert.fail('the first Bookkeeper must reach its SendPrompt barrier')),
+      ])
+      try {
+        await withPreference('zh-CN', async () => {
+          language.refreshGlobalLanguage()
+          second = local.fetch(shelfmark)
+          assert.equal(createCalls.length, 1)
+          release.resolve()
+          const [firstText, secondText] = await Promise.all([first, second])
+          assert.equal(firstText, secondText)
+          assert.match(firstText, /The facts this case depended on had changed/)
+          assert.doesNotMatch(firstText, /这份 case 所依赖的事实已经变化/)
+          assert.equal(createCalls.length, 1)
+        })
+      } finally {
+        language.refreshGlobalLanguage()
+      }
+    })
   } finally {
     release.resolve()
     await Promise.allSettled([first, second])
+    language.refreshGlobalLanguage()
     bookkeeper.resetRuntime()
     local.close()
   }

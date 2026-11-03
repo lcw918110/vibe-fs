@@ -87,27 +87,36 @@ test('WHAT[change-integration-004] GATE_dispose_releases_the_lock', async () => 
   await change.releaseGate(second)
   cleanup()
 })
-test('WHAT[change-integration-004] GATE_second_acquire_on_held_lock_eventually_fails', async () => {
+test('WHAT[change-integration-004] GATE_competing_acquire_waits_for_holder_release', async () => {
   const { dir, cleanup } = sandbox()
   const lockTarget = join(dir, 'target.lock')
   writeFileSync(lockTarget, '')
-
-  const gate = await change.acquireGate(lockTarget)
+  let gate
+  let nextGate
+  let competing
   let settled = false
-  const competing = change.acquireGate(lockTarget).then(
-    () => {
-      settled = 'acquired'
-    },
-    () => {
-      settled = 'failed'
+  try {
+    gate = await change.acquireGate(lockTarget)
+    competing = change.acquireGate(lockTarget).then(acquired => {
+      nextGate = acquired
+      settled = true
     })
 
-  await new Promise((resolve) => setTimeout(resolve, 300))
-  assert.equal(settled, false, 'a held lock must not be acquired concurrently')
-
-  await change.releaseGate(gate)
-  await competing.catch(() => {})
-  cleanup()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    assert.equal(settled, false, 'a held lock must not be acquired concurrently')
+    await change.releaseGate(gate)
+    gate = undefined
+    await competing
+    assert.equal(settled, true, 'the competitor acquires after the holder releases')
+  } finally {
+    try {
+      if (gate !== undefined) await change.releaseGate(gate)
+      if (competing !== undefined) await competing.catch(() => {})
+      if (nextGate !== undefined) await change.releaseGate(nextGate)
+    } finally {
+      cleanup()
+    }
+  }
 })
 }
 

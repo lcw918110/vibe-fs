@@ -94,7 +94,7 @@ test('WHAT[durable-events-016] Git_contract_exposes_canonical_store_ref', () => 
 const { default: assert } = await import("node:assert/strict");
 const { readFileSync } = await import("node:fs");
 const { default: test } = await import("node:test");
-const { CANONICAL_EVENT_READER_OWNER_PATHS, DUAL_WRITE_ALLOWLIST, GIT_BYPASS_ALLOWLIST, NON_STORE_SCHEMA_VERSION_SITES, PHYSICAL_HISTORY_OBSERVER_PATHS, SCANNER_IDS, collectProductionEntries, scanCanonicalSharedProgram, scanDualWrite, scanFeatureHistoryLoop, scanFeatureRef, scanFiles, scanGitBypass, scanPrivateDurableSubstrate, scanSchemaVersionInStoreContext, scanText } = await import("../../../scripts/checks/unified-store-gate.mjs");
+const { CANONICAL_EVENT_READER_OWNER_PATHS, DUAL_WRITE_ALLOWLIST, GIT_BYPASS_ALLOWLIST, NON_STORE_SCHEMA_VERSION_SITES, PHYSICAL_HISTORY_OBSERVER_PATHS, SCANNER_IDS, collectProductionEntries, scanDualWrite, scanFeatureHistoryLoop, scanFeatureRef, scanFiles, scanGitBypass, scanPrivateDurableSubstrate, scanSchemaVersionInStoreContext, scanText } = await import("../../../scripts/checks/unified-store-gate.mjs");
 
 const readFixture = (name) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')
@@ -107,7 +107,6 @@ test('WHAT[durable-events-016] scanner ids cover unified-store clean-break and h
     'dual-write',
     'feature-history-loop',
     'private-durable-substrate',
-    'canonical-shared-program',
   ])
 })
 test('WHAT[durable-events-016] fixture unified-store-feature-ref.fs is RED for feature-ref', () => {

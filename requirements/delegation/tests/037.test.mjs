@@ -64,7 +64,7 @@ test('WHAT[delegation-037] a consultation answer the agent already worked past n
 // history, and the projected copy (which hollows out the pre-answer todowrite
 // turn after a later resetScope) is never re-judged.
 test('WHAT[delegation-037] the late-consultation stop sees raw history once, never the reset projection', async () => {
-  const { normalTransform, DeliveryAdjudication } = await import('../../../dist/OpenCode/Plugin/PluginTransforms.js')
+  const { normalTransform, DeliveryAdjudication } = await import('../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js')
   const { clearSessionState } = await import('../../../dist/Context/Scope/Surface.js')
   const sid = 'ses_consult_037_projection'
   clearSessionState(sid)

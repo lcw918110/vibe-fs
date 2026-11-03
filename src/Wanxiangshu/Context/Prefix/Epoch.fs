@@ -12,24 +12,8 @@ type ArchivedScope =
       ArchiveRef: BlobRef
       ArchiveDigest: BlobDigest }
 
-/// Which prefix generation is in force, as the durable projection holds it.
-///
-/// The generation rules — which evidence may advance it, candidate versus commit,
-/// which refusals are absorbed — are owned by `wanxiangli/prefix` (CUT-15). This
-/// record is only the projection's typed copy of that owner's plain state.
-type ActivePrefixEpoch =
-    {
-        EpochId: PrefixEpochId
-        /// HOST-006: compaction pseudo-runs that already advanced the epoch.
-        ReanchoredRuns: Set<ProviderRunIdentity>
-        /// Plan tenure incumbencies that already advanced the epoch.
-        ReanchoredTenures: Set<string>
-        ReanchoredScopes: Set<string>
-        LastScopeArchive: ArchivedScope option
-        ScopeQuestions: Map<string, string>
-    }
+type ActivePrefixEpoch = private { History: obj }
 
-/// Why a prefix-epoch line was refused, in this repository's vocabulary.
 [<RequireQualifiedAccess>]
 type PrefixFoldRejection =
     | StalePrefixEpoch of expected: PrefixEpochId * actual: PrefixEpochId
@@ -38,71 +22,61 @@ type PrefixFoldRejection =
     | TenureAlreadyReanchored of incumbencyId: string
     | ScopeAlreadyReanchored of callId: string
 
-/// One proposed epoch-advancing line. Proposing changes nothing; only a fold of
-/// the written line commits it.
 type PrefixReanchorCandidate =
     { PreviousEpochId: PrefixEpochId
       NextEpochId: PrefixEpochId
       CompactionRun: ProviderRunIdentity }
 
 module PrefixEpochProjection =
+    [<Import("PrefixHistory", "wanxiangli/prefix")>]
+    let private historyClass: obj = jsNative
 
-    [<Import("Prefix", "wanxiangli/prefix")>]
-    let private prefixOwnerCtor: obj = jsNative
+    let empty: ActivePrefixEpoch = { History = createNew historyClass () }
 
-    let private prefixOwner: obj = createNew prefixOwnerCtor ()
+    let ofGeneration (generation: obj) : ActivePrefixEpoch =
+        { History = createNew historyClass generation }
 
-    let empty =
-        { EpochId = PrefixEpochId.initial
-          ReanchoredRuns = Set.empty
-          ReanchoredTenures = Set.empty
-          ReanchoredScopes = Set.empty
-          LastScopeArchive = None
-          ScopeQuestions = Map.empty }
-
-    let private epochNumber (epoch: PrefixEpochId) : int64 = PrefixEpochId.value epoch
-
-    let private epochOf (value: obj) : PrefixEpochId =
+    let private epochOf (value: obj) =
         PrefixEpochId.create (unbox<int64> (emitJsExpr value "BigInt($0)"))
 
-    let private stateView (state: ActivePrefixEpoch) : obj =
-        let baseObj =
-            createObj
-                [ "epoch" ==> epochNumber state.EpochId
-                  "compactionRuns"
-                  ==> (state.ReanchoredRuns |> Set.toArray |> Array.map ProviderRunIdentity.value)
-                  "tenures" ==> (state.ReanchoredTenures |> Set.toArray) ]
+    let epochId state = epochOf (state.History?epoch())
+    let scopeCount state : int = state.History?scopeCount()
+    let reanchoredScopes state : string array = state.History?reanchored "scope"
+    let reanchoredTenures state : string array = state.History?reanchored "tenure"
 
-        if not (Set.isEmpty state.ReanchoredScopes) then
-            baseObj?scopes <- (state.ReanchoredScopes |> Set.toArray)
+    let reanchoredRuns state : ProviderRunIdentity array =
+        unbox<string array> (state.History?reanchored "compaction")
+        |> Array.map ProviderRunIdentity.create
 
-        baseObj
+    let lastScopeArchive state : ArchivedScope option =
+        let value: obj = state.History?lastScopeArchive()
 
-    let private stateOf (view: obj) : ActivePrefixEpoch =
-        { EpochId = epochOf view?epoch
-          ReanchoredRuns =
-            unbox<string array> view?compactionRuns
-            |> Array.map ProviderRunIdentity.create
-            |> Set.ofArray
-          ReanchoredTenures = unbox<string array> view?tenures |> Set.ofArray
-          ReanchoredScopes =
-            if emitJsExpr view "'scopes' in Object($0)" then
-                unbox<string array> view?scopes |> Set.ofArray
-            else
-                Set.empty
-          LastScopeArchive = None
-          ScopeQuestions = Map.empty }
+        if isNull value then
+            None
+        else
+            Some
+                { SourceEpochId = epochOf value?sourceEpoch
+                  TargetEpochId = epochOf value?targetEpoch
+                  ResetCallId = unbox value?resetCallId
+                  ArchiveRef = BlobRef.create (unbox value?reference)
+                  ArchiveDigest = BlobDigest.create (unbox value?digest) }
 
-    let private compaction (run: ProviderRunIdentity) : obj =
+    let private compaction run =
         createObj [ "kind" ==> "compaction"; "run" ==> ProviderRunIdentity.value run ]
 
-    let private tenure (incumbencyId: string) : obj =
+    let private tenure incumbencyId =
         createObj [ "kind" ==> "tenure"; "incumbencyId" ==> incumbencyId ]
 
-    let private scope (callId: string) : obj =
+    let private scope callId =
         createObj [ "kind" ==> "scope"; "callId" ==> callId ]
 
-    let private rejectionOf (result: obj) : PrefixFoldRejection =
+    let private candidate previousEpoch nextEpoch evidence =
+        createObj
+            [ "previousEpoch" ==> PrefixEpochId.value previousEpoch
+              "nextEpoch" ==> PrefixEpochId.value nextEpoch
+              "evidence" ==> evidence ]
+
+    let private rejectionOf (result: obj) =
         let evidence = result?evidence
 
         match string result?error, (if isNull evidence then "" else string evidence?kind) with
@@ -113,41 +87,26 @@ module PrefixEpochProjection =
             PrefixFoldRejection.CompactionAlreadyReanchored(ProviderRunIdentity.create (string evidence?run))
         | _ -> PrefixFoldRejection.NonSequentialPrefixEpoch
 
-    let private commit
-        (previousEpoch: PrefixEpochId)
-        (nextEpoch: PrefixEpochId)
-        (evidence: obj)
-        (state: ActivePrefixEpoch)
-        : Result<ActivePrefixEpoch, PrefixFoldRejection> =
-        let candidate =
-            createObj
-                [ "previousEpoch" ==> epochNumber previousEpoch
-                  "nextEpoch" ==> epochNumber nextEpoch
-                  "evidence" ==> evidence ]
-
-        let result = prefixOwner?commit (stateView state, candidate)
-
+    let private resultOf (result: obj) =
         if unbox<bool> result?ok then
-            Ok
-                { (stateOf result?state) with
-                    LastScopeArchive = state.LastScopeArchive
-                    ScopeQuestions = state.ScopeQuestions }
+            Ok { History = result?value }
         else
             Error(rejectionOf result)
 
-    /// PERSIST-010 `ContextReanchored`: HOST-006 containment.
-    let applyReanchor previousEpoch nextEpoch (observedRun: ProviderRunIdentity) state =
+    let private commit previousEpoch nextEpoch evidence state =
+        state.History?advance(candidate previousEpoch nextEpoch evidence) |> resultOf
+
+    let applyReanchor previousEpoch nextEpoch observedRun state =
         commit previousEpoch nextEpoch (compaction observedRun) state
 
-    let isReanchored (run: ProviderRunIdentity) (state: ActivePrefixEpoch) : bool =
-        unbox<bool> (prefixOwner?isReanchored (stateView state, compaction run))
+    let isReanchored run state : bool =
+        state.History?hasReanchored(compaction run)
 
-    /// Plan tenure handover: `TenureReanchored`.
     let applyTenureReanchor previousEpoch nextEpoch (incumbencyId: string) state =
         commit previousEpoch nextEpoch (tenure incumbencyId) state
 
-    let isTenureReanchored (incumbencyId: string) (state: ActivePrefixEpoch) : bool =
-        unbox<bool> (prefixOwner?isReanchored (stateView state, tenure incumbencyId))
+    let isTenureReanchored (incumbencyId: string) state : bool =
+        state.History?hasReanchored(tenure incumbencyId)
 
     let applyScopeReanchor previousEpoch nextEpoch (callId: string) state =
         commit previousEpoch nextEpoch (scope callId) state
@@ -160,67 +119,42 @@ module PrefixEpochProjection =
         (digest: BlobDigest option)
         state
         =
-        applyScopeReanchor previousEpoch nextEpoch callId state
-        |> Result.map (fun advanced ->
-            let captured =
-                match blob, digest with
-                | Some actual, Some checksum ->
-                    Some
-                        { SourceEpochId = previousEpoch
-                          TargetEpochId = nextEpoch
-                          ResetCallId = callId
-                          ArchiveRef = actual
-                          ArchiveDigest = checksum }
-                | _ -> None
+        state.History?advanceScope(
+            candidate previousEpoch nextEpoch (scope callId),
+            blob |> Option.map BlobRef.value |> Option.toObj,
+            digest |> Option.map BlobDigest.value |> Option.toObj
+        )
+        |> resultOf
 
-            { advanced with
-                LastScopeArchive = captured
-                ScopeQuestions = Map.empty })
+    let scopeQuestionReceipt (callId: string) state : string option =
+        let receipt: obj = state.History?scopeQuestion callId
+        if isNull receipt then None else Some(unbox receipt)
 
-    let scopeQuestionReceipt (callId: string) (state: ActivePrefixEpoch) = Map.tryFind callId state.ScopeQuestions
+    let recordScopeQuestion targetEpoch (callId: string) (digest: string) state : Result<ActivePrefixEpoch, string> =
+        let result: obj =
+            state.History?recordScopeQuestion(PrefixEpochId.value targetEpoch, callId, digest)
 
-    let recordScopeQuestion
-        (targetEpoch: PrefixEpochId)
-        (callId: string)
-        (digest: string)
-        (state: ActivePrefixEpoch)
-        : Result<ActivePrefixEpoch, string> =
-        let validArchive =
-            state.LastScopeArchive
-            |> Option.exists (fun prior -> prior.TargetEpochId = targetEpoch)
+        if unbox<bool> result?ok then
+            Ok { History = result?value }
+        else
+            Error(unbox result?error)
 
-        match targetEpoch = state.EpochId && validArchive, scopeQuestionReceipt callId state with
-        | false, _ -> Error "stale scope epoch or missing prior archive"
-        | true, Some earlier when earlier <> digest -> Error "scope question receipt conflict"
-        | true, Some _ -> Ok state
-        | true, None ->
-            Ok
-                { state with
-                    ScopeQuestions = Map.add callId digest state.ScopeQuestions }
+    let isScopeReanchored (callId: string) state : bool =
+        state.History?hasReanchored(scope callId)
 
-    let isScopeReanchored (callId: string) (state: ActivePrefixEpoch) : bool =
-        unbox<bool> (prefixOwner?isReanchored (stateView state, scope callId))
+    let proposeCompaction (observed: ProviderRunIdentity list) state =
+        let result: obj =
+            state.History?proposeCompaction(observed |> List.map ProviderRunIdentity.value |> List.toArray)
 
-    /// HOST-006: the one compaction among `observed` (oldest first) that still needs
-    /// a reanchor line, with the epochs that line must carry.
-    let proposeCompaction
-        (observed: ProviderRunIdentity list)
-        (state: ActivePrefixEpoch)
-        : PrefixReanchorCandidate option =
-        let runs = observed |> List.map ProviderRunIdentity.value |> List.toArray
-        let candidate = prefixOwner?proposeCompaction (stateView state, runs)
-
-        if isNull candidate then
+        if isNull result then
             None
         else
             Some
-                { PreviousEpochId = epochOf candidate?previousEpoch
-                  NextEpochId = epochOf candidate?nextEpoch
-                  CompactionRun = ProviderRunIdentity.create (string candidate?evidence?run) }
+                { PreviousEpochId = epochOf result?previousEpoch
+                  NextEpochId = epochOf result?nextEpoch
+                  CompactionRun = ProviderRunIdentity.create (string result?evidence?run) }
 
-    /// Absorption policy owned by the library: `None` means the caller must write
-    /// nothing (a replayed line or a repeated observation); `Some reason` is fatal.
-    let describe (rejection: PrefixFoldRejection) : string option =
+    let describe rejection =
         match rejection with
         | PrefixFoldRejection.StalePrefixEpoch _
         | PrefixFoldRejection.CompactionAlreadyReanchored _

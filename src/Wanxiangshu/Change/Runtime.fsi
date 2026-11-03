@@ -4,6 +4,11 @@ open System.Threading.Tasks
 open Wanxiangshu.Execution.Session.Wait
 open Wanxiangshu.Foundation.Identity
 
+module internal ManagerWorktreePolicy =
+    val managerBranchOf: jobId: string -> string
+    val staleWorktrees: entries: (string * string option) list -> owned: string list -> string list
+    val staleBranches: branches: string list -> owned: string list -> string list
+
 type Orchestrator =
     new:
         observer: IWaitObserver *

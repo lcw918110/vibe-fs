@@ -6,7 +6,7 @@ open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Persistence.EventStore
 
 module private SettlementInterop =
-    [<Import("CasebookSettlementOwner", "wanxiangli/casebook-maintenance")>]
+    [<Import("CasebookSettlementOwner", "wanxiangli/casebook")>]
     let settlementOwnerCtor: obj = jsNative
 
     [<Emit("new $0($1)")>]

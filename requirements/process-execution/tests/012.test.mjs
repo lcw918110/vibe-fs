@@ -15,7 +15,7 @@ test('WHAT[process-execution-012] request vocabulary is compiled separately from
   }
   const [request] = owners('Process/ProcessRequest.fs')
   assert.ok(request)
-  for (const relative of ['Process/NodeProcessHost.fs', 'Process/ProcessRunner.fs', 'Process/PtySession.fs', 'Process/Spool.fs']) {
+  for (const relative of ['Process/PtySession.fs', 'Process/Spool.fs']) {
     const [runtime] = owners(relative)
     assert.ok(runtime)
     assert.notEqual(runtime.shard, request.shard, `${relative} must not share the request vocabulary compilation unit`)

@@ -7,7 +7,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.distribution.resources-enforcercatalogresource.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-runtimeresources.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-model.fsproj" />
-    <Compile Include="OpenCode/Host/ProviderSystemTransform.fsi" />
-    <Compile Include="OpenCode/Host/ProviderSystemTransform.fs" />
+    <Compile Include="../../wanxiangtong/opencode/provider-request/SystemProjection.fsi" />
+    <Compile Include="../../wanxiangtong/opencode/provider-request/SystemProjection.fs" />
   </ItemGroup>
 </Project>

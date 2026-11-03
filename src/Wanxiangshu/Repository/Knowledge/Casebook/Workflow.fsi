@@ -9,6 +9,23 @@ module CasebookFeature =
 
     val isEnabled: workspaceRoot: string -> bool
 
+module CasebookServiceBinding =
+
+    val observationCollector: obj
+    val drainCollector: collector: obj -> identity: string -> Observation list
+    val cleanupDraft: identity: string -> unit
+
+    val finalizeCaptured: store: IEventStore -> case: Case -> Task<CaseFinalizeSettlement>
+
+    val finalizeDraft: root: string -> store: IEventStore -> identity: string -> Task<CaseFinalizeSettlement>
+
+    val refresh: root: string -> store: IEventStore -> identity: string -> Task<Result<bool, CasebookMutationError>>
+
+    val touch: root: string -> store: IEventStore -> identity: string -> Task<Result<unit, CasebookMutationError>>
+
+    val fetch:
+        root: string -> store: IEventStore -> shelfmark: string -> notify: (CasebookAppendFailure -> unit) -> Task<obj>
+
 /// CASE-003/004/005 / KR-004/005/015: Casebook workflow.
 module CasebookWorkflow =
 

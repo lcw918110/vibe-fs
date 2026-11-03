@@ -112,7 +112,7 @@ test('WHAT[capability-enforcement-019] two supervised independent Node processes
   }
 })
 
-test.todo('WHAT[capability-enforcement-019] remaining PhysicalHandle boundaries include SessionQuiescenceGate, ModelRouting RuntimeHandle and PortHandle, and ParallelSurface TokenHandle; their native serialization and restore consumers are not covered by the permit and execution-lease proofs')
+test.todo('WHAT[capability-enforcement-019] remaining PhysicalHandle boundaries include SessionQuiescenceGate and ModelRouting RuntimeHandle and PortHandle; their native serialization and restore consumers are not covered by the permit and execution-lease proofs')
 
 test('WHAT[capability-enforcement-019] live opaque permit resources stay bounded to the current session attempt', () => {
   const gate = quiescence.create()

@@ -36,11 +36,10 @@ import { assertEq, assertTrue } from './lib.mjs';
 import { parse as parseToml } from 'smol-toml';
 import { auditPayload, roundTripValue, splitDocument } from '../../e2e/support/arch010.js';
 import {
-  field,
+  stringField,
   forkBaseInstructions,
   forkPayload,
   idleEncouragement,
-  renderString,
   syntheticDocument,
   workActivation,
 } from '../../e2e/support/production.js';
@@ -87,7 +86,7 @@ const productionPayloads = () => ({
     originalUserRequirements: [INJECTION],
   }),
   'writer: instruction only': syntheticDocument(['Continue the current logical run.'], []),
-  'writer: data only': syntheticDocument([], [field('status', renderString('ok'))]),
+  'writer: data only': syntheticDocument([], [stringField('status', 'ok')]),
   'writer: empty': syntheticDocument([], []),
   // GLORY lifecycle prompts — instruction-only SyntheticToml (all # comments).
   'glory: work activation': workActivation(),
@@ -414,8 +413,8 @@ export const arch010Cases = [
       ];
 
       for (const raw of inputs) {
-        const failure = roundTripValue(renderString(raw), raw);
-        assertEq(failure, null, `${JSON.stringify(raw)}: ${failure}`);
+        const document = syntheticDocument([], [stringField('value', raw)]);
+        assertEq(parseToml(document).value, raw, JSON.stringify(raw));
       }
       assertTrue(
         roundTripValue("'''\nfirst\nsecond\n'''", 'first\nsecond') !== null,

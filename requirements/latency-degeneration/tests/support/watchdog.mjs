@@ -1,5 +1,5 @@
 import * as HostSignalSurface from '../../../../dist/OpenCode/Host/HostSignalSurface.js'
-export { LatencyWatchdogFactory_createLatencyWatchdog as createLatencyWatchdog } from '../../../../dist/OpenCode/Host/LatencyWatchdog.js'
+export { LatencyWatchdogFactory_createLatencyWatchdog as createLatencyWatchdog } from '../../../../dist/wanxiangtong/opencode/request-latency/LatencyWatchdog.js'
 
 export function fakeDetector() {
   const calls = []

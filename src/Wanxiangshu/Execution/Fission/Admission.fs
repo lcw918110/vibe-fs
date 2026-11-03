@@ -1,11 +1,9 @@
 namespace Wanxiangshu.Execution.Fission
 
 open System
-open System.Collections.Generic
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
-open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 
@@ -70,223 +68,120 @@ module FissionStartup =
 
 module FissionAdmission =
 
-    [<Import("fissionAdmissionRegistry", "wanxiangli/fission-group")>]
-    let private fissionAdmissionRegistry: obj = jsNative
+    [<Import("FissionLifecycle", "wanxiangli/fission-group")>]
+    let private lifecycleClass: obj = jsNative
+
+    let private lifecycle: obj = createNew lifecycleClass ()
 
     let private noHooks =
         { OnLanesCreated = fun _ _ _ _ -> Task.FromResult(Ok())
           OnFailed = fun _ _ -> Task.FromResult(()) }
 
     let create deps = FissionAdmissionRuntime(deps, noHooks)
-
     let createWithHooks deps hooks = FissionAdmissionRuntime(deps, hooks)
 
     let isActive (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) : bool =
-        fissionAdmissionRegistry?isActive (SessionId.value ownerSessionId)
+        lifecycle?isActive (SessionId.value ownerSessionId)
 
     let release (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) : unit =
-        fissionAdmissionRegistry?release (SessionId.value ownerSessionId) |> ignore
+        lifecycle?release (SessionId.value ownerSessionId) |> ignore
 
     let releaseOwner (ownerSessionId: SessionId) : unit =
-        fissionAdmissionRegistry?release (SessionId.value ownerSessionId) |> ignore
+        lifecycle?release (SessionId.value ownerSessionId) |> ignore
 
-    let private reserve (_runtime: FissionAdmissionRuntime) (ownerSessionId: SessionId) : bool =
-        fissionAdmissionRegistry?reserve (SessionId.value ownerSessionId)
-
-    let private dependencyError message =
-        Error(FissionRejectReason.RuntimeUnavailable message)
-
-    let private abortLaneQuietly (runtime: FissionAdmissionRuntime) (lane: FissionStartedLane) =
+    let private resultToNative convert (operation: Task<Result<'a, string>>) =
         task {
-            try
-                do! runtime.Dependencies.AbortLane lane.SessionId
-            with _ ->
-                ()
-        }
-
-    let private rollback (runtime: FissionAdmissionRuntime) ownerSessionId (created: FissionStartedLane list) =
-        task {
-            for lane in created do
-                do! abortLaneQuietly runtime lane
-
-            release runtime ownerSessionId
-        }
-
-    let private dependency prefix (operation: Task<Result<'a, string>>) : Task<Result<'a, FissionRejectReason>> =
-        task {
-            match! operation with
-            | Ok value -> return Ok value
-            | Error error -> return dependencyError (prefix + error)
-        }
-
-    let private dependencyOrRelease
-        (runtime: FissionAdmissionRuntime)
-        ownerSessionId
-        prefix
-        (operation: Task<Result<'a, string>>)
-        : Task<Result<'a, FissionRejectReason>> =
-        task {
-            match! dependency prefix operation with
-            | Ok value -> return Ok value
-            | Error error ->
-                release runtime ownerSessionId
-                return Error error
-        }
-
-    let private mapCreateLaneError createdRev (operation: Task<Result<SessionId, string>>) =
-        task {
-            match! operation with
-            | Ok laneSessionId -> return Ok laneSessionId
-            | Error error -> return Error(error, List.rev createdRev)
-        }
-
-    let rec private createLanes
-        (runtime: FissionAdmissionRuntime)
-        ownerSessionId
-        parentSessionId
-        (remaining: FissionLanePrompt list)
-        (createdRev: FissionStartedLane list)
-        =
-        taskResult {
-            match remaining with
-            | [] -> return List.rev createdRev
-            | lane :: rest ->
-                let! laneSessionId =
-                    mapCreateLaneError createdRev (runtime.Dependencies.CreateLane ownerSessionId parentSessionId lane)
-
-                let started =
-                    { Index = lane.Index
-                      SessionId = laneSessionId
-                      Prompt = lane.Prompt }
-
-                return! createLanes runtime ownerSessionId parentSessionId rest (started :: createdRev)
-        }
-
-    let private createAllLanes
-        (runtime: FissionAdmissionRuntime)
-        ownerSessionId
-        parentSessionId
-        (lanes: FissionLanePrompt list)
-        =
-        task {
-            match! createLanes runtime ownerSessionId parentSessionId lanes [] with
-            | Ok created -> return Ok created
-            | Error(error, created) ->
-                do! rollback runtime ownerSessionId created
-                return dependencyError ("lane create failed: " + error)
-        }
-
-    let private commitLanesCreated
-        (runtime: FissionAdmissionRuntime)
-        ownerSessionId
-        parentSessionId
-        ownerView
-        (created: FissionStartedLane list)
-        =
-        task {
-            match! runtime.Hooks.OnLanesCreated ownerSessionId parentSessionId ownerView created with
-            | Ok() -> return Ok()
-            | Error error ->
-                do! rollback runtime ownerSessionId created
-                return dependencyError ("fission admission commit failed: " + error)
-        }
-
-    let private startAllLanes
-        (runtime: FissionAdmissionRuntime)
-        ownerSessionId
-        (parsed: ParsedFissionPrompts)
-        ownerView
-        (created: FissionStartedLane list)
-        =
-        task {
-            let! outcome =
-                created
-                |> TaskResultList.traverseM (fun started ->
-                    let lane =
-                        parsed.Lanes |> List.find (fun candidate -> candidate.Index = started.Index)
-
-                    let startup = FissionStartup.render parsed.Count lane ownerView
-                    runtime.Dependencies.StartLane started.SessionId startup)
-
-            match outcome with
-            | Ok _ -> return Ok()
-            | Error error ->
-                do! runtime.Hooks.OnFailed ownerSessionId ("lane start failed: " + error)
-                do! rollback runtime ownerSessionId created
-                return dependencyError ("lane start failed: " + error)
-        }
-
-    let private silentInterruptOwner
-        (runtime: FissionAdmissionRuntime)
-        ownerSessionId
-        (created: FissionStartedLane list)
-        =
-        task {
-            match! runtime.Dependencies.SilentInterruptOwner ownerSessionId with
-            | Ok() -> return Ok()
-            | Error error ->
-                do! runtime.Hooks.OnFailed ownerSessionId ("silent owner interrupt failed: " + error)
-                do! rollback runtime ownerSessionId created
-                return dependencyError ("silent owner interrupt failed: " + error)
-        }
-
-    let private admitReserved
-        (runtime: FissionAdmissionRuntime)
-        (ownerSessionId: SessionId)
-        (parentSessionId: SessionId)
-        (parsed: ParsedFissionPrompts)
-        =
-        taskResult {
-            let! ownerView =
-                dependencyOrRelease
-                    runtime
-                    ownerSessionId
-                    "owner view materialization failed: "
-                    (runtime.Dependencies.OwnerView ownerSessionId)
-
-            // The owner's delivered view is optional context for the lanes, not an
-            // admission precondition: an owner that has not delivered yet still
-            // admits its lanes, and those lanes start from the lane input alone.
-            let physicalParent = Some parentSessionId
-            // The lanes' owner view is one text: the delivered view, or the empty
-            // view when the owner has delivered nothing. The durable commit and the
-            // lane startup both read it, so the fact and the lanes cannot disagree.
-            let ownerViewText = ownerView |> Option.defaultValue ""
-            let! created = createAllLanes runtime ownerSessionId physicalParent parsed.Lanes
-            do! commitLanesCreated runtime ownerSessionId physicalParent ownerViewText created
-            do! startAllLanes runtime ownerSessionId parsed ownerView created
-            do! silentInterruptOwner runtime ownerSessionId created
+            let! result = operation
 
             return
-                { OwnerSessionId = ownerSessionId
-                  ParentSessionId = Some parentSessionId
-                  OwnerView = ownerView
-                  Lanes = created }
+                match result with
+                | Ok value -> createObj [ "ok" ==> true; "value" ==> convert value ]
+                | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
         }
 
-    let private admitFromPhysicalParent
-        (runtime: FissionAdmissionRuntime)
-        (ownerSessionId: SessionId)
-        (parsed: ParsedFissionPrompts)
-        parentSessionId
-        =
-        match parentSessionId with
-        | None -> Task.FromResult(Error FissionRejectReason.InvalidOrigin)
-        | Some _ when not (reserve runtime ownerSessionId) ->
-            Task.FromResult(Error FissionRejectReason.AlreadyFissioned)
-        | Some parent -> admitReserved runtime ownerSessionId parent parsed
+    let private optionalText (value: obj) =
+        if isNullOrUndefined value then
+            None
+        else
+            Some(unbox<string> value)
+
+    let private optionalSession value =
+        optionalText value |> Option.map SessionId.create
+
+    let private lanePrompt (value: obj) : FissionLanePrompt =
+        { Index = unbox value?index
+          Prompt = unbox value?prompt }
+
+    let private startedLane (value: obj) : FissionStartedLane =
+        { Index = unbox value?index
+          Prompt = unbox value?prompt
+          SessionId = SessionId.create (unbox value?session) }
+
+    let private startedLanes (values: obj array) =
+        values |> Array.map startedLane |> Array.toList
+
+    let private effects (runtime: FissionAdmissionRuntime) =
+        let deps = runtime.Dependencies
+        let hooks = runtime.Hooks
+
+        createObj
+            [ "parentOf"
+              ==> (fun owner ->
+                  deps.ParentOf(SessionId.create owner)
+                  |> resultToNative (Option.map SessionId.value >> box))
+              "ownerView"
+              ==> (fun owner -> deps.OwnerView(SessionId.create owner) |> resultToNative box)
+              "createLane"
+              ==> (fun owner parent lane ->
+                  deps.CreateLane (SessionId.create owner) (optionalSession parent) (lanePrompt lane)
+                  |> resultToNative (SessionId.value >> box))
+              "renderStartup"
+              ==> (fun count lane view -> FissionStartup.render count (lanePrompt lane) (optionalText view))
+              "startLane"
+              ==> (fun session prompt -> deps.StartLane (SessionId.create session) prompt |> resultToNative box)
+              "abortLane" ==> (fun session -> deps.AbortLane(SessionId.create session))
+              "interruptOwner"
+              ==> (fun owner -> deps.SilentInterruptOwner(SessionId.create owner) |> resultToNative box)
+              "onLanesCreated"
+              ==> (fun owner parent view lanes ->
+                  hooks.OnLanesCreated (SessionId.create owner) (optionalSession parent) view (startedLanes lanes)
+                  |> resultToNative box)
+              "onFailed"
+              ==> (fun owner reason -> hooks.OnFailed (SessionId.create owner) reason) ]
 
     let admit
         (runtime: FissionAdmissionRuntime)
         (ownerSessionId: SessionId)
         (parsed: ParsedFissionPrompts)
         : Task<Result<FissionAdmission, FissionRejectReason>> =
-        taskResult {
-            if parsed.Count < 2 then
-                return! Error FissionRejectReason.TooFewLanes
-            else
-                let! parentSessionId =
-                    dependency "physical parent lookup failed: " (runtime.Dependencies.ParentOf ownerSessionId)
+        task {
+            let request =
+                createObj
+                    [ "owner" ==> SessionId.value ownerSessionId
+                      "count" ==> parsed.Count
+                      "lanes"
+                      ==> (parsed.Lanes
+                           |> List.map (fun lane -> createObj [ "index" ==> lane.Index; "prompt" ==> lane.Prompt ])
+                           |> List.toArray) ]
 
-                return! admitFromPhysicalParent runtime ownerSessionId parsed parentSessionId
+            let! (result: obj) = lifecycle?admit (request, effects runtime)
+
+            let rejection () =
+                match string result?kind with
+                | "TooFewLanes" -> FissionRejectReason.TooFewLanes
+                | "InvalidOrigin" -> FissionRejectReason.InvalidOrigin
+                | "AlreadyFissioned" -> FissionRejectReason.AlreadyFissioned
+                | _ -> FissionRejectReason.RuntimeUnavailable(unbox result?error)
+
+            if unbox<bool> result?ok then
+                let value: obj = result?value
+
+                return
+                    Ok
+                        { OwnerSessionId = SessionId.create (unbox value?owner)
+                          ParentSessionId = optionalSession value?parent
+                          OwnerView = optionalText value?ownerView
+                          Lanes = startedLanes (unbox value?lanes) }
+            else
+                return Error(rejection ())
         }

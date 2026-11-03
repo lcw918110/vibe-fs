@@ -16,6 +16,10 @@ module JournalSurface =
     val mapAppendFailure: value: obj -> obj
     /// 解析并初始化主工作树的本机状态根，不改 Git 配置。
     val initializeStateRoot: workspace: string -> Task<string>
+    val stateRoot: workspace: string -> Task<string>
+    val stateRootSync: workspace: string -> string
+    val enqueueRecovery: handle: JournalHandle -> recover: (unit -> Task) -> unit
+    val runOrAwaitRecovery: handle: JournalHandle -> Task
 
     val bootWithWriterId:
         commonDir: string -> writerId: string -> runtimeId: string -> processId: int -> startedAt: string -> Task<obj>
@@ -23,7 +27,7 @@ module JournalSurface =
     val boot: commonDir: string -> runtimeId: string -> processId: int -> startedAt: string -> Task<obj>
     val acquireSharedForWorkspace: workspace: string -> processId: int -> startedAt: string -> Task<obj>
     /// interaction-authority-018: append one exact HumanRoot/Manager logical-run closure through the shared journal owner.
-    val appendAuthorityLogicalRunClosed: commonDir: string -> sessionId: string -> retirementId: string -> Task<unit>
+    val appendAuthorityLogicalRunClosed: stateRoot: string -> sessionId: string -> retirementId: string -> Task<unit>
     val appendAuthorityTerminalSource: handle: JournalHandle -> sessionId: string -> fact: obj -> Task<obj>
     val dispose: handle: JournalHandle -> unit
     val runtimeId: handle: JournalHandle -> string
@@ -36,10 +40,3 @@ module JournalSurface =
     val readPayload: handle: JournalHandle -> reference: string -> Task<obj>
     val snapshot: handle: JournalHandle -> obj
     val hasSession: handle: JournalHandle -> sessionId: string -> bool
-    /// crash-reconciliation-023: register one restart-recovery body. The first
-    /// `runOrAwaitRecovery` caller starts it; every caller awaits the same work.
-    val enqueueRecovery: handle: JournalHandle -> start: (unit -> Task) -> unit
-    /// crash-reconciliation-023: run the registered recovery once and await its
-    /// completion for every caller. A faulting recovery reaches every awaiter and
-    /// is cleared, so a later caller starts a fresh one instead of re-observing it.
-    val runOrAwaitRecovery: handle: JournalHandle -> Task

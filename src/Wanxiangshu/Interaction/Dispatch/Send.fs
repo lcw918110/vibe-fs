@@ -1,10 +1,11 @@
 namespace Wanxiangshu.Interaction.Dispatch
 
 open Wanxiangshu.Foundation.HostSession
-open Wanxiangshu.Foundation.HostSession
 
 open System
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Outcome
 open Wanxiangshu.Host
@@ -14,72 +15,111 @@ open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Participant.Provider.Attempt
 open Wanxiangshu.Foundation.Identity
 
-/// PROMPT-005's four-fact send protocol, in one place.
-///
-/// Claimed → Submitted → PhysicalAccepted, or Claimed → Abandoned. Both members
-/// below return the `PromptKey` rather than a message id: at send time no
-/// physical message exists yet, and the key is what the caller can later use to
-/// recognise the message when `chat.message` delivers it (PROMPT-011).
+/// 主体准备认领与宿主载荷，库协调一次实际发送。
 [<AutoOpen>]
 module PromptDispatcherSend =
 
-    let private observeHostSend
+    [<Import("DispatchAttempt", "wanxiangli/dispatch")>]
+    let private attemptClass: obj = jsNative
+
+    [<Import("promptPhysicalAcceptance", "wanxiangli/dispatch")>]
+    let private physicalAcceptance: obj = jsNative
+
+    let private attempt: obj =
+        emitJsExpr (attemptClass, physicalAcceptance) "new $0($1)"
+
+    [<Emit("$0.dispose()")>]
+    let private disposeNative (_subscription: obj) : unit = jsNative
+
+    let private outcomeToNative (outcome: SendOutcome) : obj =
+        match outcome with
+        | AdmittedWithReceipt receipt ->
+            createObj
+                [ "kind" ==> "AdmittedWithReceipt"
+                  "receipt" ==> TransportReceipt.value receipt ]
+        | AdmittedWithPhysicalMessage physical ->
+            createObj
+                [ "kind" ==> "AdmittedWithPhysicalMessage"
+                  "physicalUserMessageId" ==> PhysicalUserMessageId.value physical ]
+        | Retryable reason -> createObj [ "kind" ==> "Retryable"; "reason" ==> reason ]
+        | Fatal reason -> createObj [ "kind" ==> "Fatal"; "reason" ==> reason ]
+        | AcceptanceUnknown reason -> createObj [ "kind" ==> "AcceptanceUnknown"; "reason" ==> reason ]
+
+    let private outcomeFromNative (outcome: obj) : SendOutcome =
+        match unbox<string> outcome?kind with
+        | "AdmittedWithReceipt" -> AdmittedWithReceipt(TransportReceipt.create (unbox<string> outcome?receipt))
+        | "AdmittedWithPhysicalMessage" ->
+            AdmittedWithPhysicalMessage(PhysicalUserMessageId.create (unbox<string> outcome?physicalUserMessageId))
+        | "Retryable" -> Retryable(unbox<string> outcome?reason)
+        | "Fatal" -> Fatal(unbox<string> outcome?reason)
+        | "AcceptanceUnknown" -> AcceptanceUnknown(unbox<string> outcome?reason)
+        | other -> invalidOp ("wanxiangli/dispatch returned an unknown send outcome: " + other)
+
+    let private verdictToNative (verdict: Wanxiangshu.Host.Ports.DeliveryVerdict) : obj =
+        match verdict with
+        | Wanxiangshu.Host.Ports.DeliveryVerdict.OwnedSettled -> createObj [ "kind" ==> "OwnedSettled" ]
+        | Wanxiangshu.Host.Ports.DeliveryVerdict.Refused reason ->
+            createObj [ "kind" ==> "Refused"; "reason" ==> reason ]
+        | Wanxiangshu.Host.Ports.DeliveryVerdict.OutcomeUnknown reason ->
+            createObj [ "kind" ==> "OutcomeUnknown"; "reason" ==> reason ]
+
+    let private verdictFromNative (verdict: obj) : DetachedSendVerdict =
+        match unbox<string> verdict?kind with
+        | "OwnedSettled" -> DetachedSendVerdict.OwnedSettled
+        | "Refused" -> DetachedSendVerdict.Refused(unbox<string> verdict?reason)
+        | "OutcomeUnknown" -> DetachedSendVerdict.OutcomeUnknown(unbox<string> verdict?reason)
+        | other -> invalidOp ("wanxiangli/dispatch returned an unknown detached verdict: " + other)
+
+    let private observerToNative (observer: ContinuationAcceptanceObserver) : obj =
+        createObj
+            [ yield
+                  "notify"
+                  ==> Action<string>(fun physical -> observer.Notify(PhysicalUserMessageId.create physical))
+              yield
+                  "own"
+                  ==> Action<obj>(fun owned ->
+                      observer.AttachDisposable
+                          { new IDisposable with
+                              member _.Dispose() = disposeNative owned })
+              match observer.Budget with
+              | Some budget -> yield "budget" ==> budget
+              | None -> () ]
+
+    let private observeSend observe (event: obj) =
+        let eventKey = PromptKey.create (unbox<string> event?key)
+
+        match unbox<string> event?kind with
+        | "Sending" -> observe (PromptDispatcher.PromptSendObservation.Sending eventKey)
+        | "Answered" ->
+            observe (PromptDispatcher.PromptSendObservation.Answered(eventKey, outcomeFromNative event?outcome))
+        | other -> invalidOp ("wanxiangli/dispatch returned an unknown send observation: " + other)
+
+    let private specOf
         (key: PromptKey)
-        (observer: (PromptDispatcher.PromptSendObservation -> unit) option)
-        (send: unit -> Task<SendOutcome>)
-        : Task<SendOutcome> =
-        match observer with
-        | None -> send ()
-        | Some observe ->
-            observe (PromptDispatcher.PromptSendObservation.Sending key)
-            let pending = send ()
-
-            task {
-                let! outcome = pending
-                observe (PromptDispatcher.PromptSendObservation.Answered(key, outcome))
-                return outcome
-            }
-
-    /// What one Host send answer obliges the claim ledger to do, as
-    /// `wanxiangli/dispatch` answer decides it (CUT-11): a receipt only reaches
-    /// Submitted; a real physical id reaches Submitted then PhysicalAccepted; a
-    /// refusal before physical acceptance is an explicit Abandoned and the only
-    /// definitely-not-sent answer; acceptance unknown writes nothing and stays
-    /// pending. Detached never writes PhysicalAccepted from an SDK return value.
-    [<RequireQualifiedAccess>]
-    type private SendLedger =
-        | Submit of TransportReceipt
-        | SubmitThenAccept of PhysicalUserMessageId
-        | Abandon of reason: string
-        | KeepPending of reason: string
-
-    let private answerOf (outcome: SendOutcome) =
-        let label, payload =
-            match outcome with
-            | AdmittedWithReceipt receipt -> "AdmittedWithReceipt", box receipt
-            | AdmittedWithPhysicalMessage physicalId -> "AdmittedWithPhysicalMessage", box physicalId
-            | Retryable error -> "Retryable", box error
-            | Fatal error -> "Fatal", box error
-            | AcceptanceUnknown reason -> "AcceptanceUnknown", box reason
-
-        let ledger, definitelyNotSent, detached = DispatchLaw.answer label
-
-        let action =
-            match ledger with
-            | "Submit" -> SendLedger.Submit(unbox<TransportReceipt> payload)
-            | "SubmitThenAccept" -> SendLedger.SubmitThenAccept(unbox<PhysicalUserMessageId> payload)
-            | "Abandon" -> SendLedger.Abandon(unbox<string> payload)
-            | "KeepPending" -> SendLedger.KeepPending(unbox<string> payload)
-            | other -> failwithf "wanxiangli/dispatch returned an unknown send ledger action %s" other
-
-        let verdict =
-            match detached with
-            | "OwnedSettled" -> DetachedSendVerdict.OwnedSettled
-            | "Refused" -> DetachedSendVerdict.Refused(unbox<string> payload)
-            | "OutcomeUnknown" -> DetachedSendVerdict.OutcomeUnknown(unbox<string> payload)
-            | other -> failwithf "wanxiangli/dispatch returned an unknown detached verdict %s" other
-
-        action, definitelyNotSent, verdict
+        (mode: PromptDispatcher.AwaitMode)
+        (observer: ContinuationAcceptanceObserver option)
+        (observed: (PromptDispatcher.PromptSendObservation -> unit) option)
+        (onFailure: (string -> Task) option)
+        : obj =
+        createObj
+            [ yield "key" ==> PromptKey.value key
+              yield
+                  "mode"
+                  ==> (match mode with
+                       | PromptDispatcher.AwaitMode.Await -> "await"
+                       | PromptDispatcher.AwaitMode.Detached -> "detached")
+              match observer with
+              | Some observer -> yield "observer" ==> observerToNative observer
+              | None -> ()
+              match observed with
+              | Some observe -> yield "observed" ==> Action<obj>(observeSend observe)
+              | None -> ()
+              match onFailure with
+              | Some notify ->
+                  yield
+                      "onFailure"
+                      ==> Func<obj, Task>(fun verdict -> notify (sprintf "%A" (verdictFromNative verdict)))
+              | None -> () ]
 
     /// PROMPT-011: the key is derived, never generated.
     ///
@@ -104,154 +144,96 @@ module PromptDispatcherSend =
             origin
             payloadDigest
 
-    let private handleAdmittedPhysical
-        (submitted: TransportReceipt -> Task<Result<unit, string>>)
-        (acceptPhysical: PhysicalUserMessageId -> Task<Result<unit, string>>)
-        (physicalId: PhysicalUserMessageId)
-        (key: PromptKey)
-        : Task<Result<PromptKey, string>> =
-        taskResult {
-            let! _ = submitted (TransportReceipt.create (PhysicalUserMessageId.value physicalId))
-            let! _ = acceptPhysical physicalId
-            return key
-        }
+    let private attemptFromNative (result: obj) : PromptDispatcher.SendAttemptOutcome =
+        match unbox<string> result?kind with
+        | "Sent" -> PromptDispatcher.SendAttemptOutcome.Sent(PromptKey.create (unbox<string> result?key))
+        | "NotSent" -> PromptDispatcher.SendAttemptOutcome.NotSent(unbox<string> result?reason)
+        | "Failed" -> PromptDispatcher.SendAttemptOutcome.Failed(unbox<string> result?reason)
+        | "AdmissionRejected" ->
+            PromptDispatcher.SendAttemptOutcome.AdmissionRejected(unbox<QuiescencePermitFailure> result?failure)
+        | other -> invalidOp ("wanxiangli/dispatch returned an unknown attempt outcome: " + other)
 
-    let private registerAcceptance (key: PromptKey) (observer: ContinuationAcceptanceObserver option) =
-        observer
-        |> Option.map (fun owner ->
-            let registration = PromptPhysicalAcceptance.register key owner.Notify
-
-            try
-                owner.AttachDisposable registration
-                registration
-            with error ->
-                registration.Dispose()
-                raise error)
-
-    let private releaseRegistration (registration: IDisposable option) =
-        registration |> Option.iter (fun owned -> owned.Dispose())
-
-    let private beginOwnedConfirmation key registration (observer: ContinuationAcceptanceObserver) =
-        let outcome, subscription =
-            PromptPhysicalAcceptance.beginConfirmation key observer.Budget
-
-        try
-            observer.AttachDisposable subscription
-            outcome, subscription
-        with error ->
-            subscription.Dispose()
-            releaseRegistration registration
-            raise error
-
-    let private invokeObservedHostSend key onSendObserved registration send =
-        try
-            observeHostSend key onSendObserved send
-        with error ->
-            releaseRegistration registration
-            raise error
-
-    let private releaseFailedResult registration result =
-        if Result.isError result then
-            releaseRegistration registration
-
-    let private releaseFailedAttempt registration result =
-        match result with
-        | PromptDispatcher.SendAttemptOutcome.Sent _ -> ()
-        | _ -> releaseRegistration registration
-
-    let private persistSubmittedFact
-        (key: PromptKey)
-        (sessionId: SessionId)
-        (persist: PromptSessionFact -> Task<Result<unit, string>>)
-        (receipt: TransportReceipt)
-        : Task<Result<unit, string>> =
-        persist (
-            PromptSessionFact.PromptSubmitted
-                {| PromptKey = key
-                   SessionId = sessionId
-                   Receipt = receipt |}
-        )
-
-    let private admissionVerdict
-        (key: PromptKey)
-        (confirmation: PromptPhysicalOutcome option)
-        : Result<PromptKey, string> =
-        match confirmation with
-        | Some(PromptPhysicalOutcome.Accepted _) -> Ok key
-        | Some(PromptPhysicalOutcome.Rejected reason) -> Error(sprintf "Prompt admission rejected: %s" reason)
-        | None -> Error(sprintf "Acceptance unknown for PromptKey %s: confirmation timed out" (PromptKey.value key))
-
-    let private awaitAdmissionConfirmation
-        (key: PromptKey)
-        (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
-        : Task<Result<PromptKey, string>> =
-        match confirmationWaiterOpt with
-        | None -> Task.FromResult(Ok key)
-        | Some confirmationTask ->
-            task {
-                let! confirmation = confirmationTask
-                return admissionVerdict key confirmation
-            }
-
-    let private settleAdmittedReceipt
-        (key: PromptKey)
-        (sessionId: SessionId)
-        (persist: PromptSessionFact -> Task<Result<unit, string>>)
-        (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
-        (receipt: TransportReceipt)
-        : Task<Result<PromptKey, string>> =
+    let private unitToNative (pending: Task<Result<unit, string>>) : Task<obj> =
         task {
-            let! persisted = persistSubmittedFact key sessionId persist receipt
+            let! result = pending
 
-            match persisted with
-            | Error err -> return Error err
-            | Ok() -> return! awaitAdmissionConfirmation key confirmationWaiterOpt
+            return
+                match result with
+                | Ok() -> createObj [ "ok" ==> true ]
+                | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
         }
 
-    let private awaitPhysicalAwareSend
-        (key: PromptKey)
+    let private diagnostic (sessionId: SessionId) (key: PromptKey) (event: obj) =
+        let reason = unbox<string> event?reason
+
+        let name, result =
+            match unbox<string> event?kind with
+            | "outcome-unknown" ->
+                "detached-prompt-outcome-unknown",
+                sprintf "PromptKey %s outcome indeterminate: %s" (PromptKey.value key) reason
+            | "abandon-uncommitted" -> "detached-prompt-abandon-uncommitted", reason
+            | "observer-failed" -> "detached-prompt-observer-failed", reason
+            | other -> invalidOp ("wanxiangli/dispatch returned an unknown diagnostic: " + other)
+
+        Diagnostic.emit name [ "session_id", SessionId.value sessionId; "result", result ]
+
+    let private effectsOf
+        (runtime: PromptDispatcher.Runtime)
+        (port: IDispatchSessionPort)
         (sessionId: SessionId)
-        (persist: PromptSessionFact -> Task<Result<unit, string>>)
+        (key: PromptKey)
+        (request: Wanxiangshu.Host.Ports.PromptRequest)
+        (metadata: obj option)
         (acceptPhysical: PhysicalUserMessageId -> Task<Result<unit, string>>)
-        (abandon: PromptAbandonReason -> string -> Task<Result<unit, string>>)
-        (sendTask: Task<SendOutcome>)
-        (confirmationWaiterOpt: Task<PromptPhysicalOutcome option> option)
-        : Task<Result<PromptKey, string> * bool> =
-        // The verdict travels with the result: a Host that refused before
-        // accepting anything must stay `NotSent`, not decay into `Failed`.
-        // DSL-MUTABLE: resource — physical send receipt controls cancellation cleanup
-        let mutable definitelyNotSent = false
+        (admit: (unit -> obj) option)
+        : obj =
+        createObj
+            [ yield
+                  "subscribe"
+                  ==> Func<obj>(fun () ->
+                      let subscription = port.SubscribeTerminal(sessionId, (fun _ _ -> ()))
+                      createObj [ "dispose" ==> Action(fun () -> subscription.Dispose()) ])
+              yield
+                  "send"
+                  ==> Func<obj, Task<obj>>(fun late ->
+                      let listener: Wanxiangshu.Host.Ports.LateDeliveryListener option =
+                          match box late with
+                          | null -> None
+                          | _ -> Some(fun verdict -> unbox<Task> (emitJsExpr (late, verdictToNative verdict) "$0($1)"))
 
-        let settle =
-            task {
-                let! outcome = sendTask
-                let action, notSent, _ = answerOf outcome
-                definitelyNotSent <- notSent
+                      let pending = port.SendPrompt(sessionId, request, metadata, listener)
 
-                match action with
-                | SendLedger.Submit receipt ->
-                    return! settleAdmittedReceipt key sessionId persist confirmationWaiterOpt receipt
-                | SendLedger.SubmitThenAccept physicalId ->
-                    return!
-                        handleAdmittedPhysical
-                            (persistSubmittedFact key sessionId persist)
-                            acceptPhysical
-                            physicalId
-                            key
-                | SendLedger.Abandon error ->
-                    let! _ = abandon (PromptAbandonReason.SendFailed error) error
-                    return Error error
-                | SendLedger.KeepPending reason ->
-                    return Error(sprintf "Acceptance unknown for PromptKey %s: %s" (PromptKey.value key) reason)
-            }
+                      task {
+                          let! outcome = pending
+                          return outcomeToNative outcome
+                      })
+              yield
+                  "submitted"
+                  ==> Func<string, Task<obj>>(fun receipt ->
+                      PromptSessionFact.PromptSubmitted
+                          {| PromptKey = key
+                             SessionId = sessionId
+                             Receipt = TransportReceipt.create receipt |}
+                      |> runtime.Persist sessionId None
+                      |> unitToNative)
+              yield
+                  "acceptPhysical"
+                  ==> Func<string, Task<obj>>(fun physical ->
+                      acceptPhysical (PhysicalUserMessageId.create physical) |> unitToNative)
+              yield
+                  "abandon"
+                  ==> Func<obj, Task<obj>>(fun command ->
+                      let reason =
+                          match unbox<string> command?kind with
+                          | "send-failed" -> PromptAbandonReason.SendFailed(unbox<string> command?reason)
+                          | "superseded" -> PromptAbandonReason.SupersededBeforePhysicalSend
+                          | other -> invalidOp ("wanxiangli/dispatch requested an unknown abandonment: " + other)
 
-        task {
-            try
-                let! result = settle
-                return result, definitelyNotSent
-            with ex ->
-                return Error ex.Message, false
-        }
+                      runtime.Abandon key sessionId reason |> unitToNative)
+              yield "diagnostic" ==> Action<obj>(diagnostic sessionId key)
+              match admit with
+              | Some admit -> yield "admit" ==> Func<obj>(admit)
+              | None -> () ]
 
     let private publicResultOfAttempt =
         function
@@ -261,184 +243,7 @@ module PromptDispatcherSend =
         | PromptDispatcher.SendAttemptOutcome.AdmissionRejected failure ->
             Error(sprintf "idle-derived send admission rejected before physical dispatch: %A" failure)
 
-    let private continuationAttemptOutcome (outcome: SendOutcome) (result: Result<PromptKey, string>) =
-        let _, definitelyNotSent, _ = answerOf outcome
-
-        match result with
-        | Error error when definitelyNotSent -> PromptDispatcher.SendAttemptOutcome.NotSent error
-        | Ok sentKey -> PromptDispatcher.SendAttemptOutcome.Sent sentKey
-        | Error error -> PromptDispatcher.SendAttemptOutcome.Failed error
-
-    /// Same classification, with the verdict the physical-aware await observed
-    /// instead of a synthesized one.
-    let private attemptOutcomeFrom (definitelyNotSent: bool) (result: Result<PromptKey, string>) =
-        match result with
-        | Error error when definitelyNotSent -> PromptDispatcher.SendAttemptOutcome.NotSent error
-        | Ok sentKey -> PromptDispatcher.SendAttemptOutcome.Sent sentKey
-        | Error error -> PromptDispatcher.SendAttemptOutcome.Failed error
-
-    let private awaitPhysicalAwareContinuationAttempt
-        (sendTask: Task<SendOutcome>)
-        (record: SendOutcome -> Task<Result<PromptKey, string>>)
-        : Task<PromptDispatcher.SendAttemptOutcome> =
-        task {
-            try
-                let! outcome = sendTask
-                let! result = record outcome
-                return continuationAttemptOutcome outcome result
-            with ex ->
-                return raise ex
-        }
-
-    let private physicalSendAdmission (admission: (unit -> Result<unit, QuiescencePermitFailure>) option) =
-        admission |> Option.map (fun admit -> admit ()) |> Option.defaultValue (Ok())
-
-    /// Detached dispatch observer: the success rail stays silent, the
-    /// failure rail receives exactly one string form of the typed verdict.
-    /// Pulled out as a module-level helper to flatten the consumer's pyramid
-    /// — the try/wrap stays at one level in both this file's bodies.
-    let private notifyDetachedFailureListener
-        (sessionId: SessionId)
-        (verdict: DetachedSendVerdict)
-        (callback: string -> Task)
-        : Task =
-        task {
-            try
-                do! callback (sprintf "%A" verdict)
-            with ex ->
-                Diagnostic.emit
-                    "detached-prompt-observer-failed"
-                    [ "session_id", SessionId.value sessionId; "result", ex.Message ]
-        }
-
     type PromptDispatcher.Runtime with
-
-        /// Record the Host's answer and report what the caller may conclude.
-        ///
-        /// `AcceptanceUnknown` deliberately writes nothing. PROMPT-011 keeps such a
-        /// key Pending so recovery can look for the physical message later;
-        /// abandoning it here would license a resend, and resending is exactly how
-        /// one logical prompt becomes two physical ones.
-        member private this.RecordSendOutcome
-            (key: PromptKey)
-            (sessionId: SessionId)
-            (outcome: SendOutcome)
-            (acceptPhysical: PhysicalUserMessageId -> Task<Result<unit, string>>)
-            : Task<Result<PromptKey, string>> =
-            task {
-                let submitted (receipt: TransportReceipt) =
-                    PromptSessionFact.PromptSubmitted
-                        {| PromptKey = key
-                           SessionId = sessionId
-                           Receipt = receipt |}
-                    |> this.Persist sessionId None
-
-                // `Abandoned` is written by `Runtime.Abandon` (PROMPT-005 single writer).
-                // Constructing the fact here as well would make PROMPT-011's recovery a
-                // second writer of the same fact with its own copy of the payload shape.
-                let abandon (reason: PromptAbandonReason) (error: string) =
-                    task {
-                        match! this.Abandon key sessionId reason with
-                        | Ok() -> return Error error
-                        | Error persistError -> return Error persistError
-                    }
-
-                let action, _, _ = answerOf outcome
-
-                match action with
-                | SendLedger.Submit receipt ->
-                    // PROMPT-005: an `accepted-*` receipt is not a message identity, so
-                    // the chain stops at Submitted. `chat.message` supplies the physical
-                    // id later and PromptIngress writes PhysicalAccepted then.
-                    // PROMPT-007 Detached: this is already a complete success for the caller.
-                    let! persisted = submitted receipt
-                    return persisted |> Result.map (fun () -> key)
-
-                | SendLedger.SubmitThenAccept physicalId ->
-                    // The Host answered with a real id. That answer is still the
-                    // transport receipt — it is simply not admission-shaped — so the
-                    // four-stage chain stays intact instead of skipping Submitted.
-                    return! handleAdmittedPhysical submitted acceptPhysical physicalId key
-
-                | SendLedger.Abandon error -> return! abandon (PromptAbandonReason.SendFailed error) error
-
-                | SendLedger.KeepPending reason ->
-                    return Error(sprintf "Acceptance unknown for PromptKey %s: %s" (PromptKey.value key) reason)
-            }
-
-        member private this.PersistDetachedInvocation(key: PromptKey, sessionId: SessionId) =
-            // PROMPT-007: this is a local invocation receipt, not a physical
-            // message id and not the eventual SDK Promise result. It is durable
-            // before the Detached caller returns so immediate reuse/recovery sees
-            // the claim as already handed to Host async enqueue.
-            PromptSessionFact.PromptSubmitted
-                {| PromptKey = key
-                   SessionId = sessionId
-                   Receipt = TransportReceipt.create ("accepted-detached-" + PromptKey.value key) |}
-            |> this.Persist sessionId None
-
-        /// The detached envelope's eventual verdict routed to this exact
-        /// PromptKey: OwnedSettled means the caller-visible path already
-        /// decided; Refused licenses aborting the claim (nothing reached the
-        /// Host); OutcomeUnknown keeps the claim pending on durable evidence.
-        /// Nothing else — no fatal, no resend, no fabricated success.
-        member internal this.SettleDetachedSend
-            (key: PromptKey)
-            (sessionId: SessionId)
-            (verdict: DetachedSendVerdict)
-            (onFailure: (string -> Task) option)
-            : Task =
-            task {
-                match verdict with
-                | DetachedSendVerdict.OwnedSettled ->
-                    // The sendTask or a synchronous throw already decided the
-                    // caller-visible outcome; a late arrival must not re-settle.
-                    ()
-                | DetachedSendVerdict.Refused reason -> return! this.SettleDetachedSendRefused key sessionId reason
-                | DetachedSendVerdict.OutcomeUnknown reason ->
-                    // PROMPT-011: never resent, never abandoned — the claim
-                    // stays Pending on durable evidence until chat.message
-                    // proves physical acceptance or a later explicit abandon
-                    // closes it.
-                    Diagnostic.emit
-                        "detached-prompt-outcome-unknown"
-                        [ "session_id", SessionId.value sessionId
-                          "result", sprintf "PromptKey %s outcome indeterminate: %s" (PromptKey.value key) reason ]
-
-                match verdict, onFailure with
-                | DetachedSendVerdict.OwnedSettled, _
-                | _, None -> ()
-                | verdict, Some callback -> return! notifyDetachedFailureListener sessionId verdict callback
-            }
-
-        /// PROMPT-007: observe a Host send after a Detached caller has already
-        /// received its PromptKey. The synchronous sendTask verdict and the
-        /// eventual detached verdict both route through SettleDetachedSend —
-        /// the same typed owner evidence. Nothing fails the whole process for
-        /// a late Host transport result.
-        member private this.ObserveDetachedSend
-            (key: PromptKey)
-            (sessionId: SessionId)
-            (sendTask: Task<SendOutcome>)
-            (onFailure: (string -> Task) option)
-            : unit =
-            let classifyDetachedOutcome outcome =
-                let _, _, verdict = answerOf outcome
-                verdict
-
-            task {
-                let! verdict =
-                    task {
-                        try
-                            let! outcome = sendTask
-                            return classifyDetachedOutcome outcome
-                        with ex ->
-                            return DetachedSendVerdict.OutcomeUnknown ex.Message
-                    }
-
-                do! this.SettleDetachedSend key sessionId verdict onFailure
-            }
-            |> ignore
 
         /// PROMPT-002: a plugin-owned Authority Root.
         ///
@@ -486,10 +291,6 @@ module PromptDispatcherSend =
 
                 let! _ = this.Persist sessionId None claimed
 
-                // EXEC-003: the terminal listener must exist before the prompt
-                // does, or a fast completion has nobody to deliver to.
-                use _listener = this.SubscribeNoOp port sessionId
-
                 let request: Wanxiangshu.Host.Ports.PromptRequest =
                     { Text = text
                       Route = None
@@ -500,65 +301,16 @@ module PromptDispatcherSend =
 
                 let metadata = Some(this.Metadata key (PromptDispatcher.originLabel origin) None)
 
-                let late: Wanxiangshu.Host.Ports.LateDeliveryListener option =
-                    match awaitMode with
-                    | PromptDispatcher.AwaitMode.Detached ->
-                        Some(fun (verdict: Wanxiangshu.Host.Ports.DeliveryVerdict) ->
-                            this.SettleDetachedSend
-                                key
-                                sessionId
-                                (DispatchSessionPort.toDetachedVerdict verdict)
-                                onDetachedFailure)
-                    | PromptDispatcher.AwaitMode.Await -> None
-
-                let registration = registerAcceptance key onAccepted
-
-                let confirmation =
-                    match awaitMode, onAccepted with
-                    | PromptDispatcher.AwaitMode.Await, Some observer ->
-                        Some(beginOwnedConfirmation key registration observer)
-                    | _ -> None
-
                 let acceptFn physicalId =
                     this.AcceptPhysicalAgentOwnerRoot key sessionId physicalId claim.IdentitySeed None
                     |> TaskValue.map (Result.map ignore)
 
-                let awaitRootSend sendTask =
-                    task {
-                        let! outcome, _ =
-                            awaitPhysicalAwareSend
-                                key
-                                sessionId
-                                (fun fact -> this.Persist sessionId None fact)
-                                acceptFn
-                                (fun reason error ->
-                                    this.Abandon key sessionId reason |> TaskValue.map (fun _ -> Error error))
-                                sendTask
-                                (confirmation |> Option.map fst)
+                let spec = specOf key awaitMode onAccepted onSendObserved onDetachedFailure
+                let effects = effectsOf this port sessionId key request metadata acceptFn None
 
-                        releaseFailedResult registration outcome
-                        return outcome
-                    }
-
-                let sendClaimedRoot sendTask =
-                    match awaitMode with
-                    | PromptDispatcher.AwaitMode.Detached ->
-                        taskResult {
-                            let! _ = this.PersistDetachedInvocation(key, sessionId)
-                            this.ObserveDetachedSend key sessionId sendTask onDetachedFailure
-                            return key
-                        }
-                    | PromptDispatcher.AwaitMode.Await -> awaitRootSend sendTask
-
-                try
-                    let sendTask =
-                        invokeObservedHostSend key onSendObserved registration (fun () ->
-                            port.SendPrompt(sessionId, request, metadata, late))
-
-                    let! result = sendClaimedRoot sendTask
-                    return result
-                finally
-                    confirmation |> Option.iter (fun (_, owned) -> owned.Dispose())
+                return!
+                    unbox<Task<obj>> (attempt?sendInitial (spec, effects))
+                    |> TaskValue.map (attemptFromNative >> publicResultOfAttempt)
             }
 
         member this.SendAgentOwnerRoot
@@ -637,8 +389,6 @@ module PromptDispatcherSend =
             (key: PromptKey)
             : Task<PromptDispatcher.SendAttemptOutcome> =
             task {
-                use _listener = this.SubscribeNoOp port sessionId
-
                 let request: Wanxiangshu.Host.Ports.PromptRequest =
                     { Text = text
                       Route = None
@@ -649,104 +399,32 @@ module PromptDispatcherSend =
 
                 let metadata = Some(this.Metadata key originLabel (Some profile.LogicalRunId))
 
-                let late: Wanxiangshu.Host.Ports.LateDeliveryListener option =
-                    match awaitMode with
-                    | PromptDispatcher.AwaitMode.Detached ->
-                        Some(fun (verdict: Wanxiangshu.Host.Ports.DeliveryVerdict) ->
-                            this.SettleDetachedSend key sessionId (DispatchSessionPort.toDetachedVerdict verdict) None)
-                    | PromptDispatcher.AwaitMode.Await -> None
+                let acceptFn physicalId =
+                    this.AcceptContinuation key sessionId physicalId
+                    |> TaskValue.map (Result.map ignore)
 
-                let registration = registerAcceptance key onAccepted
+                let physicalVerdict () =
+                    let admitted =
+                        physicalAdmission
+                        |> Option.map (fun check -> check ())
+                        |> Option.defaultValue (Ok())
 
-                let confirmation =
-                    match awaitMode, onAccepted with
-                    | PromptDispatcher.AwaitMode.Await, Some observer ->
-                        Some(beginOwnedConfirmation key registration observer)
-                    | _ -> None
+                    match admitted with
+                    | Ok() -> createObj [ "kind" ==> "allowed" ]
+                    | Error failure -> createObj [ "kind" ==> "rejected"; "failure" ==> failure ]
 
-                let ownedOpt = confirmation |> Option.map snd
+                let admit () =
+                    match this.RequireActiveProfile sessionId profile with
+                    | Error reason -> createObj [ "kind" ==> "failed"; "reason" ==> reason ]
+                    | Ok() -> physicalVerdict ()
 
-                use _ownedScope =
-                    { new System.IDisposable with
-                        member _.Dispose() =
-                            ownedOpt |> Option.iter (fun d -> d.Dispose()) }
+                let spec = specOf key awaitMode onAccepted onSendObserved None
 
-                // The admission check and the Host call are deliberately
-                // synchronous neighbours. No await may reopen a window where
-                // newer physical material can arrive after quiescence was
-                // proven but before SendPrompt is invoked.
-                let sendAdmitted () : Task<PromptDispatcher.SendAttemptOutcome> =
-                    task {
-                        let sendTask =
-                            observeHostSend key onSendObserved (fun () ->
-                                port.SendPrompt(sessionId, request, metadata, late))
+                let effects =
+                    effectsOf this port sessionId key request metadata acceptFn (Some admit)
 
-                        let acceptFn physicalId =
-                            this.AcceptContinuation key sessionId physicalId
-                            |> TaskValue.map (Result.map ignore)
-
-                        let detachedOutcome () : Task<PromptDispatcher.SendAttemptOutcome> =
-                            task {
-                                let! persisted = this.PersistDetachedInvocation(key, sessionId)
-
-                                match persisted with
-                                | Error error -> return PromptDispatcher.SendAttemptOutcome.Failed error
-                                | Ok() ->
-                                    this.ObserveDetachedSend key sessionId sendTask None
-                                    return PromptDispatcher.SendAttemptOutcome.Sent key
-                            }
-
-                        let sendAfterAdmission () : Task<PromptDispatcher.SendAttemptOutcome> =
-                            match awaitMode with
-                            | PromptDispatcher.AwaitMode.Detached -> detachedOutcome ()
-                            | PromptDispatcher.AwaitMode.Await ->
-                                task {
-                                    let! outcome, definitelyNotSent =
-                                        awaitPhysicalAwareSend
-                                            key
-                                            sessionId
-                                            (fun fact -> this.Persist sessionId None fact)
-                                            acceptFn
-                                            (fun reason error ->
-                                                this.Abandon key sessionId reason
-                                                |> TaskValue.map (fun _ -> Error error))
-                                            sendTask
-                                            (confirmation |> Option.map fst)
-
-                                    return attemptOutcomeFrom definitelyNotSent outcome
-                                }
-
-                        return! sendAfterAdmission ()
-                    }
-
-                let dispatchClaimedContinuation () =
-                    let admission =
-                        match this.RequireActiveProfile sessionId profile with
-                        | Error error -> Error(PromptDispatcher.SendAttemptOutcome.Failed error)
-                        | Ok() ->
-                            physicalSendAdmission physicalAdmission
-                            |> Result.mapError PromptDispatcher.SendAttemptOutcome.AdmissionRejected
-
-                    match admission with
-                    | Error failure ->
-                        releaseRegistration registration
-
-                        this.Abandon key sessionId PromptAbandonReason.SupersededBeforePhysicalSend
-                        |> TaskValue.map (function
-                            | Ok() -> failure
-                            | Error error -> PromptDispatcher.SendAttemptOutcome.Failed error)
-                    | Ok() ->
-                        task {
-                            let! result = sendAdmitted ()
-                            releaseFailedAttempt registration result
-                            return result
-                        }
-
-                try
-                    return! dispatchClaimedContinuation ()
-                with error ->
-                    releaseRegistration registration
-                    return raise error
+                let! result = unbox<Task<obj>> (attempt?sendContinuation (spec, effects))
+                return attemptFromNative result
             }
 
         member private this.SendContinuationWithDigestAttempt
@@ -962,21 +640,7 @@ module PromptDispatcherSend =
             (directory: string option)
             (tools: Map<string, bool> option)
             : Task<Result<PromptKey, string>> =
-            match (this.ProjectionFor sessionId).ActiveLogicalRun with
-            | Some profile ->
-                this.SendContinuationWithDigest
-                    port
-                    sessionId
-                    text
-                    (HostDigest.sha256Hex text)
-                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
-                    profile
-                    directory
-                    PromptDispatcher.AwaitMode.Detached
-                    None
-                    None
-                    tools
-            | None ->
+            let sendRoot () =
                 match issueIdentitySeed () with
                 | Error reason -> Task.FromResult(Error reason)
                 | Ok identitySeed ->
@@ -992,6 +656,22 @@ module PromptDispatcherSend =
                         None
                         tools
 
+            match (this.ProjectionFor sessionId).ActiveLogicalRun with
+            | Some profile ->
+                this.SendContinuationWithDigest
+                    port
+                    sessionId
+                    text
+                    (HostDigest.sha256Hex text)
+                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
+                    profile
+                    directory
+                    PromptDispatcher.AwaitMode.Detached
+                    None
+                    None
+                    tools
+            | None -> sendRoot ()
+
         member this.SendManagedAssignmentObserved
             (port: IDispatchSessionPort)
             (sessionId: SessionId)
@@ -1003,21 +683,7 @@ module PromptDispatcherSend =
             (onSendObserved: (PromptDispatcher.PromptSendObservation -> unit) option)
             (tools: Map<string, bool> option)
             : Task<Result<PromptKey, string>> =
-            match (this.ProjectionFor sessionId).ActiveLogicalRun with
-            | Some profile ->
-                this.SendContinuationWithDigest
-                    port
-                    sessionId
-                    text
-                    (HostDigest.sha256Hex text)
-                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
-                    profile
-                    directory
-                    awaitMode
-                    onAccepted
-                    onSendObserved
-                    tools
-            | None ->
+            let sendRoot () =
                 match issueIdentitySeed () with
                 | Error reason -> Task.FromResult(Error reason)
                 | Ok identitySeed ->
@@ -1032,6 +698,22 @@ module PromptDispatcherSend =
                         onSendObserved
                         None
                         tools
+
+            match (this.ProjectionFor sessionId).ActiveLogicalRun with
+            | Some profile ->
+                this.SendContinuationWithDigest
+                    port
+                    sessionId
+                    text
+                    (HostDigest.sha256Hex text)
+                    PromptAuthority.ContinuationKind.ManagedDelegationAssignment
+                    profile
+                    directory
+                    awaitMode
+                    onAccepted
+                    onSendObserved
+                    tools
+            | None -> sendRoot ()
 
         /// provider-attempt-recovery-008: the one request + terminal-scoped interaction repair an unusable terminal earns.
         ///
@@ -1151,18 +833,3 @@ module PromptDispatcherSend =
                 None
                 None
                 (Some physicalAdmission)
-
-        /// Refused arm of SettleDetachedSend — kept flat so the outer match
-        /// stays a single level; persistence errors report through the
-        /// diagnostic lane rather than a second nested match arm.
-        member private this.SettleDetachedSendRefused (key: PromptKey) (sessionId: SessionId) (reason: string) : Task =
-            task {
-                let! result = this.Abandon key sessionId (PromptAbandonReason.SendFailed reason)
-
-                match result with
-                | Ok() -> ()
-                | Error persistError ->
-                    Diagnostic.emit
-                        "detached-prompt-abandon-uncommitted"
-                        [ "session_id", SessionId.value sessionId; "result", persistError ]
-            }

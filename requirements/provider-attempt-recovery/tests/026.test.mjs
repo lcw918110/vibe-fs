@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
+const runtimePath = { stateRoot: journal.JournalSurface_stateRoot }
 import * as owner from '../../../dist/Participant/Provider/Attempt/Fallback/ProviderFailureSurface.js'
 
 test('WHAT[provider-attempt-recovery-026] missing active profile is terminal, never superseded', async () => {
@@ -69,33 +70,17 @@ test('WHAT[provider-attempt-recovery-026] terminal verdict notifies terminal fai
 
     // 迟到失败到来之前，logical run 已按 Manager-life 退休 durably 关闭：
     // active profile 随之消失，催续从此无从谈起。
-    await journal.JournalSurface_appendAuthorityLogicalRunClosed(directory, 'ses-026-terminal', 'retire-026-terminal')
+    await journal.JournalSurface_appendAuthorityLogicalRunClosed(await runtimePath.stateRoot(directory), 'ses-026-terminal', 'retire-026-terminal')
 
     // 先信号后等待：对已停 key 的迟到等待者立即解析（022/027 先例），否则挂 30 秒
     providerAttemptStopFence.SignalStop('ses-026-terminal', 'run-026-terminal')
 
-    // turn 由面按领域名解码：身份与角色是恢复的全部输入，失败账的证据不在其中。
-    // root 故意不同于已关闭 run 的 root：同 root 会被 sameRunAlreadyClosed 判为
-    // 陈旧失败而静默；不同的 root 才让缺失 profile 的 Terminal 判定走到通知。
-    // role 为空：stopOrContinueLongWork 直达 notifyFailure(reason)，全程不触 SendPrompt。
-
-    // 真链路：continueAfterConfirmedFailure → retryConfirmedFailure → fence 'Stopped' →
-    // continueSameProvider 判 Terminal 'No active authority profile' → notifyFailure。
-    // 失败账的第一笔也由这条链自己写下（admitAuthorizedFailure）。
-    await owner.continueAfterConfirmedFailure(
-      sessionPort,
-      null, // rootWorkspace：Terminal 判定不触 continuation send
-      eventPort,
-      created.journal,
-      'ses-026-terminal',
-      'msg-026-terminal',
-      'msg-026-terminal-late-root',
-      'run-026-terminal',
-      '', // role：短命角色，通知即终局
-      'ProviderTransient', // 领域失败名，不是编译后 union tag
-      'late provider error', // 刻意不含目标短语：文案只能来自产品判定，不是测试回声
-      'probe continuation prompt',
-    )
+    await owner.continueConfirmedFailure(created.journal, sessionPort, eventPort, {
+      session: 'ses-026-terminal', physicalMessage: 'msg-026-terminal',
+      authorityRoot: 'msg-026-terminal-late-root', providerRun: 'run-026-terminal',
+      role: null, failure: 'ProviderTransient', error: 'late provider error',
+      continuationPrompt: 'probe continuation prompt',
+    })
 
     // 可观察失败断言：恰一条 Failed 通知，文案精确等于产品自判的缺失 profile 短语
     assert.equal(terminals.length, 1, JSON.stringify(terminals))

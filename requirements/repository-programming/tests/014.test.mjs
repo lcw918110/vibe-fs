@@ -8,7 +8,6 @@ const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
 const { caseName, failureCode, failureReason, rewritten, run, runObserved } = await import("../../../dist/Repository/Programming/Js/WorkflowSurface.js");
 const { generate } = await import("../../../dist/Repository/Programming/Js/GeneratorSurface.js");
-const { api: runtimeApi, createApi: createRuntimeApi, readPaths: runtimeReadPaths, run: runRuntime, stagedCount, stagedKinds } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
 
 const sandbox = () => {
   const dir = mkdtempSync(join(tmpdir(), 'wxs-edit-'))
@@ -209,6 +208,7 @@ test('WHAT[repository-programming-014] JS014_as_is_create_lands_immediately_and_
     return { ok: true };
   }
 }`
+    let observed
     const outcome = await runObserved(
       dir,
       'Coder',
@@ -218,12 +218,16 @@ test('WHAT[repository-programming-014] JS014_as_is_create_lands_immediately_and_
       4_102_444_800_000,
       1 << 20,
       null,
-      async () => writeFileSync(join(dir, 'new.txt'), 'external', 'utf8'),
+      async (readPaths, effectPaths) => {
+        observed = { readPaths, effectPaths }
+        writeFileSync(join(dir, 'new.txt'), 'external', 'utf8')
+      },
     )
 
     // The create landed at call time; the observation callback's external
     // write is a later, separate fact and does not fail the program.
     assert.equal(caseName(outcome), 'Succeeded')
+    assert.deepEqual(observed, { readPaths: [], effectPaths: ['new.txt'] })
     assert.equal(readFileSync(join(dir, 'new.txt'), 'utf8'), 'external')
   } finally {
     cleanup()

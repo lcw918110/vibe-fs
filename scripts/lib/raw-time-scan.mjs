@@ -54,8 +54,6 @@ export const RAW_TIME_ALLOWLIST = Object.freeze([
   'OpenCode/Tools/ToolRegistry.fs',
   'Persistence/EventStore/ProcessEventLog.fs',
   'Persistence/Journal/EventStoreJournalWriter.fs',
-  'Process/NodeProcessWait.fs',
-  'Process/ProcessRunner.fs',
   'Process/Pty.fs',
   'Process/PtySupervisor.fs',
   'Process/NodeTiming.fs',

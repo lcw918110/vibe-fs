@@ -2,21 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { parse as parseDocument } from 'smol-toml'
 import { sandbox, runProgram, runText, caseName, parseData, nodeCommand } from './support/executor.mjs'
-import {
-  field,
-  renderDocument,
-  renderInt,
-  renderString,
-  renderStringByteCountPrefix,
-} from '../../../dist/Foundation/SyntheticTomlSurface.js'
+import { LlmText } from 'wanxiangli/llm-text'
 import { readFileSync } from 'node:fs'
 import { closeSession } from '../../../dist/Repository/Programming/Js/Programs.js'
 import { failureCode } from '../../../dist/Repository/Programming/Js/WorkflowSurface.js'
 
 // Host-native `run` tool is retired; `this.call` supersedes it (repository-programming [050]-[052]).
 
-const formatOutcomeDocument = (exitCode, raw) =>
-  renderDocument([], [field('exit_code', renderInt(exitCode)), field('output', renderString(raw))])
+const text = new LlmText()
+const formatOutcomeDocument = (exitCode, raw) => text.render(text.withData([
+  text.intField('exit_code', exitCode), text.stringField('output', raw),
+], text.empty()))
 
 test('WHAT[process-execution-014] raw_spooled_output_is_data_not_an_instruction', async () => {
   const { dir, cleanup } = sandbox('wxs-proc-014a-')
@@ -37,7 +33,7 @@ test('WHAT[process-execution-014] raw_spooled_output_is_data_not_an_instruction'
   }
 })
 
-test('WHAT[process-execution-014] actual spooled output round-trips every raw text value', async (context) => {
+test('WHAT[process-execution-014] output presentation round-trips every raw text value', async (context) => {
   const samples = [
     ['empty', ''],
     ['no trailing LF', 'first\nsecond'],
@@ -125,29 +121,9 @@ test('WHAT[process-execution-014] multiline TOML stays readable without adding a
     'first\n\u0000\u0007\u007f\t\n',
   ]
   for (const raw of samples) {
-    const rendered = renderString(raw)
-    assert.ok(rendered.startsWith('"""\n') || rendered.startsWith("'''\n"))
+    const rendered = text.render(text.withData([text.stringField('output', raw)], text.empty()))
+    assert.ok(rendered.startsWith('output = """\n') || rendered.startsWith("output = '''\n"))
     assert.ok(rendered.includes('first\n') || rendered.includes('first\\r\n'))
-    assert.equal(parseDocument(field('output', rendered)).output, raw)
-  }
-})
-
-test('WHAT[process-execution-014] TOML byte counts match multiline rendering at prefix boundaries', () => {
-  const samples = [
-    '',
-    'first\nsecond',
-    'first\nsecond\n',
-    'first\r\nsecond',
-    `"""\n'''\n中文 😀\\`,
-    'x\n\u0000\n',
-  ]
-  const suffixes = ['', '\n', '\nend', "''\n", '\ude00']
-  for (const raw of samples) {
-    for (let length = 0; length <= raw.length; length += 1) {
-      for (const suffix of suffixes) {
-        const expected = Buffer.byteLength(renderString(raw.slice(0, length) + suffix))
-        assert.equal(renderStringByteCountPrefix(raw, length, suffix), expected)
-      }
-    }
+    assert.equal(parseDocument(rendered).output, raw)
   }
 })

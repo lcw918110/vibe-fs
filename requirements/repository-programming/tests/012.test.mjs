@@ -6,7 +6,7 @@ const { default: test } = await import("node:test");
 const { mkdtempSync, writeFileSync, rmSync, mkdirSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
-const { createApi, api: apiOf, stagedCount, stagedKinds, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
+const { createApi, api: apiOf, run } = await import("../../../dist/Repository/Programming/Js/RuntimeSurface.js");
 const { generate } = await import("../../../dist/Repository/Programming/Js/GeneratorSurface.js");
 
 const sandbox = () => {
@@ -22,8 +22,6 @@ test('WHAT[repository-programming-012] JS008_012_bindings_rewrite_persists_immed
     const binding = createApi(dir)
     const result = apiOf(binding).write('a.txt', 'new text')
     assert.equal(result.ok, true)
-    assert.equal(stagedCount(binding), 1)
-    assert.deepEqual(stagedKinds(binding), ['Rewrite'])
     const disk = apiOf(binding).cat('a.txt')
     assert.equal(disk.text, 'new text')
   } finally {

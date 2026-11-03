@@ -475,6 +475,18 @@ module HostPlugin =
                else
                    reason) ]
 
+    let private confirmNegotiationDelivery sid delegator receipt =
+        let confirmed =
+            Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer receipt sid
+
+        if not confirmed then
+            negotiationDeliveryFailed
+                receipt
+                sid
+                delegator
+                "confirm-steer"
+                "steer delivered but the receipt was not confirmed (unknown, settled or stale)"
+
     let private processNegotiationDelivery
         (transport: INegotiationTransport)
         (sid: string)
@@ -491,20 +503,8 @@ module HostPlugin =
 
             let! deliverRes = transport.DeliverAndObserve steerReq
 
-            let confirmDelivery () =
-                let confirmed =
-                    Wanxiangshu.Context.Scope.Surface.confirmNegotiationSteer readyReceipt sid
-
-                if not confirmed then
-                    negotiationDeliveryFailed
-                        readyReceipt
-                        sid
-                        delegator
-                        "confirm-steer"
-                        "steer delivered but the receipt was not confirmed (unknown, settled or stale)"
-
             match deliverRes with
-            | Ok() -> confirmDelivery ()
+            | Ok() -> confirmNegotiationDelivery sid delegator readyReceipt
             | Error reason -> negotiationDeliveryFailed readyReceipt sid delegator "deliver-steer" reason
         }
 

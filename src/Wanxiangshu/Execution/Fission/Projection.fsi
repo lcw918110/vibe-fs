@@ -41,13 +41,7 @@ type FissionGroupProjection =
       Takeover: FissionTakeoverProjection option
       Terminal: FissionGroupTerminal }
 
-[<CLIMutable>]
-type FissionProjectionState =
-    { Groups: Map<string, FissionGroupProjection>
-      ActiveByOwner: Map<SessionId, string>
-      LatestByOwner: Map<SessionId, string>
-      LaneOwner: Map<SessionId, SessionId>
-      LaneMembership: Map<SessionId, string * int> }
+type FissionProjectionState
 
 [<RequireQualifiedAccess>]
 type FissionProjectionRejection =
@@ -63,12 +57,14 @@ type FissionProjectionRejection =
 
 module FissionProjection =
     val empty: FissionProjectionState
+    val native: state: FissionProjectionState -> obj
+    val fromGroup: value: obj -> FissionGroupProjection
     val tryGroup: groupId: string -> state: FissionProjectionState -> FissionGroupProjection option
     val tryActiveForOwner: owner: SessionId -> state: FissionProjectionState -> FissionGroupProjection option
     val tryLatestForOwner: owner: SessionId -> state: FissionProjectionState -> FissionGroupProjection option
     val tryOwnerOfLane: lane: SessionId -> state: FissionProjectionState -> SessionId option
     val tryMembershipOfLane: lane: SessionId -> state: FissionProjectionState -> (FissionGroupProjection * int) option
-    /// wanxiangli/fission-group `convergenceReady` over a folded group (CUT-28).
+    val activeGroups: state: FissionProjectionState -> FissionGroupProjection list
     val convergenceReady: group: FissionGroupProjection -> bool
 
     val fold:

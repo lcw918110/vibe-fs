@@ -1,6 +1,8 @@
 namespace Wanxiangshu.Participant.Provider.Attempt.Fallback
 
 open System.Threading.Tasks
+open Fable.Core
+open Fable.Core.JsInterop
 open Wanxiangshu.Composition.Turn
 open Wanxiangshu.Execution.Failure
 open Wanxiangshu.Foundation.Identity
@@ -30,15 +32,34 @@ type RetryPorts =
 /// dedicated delegate children (delegation-023 / execution-failure-policy-003 / provider-attempt-recovery-019).
 module Retry =
 
+    [<Import("ProviderRecovery", "wanxiangli/failure")>]
+    let private recoveryClass: obj = jsNative
+
+    let private recovery: obj = createNew recoveryClass ()
+
+    let internal fromNativeVerdict (value: obj) =
+        match string value?kind with
+        | "Dispatched" -> RetryVerdict.Dispatched
+        | "Superseded" -> RetryVerdict.Superseded
+        | "ReceiptUnknown" -> RetryVerdict.ReceiptUnknown
+        | "WaitDenied" -> RetryVerdict.WaitDenied
+        | _ -> RetryVerdict.Terminal(unbox value?reason)
+
+    let internal toNativeVerdict verdict =
+        match verdict with
+        | RetryVerdict.Dispatched -> createObj [ "kind" ==> "Dispatched" ]
+        | RetryVerdict.Superseded -> createObj [ "kind" ==> "Superseded" ]
+        | RetryVerdict.ReceiptUnknown -> createObj [ "kind" ==> "ReceiptUnknown" ]
+        | RetryVerdict.WaitDenied -> createObj [ "kind" ==> "WaitDenied" ]
+        | RetryVerdict.Terminal reason -> createObj [ "kind" ==> "Terminal"; "reason" ==> reason ]
+
     let verdictUnlessContinuing (alreadyAdmitted: bool) (stopWait: string) : RetryVerdict option =
-        match stopWait with
-        | "Stopped" ->
-            if alreadyAdmitted then
-                Some RetryVerdict.Superseded
-            else
-                None
-        | "Denied" -> Some RetryVerdict.WaitDenied
-        | _ -> Some RetryVerdict.ReceiptUnknown
+        let answer: obj = recovery?verdictUnlessContinuing (alreadyAdmitted, stopWait)
+
+        if isNull answer then
+            None
+        else
+            Some(fromNativeVerdict answer)
 
     let observeDelegateRetry (verdict: RetryVerdict) : Result<unit, string> =
         match verdict with
@@ -69,26 +90,39 @@ module Retry =
                   RetryBudget = budget
                   Breaker = ProviderBreakerState.Closed } }
 
-    let private admitAndRedispatch
-        (ports: RetryPorts)
-        (input: RetryAttempt)
-        (authorization: ProviderRecoveryAuthorization)
-        : Task<RetryVerdict> =
-        task {
-            match! ports.Admit authorization with
-            | Ok FailureAdmissionOutcome.RetryAuthorized -> return! ports.Redispatch authorization input
-            | Ok FailureAdmissionOutcome.RetryExhausted -> return RetryVerdict.Terminal input.Error
-            | Ok FailureAdmissionOutcome.EpisodeSuperseded -> return RetryVerdict.Superseded
-            | Ok FailureAdmissionOutcome.NoActiveRun ->
-                return RetryVerdict.Terminal "Confirmed provider failure has no active provider run"
-            | Error reason -> return RetryVerdict.Terminal reason
-        }
-
     let attempt (ports: RetryPorts) (input: RetryAttempt) : Task<RetryVerdict> =
-        match (decision input).Resolution with
-        | ExecutionFailureResolution.RetryFreshAttempt authorization -> admitAndRedispatch ports input authorization
-        | ExecutionFailureResolution.PreserveCurrentFact -> Task.FromResult RetryVerdict.Superseded
-        | ExecutionFailureResolution.AwaitAcceptanceReconciliation _ ->
-            Task.FromResult(RetryVerdict.Terminal input.Error)
-        | ExecutionFailureResolution.TerminalizeAcceptedPreProvider _
-        | ExecutionFailureResolution.TerminalizeProviderStarted _ -> Task.FromResult(RetryVerdict.Terminal input.Error)
+        let selected =
+            match (decision input).Resolution with
+            | ExecutionFailureResolution.RetryFreshAttempt authorization ->
+                createObj [ "resolution" ==> "RetryFreshAttempt"; "authorization" ==> authorization ]
+            | ExecutionFailureResolution.PreserveCurrentFact -> createObj [ "resolution" ==> "PreserveCurrentFact" ]
+            | ExecutionFailureResolution.AwaitAcceptanceReconciliation _ ->
+                createObj [ "resolution" ==> "AwaitAcceptanceReconciliation" ]
+            | ExecutionFailureResolution.TerminalizeAcceptedPreProvider _ ->
+                createObj [ "resolution" ==> "TerminalizeAcceptedPreProvider" ]
+            | ExecutionFailureResolution.TerminalizeProviderStarted _ ->
+                createObj [ "resolution" ==> "TerminalizeProviderStarted" ]
+
+        let effects =
+            createObj
+                [ "admit"
+                  ==> (fun authorization ->
+                      task {
+                          let! answer = ports.Admit authorization
+
+                          return
+                              match answer with
+                              | Ok value -> createObj [ "ok" ==> true; "value" ==> string value ]
+                              | Error error -> createObj [ "ok" ==> false; "error" ==> error ]
+                      })
+                  "redispatch"
+                  ==> (fun authorization ->
+                      task {
+                          let! answer = ports.Redispatch authorization input
+                          return toNativeVerdict answer
+                      }) ]
+
+        task {
+            let! (answer: obj) = recovery?attempt (selected, effects, input.Error)
+            return fromNativeVerdict answer
+        }

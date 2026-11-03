@@ -83,38 +83,38 @@ module ReviewShell =
         | Some run, Some call -> Ok(ProviderRunIdentity.value run, ToolCallId.value call)
         | _ -> Error "review requires the calling provider run and tool call"
 
-    /// Findings are the obligation updates. Work applies them and decides the wait.
-    let private run
+    let private submit
         (gitCommonDir: string)
         (scope: ToolRuntimeScope)
         (args: HostToolArguments)
         (context: HostToolContext)
         : obj =
-        let submit () =
-            match Model.tryParse args.Raw, officeOf scope context, fenceOf context with
-            | Error reason, _, _
-            | _, Error reason, _
-            | _, _, Error reason -> createObj [ "status", box "Conflict"; "kind", box ""; "reason", box reason ]
-            | Ok findings, Ok office, Ok(providerRunId, toolCallId) ->
-                DurableWorkHost.submitReview
-                    gitCommonDir
-                    context.SessionId
-                    (providerRunId + ":" + toolCallId)
-                    office
-                    providerRunId
-                    toolCallId
-                    (updatesOf findings)
-                    (blockersOf scope context.SessionId (providerRunId + ":" + toolCallId))
-                    (digestOf args.Raw)
-                    (scope.ReviewPorts context)
+        match Model.tryParse args.Raw, officeOf scope context, fenceOf context with
+        | Error reason, _, _
+        | _, Error reason, _
+        | _, _, Error reason -> createObj [ "status", box "Conflict"; "kind", box ""; "reason", box reason ]
+        | Ok findings, Ok office, Ok(providerRunId, toolCallId) ->
+            DurableWorkHost.submitReview
+                gitCommonDir
+                context.SessionId
+                (providerRunId + ":" + toolCallId)
+                office
+                providerRunId
+                toolCallId
+                (updatesOf findings)
+                (blockersOf scope context.SessionId (providerRunId + ":" + toolCallId))
+                (digestOf args.Raw)
+                (scope.ReviewPorts context)
 
+    /// Findings are the obligation updates. Work applies them and decides the wait.
+    let private run gitCommonDir scope args context =
         if String.IsNullOrWhiteSpace gitCommonDir then
             createObj
                 [ "status", box "Conflict"
                   "kind", box ""
                   "reason", box "git common directory is missing" ]
         else
-            submit ()
+            submit gitCommonDir scope args context
 
     let spec (factory: HostToolFactory) (scope: ToolRuntimeScope) : ToolSpec =
         let findingSchema =

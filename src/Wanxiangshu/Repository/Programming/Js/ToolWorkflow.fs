@@ -4,7 +4,6 @@ open System
 open System.Threading.Tasks
 open Fable.Core
 open Fable.Core.JsInterop
-open FsToolkit.ErrorHandling
 open Wanxiangshu.Foundation
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Repository.Programming.Js
@@ -183,7 +182,7 @@ type JsReviewGates =
     { ReadGate: (unit -> Task<bool>) option
       WriteGate: (unit -> bool) option }
 
-/// The host binds business capabilities and settles their audit effects.
+/// 宿主负责能力装配、持久端口与返回值形状。
 module JsToolWorkflow =
     [<Import("activeTurnBridge", "wanxiangli/program")>]
     let private activeTurnBridge: obj = jsNative
@@ -209,108 +208,8 @@ module JsToolWorkflow =
     [<Emit("typeof $0 === 'object' && $0 !== null && !Array.isArray($0) && (Object.keys($0).length === 3 || (Object.keys($0).length === 4 && Object.prototype.hasOwnProperty.call($0, 'scope'))) && typeof $0.name === 'string' && $0.name.trim().length > 0 && typeof $0.program === 'string' && $0.program.trim().length > 0 && typeof $0.intent === 'string' && $0.intent.length > 0")>]
     let private validInput (value: obj) : bool = jsNative
 
-    [<Emit("Object.assign({}, $0, $1)")>]
-    let private merge (left: obj) (right: obj) : obj = jsNative
-
     [<Emit("new TextEncoder().encode($0).byteLength")>]
     let private utf8Bytes (value: string) : int = jsNative
-
-    let private rewrittenPaths (mutations: JsStagedMutation list) =
-        mutations
-        |> List.choose (function
-            | JsStagedMutation.Rewrite(path, _, _) -> Some path
-            | JsStagedMutation.Create _
-            | JsStagedMutation.Remove _
-            | JsStagedMutation.Move _ -> None)
-
-    let private createdPaths (mutations: JsStagedMutation list) =
-        mutations
-        |> List.choose (function
-            | JsStagedMutation.Create(path, _) -> Some path
-            | JsStagedMutation.Rewrite _
-            | JsStagedMutation.Remove _
-            | JsStagedMutation.Move _ -> None)
-
-    let private removedPaths (mutations: JsStagedMutation list) =
-        mutations
-        |> List.choose (function
-            | JsStagedMutation.Remove(path) -> Some path
-            | JsStagedMutation.Rewrite _
-            | JsStagedMutation.Create _
-            | JsStagedMutation.Move _ -> None)
-
-    let private movedPaths (mutations: JsStagedMutation list) =
-        mutations
-        |> List.choose (function
-            | JsStagedMutation.Move(fromPath, toPath) -> Some(fromPath, toPath)
-            | JsStagedMutation.Rewrite _
-            | JsStagedMutation.Create _
-            | JsStagedMutation.Remove _ -> None)
-
-    let private mapPersistenceFailure
-        (operation: Task<Result<'a, JsTransactionAppendFailure>>)
-        : Task<Result<'a, JsFailure>> =
-        operation
-        |> TaskValue.map (Result.mapError JsFailure.TransactionPersistenceFailed)
-
-    /// Settle the H1 ledger the mutation members fired (PLAN algorithm H1):
-    /// await every Prepared/Committed append. The members fire Prepared at
-    /// call time (before the write lands) and Committed right after, at
-    /// per-mutation granularity with no aggregation; the physical EventStore
-    /// append chain settles within the same event-loop turn as the write. A
-    /// failed append fails the tool result with the stable
-    /// TRANSACTION_PREPARE_*/COMMIT_* codes while the landed as-is writes
-    /// stay reported, never rolled back ([013]).
-    let private recordFirstAppendFailure
-        (currentFailure: JsFailure option)
-        (appended: Result<'a, JsTransactionAppendFailure>)
-        =
-        match currentFailure, appended with
-        | None, Error failure -> Some(JsFailure.TransactionPersistenceFailed failure)
-        | _ -> currentFailure
-
-    let private settleLedger (ledger: JsAsIsLedger) : Task<Result<unit, JsFailure>> =
-        task {
-            // DSL-MUTABLE: algorithm-scratch — first append failure for the outcome
-            let mutable appendFailure = None
-
-            for pending in ledger.Appends do
-                let! appended = pending
-                appendFailure <- recordFirstAppendFailure appendFailure appended
-
-            match appendFailure with
-            | Some failure -> return Error failure
-            | None -> return Ok()
-        }
-
-    let private invokeObservation observe readPaths effectPaths : Task<Result<unit, JsFailure>> =
-        task {
-            try
-                do! observe readPaths effectPaths
-            with _ ->
-                ()
-
-            return Ok()
-        }
-
-    let private observeFileAccess
-        (observer: FileAccessObservation option)
-        readPaths
-        effectPaths
-        : Task<Result<unit, JsFailure>> =
-        match observer with
-        | None -> Task.FromResult(Ok())
-        | Some observe -> invokeObservation observe readPaths effectPaths
-
-
-    let private checkReadOnlyMutation
-        (hasMutationCapability: bool)
-        (mutations: JsStagedMutation list)
-        : JsFailure option =
-        if not hasMutationCapability && not (List.isEmpty mutations) then
-            Some JsFailure.ReadOnlyMutationRejected
-        else
-            None
 
     let conflictingInputReason (input: obj) =
         if validInput input then
@@ -376,17 +275,8 @@ module JsToolWorkflow =
         else
             parsedValueFailure json
 
-    let private returnedValueFailure outputBoundBytes (receipt: obj) =
-        if string receipt?state = "completed" then
-            jsonValueFailure outputBoundBytes (JS.JSON.stringify receipt?value)
-        else
-            None
-
-    let private settlementResult outputBoundBytes receipt observed appended =
-        match observed, appended with
-        | Error failure, _
-        | _, Error failure -> Some failure
-        | _ -> returnedValueFailure outputBoundBytes receipt
+    let private returnedValueFailure (request: obj) =
+        jsonValueFailure (unbox<int> request?outputBoundBytes) (JS.JSON.stringify request?value)
 
     let private receiptFailure (receipt: obj) =
         match string receipt?code with
@@ -451,11 +341,24 @@ module JsToolWorkflow =
         (fileAccessObservation: FileAccessObservation option)
         : Task<JsToolOutcome> =
         task {
-            let staging = ResizeArray<JsStagedMutation>()
-            let reads = ResizeArray<JsExplicitFileRead>()
-            let ledger = JsToolsBindings.createLedger persistence
-            // DSL-MUTABLE: resource — 保存本次结算失败，供回执映射保留原始原因。
-            let mutable settlementFailure: JsFailure option = None
+            let ledger = JsAsIsLedger persistence
+
+            let observe =
+                fileAccessObservation
+                |> Option.map (fun observer ->
+                    fun (access: obj) ->
+                        let reads =
+                            unbox<obj array> access?reads
+                            |> Array.map (fun read ->
+                                { Path = unbox<string> read?path
+                                  ResultBytes = unbox<string> read?resultBytes })
+                            |> Array.toList
+
+                        let effects = unbox<string array> access?effectPaths |> Array.toList
+                        observer reads effects)
+
+            let invocation =
+                JsToolsBindings.createInvocation root ledger observe returnedValueFailure
 
             // Dynamic proxy: resolve host and ask at actual member invocation time
             // preventing stale closures across park/unpark turns and enforcing active lease gates!
@@ -526,54 +429,8 @@ module JsToolWorkflow =
                         askFn question
 
             let api =
-                JsToolsBindings.createApi capabilities root staging reads ledger (Some dynamicHost) (Some dynamicAsk)
+                JsToolsBindings.createApi capabilities root invocation?files (Some dynamicHost) (Some dynamicAsk)
                 |> applyReviewGates reviewGates
-
-            let settle (receipt: obj) : Task<obj> =
-                task {
-                    let mutations = List.ofSeq staging
-                    let rewritten, created = rewrittenPaths mutations, createdPaths mutations
-                    let removed, moved = removedPaths mutations, movedPaths mutations
-
-                    let effectPaths =
-                        rewritten @ created @ removed @ (moved |> List.collect (fun (a, b) -> [ a; b ]))
-
-                    let! observed =
-                        observeFileAccess
-                            fileAccessObservation
-                            (reads |> Seq.distinctBy (fun read -> read.Path) |> Seq.toList)
-                            effectPaths
-
-                    let! appended = settleLedger ledger
-                    let failure = settlementResult outputBoundBytes receipt observed appended
-                    settlementFailure <- failure
-
-                    let result =
-                        match failure with
-                        | None -> receipt
-                        | Some failure ->
-                            merge
-                                receipt
-                                (createObj
-                                    [ "state" ==> "failed"
-                                      "code" ==> JsFailure.code failure
-                                      "reason" ==> JsFailure.reason failure ])
-
-                    return
-                        merge
-                            result
-                            (createObj
-                                [ "effects"
-                                  ==> createObj
-                                          [ "rewritten" ==> Array.ofList rewritten
-                                            "created" ==> Array.ofList created
-                                            "removed" ==> Array.ofList removed
-                                            "moved"
-                                            ==> (moved
-                                                 |> List.map (fun (a, b) ->
-                                                     createObj [ "from" ==> a; "destination" ==> b ])
-                                                 |> Array.ofList) ] ])
-                }
 
             let callId =
                 fence
@@ -595,7 +452,6 @@ module JsToolWorkflow =
                       "callId" ==> callId
                       "capabilities"
                       ==> (capabilities |> Set.toArray |> Array.map JsCapability.labelOf)
-                      "api" ==> api
                       "root" ==> root
                       "outputRoot"
                       ==> (if outputRoot = "" then
@@ -604,12 +460,11 @@ module JsToolWorkflow =
                                box (outputRoot + "/program-output"))
                       "executionBudgetMs" ==> max 1 deadlineMs
                       "outputBoundBytes" ==> outputBoundBytes
-                      "settle" ==> settle
                       "lifecycle" ==> lifecycle lifecyclePersistence sessionId ]
 
             JsPrograms.noteCaller sessionId callId (string input?name)
 
-            let rewriteOutcome receipt reported =
+            let settledOutcome (receipt: obj) reported settlementFailure =
                 match reported, settlementFailure with
                 | JsToolOutcome.Failed(_, rewritten, created, removed, moved), Some failure when
                     string receipt?code = JsFailure.code failure
@@ -619,8 +474,15 @@ module JsToolWorkflow =
 
             try
                 let session = JsPrograms.forSession sessionId
-                let! receipt = unbox<Task<obj>> (session?execute (spec))
-                return rewriteOutcome receipt (outcome receipt)
+                let! completed = unbox<Task<obj>> (invocation?execute (session, spec, api))
+                let receipt = completed?receipt
+                let reported = outcome receipt
+
+                let settlementFailure =
+                    Option.ofObj completed?settlementFailure
+                    |> Option.map (fun envelope -> unbox<JsFailure> envelope?failure)
+
+                return settledOutcome receipt reported settlementFailure
             finally
                 JsPrograms.clearCaller sessionId callId
         }
@@ -787,13 +649,34 @@ module JsToolWorkflow =
 
 module JsToolsResult =
 
+    let private fileEffects rewritten created removed moved =
+        let strings values =
+            values |> List.map (fun value -> box value) |> List.toArray |> box
+
+        let fields =
+            [ if rewritten <> [] then
+                  "rewritten", strings rewritten
+              if created <> [] then
+                  "created", strings created
+              if removed <> [] then
+                  "removed", strings removed
+              if moved <> [] then
+                  "moved", strings (moved |> List.map (fun (fromPath, toPath) -> fromPath + " -> " + toPath)) ]
+
+        if List.isEmpty fields then
+            []
+        else
+            Fable.Core.JsInterop.createObj [ "fs", Fable.Core.JsInterop.createObj fields ]
+            |> LlmFacing.Data.ofJs
+            |> LlmFacing.Data.rootStructuredValue
+
     let render (outcome: JsToolWorkflow.JsToolOutcome) : string =
         match outcome with
         | JsToolWorkflow.JsToolOutcome.Succeeded(value, rewritten, created, removed, moved) ->
             LlmFacing.instruction "ok"
             |> LlmFacing.withData (
                 LlmFacing.Data.structuredValue (LlmFacing.Data.ofJs value)
-                @ LlmFacing.Data.fileEffects rewritten created removed moved
+                @ fileEffects rewritten created removed moved
             )
             |> LlmFacing.render
         | JsToolWorkflow.JsToolOutcome.Failed(failure, rewritten, created, removed, moved) ->
@@ -806,7 +689,7 @@ module JsToolsResult =
                 then
                     []
                 else
-                    LlmFacing.Data.fileEffects rewritten created removed moved
+                    fileEffects rewritten created removed moved
 
             LlmFacing.instruction "failed"
             |> LlmFacing.withData (

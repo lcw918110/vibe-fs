@@ -417,8 +417,8 @@ module SyncDelegateSurface =
             match options.Metadata with
             | None when isHostRecording -> ()
             | _ ->
-                let origin: string = options.Metadata.Value?wanxiangshu_origin
-                let promptKey: string = options.Metadata.Value?wanxiangshu_prompt_key
+                let origin: string = options.Metadata.Value?(PromptMetadataCodec.OriginField)
+                let promptKey: string = options.Metadata.Value?(PromptMetadataCodec.PromptKeyField)
                 originsOf (SessionId.value sessionId) |> fun values -> values.Add origin
 
                 keysOf (SessionId.value sessionId)

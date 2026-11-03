@@ -85,12 +85,12 @@ module OpenCodeHostPorts =
 
     let private resolveTranscriptPort (boot: PluginBoot.Boot) (host: PluginHostWiring.Host) : ITranscriptPort =
         host.SnapshotOpt
-        |> Option.orElseWith (fun () -> SessionSnapshotPort.create boot.WorkspaceDirectory boot.Input)
+        |> Option.orElse boot.Transport.Snapshot
         |> Option.map (fun snapshotPort -> TranscriptPort.HostTranscriptPort(snapshotPort) :> ITranscriptPort)
         |> Option.defaultWith (fun () -> UnavailableTranscriptPort() :> ITranscriptPort)
 
     let private resolveSessionPort (boot: PluginBoot.Boot) : ISessionPort =
-        SessionSnapshotPort.createSessionPort boot.WorkspaceDirectory boot.Input
+        boot.Transport.SessionCatalog
         |> Option.defaultWith (fun () -> UnavailableSessionPort() :> ISessionPort)
 
     type private UnsupportedModelCatalog() =

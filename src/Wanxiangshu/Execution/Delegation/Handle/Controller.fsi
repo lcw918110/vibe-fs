@@ -12,6 +12,9 @@ type HandleConsumeRejection =
     | NotJoinable of HandleTransitionRejection
     | AppendFailed of string
 
+module internal HandleDurable =
+    val create: AgentJournalPort -> SessionId -> obj
+
 module HandleController =
     val agentHandle: agentId: string -> HandleId
 

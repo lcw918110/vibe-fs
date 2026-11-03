@@ -153,19 +153,19 @@ test('WHAT[crash-reconciliation-023] a faulting journal recovery propagates to i
       new Date().toISOString(),
     )
     assert.equal(opened.ok, true, JSON.stringify(opened.error))
-    const handle = opened.journal
+    const journal = opened.journal
 
     let calls = 0
     let fail = true
-    journalSurface.JournalSurface_enqueueRecovery(handle, async () => {
+    journalSurface.JournalSurface_enqueueRecovery(journal, async () => {
       calls += 1
       if (fail) throw new Error('load settlement failed')
     })
 
     // Concurrent callers share the one run, and every awaiter sees the real
     // failure — never a silent success.
-    const first = journalSurface.JournalSurface_runOrAwaitRecovery(handle)
-    const second = journalSurface.JournalSurface_runOrAwaitRecovery(handle)
+    const first = journalSurface.JournalSurface_runOrAwaitRecovery(journal)
+    const second = journalSurface.JournalSurface_runOrAwaitRecovery(journal)
     await assert.rejects(() => first, /load settlement failed/)
     await assert.rejects(() => second, /load settlement failed/)
     assert.equal(calls, 1)
@@ -173,9 +173,9 @@ test('WHAT[crash-reconciliation-023] a faulting journal recovery propagates to i
     // The faulted run is cleared: a later caller starts a fresh recovery, and
     // the idempotent settlement repairs exactly what the fault left unsettled.
     fail = false
-    await journalSurface.JournalSurface_runOrAwaitRecovery(handle)
+    await journalSurface.JournalSurface_runOrAwaitRecovery(journal)
     assert.equal(calls, 2)
-    await journalSurface.JournalSurface_runOrAwaitRecovery(handle)
+    await journalSurface.JournalSurface_runOrAwaitRecovery(journal)
     assert.equal(calls, 2, 'single-flight still holds after a retried recovery')
 
   } finally {

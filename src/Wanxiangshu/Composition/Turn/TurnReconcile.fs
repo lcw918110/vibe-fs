@@ -135,15 +135,18 @@ module TurnReconcile =
 
         let plain assistant = Some(physical, assistant)
 
+        let resolveAborted (assistant: SessionMessage) =
+            match assistant.ParentId with
+            | Some answer when stopped answer ->
+                stoppedContinuationTerminal messages (Some physical) answer
+                |> Option.orElse (plain assistant)
+            | _ -> plain assistant
+
         // The stop returns before the ordinary stages, so the stopped answer
         // never becomes the bound physical: the abort shows up as the newest
         // assistant after the run's own physical, parented by the answer.
         match resolveAssistant messages physical with
-        | Some assistant when isAbortedAssistant assistant ->
-            assistant.ParentId
-            |> Option.filter stopped
-            |> Option.bind (stoppedContinuationTerminal messages (Some physical))
-            |> Option.orElse (plain assistant)
+        | Some assistant when isAbortedAssistant assistant -> resolveAborted assistant
         | Some assistant -> plain assistant
         | None when stopped physical -> stoppedContinuationTerminal messages None physical
         | None -> None

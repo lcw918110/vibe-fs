@@ -42,13 +42,20 @@ test('WHAT[semantic-trace-003] concurrent same-session captures serialize before
 
     assert.equal(first.ok, true, first.ok ? '' : first.error)
     assert.equal(second.ok, true, second.ok ? '' : second.error)
+    assert.deepEqual(first.receipt.currentHead, second.receipt.previousHead)
     const parts = trace.orderedSemanticParts(trace.snapshot(handle, SESSION))
     assert.equal(parts.length, 2)
     assert.deepEqual(parts.map((part) => part.cursor.sequence), [1, 2])
-    assert.deepEqual(parts.map((part) => part.provenance).sort(), [
+    assert.deepEqual(parts.map((part) => part.provenance), [
       'g:0/msg:concurrent-a/host-part:concurrent-a-part',
       'g:0/msg:concurrent-b/host-part:concurrent-b-part',
     ])
+    const expectedTexts = ['first concurrent semantic part', 'second concurrent semantic part']
+    for (let index = 0; index < parts.length; index += 1) {
+      const payload = await journal.JournalSurface_readPayload(handle, parts[index].textRef)
+      assert.equal(payload.ok, true, payload.ok ? '' : payload.error)
+      assert.equal(payload.content, expectedTexts[index])
+    }
   })
 })
 
@@ -75,35 +82,6 @@ test('WHAT[semantic-trace-003] stable tool-part identity remains idempotent with
     assert.equal(replay.receipt.capturedPartCount, 0)
     assert.deepEqual(trace.orderedSemanticParts(trace.snapshot(handle, SESSION)), before)
   })
-})
-}
-
-{
-const { default: assert } = await import("node:assert/strict");
-const { default: test } = await import("node:test");
-const trace = await import("../../../dist/Context/Trace/SemanticTraceSurface.js");
-
-const unwrap = (result) => {
-  assert.equal(result.ok, true, result.ok ? '' : result.error)
-  return result.projection
-}
-const part = (sequence, overrides = {}) => ({
-  sequence,
-  role: 'assistant',
-  provenance: `g:0/msg:run-${sequence}/host-part:part-${sequence}`,
-  turn: 0,
-  partIndex: sequence - 1,
-  kind: 'text',
-  textRef: `blob-${sequence}`,
-  textDigest: `digest-${sequence}`,
-  providerRun: `run-${sequence}`,
-  ...overrides,
-})
-
-test('WHAT[semantic-trace-003] duplicate and retreating cursors are rejected', () => {
-  const projection = unwrap(trace.appendPart(trace.emptyProjection(), part(5)))
-  assert.equal(trace.appendPart(projection, part(5)).ok, false)
-  assert.equal(trace.appendPart(projection, part(3)).ok, false)
 })
 }
 

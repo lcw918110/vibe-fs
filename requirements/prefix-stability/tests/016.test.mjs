@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { planRequest, resetScopeState, onTurnStart, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
-import { normalTransform, DeliveryAdjudication } from '../../../dist/OpenCode/Plugin/PluginTransforms.js'
+import { normalTransform, DeliveryAdjudication } from '../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js'
 
 async function outbound(sessionId, messages) {
   const yes = async () => {}

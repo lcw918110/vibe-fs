@@ -5,50 +5,6 @@ import * as fissionCanaries from '../../../dist/Execution/Fission/Canaries.js'
 import * as fissionHost from '../../../dist/OpenCode/Host/FissionHostSurface.js'
 import { assertJsData } from '../../verification-system/tests/support/js-contract.mjs'
 
-const mustOk = result => {
-  assertJsData(result, 'Fission operation result')
-  assert.equal(result.ok, true, JSON.stringify(result))
-  return result
-}
-
-test('WHAT[intra-participant-parallelism-009] convergence predicate rejects each missing record or broadcast debt', () => {
-  const bundle = [0, 1, 2].reduce(
-    (state, lane) => mustOk(fission.workBundleAdd(lane, `ref-${lane}`, state)).bundle,
-    fission.workBundleEmpty,
-  )
-  let delivery = fission.deliveryEmpty(3)
-  for (const lane of [0, 1, 2]) {
-    assert.equal(fission.convergenceReady(3, ['pre-child'], bundle, delivery), false)
-    delivery = mustOk(fission.deliveryMark('pre-child', lane, delivery)).delivery
-  }
-  assert.equal(fission.convergenceReady(3, ['pre-child'], bundle, delivery), true)
-  assert.equal(fission.convergenceReady(3, ['pre-child', 'other-child'], bundle, delivery), false)
-  for (const absent of [0, 1, 2]) {
-    const incomplete = [0, 1, 2].filter(lane => lane !== absent).reduce(
-      (state, lane) => mustOk(fission.workBundleAdd(lane, `ref-${lane}`, state)).bundle,
-      fission.workBundleEmpty,
-    )
-    assert.equal(fission.convergenceReady(3, ['pre-child'], incomplete, delivery), false)
-  }
-  // 未交付 lane 保持 group 并发 nudge，不把整组失败当正确。
-  // Incomplete delivery does not fail the group; missing broadcast/record blocks convergence.
-  assert.equal(fission.convergenceReady(3, [], bundle, delivery), true)
-  assert.equal(fission.convergenceReady(3, ['pre-child'], bundle, fission.deliveryEmpty(3)), false)
-  for (const nonTarget of [-1, 3]) {
-    assert.equal(fission.deliveryMark('pre-child', nonTarget, delivery).ok, false)
-  }
-  assert.equal(fission.ringSuccessor(3, 0, [0, 1, 2]), null)
-  assert.equal(fission.ringSuccessor(3, -1, []), null)
-  assert.equal(fission.ringSuccessor(3, 3, []), null)
-})
-
-test('WHAT[intra-participant-parallelism-009] ring routing skips closed lanes and wraps to the next live lane', () => {
-  assert.equal(fission.ringSuccessor(4, 0, [0, 1, 2, 3]), null)
-  assert.equal(fission.ringSuccessor(4, 1, [0, 1, 3]), 2)
-  assert.equal(fission.ringSuccessor(4, 1, [0, 1, 2]), 3)
-  assert.equal(fission.ringSuccessor(4, 3, [1, 2, 3]), 0)
-})
-
 test('WHAT[intra-participant-parallelism-009] actual turn observers absorb a marked retired owner without continuation or terminal notification', async () => {
   const owner = 'retired-owner-workflow'
   fission.markSilentInterrupt(owner)

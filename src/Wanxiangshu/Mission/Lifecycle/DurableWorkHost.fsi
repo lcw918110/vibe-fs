@@ -2,6 +2,7 @@ namespace Wanxiangshu.Mission.Lifecycle
 
 module DurableWorkHost =
     val journalPath: stateRoot: string -> string
+    val openScopeJournal: stateRoot: string -> obj
 
     type HostReceipt =
         { RequestId: string

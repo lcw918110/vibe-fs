@@ -16,6 +16,9 @@ open Wanxiangshu.Participant.Provider
 
 module CasebookBookkeeperSurface =
 
+    let renderSuccess (languageName: string) (value: obj) =
+        BookkeeperPolicy.succeeded (ProviderLanguage.parse languageName) value
+
     [<Import("bookkeeperStaging", "wanxiangli/casebook")>]
     let private staging: obj = jsNative
 

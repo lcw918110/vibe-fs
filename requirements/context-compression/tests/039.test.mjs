@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalTransform, DeliveryAdjudication } from '../../../dist/OpenCode/Plugin/PluginTransforms.js'
+import { normalTransform, DeliveryAdjudication } from '../../../dist/wanxiangtong/opencode/provider-request/RequestProjection.js'
 import { resetScopeState, clearSessionState } from '../../../dist/Context/Scope/Surface.js'
 
 // [PRODUCT-RETIRED estimate] host/scope-steer/missing-estimate now asks for a retention budget.

@@ -15,6 +15,7 @@ module PluginBoot =
     /// durable state but never repairs old work, mutates the workspace, or calls Host sessions.
     type Boot =
         { Input: obj
+          Transport: OpenCodeTransport.Connection
           PortOpt: IOpenCodePort option
           Journal: AgentJournal option
           Scope: PluginRuntimeScope

@@ -17,7 +17,7 @@ const UPPER_NAMESPACES = ['Wanxiangshu.OpenCode', 'Wanxiangshu.Session', 'Wanxia
 const PACKAGE_RESOURCE_READ = /PackageResources\./
 const HOST_ADAPTER_DIRS = ['Codec', 'Host', 'Signals', 'Plugin']
   .map((dir) => `${PRODUCTION_ROOT}/OpenCode/${dir}/`)
-  .concat([`${PRODUCTION_ROOT}/Host/`])
+  .concat([`${PRODUCTION_ROOT}/Host/`, 'wanxiangtong/'])
 const HOST_SDK_IMPORT = /@opencode-ai\//
 const isKernelFile = (file) =>
   !HOST_ADAPTER_DIRS.some((dir) => file.startsWith(dir)) &&
@@ -86,7 +86,7 @@ export function scanArchitecture(productionFiles, read, options) {
     const declared = ownerProjects.flatMap((project) => {
       const text = read(project)
       return [...text.matchAll(/<Compile\s+Include="([^"]+\.fs)"\s*\/?\s*>/g)].map((m) =>
-        norm(`${PRODUCTION_ROOT}/${m[1]}`),
+        norm(join(PRODUCTION_ROOT, m[1])),
       )
     })
     const counts = new Map()
@@ -169,7 +169,7 @@ export function scanArchitecture(productionFiles, read, options) {
   for (const file of productionSources) {
     const decl = /^(?:namespace|module)\s+(?:rec\s+)?([\w.]+)/m.exec(read(file))
     if (!decl) continue
-    const inFolder = file.startsWith(`${PRODUCTION_ROOT}/OpenCode/`) || file.includes('/OpenCode/')
+    const inFolder = file.startsWith(`${PRODUCTION_ROOT}/OpenCode/`) || file.includes('/OpenCode/') || file.startsWith('wanxiangtong/opencode/')
     const inNamespace = decl[1].split('.').includes('OpenCode')
     if (inFolder && !inNamespace) {
       fail('adapter-namespace-folder', `${file}: lives under an OpenCode/ adapter folder but declares '${decl[1]}'`)
@@ -201,9 +201,14 @@ export function check(context) {
     }
   }
 
-  const productionFiles = context?.sourceFiles
+  const mainFiles = context?.sourceFiles
     ? context.sourceFiles()
     : walk(join(root, PRODUCTION_ROOT), ['.fs', '.fsi', '.fsproj']).map((p) => relative(root, p))
+  const adapterRoot = join(root, 'wanxiangtong')
+  const adapterFiles = existsSync(adapterRoot)
+    ? walk(adapterRoot, ['.fs', '.fsi']).map((p) => norm(relative(root, p)))
+    : []
+  const productionFiles = [...mainFiles, ...adapterFiles]
   const { violations } = scanArchitecture(productionFiles, read, { root })
 
   const issues = violations.map(({ gate, message }) => ({

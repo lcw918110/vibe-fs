@@ -1,5 +1,7 @@
 namespace Wanxiangshu.OpenCode
 
+open Wanxiangshu.Context.Prefix
+
 open Wanxiangshu.Host
 open Wanxiangshu.Context.Scope
 open Wanxiangshu.Foundation.HostSession
@@ -120,6 +122,26 @@ module ToolRegistry =
         elif isStringValue note then Ok(unbox<string> note)
         else Error "review note must be a string"
 
+    let private awaitReview (produced: obj) =
+        if produced <> null && emitJsExpr produced "typeof $0.then === 'function'" then
+            unbox<Task<obj>> produced
+        else
+            Task.FromResult produced
+
+    let private reviewReply (reply: obj) =
+        let status = string reply?status
+
+        if status = "Committed" || status = "Replayed" || status = "Observed" then
+            createObj
+                [ "ok", box true
+                  "kind", reply?kind
+                  "milestone", reply?milestone
+                  "wait", reply?wait
+                  "incumbencyId", reply?incumbencyId
+                  "blockers", reply?blockers ]
+        else
+            createObj [ "ok", box false; "reason", reply?reason ]
+
     /// The `this.review(findings, note)` member. Plan and Manager send one Review command.
     let private reviewMember
         (runtime: ToolRuntimeScope)
@@ -127,26 +149,6 @@ module ToolRegistry =
         (findings: obj)
         (note: obj)
         : Task<obj> =
-        let awaitProduced produced =
-            if produced <> null && emitJsExpr produced "typeof $0.then === 'function'" then
-                unbox<Task<obj>> produced
-            else
-                Task.FromResult produced
-
-        let renderReply (reply: obj) =
-            let status = string reply?status
-
-            if status = "Committed" || status = "Replayed" || status = "Observed" then
-                createObj
-                    [ "ok", box true
-                      "kind", reply?kind
-                      "milestone", reply?milestone
-                      "wait", reply?wait
-                      "incumbencyId", reply?incumbencyId
-                      "blockers", reply?blockers ]
-            else
-                createObj [ "ok", box false; "reason", reply?reason ]
-
         task {
             match runtime.WorkspaceDirectory, ctx.ProviderRunId, ctx.ToolCallId, reviewNote note with
             | _, _, _, Error reason -> return reviewRefusal "INVALID_ARGUMENT" reason
@@ -185,8 +187,8 @@ module ToolRegistry =
                         draft
                         (runtime.ReviewPorts ctx)
 
-                let! reply = awaitProduced produced
-                return renderReply reply
+                let! reply = awaitReview produced
+                return reviewReply reply
             | _ ->
                 return
                     reviewRefusal
@@ -627,7 +629,7 @@ module ToolRegistry =
                     (SessionId.create ctx.SessionId)
                     (AgentJournal.snapshot durable).AgentProjections)
             |> Option.bind (fun session -> session.PrefixEpoch)
-            |> Option.map (fun epoch -> string (Set.count epoch.ReanchoredScopes))
+            |> Option.map (fun epoch -> string (PrefixEpochProjection.scopeCount epoch))
             |> Option.defaultValue "0"
 
         let generatedJsSpecFor (role: Role) =
@@ -731,7 +733,7 @@ module ToolRegistry =
                                     return devopsAnswer outcome
                                 }
 
-                            let dispatchDevops payload =
+                            let devopsAtWorkspace payload =
                                 task {
                                     let! gitCommonDir = askGitCommonDir workspaceDirectory
 
@@ -749,7 +751,7 @@ module ToolRegistry =
                                     if not (devopsDispatchAllowed (runtime.IsWaitingForUser ctx.SessionId)) then
                                         return refusalWithReason "devops-refused" "a question is waiting for the user"
                                     else
-                                        return! dispatchDevops payload
+                                        return! devopsAtWorkspace payload
                                 }
 
                             // The commit-side fact of a delivery: the live cell

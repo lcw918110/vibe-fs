@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { stateRoot, initializeStateRoot } from '../../../scripts/lib/state-root.mjs'
 import * as journal from '../../../dist/Persistence/Journal/Surface.js'
+import { JournalSurface_stateRoot as locateStateRoot, JournalSurface_stateRootSync as locateStateRootSync } from '../../../dist/Persistence/Journal/Surface.js'
 import * as store from '../../../dist/Persistence/EventStore/Surface.js'
 import * as retention from '../../../dist/Persistence/EventStore/RetentionSurface.js'
 import * as lifecycle from '../../../dist/Mission/Lifecycle/Surface.js'
@@ -39,6 +40,7 @@ test('WHAT[durable-events-028] runtime and diagnostics use the primary worktree 
   const expected = path.join(repo, '.Herdchestra')
   for (const entry of [repo, linked, nested]) {
     assert.equal(await stateRoot(entry), expected)
+    assert.equal(locateStateRootSync(entry), expected)
     assert.equal(await journal.JournalSurface_initializeStateRoot(entry), expected)
   }
   assert.equal(readFileSync(path.join(expected, '.gitignore'), 'utf8'), '*\n')
@@ -56,6 +58,8 @@ test('WHAT[durable-events-028] non-Git directories and independent repositories 
   git(other, 'init')
   for (const entry of [repo, plain, other]) {
     assert.equal(await stateRoot(entry), path.join(entry, '.Herdchestra'))
+    assert.equal(await locateStateRoot(entry), path.join(entry, '.Herdchestra'))
+    assert.equal(locateStateRootSync(entry), path.join(entry, '.Herdchestra'))
   }
 })
 
@@ -65,6 +69,8 @@ test('WHAT[durable-events-028] bare repositories and direct Git paths are not st
   mkdirSync(bare)
   git(bare, 'init', '--bare')
   await assert.rejects(() => stateRoot(bare), /bare repository/)
+  await assert.rejects(() => locateStateRoot(bare), /bare repository/)
+  assert.throws(() => locateStateRootSync(bare), /bare repository/)
   const metadata = path.join(repo, '.git')
   await assert.rejects(() => stateRoot(metadata), /inside .git/)
   await assert.rejects(() => journal.JournalSurface_initializeStateRoot(metadata), /inside .git/)
@@ -99,6 +105,7 @@ test('WHAT[durable-events-028] symlink state and ignore files cannot redirect pe
   symlinkSync(path.join(repo, '.git'), target, 'junction')
   await assert.rejects(() => stateRoot(repo), /real directory/)
   await assert.rejects(() => journal.JournalSurface_initializeStateRoot(repo), /real directory/)
+  assert.throws(() => locateStateRootSync(repo), /real directory/)
   assert.throws(() => lifecycle.journalPath(target), /into .git/)
   rmSync(target)
   mkdirSync(target)
@@ -112,19 +119,66 @@ test('WHAT[durable-events-028] symlink state and ignore files cannot redirect pe
 
 test('WHAT[durable-events-028] a missing manager worktree still reads work from the primary state root', async t => {
   const { base, repo } = fixture(t)
-  const stateRoot = await journal.JournalSurface_initializeStateRoot(repo)
-  const store = workspaceSurface.acquire(stateRoot)
+  const resolvedRoot = await journal.JournalSurface_initializeStateRoot(repo)
+  const store = workspaceSurface.acquire(resolvedRoot)
   const workId = 'ses-missing-worktree'
   try {
     const surface = lifecycle.LifecycleSurface ?? lifecycle
-    const opened = surface.submitReview(stateRoot, workId, 'open', 'Manager', 'run', 'open', [{ key: 'job', value: 'do' }], [], '')
+    const opened = surface.submitReview(resolvedRoot, workId, 'open', 'Manager', 'run', 'open', [{ key: 'job', value: 'do' }], [], '')
     assert.equal(opened.kind, 'Reviewed', opened.reason)
     const missingWorktree = path.join(repo, 'not-created-yet')
+    assert.equal(await stateRoot(missingWorktree), resolvedRoot)
+    assert.equal(await locateStateRoot(missingWorktree), resolvedRoot)
+    assert.equal(locateStateRootSync(missingWorktree), resolvedRoot)
     const signal = await hostSurface.loopSignalOf(missingWorktree, workId)
     assert.equal(signal.kind, 'None')
     assert.equal(existsSync(path.join(repo, 'wanxiangshu')), false)
     assert.equal(git(repo, 'status', '--porcelain'), '')
   } finally {
-    workspaceSurface.release(stateRoot)
+    workspaceSurface.release(resolvedRoot)
   }
+})
+
+test('WHAT[durable-events-028] strict state lookup rejects a regular file target in every entry', async t => {
+  const { repo } = fixture(t)
+  const target = path.join(repo, '.Herdchestra')
+  writeFileSync(target, 'keep this file untouched')
+  await assert.rejects(() => stateRoot(repo), /real directory/)
+  await assert.rejects(() => locateStateRoot(repo), /real directory/)
+  assert.throws(() => locateStateRootSync(repo), /real directory/)
+  assert.equal(readFileSync(target, 'utf8'), 'keep this file untouched')
+})
+
+test('WHAT[durable-events-028] strict state lookup refuses a missing deeper path instead of guessing an ancestor', async t => {
+  const { repo } = fixture(t)
+  const absentParent = path.join(repo, 'absent-parent')
+  const missing = path.join(absentParent, 'absent-worktree')
+  const results = await Promise.allSettled([stateRoot(missing), locateStateRoot(missing)])
+  assert.equal(results[0].status, 'rejected', 'diagnostics must not search above a missing direct parent')
+  assert.equal(results[0].reason.code, 'ENOENT')
+  assert.equal(results[1].status, 'rejected', 'async runtime must not search above a missing direct parent')
+  assert.equal(results[1].reason.code, 'ENOENT')
+  assert.throws(() => locateStateRootSync(missing), { code: 'ENOENT' })
+  assert.equal(existsSync(absentParent), false)
+  assert.equal(existsSync(path.join(repo, '.Herdchestra')), false)
+})
+
+test('WHAT[durable-events-028] strict state lookup rejects a missing direct child of a non-Git directory', async t => {
+  const base = realpathSync(mkdtempSync(path.join(tmpdir(), 'wxs-missing-plain-state-')))
+  t.after(() => rmSync(base, { recursive: true, force: true }))
+  const plain = path.join(base, 'plain')
+  mkdirSync(plain)
+  const missing = path.join(plain, 'missing-workspace')
+  const results = await Promise.allSettled([
+    stateRoot(missing),
+    locateStateRoot(missing),
+    Promise.resolve().then(() => locateStateRootSync(missing)),
+  ])
+  const entries = ['diagnostics', 'async runtime', 'sync runtime']
+  for (let index = 0; index < entries.length; index += 1) {
+    assert.equal(results[index].status, 'rejected', `${entries[index]} cannot locate a missing workspace from a non-Git parent`)
+  }
+  assert.equal(existsSync(missing), false)
+  assert.equal(existsSync(path.join(plain, '.Herdchestra')), false)
+  assert.equal(existsSync(path.join(base, '.Herdchestra')), false)
 })

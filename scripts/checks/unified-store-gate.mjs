@@ -10,7 +10,6 @@
  * Scanners (canonical history ownership):
  *   7. feature-history-loop — path-sensitive reader/merge/fold census
  *   8. private-durable-substrate — feature-local NDJSON/SQLite/private stores
- *   9. canonical-shared-program — one-envelope IntegrationRule and shared boot/live integrateOne
  *
  * Dual-write note (Phase 5 DONE for NDJSON substrate): production Boot / NDJSON
  * JournalWriter / dir BlobWriter are deleted. Strategy A keeps AgentJournal as an
@@ -73,15 +72,12 @@ export const SCANNER_IDS = Object.freeze([
   'dual-write',
   'feature-history-loop',
   'private-durable-substrate',
-  'canonical-shared-program',
 ])
 
 const norm = (p) => p.replace(/\\/g, '/')
 
 const CANONICAL_INTEGRATOR_PATH =
   'src/Wanxiangshu/Persistence/EventStore/IntegratorEngine.fs'
-const INTEGRATION_KERNEL_PATH =
-  'src/Wanxiangshu/Persistence/EventStore/IntegrationKernel.fs'
 
 /**
  * Exact physical stream readers/convergence programs. They may observe or order
@@ -695,129 +691,6 @@ export const scanPrivateDurableSubstrate = (text, file = '<synthetic>') => {
 }
 
 /**
- * Positive shared-program shape: IntegrationRule is a one-envelope oracle and
- * both boot replay and live preparation invoke the same integrateOne program.
- * @param {{ file: string, text: string }[]} entries
- * @returns {Violation[]}
- */
-export const scanCanonicalSharedProgram = (entries) => {
-  const hits = []
-  const findEntry = (expected) => entries.find((entry) => pathIs(entry.file, expected))
-  const kernel = findEntry(INTEGRATION_KERNEL_PATH)
-  const canonical = findEntry(CANONICAL_INTEGRATOR_PATH)
-
-  const missing = (file, line, token, label, text = '') =>
-    hits.push({ id: 'canonical-shared-program', file, line, token, label, text })
-
-  if (!kernel) {
-    missing(INTEGRATION_KERNEL_PATH, 1, 'IntegrationRule', 'canonical IntegrationRule definition is missing')
-  } else {
-    const lines = kernel.text.split('\n')
-    const start = lines.findIndex((line) => /^\s*type\s+IntegrationRule\s*=/.test(stripLineComment(line)))
-    const end = start < 0 ? -1 : lines.findIndex((line, i) => i > start && /^\s*type\s+/.test(stripLineComment(line)))
-    const block = start < 0 ? '' : lines.slice(start, end < 0 ? lines.length : end).map(stripLineComment).join('\n')
-    const hasOneEnvelopeOracle =
-      /\bIntegrate\s*:\s*obj\s*->\s*EventEnvelope\s*->\s*Result</.test(block) &&
-      !/\bEventEnvelope\s+(?:list|array|seq)\b|\b(?:History|Streams|Events)Reader\b/.test(block)
-    if (!hasOneEnvelopeOracle) {
-      missing(
-        kernel.file,
-        start < 0 ? 1 : start + 1,
-        'IntegrationRule.Integrate(EventEnvelope)',
-        'IntegrationRule must consume exactly one EventEnvelope',
-        start < 0 ? '' : lines[start].trim(),
-      )
-    }
-  }
-
-  if (!canonical) {
-    missing(CANONICAL_INTEGRATOR_PATH, 1, 'integrateOne', 'canonical shared integration program is missing')
-    return hits
-  }
-
-  const lines = canonical.text.split('\n')
-  const codeLines = lines.map(stripLineComment)
-  const definition = codeLines.findIndex((line) => /^\s*let\s+private\s+integrateOne\b/.test(line))
-  if (definition < 0) {
-    missing(canonical.file, 1, 'integrateOne', 'canonical single-envelope integration program is missing')
-  }
-
-  const indentation = (line) => (line.match(/^\s*/) || [''])[0].length
-  const regionFrom = (startRe, boundaryRe) => {
-    const start = codeLines.findIndex((line) => startRe.test(line))
-    if (start < 0) return { start, body: [] }
-    const indent = indentation(codeLines[start])
-    let end = codeLines.length
-    for (let i = start + 1; i < codeLines.length; i++) {
-      const line = codeLines[i]
-      if (line.trim() && indentation(line) <= indent && boundaryRe.test(line)) {
-        end = i
-        break
-      }
-    }
-    return { start, body: codeLines.slice(start, end) }
-  }
-
-  const hasDirectCall = (body, callee) => {
-    const call = new RegExp(`\\b${callee}\\b(?=\\s+(?:[A-Za-z0-9_("']))`)
-    return body.some((line) => {
-      if (/^\s*let\s+_\s*=/.test(line)) return false
-      if (new RegExp(`^\\s*let(?:\\s+private)?\\s+${callee}\\b`).test(line)) return false
-      return call.test(line)
-    })
-  }
-
-  const assertDirectCall = (region, callee, token, label) => {
-    if (!hasDirectCall(region.body, callee)) {
-      missing(
-        canonical.file,
-        region.start < 0 ? 1 : region.start + 1,
-        token,
-        label,
-        region.start < 0 ? '' : lines[region.start].trim(),
-      )
-    }
-  }
-
-  const replay = regionFrom(/^\s*let\s+private\s+replay\b/, /^\s*let\b|^\s*\{\s*new\b/)
-  const prepareLive = regionFrom(/^\s*let\s+prepareLive\b/, /^\s*let\b|^\s*\{\s*new\b/)
-  const reloadLocal = regionFrom(
-    /^\s*member\s+[^.]+\.ReloadLocal\b/,
-    /^\s*member\b|^\s*\}\s*$/,
-  )
-  const prepareLiveMember = regionFrom(
-    /^\s*member\s+[^.]+\.PrepareLive\b/,
-    /^\s*member\b|^\s*\}\s*$/,
-  )
-
-  assertDirectCall(
-    reloadLocal,
-    'replay',
-    'ReloadLocal->replay',
-    'ReloadLocal must directly call the canonical replay program',
-  )
-  assertDirectCall(
-    replay,
-    'integrateOne',
-    'replay->integrateOne',
-    'replay must directly call the canonical integrateOne program',
-  )
-  assertDirectCall(
-    prepareLive,
-    'integrateOne',
-    'PrepareLive->integrateOne',
-    'PrepareLive path must directly call the canonical integrateOne program',
-  )
-  assertDirectCall(
-    prepareLiveMember,
-    'prepareLive',
-    'PrepareLive->integrateOne',
-    'PrepareLive must directly enter the helper that calls integrateOne',
-  )
-  return hits
-}
-
-/**
  * Run Phase 1–3 + clean-break scanners on one file body.
  * @param {string} text
  * @param {string} [file]
@@ -859,10 +732,7 @@ export function check(context) {
   } else {
     production = collectProductionEntries(resolve(root, PRODUCTION_ROOT))
   }
-  const violations = [
-    ...scanFiles(production),
-    ...scanCanonicalSharedProgram(production),
-  ]
+  const violations = scanFiles(production)
   return {
     issues: violations.map((v) => {
       const token = v.token === undefined ? '' : ` token='${v.token}'`

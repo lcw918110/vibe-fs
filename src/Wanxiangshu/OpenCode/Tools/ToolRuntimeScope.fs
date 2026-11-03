@@ -946,6 +946,17 @@ type ToolRuntimeScope
                else
                    reason) ]
 
+    let observeNegotiationSteer receipt recipient delegator sent =
+        match sent with
+        | Ok() -> ()
+        | Error reason -> negotiationDeliveryFailed receipt recipient delegator "send-steer" reason
+
+    let negotiationRefusal (prepared: obj) =
+        if isNull prepared?reason then
+            ""
+        else
+            string prepared?reason
+
     let deliverNegotiationReply
         (delegator: string)
         (receipt: string)
@@ -958,25 +969,17 @@ type ToolRuntimeScope
 
             let admitted = not (isNull prepared?ok) && unbox<bool> prepared?ok
 
-            let reportSent recipient sent =
-                match sent with
-                | Ok() -> ()
-                | Error reason -> negotiationDeliveryFailed receipt recipient delegator "send-steer" reason
-
-            let prepareFailureReason =
-                match Option.ofObj prepared?reason with
-                | Some text -> string text
-                | None -> ""
-
             if admitted then
                 // Only the real Host PhysicalAccepted observer may unlock the
                 // first scope. A detached queue receipt is not a landed steer.
                 let recipient = string prepared?recipient
                 let! sent = steer recipient (string prepared?steer) receipt
-                reportSent recipient sent
+
+                observeNegotiationSteer receipt recipient delegator sent
+
                 return ()
             else
-                negotiationDeliveryFailed receipt "" delegator "prepare-reply" prepareFailureReason
+                negotiationDeliveryFailed receipt "" delegator "prepare-reply" (negotiationRefusal prepared)
         }
 
     let settleNegotiationAnswer
@@ -1133,8 +1136,12 @@ type ToolRuntimeScope
                 AgentProjection.tryFind (SessionId.create sessionText) snapshot.AgentProjections)
             |> Option.bind (fun session -> session.PrefixEpoch)
 
-        match current |> Option.bind (fun epoch -> epoch.LastScopeArchive) with
-        | Some archive when current |> Option.exists (fun epoch -> epoch.EpochId = archive.TargetEpochId) -> Ok archive
+        match current |> Option.bind PrefixEpochProjection.lastScopeArchive with
+        | Some archive when
+            current
+            |> Option.exists (fun epoch -> (PrefixEpochProjection.epochId epoch) = archive.TargetEpochId)
+            ->
+            Ok archive
         | _ -> Error "NoPreviousScope: immediate previous archived Scope is unavailable"
 
     let sendPreviousScopeSteer (recipient: string) (answer: string) (receipt: string) =
@@ -1660,12 +1667,12 @@ type ToolRuntimeScope
                     return createObj [ "ok", box false; "reason", box "prompt was not admitted" ]
             }
 
-        let openSession (request: obj) =
-            let refusedByHost (reason: obj) =
-                match box reason with
-                | :? string as text -> text.StartsWith("HTTP ", StringComparison.Ordinal)
-                | _ -> false
+        let creationRefused reason =
+            match box reason with
+            | :? string as text -> text.StartsWith("HTTP ", StringComparison.Ordinal)
+            | _ -> false
 
+        let openSession (request: obj) =
             task {
                 let options: ChildSessionOptions =
                     { Title = Some(string request?digest)
@@ -1678,7 +1685,9 @@ type ToolRuntimeScope
                     // Only an answer from the host (an HTTP status, not a transport
                     // failure) proves the session was never created; every other
                     // failure — timeout included — leaves creation unknown.
-                    return createObj [ "ok", box false; "reason", box reason; "refused", box (refusedByHost reason) ]
+                    let refused = creationRefused reason
+
+                    return createObj [ "ok", box false; "reason", box reason; "refused", box refused ]
             }
 
         let draft (request: obj) =
@@ -1694,36 +1703,31 @@ type ToolRuntimeScope
                     return createObj [ "ok", box false; "reason", box "draft was not admitted" ]
             }
 
-        let stop (_request: obj) =
-            let appendClosure commonDir retirementId =
-                JournalSurface.appendAuthorityLogicalRunClosed commonDir ctx.SessionId retirementId
+        let closeCompletedManager workspace =
+            task {
+                let! commonDir = RuntimePath.stateRoot workspace
 
-            let closeCompletedRun commonDir =
-                let retirementId =
+                let retirement =
                     Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir ctx.SessionId
                     |> Option.bind Wanxiangshu.Mission.Lifecycle.DurableWorkHost.completedClosureId
-                    |> Option.filter (fun _ -> this.IsRole(ctx, Role.Manager))
 
-                match retirementId with
-                | Some retirementId -> appendClosure commonDir retirementId
-                | None -> Task.FromResult(())
+                match retirement with
+                | Some retirementId when this.IsRole(ctx, Role.Manager) ->
+                    do! JournalSurface.appendAuthorityLogicalRunClosed commonDir ctx.SessionId retirementId
+                | _ -> ()
+            }
 
-            let closeIfCompleted () =
-                task {
-                    match this.WorkspaceDirectory with
-                    | Some workspace ->
-                        let! commonDir = RuntimePath.stateRoot workspace
-                        return! closeCompletedRun commonDir
-                    | None -> return ()
-                }
+        let closeManager () =
+            match this.WorkspaceDirectory with
+            | Some workspace -> closeCompletedManager workspace
+            | None -> Task.FromResult()
 
-            let interrupt () =
-                task {
-                    match! sessions.InterruptAttempt(SessionId.create ctx.SessionId) with
-                    | Ok() -> return createObj [ "ok", box true ]
-                    | Error reason -> return createObj [ "ok", box false; "reason", box reason ]
-                }
+        let stopResult =
+            function
+            | Ok() -> createObj [ "ok", box true ]
+            | Error reason -> createObj [ "ok", box false; "reason", box reason ]
 
+        let stop (_request: obj) =
             task {
                 // Work has already committed the retirement before invoking
                 // this effect. A genuinely Completed Manager tenure carries
@@ -1732,8 +1736,9 @@ type ToolRuntimeScope
                 // before ending that physical attempt. Relays have no
                 // Completed retirement and must never close the logical run.
                 try
-                    do! closeIfCompleted ()
-                    return! interrupt ()
+                    do! closeManager ()
+                    let! interrupted = sessions.InterruptAttempt(SessionId.create ctx.SessionId)
+                    return stopResult interrupted
                 with error ->
                     return
                         createObj

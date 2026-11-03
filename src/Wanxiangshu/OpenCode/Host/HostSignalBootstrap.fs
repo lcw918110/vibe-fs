@@ -73,7 +73,8 @@ module HostSignalBootstrap =
     /// functions are called internally by the binding helpers. Handing them out as
     /// well made the signal stack look like it had six more entry points than it does.
     type WiredSignals =
-        { RegisterOwned: string -> unit
+        { Compaction: OpenCodeCompaction
+          RegisterOwned: string -> unit
           CancelSignals: SessionId seq -> unit
           BindActiveRun: SessionId -> Role -> string option -> unit
           CurrentPhysicalUserMessage: string -> string option
@@ -157,12 +158,10 @@ module HostSignalBootstrap =
                 HostTurnObserver.observe observeTurnWorkflow sessionPort rootWorkspace eventPort journal scope
 
 
-            let compactionProbe: CompactionProbe =
-                { TryClaimStartupProbe = (fun () -> scope.TryClaimStartupProbe())
-                  ReadCompactionSettingGap = (fun () -> scope.CompactionSettingGap)
-                  IsStartupProbeOpen = (fun () -> scope.IsStartupProbeOpen) }
+            let compaction = OpenCodeCompaction(journal)
 
-            let onSnapshot = HostCompactionObserver.observe compactionProbe journal
+            let onSnapshot session messages =
+                compaction.ObserveSnapshot(session, messages)
 
             let reconciler =
                 Reconciler.Scheduler(
@@ -943,7 +942,7 @@ module HostSignalBootstrap =
                     ModelRouting.tryReadExecution key
                     |> Option.defaultWith (fun () -> invalidOp "managed admission has no exact committed lease")
 
-                if lease.Identity.Target <> hostTarget output then
+                if (ModelRouting.executionAdmissionIdentity lease).Target <> hostTarget output then
                     invalidOp "OpenCode model does not match the committed execution lease"
 
             let completeAdmission intent output result =
@@ -1390,7 +1389,7 @@ module HostSignalBootstrap =
                 |> List.filter (fun state -> state.key.SessionId = sessionId && state.terminalDisposition.IsNone)
                 |> List.tryLast
 
-            let failUninheritableContinuation durable (key: ChatExecutionKey) reason : Task<unit> =
+            let failUninheritableContinuation durable (key: ChatExecutionKey) reason =
                 Diagnostic.emit
                     "compaction-continuation-uninheritable"
                     [ "session_id", SessionId.value key.SessionId
@@ -1408,8 +1407,6 @@ module HostSignalBootstrap =
                         ))
                     |> ignore)
 
-                Task.FromResult()
-
             /// managed-chat-execution-017: OpenCode never runs `chat.message` for
             /// its post-compaction continuation, so the row reaches the provider
             /// boundary with no Accepted record. It is not new authority: it is
@@ -1418,27 +1415,24 @@ module HostSignalBootstrap =
             /// continuation admission below hands the lease over. When nothing
             /// live can be inherited, the parent waiting on the run is told the
             /// run failed instead of waiting on a dead session.
-            let inheritAccepted durable (key: ChatExecutionKey) (evidence: AcceptedChatExecutionEvidence) =
+            let acceptCompactionContinuation durable (key: ChatExecutionKey) evidence =
                 task {
                     match! ManagedChatAcceptance.accept durable key evidence with
-                    | Ok _ ->
-                        observePhysicalAdmission () key.SessionId key.PhysicalUserMessageId
-                        return ()
-                    | Error error -> return! failUninheritableContinuation durable key (sprintf "%A" error)
+                    | Ok _ -> observePhysicalAdmission () key.SessionId key.PhysicalUserMessageId
+                    | Error error -> failUninheritableContinuation durable key (sprintf "%A" error)
                 }
 
-            let inheritFromCompacted durable (key: ChatExecutionKey) =
+            let inheritCompactedExecution durable (key: ChatExecutionKey) =
                 task {
                     match compactedExecution durable key.SessionId with
-                    | None ->
-                        return! failUninheritableContinuation durable key "no live execution holds the session lease"
+                    | None -> failUninheritableContinuation durable key "no live execution holds the session lease"
                     | Some compacted ->
                         let evidence =
                             { compacted.acceptedEvidence with
                                 PhysicalUserMessageId = key.PhysicalUserMessageId
                                 Origin = PromptOrigin.Continuation PromptContinuationKind.BusyAgentNudge }
 
-                        return! inheritAccepted durable key evidence
+                        do! acceptCompactionContinuation durable key evidence
                 }
 
             let inheritCompactionContinuation durable messages (key: ChatExecutionKey) =
@@ -1452,10 +1446,10 @@ module HostSignalBootstrap =
                         not exists
                         && ProviderWireCapture.isHostCompactionContinuation messages key.PhysicalUserMessageId
                     then
-                        do! inheritFromCompacted durable key
+                        do! inheritCompactedExecution durable key
                 }
 
-            let inheritIfSessionVisible durable messages output physicalId =
+            let inheritProjectedCompaction durable messages physicalId output =
                 match ProviderWireDecode.projectionSessionIdFromMessages output with
                 | Some sessionText ->
                     inheritCompactionContinuation
@@ -1471,7 +1465,7 @@ module HostSignalBootstrap =
 
                     match journal, admissionTransaction, ProviderWireCapture.lastUserMessageId messages with
                     | Some durable, Some createTransaction, Some physicalId ->
-                        do! inheritIfSessionVisible durable messages output physicalId
+                        do! inheritProjectedCompaction durable messages physicalId output
 
                         return!
                             messages
@@ -1540,7 +1534,8 @@ module HostSignalBootstrap =
                 ids |> Seq.iter (fun id -> signalRouter.UnregisterOwned id)
 
             return
-                { RegisterOwned = registerOwned
+                { Compaction = compaction
+                  RegisterOwned = registerOwned
                   CancelSignals = cancelSignals
                   BindActiveRun = bindActiveRun
                   CurrentPhysicalUserMessage =

@@ -45,6 +45,11 @@ module TemporalSurface =
 
     /// Plugin owner proof: disposal closes Host-work admission and awaits
     /// reconcile plus already-admitted foreground/background work before returning.
+    val createPluginWorkScope: release: (unit -> Task) -> obj
+    val runPluginWork: value: obj -> work: (unit -> Task) -> Task
+    val backgroundPluginWork: value: obj -> work: (unit -> Task) -> Task
+    val disposePluginWorkScope: value: obj -> Task
+
     val pluginScopeStopDrainScenario: unit -> Task<obj>
 
     /// Plugin owner proof: detached Host failures are not swallowed. Shutdown

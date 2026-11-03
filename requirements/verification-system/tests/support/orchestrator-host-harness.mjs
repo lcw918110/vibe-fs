@@ -11,21 +11,22 @@ import { join } from 'node:path'
 
 import * as hostSurface from '../../../../dist/Change/Host/Surface.js'
 import * as journalSurface from '../../../../dist/Persistence/Journal/Surface.js'
+import { GitWorktrees } from 'wanxiangli/git'
 
 export const fakeGitPort = (behaviour = {}) => ({
+  Worktrees: new GitWorktrees('/repo', async ({ args }) => {
+    if (args[0] === 'worktree' && args[1] === 'list' && behaviour.listError) {
+      return { code: 1, stdout: '', stderr: behaviour.listError }
+    }
+    return { code: 0, stdout: '', stderr: '' }
+  }),
   IsDirty: async () => ({ ok: true, value: behaviour.dirty ? [behaviour.dirty] : [] }),
-  CreateWorktree: async (jobId) => ({ ok: true, value: `manager/${jobId}` }),
   FreezeTargetBranch: async () =>
     behaviour.freezeError ? { ok: false, error: behaviour.freezeError } : { ok: true, value: 'refs/heads/main' },
   Rebase: async () => ({ ok: true }),
   ConflictedFiles: async () => ({ ok: true, value: [] }),
   FfMerge: async () => ({ ok: true, value: 'cafe01' }),
-  RemoveWorktree: async () => ({ ok: true }),
   HasRebaseHead: async () => false,
-  ListWorktrees: async () =>
-    behaviour.listError ? { ok: false, error: behaviour.listError } : { ok: true, value: [] },
-  ListManagerBranches: async () => ({ ok: true, value: [] }),
-  DeleteBranch: async () => ({ ok: true }),
   ReadHead: async () => ({ ok: true, value: 'beef02' }),
   GetTargetHead: async () => ({ ok: true, value: 'beef02' }),
 })

@@ -12,7 +12,7 @@
 /src/Wanxiangshu/OpenCode/Host/ChatParamsHook.fs
 /src/Wanxiangshu/OpenCode/Host/HostSignalBootstrap.fs
 /src/Wanxiangshu/OpenCode/Host/ManagedAgentConfig.fs
-/src/Wanxiangshu/OpenCode/Host/OpenCodePort.fs
+/wanxiangtong/opencode/session-transport/**
 /src/Wanxiangshu/OpenCode/Host/Sessions.fs
 /src/Wanxiangshu/OpenCode/Plugin/PluginSessionWiring.fs
 /src/Wanxiangshu/Strength/OpenCode/**

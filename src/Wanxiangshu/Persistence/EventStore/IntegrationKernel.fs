@@ -4,10 +4,7 @@ open Wanxiangshu.Foundation.Identity
 
 type SemanticCutPlan = { ResetJson: string }
 
-/// One registered business integration oracle. It receives exactly one durable
-/// EventEnvelope and its own current slot; it never receives a history reader.
-/// A rule owns the meaning of its cut/reset payload. The Integrator only persists
-/// and replays that payload in timeline order.
+/// 每个领域规则只接收自己的 Current 和当前事件。
 type IntegrationRule =
     {
         Name: string
@@ -20,40 +17,6 @@ type IntegrationRule =
         PlanCut: obj -> EventEnvelope -> string -> bool -> Result<SemanticCutPlan, string>
         ApplyCut: obj -> string -> Result<obj, string>
     }
-
-/// Structural event-graph Current is one registered Integrator slot, not a
-/// second history fold. It preserves every stream frontier so conflict remains
-/// distinguishable from an empty stream after the online-Git projector removal.
-type StructuralProjection = { Heads: Map<string, Set<EventId>> }
-
-[<RequireQualifiedAccess>]
-module StructuralProjection =
-    let empty = { Heads = Map.empty }
-
-    let heads (streamId: EventStreamId) (projection: StructuralProjection) =
-        projection.Heads
-        |> Map.tryFind (EventStreamId.value streamId)
-        |> Option.defaultValue Set.empty
-        |> Set.toList
-
-    let allHeads (projection: StructuralProjection) : EventId list =
-        projection.Heads
-        |> Map.toSeq
-        |> Seq.collect (fun (_, heads) -> heads |> Set.toSeq)
-        |> Seq.toList
-        |> List.distinct
-
-    let apply (projection: StructuralProjection) (envelope: EventEnvelope) =
-        let key = EventStreamId.value envelope.StreamId
-        let prior = Map.tryFind key projection.Heads |> Option.defaultValue Set.empty
-
-        let next =
-            envelope.Parents
-            |> List.fold (fun heads parent -> Set.remove parent heads) prior
-            |> Set.add envelope.EventId
-
-        { projection with
-            Heads = Map.add key next projection.Heads }
 
 type PreparedIntegration =
     { DurableEvents: EventEnvelope list

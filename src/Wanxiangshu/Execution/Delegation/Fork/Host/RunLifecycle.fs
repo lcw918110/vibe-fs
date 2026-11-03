@@ -86,6 +86,30 @@ module HostForkRunLifecycle =
         | Some binding -> acceptedWorkOutcome durable parentId childId root physical binding
         | None -> AgentOwnerDispatchOutcome.AcceptanceUncertain "physical acceptance exists; child binding is missing"
 
+    let private continuationRoot durable childId (seed: PromptAuthority.IdentitySeed) =
+        match
+            PromptAuthorityProjectionQueries.activeProfile childId (AgentJournal.snapshot durable).AgentProjections
+        with
+        | Some profile when profile.IdentitySeed = seed -> Ok profile.AuthorityRootUserMessageId
+        | Some _ -> Error "Active child authority profile does not match accepted continuation identity seed"
+        | None -> Error "Managed delegation continuation accepted but active child authority profile is missing"
+
+    let private acceptedRoot
+        durable
+        childId
+        (captured: PromptAuthority.AuthorityExecutionProfile option)
+        (evidence: PromptAuthority.AcceptedDispatch)
+        =
+        match evidence.Origin, captured with
+        | PromptAuthority.PromptOrigin.Continuation _, Some profile -> Ok profile.AuthorityRootUserMessageId
+        | PromptAuthority.PromptOrigin.Continuation _, None -> continuationRoot durable childId evidence.IdentitySeed
+        | _ -> Ok(PhysicalUserMessageId.promoteToAuthorityRoot evidence.PhysicalUserMessageId)
+
+    let private acceptedOwner durable childId root physical seed =
+        match PromptAuthority.identitySeedOwner seed with
+        | Some(parentId, _, _) -> acceptedBindingOutcome durable parentId childId root physical
+        | None -> AgentOwnerDispatchOutcome.Rejected "child assignment has no exact owner identity"
+
     let private acceptedOutcome
         durable
         childId
@@ -94,39 +118,16 @@ module HostForkRunLifecycle =
         (onAccepted: ContinuationAcceptanceObserver)
         (evidence: PromptAuthority.AcceptedDispatch)
         =
-        let continuationRoot () =
-            match capturedActiveProfile with
-            | Some profile -> Ok profile.AuthorityRootUserMessageId
-            | None ->
-                match
-                    PromptAuthorityProjectionQueries.activeProfile
-                        childId
-                        (AgentJournal.snapshot durable).AgentProjections
-                with
-                | Some profile when profile.IdentitySeed = evidence.IdentitySeed ->
-                    Ok profile.AuthorityRootUserMessageId
-                | Some _ -> Error "Active child authority profile does not match accepted continuation identity seed"
-                | None -> Error "Managed delegation continuation accepted but active child authority profile is missing"
+        let rootResult = acceptedRoot durable childId capturedActiveProfile evidence
 
-        let rootResult =
-            match evidence.Origin with
-            | PromptAuthority.PromptOrigin.Continuation _ -> continuationRoot ()
-            | _ -> Ok(PhysicalUserMessageId.promoteToAuthorityRoot evidence.PhysicalUserMessageId)
-
-        let effectiveSeed =
+        let effectiveSeed () =
             match evidence.Origin with
             | PromptAuthority.PromptOrigin.Continuation _ -> evidence.IdentitySeed
             | _ -> identitySeed
 
-        let acceptedRoot root =
-            match PromptAuthority.identitySeedOwner effectiveSeed with
-            | Some(parentId, _, _) ->
-                acceptedBindingOutcome durable parentId childId root evidence.PhysicalUserMessageId
-            | None -> AgentOwnerDispatchOutcome.Rejected "child assignment has no exact owner identity"
-
         match rootResult with
         | Error err -> AgentOwnerDispatchOutcome.Rejected err
-        | Ok root -> acceptedRoot root
+        | Ok root -> acceptedOwner durable childId root evidence.PhysicalUserMessageId (effectiveSeed ())
 
     let issueCurrentOwnerIdentitySeed
         (journal: AgentJournal option)
@@ -168,27 +169,25 @@ module HostForkRunLifecycle =
         =
         let projections = (AgentJournal.snapshot durable).AgentProjections
 
-        let profileMatches (evidence: PromptAuthority.AcceptedDispatch) =
-            let capturedMatches =
-                match capturedActiveProfile with
-                | Some captured -> captured.IdentitySeed = evidence.IdentitySeed
-                | None -> false
+        let matchesSeed seed (profile: PromptAuthority.AuthorityExecutionProfile) = profile.IdentitySeed = seed
 
-            let durableMatches =
-                match PromptAuthorityProjectionQueries.activeProfile childId projections with
-                | Some current -> current.IdentitySeed = evidence.IdentitySeed
-                | None -> false
+        let continuationMatches (evidence: PromptAuthority.AcceptedDispatch) =
+            match evidence.Origin with
+            | PromptAuthority.PromptOrigin.Continuation _ ->
+                let capturedMatches =
+                    capturedActiveProfile |> Option.exists (matchesSeed evidence.IdentitySeed)
 
-            capturedMatches || durableMatches
+                let durableMatches =
+                    PromptAuthorityProjectionQueries.activeProfile childId projections
+                    |> Option.exists (matchesSeed evidence.IdentitySeed)
+
+                capturedMatches || durableMatches
+            | _ -> false
 
         match PromptAuthorityProjectionQueries.dispatchStatusFor childId payloadDigest projections with
         | PromptAuthorityProjectionQueries.DispatchStatus.Accepted evidence when evidence.IdentitySeed = identitySeed ->
             DurableDispatchObservation.Accepted evidence
-        | PromptAuthorityProjectionQueries.DispatchStatus.Accepted evidence when
-            (match evidence.Origin with
-             | PromptAuthority.PromptOrigin.Continuation _ -> profileMatches evidence
-             | _ -> false)
-            ->
+        | PromptAuthorityProjectionQueries.DispatchStatus.Accepted evidence when continuationMatches evidence ->
             DurableDispatchObservation.Accepted evidence
         | PromptAuthorityProjectionQueries.DispatchStatus.Accepted _ -> DurableDispatchObservation.IdentityMismatch
         | PromptAuthorityProjectionQueries.DispatchStatus.Pending ->
@@ -554,19 +553,20 @@ module HostForkRunLifecycle =
         =
         let drained: obj array = store?drainAll ()
 
-        let payload (item: obj) =
-            let p = item?payload
-
-            if not (isJsDefined p) then
-                None
+        let subscription value =
+            if isJsDefined value then
+                Some(unbox<IDisposable> value)
             else
-                let run = unbox<PendingHostRun> p
-                let s = item?subscription
-                let sub = if isJsDefined s then Some(unbox<IDisposable> s) else None
-                Some {| Run = run; Subscription = sub |}
+                None
 
         drained
-        |> Seq.choose (fun item -> if not (isJsDefined item) then None else payload item)
+        |> Seq.choose (fun item ->
+            if not (isJsDefined item) || not (isJsDefined item?payload) then
+                None
+            else
+                Some
+                    {| Run = unbox<PendingHostRun> item?payload
+                       Subscription = subscription item?subscription |})
         |> Seq.toList
 
     let internal drainCancelledRuns (store: obj) (agentIds: string list) : IDisposable list =
@@ -578,7 +578,9 @@ module HostForkRunLifecycle =
             if isJsDefined item then
                 subs.Add(unbox<IDisposable> item)
 
-        let settleClaimed (run: PendingHostRun) (verdict: obj) =
+        let settleCancelled (run: PendingHostRun) =
+            let verdict: obj = store?settleParentCancelled (run.AgentId, run.Token)
+
             if verdict?claimed = true then
                 run.Finished <- true
                 addSubscription verdict?subscription
@@ -586,16 +588,11 @@ module HostForkRunLifecycle =
                 AsyncSupport.trySetResult run.Source (AgentCompletion.abandoned run.AgentId "ParentCancelled")
                 |> ignore
 
-        let settleRun (run: PendingHostRun) =
-            if Set.contains run.AgentId cancelledSet then
-                let verdict: obj = store?settleParentCancelled (run.AgentId, run.Token)
-                settleClaimed run verdict
+        drainedSubs |> Array.iter addSubscription
 
-        for item in drainedSubs do
-            addSubscription item
-
-        for run in allRuns store do
-            settleRun run
+        allRuns store
+        |> List.filter (fun run -> Set.contains run.AgentId cancelledSet)
+        |> List.iter settleCancelled
 
         subs |> Seq.toList
 

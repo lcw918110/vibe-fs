@@ -48,6 +48,9 @@ module DurableWorkHost =
     [<Import("dirname", "node:path")>]
     let private directoryOf (path: string) : string = jsNative
 
+    [<Import("join", "node:path")>]
+    let private joinPath (parent: string) (name: string) : string = jsNative
+
     let private rejectGitPath (path: string) =
         let isGit (value: string) =
             value.Split([| '/'; '\\' |], StringSplitOptions.RemoveEmptyEntries)
@@ -83,6 +86,17 @@ module DurableWorkHost =
         else
             let sqlite = requireModule require "node:sqlite"
             createNew sqlite?DatabaseSync path
+
+    let openScopeJournal (stateRoot: string) : obj =
+        let directory = joinPath stateRoot "wanxiangshu"
+        ensureDir directory
+        let connection = openDatabase (joinPath directory "scope-retention.sqlite")
+
+        try
+            createNew SqliteJournal connection
+        with _ ->
+            connection?close () |> ignore
+            reraise ()
 
     [<Emit("$0 != null && (($0.code === 'SQLITE_BUSY' || $0.code === 'SQLITE_BUSY_SNAPSHOT') || (typeof $0.message === 'string' && $0.message.indexOf('database is locked') >= 0))")>]
     let private isDatabaseBusy (_error: exn) : bool = jsNative
@@ -301,6 +315,15 @@ module DurableWorkHost =
     let private succeeded (result: obj) =
         isRecord result && unbox<bool> result?ok
 
+    let private creationRefusal (result: obj) =
+        if
+            isString result?reason
+            && not (String.IsNullOrEmpty(unbox<string> result?reason))
+        then
+            unbox<string> result?reason
+        else
+            "manager session was not created"
+
     /// The review coordinator calls these ports only after the domain commit.
     /// park, send, draft and stop receive one request object and return
     /// `{ ok: true }` or `{ ok: false, reason }`, or a promise of that object.
@@ -324,16 +347,7 @@ module DurableWorkHost =
                     createObj [ "status", box "SessionCreated"; "execSessionId", result?sessionId ]
                 elif isRecord result && unbox<bool> result?refused then
                     // The host answered and refused: the session definitely was not created.
-                    let reason =
-                        if
-                            isString result?reason
-                            && not (String.IsNullOrEmpty(unbox<string> result?reason))
-                        then
-                            unbox<string> result?reason
-                        else
-                            "manager session was not created"
-
-                    createObj [ "status", box "NotStarted"; "reason", box reason ]
+                    createObj [ "status", box "NotStarted"; "reason", box (creationRefusal result) ]
                 else
                     // A failure we cannot classify (transport timeout, a thrown
                     // open, a malformed reply) does not prove the session was
@@ -375,7 +389,9 @@ module DurableWorkHost =
 
             let close () = closeJournal (Some opened) connection
 
-            let failWith error =
+            let effectFailure error =
+                close ()
+
                 failwith (
                     if isNull error then
                         "review effect failed"
@@ -383,26 +399,23 @@ module DurableWorkHost =
                         string error
                 )
 
-            let runEffect () =
-                let durableWork: obj = createNew DurableWork (workId, opened, effects)
-                durableWork?execute (requestId, command)
-
-            let settleProduced (produced: obj) =
+            let closeAfter produced =
                 if isThenable produced then
                     continueEither
                         produced
                         (fun value ->
                             close ()
                             value)
-                        (fun error ->
-                            close ()
-                            failWith error)
+                        effectFailure
                 else
                     close ()
                     produced
 
             try
-                settleProduced (runEffect ())
+                let durableWork: obj = createNew DurableWork (workId, opened, effects)
+                let produced: obj = durableWork?execute (requestId, command)
+
+                closeAfter produced
             with error ->
                 close ()
                 raise error

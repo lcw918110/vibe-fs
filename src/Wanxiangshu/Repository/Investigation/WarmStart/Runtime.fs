@@ -3,8 +3,8 @@ namespace Wanxiangshu.Repository.Investigation.WarmStart
 open Wanxiangshu.Repository.Investigation.Semble
 open System
 open System.IO
-open System.Threading
 open System.Threading.Tasks
+open Fable.Core
 open Wanxiangshu.Foundation
 open Wanxiangshu.Participant.Provider
 open Wanxiangshu.Foundation.Identity
@@ -13,6 +13,18 @@ open Wanxiangshu.Foundation.Identity
 /// material. Semble remains internal and fail-open; provider rendering stays Domain.
 [<RequireQualifiedAccess>]
 module RepositoryWarmStart =
+
+    [<Import("mapBounded", "wanxiangli/bounded-map")>]
+    let private mapBoundedLibrary: obj = jsNative
+
+    [<Emit("$0($1, $2, $3)")>]
+    let private mapBounded<'T, 'U>
+        (library: obj)
+        (limit: int)
+        (action: Func<'T, obj, Task<'U>>)
+        (items: 'T array)
+        : Task<'U array> =
+        jsNative
 
     type Search = string -> string -> int -> Task<SembleMcp.Hit list>
 
@@ -36,7 +48,7 @@ module RepositoryWarmStart =
                 return []
         }
 
-    let private runSearchShard (search: Search) repo (ordinal, query) _ =
+    let private runSearchShard (search: Search) repo (ordinal, query) =
         task {
             let! hits = trySearch search repo query
 
@@ -57,14 +69,14 @@ module RepositoryWarmStart =
                 let indexed = keywords |> List.mapi (fun index query -> index + 1, query)
 
                 let! searches =
-                    Parallel.mapBounded
+                    mapBounded
+                        mapBoundedLibrary
                         RepositoryWarmStartPrompt.MaxKeywords
-                        CancellationToken.None
-                        (runSearchShard search repo)
-                        indexed
+                        (Func<_, _, _>(fun item _ -> runSearchShard search repo item))
+                        (List.toArray indexed)
 
                 // Keyword-ordinal merge order is the warm-start law's (wanxiangli/warm-start select).
-                return Ok(Some searches)
+                return Ok(Some(List.ofArray searches))
         }
 
     let private collectWithSearch

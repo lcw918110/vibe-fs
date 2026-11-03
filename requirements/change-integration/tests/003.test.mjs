@@ -272,7 +272,7 @@ const classifyRebased = (head, rebasedCommit = 'r1', snapshot = 'h1') =>
 const classifyClaim = (head, rebasedCommit = 'r1', expectedHead = 'h1') =>
   change.classifyPublishClaim(head ?? null, rebasedCommit, expectedHead)
 
-test('WHAT[change-integration-003] THEOREM_publish_claimed_without_rebased_candidate_is_rejected', () => {
+test('WHAT[change-integration-003] a claim without a rebased candidate is rejected before recovery', () => {
   const result = change.fold([createEvent(JOB_A, 'ses_orch_a'), candidateEvent(JOB_A), publishClaimedEvent(JOB_A)])
   assert.equal(result.ok, false)
   assert.match(result.error, /no rebased candidate/)
@@ -311,14 +311,6 @@ test('WHAT[change-integration-003] reentry with valid complete claim reenters wi
   assert.equal(observation.ffGateHeld.length, 1)
   assert.equal(observation.ffGateHeld[0], true)
   assert.ok(observation.facts.includes('Published'))
-})
-test('WHAT[change-integration-003] reentry missing RebasedCandidateReady evidence sends zero FF', async () => {
-  const observation = await change.observeRelayProgram('reentry-missing-rebased')
-
-  assert.equal(observation.ffCalls, 0)
-  assert.deepEqual(observation.ffPinnedCandidates, [])
-  assert.equal(observation.facts.includes('Published'), false)
-  assert.equal(observation.verdict.kind, 'IntegrationFailed')
 })
 test('WHAT[change-integration-003] reentry with conflicting claim snapshot sends zero FF', async () => {
   const observation = await change.observeRelayProgram('reentry-stale-claim-superseded')

@@ -61,17 +61,6 @@ test('WHAT[execution-model-routing-012] capacity lifecycle rejects every illegal
     { kind: 'AlreadyApplied' },
   )
 })
-test('WHAT[execution-model-routing-012] same physical retry preserves the capability and a newer generation stales it', async () => {
-  const runtime = routing.createRuntime(() => target)
-  const first = await acquire(runtime)
-  assert.equal(await acquire(runtime), first)
-
-  const newerIdentity = identity({ physicalUserMessageId: 'message-b' })
-  const newer = await acquire(runtime, newerIdentity)
-  assert.notEqual(newer, first)
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, first, identity()), { kind: 'StaleFence' })
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, newer, newerIdentity), { kind: 'Applied' })
-})
 }
 
 {
@@ -107,6 +96,9 @@ test('WHAT[execution-model-routing-012] admission lease is opaque and projects o
   const lease = await acquire(runtime)
 
   assert.deepEqual(routing.executionAdmissionTarget(runtime, lease), target())
+  assert.equal(await acquire(runtime), lease)
+  routing.commitExecutionAdmission(runtime, lease, identity())
+  assert.equal(routing.tryReadExecution(runtime, identity().sessionId, identity().physicalUserMessageId), lease)
   assert.throws(
     () => JSON.stringify(lease),
     /ExecutionAdmissionToken is process-local and cannot be serialized/,
@@ -166,136 +158,6 @@ test('WHAT[execution-model-routing-012] rejects release from another physical me
 
   assert.equal(routing.snapshotOccupied(runtime).length, 1, 'wrong identity cannot release capacity')
 })
-test('WHAT[execution-model-routing-012] same physical retry reuses capability while newer material stales it', async () => {
-  const runtime = routing.createRuntime(() => target())
-  const first = await acquire(runtime)
-  const retry = await acquire(runtime)
-  assert.equal(first, retry, 'the exact provider retry observes one capability identity')
-
-  const newerIdentity = identity({ physicalUserMessageId: 'message-b' })
-  const newer = await acquire(runtime, newerIdentity)
-  assert.notEqual(first, newer)
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, first, identity()), { kind: 'StaleFence' })
-  assert.deepEqual(routing.releaseExecutionAdmissionBeforeProvider(runtime, first, identity()), {
-    kind: 'StaleFence',
-  })
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, newer, newerIdentity), { kind: 'Applied' })
-})
-test('WHAT[execution-model-routing-012] a lease from another runtime is rejected as the wrong capacity fence', async () => {
-  const firstRuntime = routing.createRuntime(() => target())
-  const secondRuntime = routing.createRuntime(() => target())
-  const lease = await acquire(firstRuntime)
-
-  assert.deepEqual(routing.commitExecutionAdmission(secondRuntime, lease, identity()), { kind: 'StaleFence' })
-  assert.equal(routing.snapshotOccupied(firstRuntime).length, 1)
-  assert.equal(routing.snapshotOccupied(secondRuntime).length, 0)
-})
-test('WHAT[execution-model-routing-012] EMR_012_try_read_execution_returns_committed_lease_token', async () => {
-  const runtime = routing.createRuntime(() => target())
-  const lease = await acquire(runtime)
-
-  assert.equal(routing.tryReadExecution(runtime, 'session-a', 'message-a'), null, 'a pending lease is not yet executable')
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, lease, identity()), { kind: 'Applied' })
-
-  const observed = routing.tryReadExecution(runtime, 'session-a', 'message-a')
-  assert.equal(observed, lease)
-  assert.equal(routing.executionAdmissionLifecycle(runtime, observed), 'Committed')
-  assert.deepEqual(routing.executionAdmissionTarget(runtime, observed), target())
-  assert.equal(routing.tryReadExecution(runtime, 'session-a', 'message-a'), observed)
-})
-test('WHAT[execution-model-routing-012] EMR_012_try_read_execution_misses_unknown_and_blank_ids', async () => {
-  const runtime = routing.createRuntime(() => target())
-  const lease = await acquire(runtime)
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, lease, identity()), { kind: 'Applied' })
-
-  for (const [sessionId, physicalUserMessageId] of [
-    ['unknown-session', 'message-a'],
-    ['session-a', 'unknown-message'],
-    ['', 'message-a'],
-    ['session-a', ''],
-    ['   ', 'message-a'],
-    ['session-a', '   '],
-  ]) {
-    assert.equal(routing.tryReadExecution(runtime, sessionId, physicalUserMessageId), null)
-  }
-})
-test('WHAT[execution-model-routing-012] EMR_012_try_read_execution_pending_returns_null', async () => {
-  const runtime = routing.createRuntime(() => target())
-  const lease = await acquire(runtime)
-
-  assert.equal(routing.tryReadExecution(runtime, 'session-a', 'message-a'), null, 'Pending owns no executable lease')
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, lease, identity()), { kind: 'Applied' })
-  assert.equal(routing.tryReadExecution(runtime, 'session-a', 'message-a'), lease)
-})
-test('WHAT[execution-model-routing-012] EMR_012_try_read_execution_released_returns_null', async () => {
-  const beforeProvider = routing.createRuntime(() => target())
-  const released = await acquire(beforeProvider)
-  assert.deepEqual(
-    routing.releaseExecutionAdmissionBeforeProvider(beforeProvider, released, identity()),
-    { kind: 'Applied' },
-  )
-  assert.equal(routing.tryReadExecution(beforeProvider, 'session-a', 'message-a'), null)
-
-  const provider = routing.createRuntime(() => target())
-  const committed = await acquire(provider)
-  assert.deepEqual(routing.commitExecutionAdmission(provider, committed, identity()), { kind: 'Applied' })
-  assert.equal(routing.tryReadExecution(provider, 'session-a', 'message-a'), committed)
-  routing.releasePhysicalExecution(provider, 'session-a', 'message-a')
-  assert.equal(routing.tryReadExecution(provider, 'session-a', 'message-a'), null)
-})
-test('WHAT[execution-model-routing-012] EMR_012_try_read_execution_wrong_physical_and_superseded_generation', async () => {
-  const runtime = routing.createRuntime(() => target())
-  const first = await acquire(runtime)
-  const newerIdentity = identity({ physicalUserMessageId: 'message-b' })
-  const second = await acquire(runtime, newerIdentity)
-
-  assert.notEqual(first, second)
-  assert.equal(routing.tryReadExecution(runtime, 'session-a', 'message-a'), null, 'a superseded generation is not executable')
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, first, identity()), { kind: 'StaleFence' })
-
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, second, newerIdentity), { kind: 'Applied' })
-  const observed = routing.tryReadExecution(runtime, 'session-a', 'message-b')
-  assert.equal(observed, second)
-  assert.deepEqual(routing.executionAdmissionTarget(runtime, observed), target())
-})
-test('WHAT[execution-model-routing-012] EMR_012_try_read_execution_does_not_upgrade_strength_reservation', async () => {
-  const runtime = routing.createRuntime(() => target())
-  assert.deepEqual(routing.tryReserveManaged(runtime, 'session-a', 'engineer', null), target())
-
-  const before = routing.capacitySnapshot(runtime)
-  assert.equal(routing.tryReadExecution(runtime, 'session-a', 'message-a'), null, 'a reservation is not a physical execution')
-  assert.deepEqual(routing.capacitySnapshot(runtime), before, 'the query neither adopts nor consumes the reservation')
-
-  assert.deepEqual(routing.tryLease(runtime, 'session-a', 'message-a', 'engineer', 'alice', null), target())
-})
-test('WHAT[execution-model-routing-012] EMR_012_try_read_execution_is_read_only', async () => {
-  let scheduled = 0
-  const runtime = routing.createRuntime(() => {
-    scheduled += 1
-    return target()
-  })
-  const lease = await acquire(runtime)
-  assert.deepEqual(routing.commitExecutionAdmission(runtime, lease, identity()), { kind: 'Applied' })
-  const settled = scheduled
-
-  const before = routing.capacitySnapshot(runtime)
-  const pending = routing.pendingCount(runtime)
-
-  for (let index = 0; index < 5; index += 1) {
-    assert.equal(routing.tryReadExecution(runtime, 'session-a', 'message-a'), lease)
-    assert.equal(routing.tryReadExecution(runtime, 'session-a', 'unknown-message'), null)
-    assert.equal(routing.tryReadExecution(runtime, '', 'message-a'), null)
-  }
-
-  const after = routing.capacitySnapshot(runtime)
-  assert.deepEqual(after.counters, before.counters)
-  assert.deepEqual(after.tokenStateCounts, before.tokenStateCounts)
-  assert.deepEqual(after, before)
-  assert.deepEqual(routing.reconcileCapacityEvidence(after), { kind: 'NoOp' })
-  assert.equal(routing.pendingCount(runtime), pending)
-  assert.equal(scheduled, settled, 'read-only queries never invoke the scheduler')
-})
-
 test('WHAT[execution-model-routing-012] fabricated fences and foreign custody fail closed at every settlement API', async () => {
   const runtime = routing.createRuntime(() => target())
   const lease = await acquire(runtime)

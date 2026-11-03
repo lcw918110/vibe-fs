@@ -45,34 +45,40 @@ test('WHAT[semantic-trace-010] durable capture refuses conflicting text and requ
     }
   })
 })
-}
+test('WHAT[semantic-trace-010] a refused concurrent opening does not block the next legal capture', async () => {
+  await withJournal(async (handle) => {
+    const session = `${SESSION}-opening-conflict`
+    const assignment = 'Original task\r\nKeep source.'
+    const raw = 'legal after refusal\r\n中文 😀'
+    const firstOpening = trace.captureOpening(handle, session, assignment, ['r1'])
+    const conflictingOpening = trace.captureOpening(handle, session, 'Other task', ['r2'])
+    const nextCapture = trace.captureObservedMessages(handle, session, [{
+      hostMessageId: 'after-refusal',
+      message: {
+        info: { id: 'after-refusal-run', role: 'assistant' },
+        parts: [{ id: 'after-refusal-part', type: 'text', text: raw }],
+      },
+    }])
+    const [first, conflict, captured] = await Promise.all([firstOpening, conflictingOpening, nextCapture])
 
-{
-const { default: assert } = await import("node:assert/strict");
-const { default: test } = await import("node:test");
-const trace = await import("../../../dist/Context/Trace/SemanticTraceSurface.js");
+    assert.equal(first.ok, true, first.ok ? '' : first.error)
+    assert.equal(first.openingCaptured, true)
+    assert.equal(conflict.ok, false)
+    assert.match(conflict.error, /opening-already-captured/)
+    assert.equal(captured.ok, true, captured.ok ? '' : captured.error)
+    assert.equal(captured.receipt.capturedPartCount, 1)
 
-const unwrap = (result) => {
-  assert.equal(result.ok, true, result.ok ? '' : result.error)
-  return result.projection
-}
-const part = (sequence, overrides = {}) => ({
-  sequence,
-  role: 'assistant',
-  provenance: `g:0/msg:run-${sequence}/host-part:part-${sequence}`,
-  turn: 0,
-  partIndex: sequence - 1,
-  kind: 'text',
-  textRef: `blob-${sequence}`,
-  textDigest: `digest-${sequence}`,
-  providerRun: `run-${sequence}`,
-  ...overrides,
-})
-
-test('WHAT[semantic-trace-010] conflicting opening is rejected', () => {
-  const projection = unwrap(trace.appendOpening(trace.emptyProjection(), 'first task', []))
-  const rejected = trace.appendOpening(projection, 'second task', [])
-  assert.equal(rejected.ok, false)
-  assert.equal(rejected.error, 'opening-already-captured')
+    const snapshot = trace.snapshot(handle, session)
+    assert.deepEqual(trace.openingEvidence(snapshot), {
+      assignmentText: assignment, authoritativeRequirements: ['r1'], constitutiveBody: '',
+    })
+    const parts = trace.orderedSemanticParts(snapshot)
+    assert.equal(parts.length, 1)
+    assert.equal(parts[0].cursor.sequence, 1)
+    assert.equal(parts[0].provenance, 'g:0/msg:after-refusal/host-part:after-refusal-part')
+    const payload = await journal.JournalSurface_readPayload(handle, parts[0].textRef)
+    assert.equal(payload.ok, true, payload.ok ? '' : payload.error)
+    assert.equal(payload.content, raw)
+  })
 })
 }

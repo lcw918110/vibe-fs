@@ -11,5 +11,6 @@
 /src/Wanxiangshu/Resources/PromptResources.fs
 /src/Wanxiangshu/Resources/PromptSurface.fs
 /src/Wanxiangshu/Participant/Persona/**
-/src/Wanxiangshu/OpenCode/Plugin/PluginTransforms.fs
+/wanxiangtong/opencode/provider-request/RequestProjection.fs
+/src/Wanxiangshu/OpenCode/Plugin/PluginTransformComposition.fs
 /scripts/checks/language-parity-gate.mjs
