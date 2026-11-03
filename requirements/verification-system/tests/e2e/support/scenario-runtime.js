@@ -37,10 +37,17 @@ import { wireOf } from './provider-wire.js';
 
 export class ScenarioRuntime {
   /** @param scenario the `{ entries, faults, boundaries }` shape `compileScenario` returns */
-  constructor(scenario, { tenureBoundaryCount = null } = {}) {
+  constructor(scenario, { tenureBoundaryCount = null, journalCallIds = null } = {}) {
     this.scenario = scenario;
     this.bindings = new Map();
     this.deliveries = emptyDeliveries();
+    /**
+     * Tool calls the durable journal already recorded for this session. The seal
+     * admits a late-arriving interaction only when its `toolCallId` appears here
+     * (measured: the Host can run a tool and send the next request before its own
+     * projection shows that call, so the transcript gains it one delivery later).
+     */
+    this.journalCallIds = journalCallIds;
     /**
      * Durable tenure-boundary count per session, as of that session's last answered chat
      * delivery. The successor projection (work-008) may only strip a predecessor's
@@ -252,6 +259,7 @@ export class ScenarioRuntime {
       body,
       boundary: boundaryFor(this.scenario.boundaries, entry),
       stripAdmitted: this.#crossedTenureBoundary(sessionId),
+      admittedCallIds: this.#journalCallIds(sessionId),
     });
     if (decision.resealed !== undefined) this.firedBoundaries.add(entry.id);
     return decision;
@@ -263,5 +271,11 @@ export class ScenarioRuntime {
     if (previous === undefined) return false;
     const current = this.tenureBoundaryCount?.(sessionId);
     return typeof current === 'number' && current > previous;
+  }
+
+  /** Tool calls the journal recorded for this session, read at decision time. */
+  #journalCallIds(sessionId) {
+    const recorded = this.journalCallIds?.(sessionId);
+    return recorded instanceof Set ? recorded : new Set();
   }
 }

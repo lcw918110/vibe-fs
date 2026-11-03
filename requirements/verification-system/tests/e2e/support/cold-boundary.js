@@ -267,6 +267,64 @@ const successorHidesPredecessor = (previousWire, nextWire) => {
 };
 
 /**
+ * The calls a wire carries, paired with the result that closes each one.
+ *
+ * A tool-call is only evidence of real work when the Host also produced its result:
+ * an unanswered call is a request the Host itself abandoned, not history.
+ */
+const closedCallsOf = (wire) => {
+  const calls = new Map();
+  for (const message of wire.messages ?? []) {
+    for (const part of message?.parts ?? []) {
+      if (part?.kind === 'tool-call' && typeof part.callId === 'string') {
+        calls.set(part.callId, null);
+      } else if (part?.kind === 'tool-result' && typeof part.callId === 'string' && calls.has(part.callId)) {
+        calls.set(part.callId, part);
+      }
+    }
+  }
+  return [...calls].filter(([, result]) => result !== null).map(([callId]) => callId);
+};
+
+const withoutInsertedCalls = (wire, insertedCallIds) => ({
+  ...wire,
+  messages: (wire.messages ?? [])
+    .map((message) => ({
+      ...message,
+      parts: (message?.parts ?? []).filter(
+        (part) =>
+          !((part?.kind === 'tool-call' || part?.kind === 'tool-result') && insertedCallIds.has(part.callId)),
+      ),
+    }))
+    .filter((message) => (message.parts ?? []).length > 0),
+});
+
+/**
+ * Whether the successor merely filled in calls it had already completed.
+ *
+ * The Host can run a tool and send the next request before its own projection
+ * contains that call: measured on the Long Stroke Manager ladder, `call_2`
+ * (`Reviewed`) reached the wire one delivery LATE, inserted ahead of an already
+ * visible `call_3` (`Relayed`). The transcript is not rewritten — one known
+ * interaction was still missing from the earlier view. That is a visibility
+ * lag, not ARCH-004, and the durable journal is what separates the two: an
+ * inserted call is admitted only when the journal records a fact for exactly
+ * that `toolCallId` AND stripping that call leaves an intact append-only prefix
+ * (same model, tools, system, and prior messages), so a genuinely invented or
+ * reordered call still fails closed.
+ */
+const filledInKnownCalls = (previousWire, nextWire, admittedCallIds) => {
+  if (admittedCallIds.size === 0) return false;
+  const previousCalls = new Set(closedCallsOf(previousWire));
+  const nextCalls = closedCallsOf(nextWire);
+  const inserted = nextCalls.filter((callId) => !previousCalls.has(callId));
+  if (inserted.length === 0) return false;
+  if (!inserted.every((callId) => admittedCallIds.has(callId))) return false;
+  const insertedSet = new Set(inserted);
+  return isAppendOnlyPrefix(previousWire, withoutInsertedCalls(nextWire, insertedSet));
+};
+
+/**
  * Decide one chat request against the session's seal.
  *
  * Four outcomes, and the caller must treat them as four:
@@ -280,7 +338,7 @@ const successorHidesPredecessor = (previousWire, nextWire) => {
  * one: the author believes a cold boundary is covered, and the scenario silently
  * stopped exercising it. Same reasoning as an empty `attempts` list in a fault.
  */
-export function sealDecision({ previousWire, body, boundary, stripAdmitted = false }) {
+export function sealDecision({ previousWire, body, boundary, stripAdmitted = false, admittedCallIds = new Set() }) {
   if (previousWire === null || previousWire === undefined) {
     // `manager-loop` and `epoch-switch` share the multi-delivery
     // shape: the first request establishes the seal (nothing to break), later ones
@@ -304,6 +362,12 @@ export function sealDecision({ previousWire, body, boundary, stripAdmitted = fal
 
   if (boundary === null || boundary === undefined) {
     if (held) return { held: true };
+    // Host visibility lag: a completed interaction reached the wire one delivery
+    // late, so the transcript gained a row it had always earned. The journal is
+    // the only authority that can say so — see `filledInKnownCalls`.
+    if (filledInKnownCalls(previous, nextWire, admittedCallIds)) {
+      return { resealed: 'journal-fill' };
+    }
     // work-008: when the session crossed a tenure boundary between the two deliveries,
     // production's successor projection legitimately strips the predecessor's
     // assistant/tool traffic (it keeps user input and whatever the new tenure observed).

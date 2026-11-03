@@ -56,12 +56,16 @@ module ManagerWorkflow =
     /// True when the work is already complete. A completed Manager owes no
     /// continuation; only a new operator message reopens it through Work.
     let private isRetiredObservation
+        (rootWorkspace: IRootWorkspaceReader)
         (directory: string option)
         (sessionId: SessionId)
         (_providerRun: ProviderRunIdentity)
         =
         task {
-            let! workOpt = lifecycleWork directory (SessionId.value sessionId)
+            let effectiveDir =
+                RootWorkspaceDirectory.select System.IO.Directory.Exists rootWorkspace directory
+
+            let! workOpt = lifecycleWork effectiveDir (SessionId.value sessionId)
 
             return
                 workOpt
@@ -409,7 +413,12 @@ module ManagerWorkflow =
         (context: ReconciledTurnContext)
         : Task =
         task {
-            let! retired = isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun
+            let! retired =
+                isRetiredObservation
+                    rootWorkspace
+                    context.Turn.Directory
+                    context.Turn.SessionId
+                    context.Turn.ProviderRun
 
             match retired, journal, context.Failure, context.Turn.Outcome, context.Quiescence with
             | true, _, _, _, _ -> return ()
@@ -435,7 +444,12 @@ module ManagerWorkflow =
         (context: ReconciledTurnContext)
         : Task =
         task {
-            let! retired = isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun
+            let! retired =
+                isRetiredObservation
+                    rootWorkspace
+                    context.Turn.Directory
+                    context.Turn.SessionId
+                    context.Turn.ProviderRun
 
             match retired, context.Failure, context.Turn.Outcome with
             | true, _, _ -> return ()
