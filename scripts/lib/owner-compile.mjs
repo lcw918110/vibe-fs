@@ -1131,7 +1131,11 @@ export function materializeOwnerCompile(plan, {
     return relative === '..' || relative.startsWith(`..${path.sep}`)
   })
   const generatedProjectPath = norm(hasOuterSources
-    ? path.join(flatAnchor, `Wanxiangshu.Impact.${restoreFingerprint}.fsproj`)
+    // Compile items living outside the anchor force the project file into the
+    // real source tree, so its name must separate compiles that differ only by
+    // their items: two probes over the same closure would otherwise overwrite
+    // each other's project and read the wrong verdict.
+    ? path.join(flatAnchor, `Wanxiangshu.Impact.${artifactFingerprint}.fsproj`)
     : path.join(generatedProjectDir, plan.candidateBasename))
   const scratchPropsPath = norm(path.join(generatedProjectDir, 'Directory.Build.props'))
   const artifactPropsPath = norm(path.join(artifactDir, 'Directory.Build.props'))
