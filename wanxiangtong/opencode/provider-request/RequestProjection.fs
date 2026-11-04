@@ -540,9 +540,28 @@ module PluginTransforms =
             else
                 messages |> Array.take (messages.Length - tail)
 
-        let last = withoutSteer |> Array.tryLast |> Option.defaultValue null
-        let originalInfo = scopeField last "info"
-        let sessionId = scopeField originalInfo "sessionID"
+        // A request whose whole array is anonymous steers has no surviving
+        // message to inherit from, so the removed tail is the next best source:
+        // dropping the dedup pass must not be what makes a steer lose its session.
+        let sessionIdOf (row: obj) = scopeField (scopeField row "info") "sessionID"
+
+        let sessionId =
+            let inherited =
+                withoutSteer
+                |> Array.tryLast
+                |> Option.map sessionIdOf
+                |> Option.filter (fun value -> not (isNull value))
+
+            match inherited with
+            | Some value -> value
+            | None ->
+                messages
+                |> Array.rev
+                |> Array.tryPick (fun row ->
+                    let value = sessionIdOf row
+                    if isNull value then None else Some value)
+                |> Option.defaultValue null
+
         let info = createObj [ "role", box "user"; "sessionID", sessionId ]
 
         let steer =

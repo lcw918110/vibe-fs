@@ -1376,7 +1376,11 @@ export function assertActiveRegistrations({ extractedPackageDir, root }) {
  *
  * @returns {Promise<{ tarballPath: string, packEntry: object }>}
  */
-export async function packDeclaredClosure({ root = REPO_ROOT, runDir, expectedClosure } = {}) {
+export async function packDeclaredClosure({
+  root = REPO_ROOT,
+  runDir = DEFAULT_PACK_RUN_DIR,
+  expectedClosure,
+} = {}) {
   const resolvedRoot = path.resolve(root)
   const resolvedRunDir = path.resolve(runDir)
   fs.mkdirSync(resolvedRunDir, { recursive: true })
@@ -1385,10 +1389,21 @@ export async function packDeclaredClosure({ root = REPO_ROOT, runDir, expectedCl
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'wx-package-stage-'))
   let packResult
   try {
-    for (const [member, meta] of closure) {
-      const target = path.join(staging, member)
-      fs.mkdirSync(path.dirname(target), { recursive: true })
-      fs.copyFileSync(meta.fullSourcePath, target)
+    try {
+      for (const [member, meta] of closure) {
+        const target = path.join(staging, member)
+        fs.mkdirSync(path.dirname(target), { recursive: true })
+        fs.copyFileSync(meta.fullSourcePath, target)
+      }
+    } catch (err) {
+      // A closure member that cannot be staged is a source-tree problem, not a
+      // failure to start npm; reporting it as one sends the reader to the wrong
+      // place.
+      throw createVerificationError(
+        'stage-copy-failed',
+        err.path ?? 'staging',
+        `Failed to stage the declared closure: ${err.message}`,
+      )
     }
     packResult = await spawnProcess(
       'npm',
@@ -1396,6 +1411,7 @@ export async function packDeclaredClosure({ root = REPO_ROOT, runDir, expectedCl
       { cwd: staging, env: npmEnvironment() },
     )
   } catch (err) {
+    if (err?.code === 'stage-copy-failed') throw err
     throw createVerificationError(
       'pack-spawn-failed',
       'npm',
