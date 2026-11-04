@@ -271,6 +271,28 @@ test('WHAT[work-008] OpenCode-shaped relay keeps the successor own turns without
   assert.deepEqual(ids, ['u1', 'a2', 'u2', 'a4', 'a5'])
 })
 
+// A completed work has no active tenure (`ActiveId = None`), but the barrier of
+// the last succession still points at the successor that just closed it. The cut
+// must keep applying: with `ActiveId` empty, comparing it against the successor
+// always fails, and the whole pre-barrier history leaks back to the provider on
+// the request after completion.
+test('WHAT[work-008] a completed work still cuts at its last barrier', async () => {
+  const { cutVisible } = await import('../../../../dist/Mission/Work/OpenCode/NarrativeTransform.js')
+  const user = (id, body) => ({ info: { id, role: 'user' }, parts: [{ type: 'text', text: body }] })
+  const asst = (id, parentID, parts) => ({ info: { id, role: 'assistant', parentID }, parts })
+  const done = (callID, tool, output) => ({ type: 'tool', callID, tool, state: { status: 'completed', input: {}, output } })
+  const messages = [
+    user('u1', 'commission body'),
+    asst('a1', 'u1', [{ type: 'text', text: 'predecessor talk' }]),
+    asst('a2', 'u1', [done('review-1', 'review', 'relay note')]),
+    user('u2', 'successor prompt'),
+    asst('a3', 'u2', [{ type: 'text', text: 'successor own text' }]),
+  ]
+  const kept = cutVisible(messages, { BarrierToolCallId: 'review-1', SuccessorTenureId: 'ten-2', ActiveId: null })
+  assert.ok(kept, 'the cut still applies after completion')
+  assert.deepEqual(kept.map((m) => m.info.id), ['u1', 'a2', 'u2', 'a3'])
+})
+
 // Relayed keeps every user message: the commission, operator messages and
 // guard nudges before the cut, and every user message after it. When the cut
 // is not in view the successor still gets all user messages, never an empty
