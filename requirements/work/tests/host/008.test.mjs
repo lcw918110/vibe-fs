@@ -241,6 +241,25 @@ test('WHAT[work-008] provider barrier: registered OMP context hook keeps user me
     assert.deepEqual(reply.messages.map((message) => message.id).filter(Boolean), ['before', 'call', 'result', 'kept', 'stray'])
     console.log('omp context excludes pre-barrier')
     console.log('omp stored originals unchanged')
+
+    // Close the work: the last succession barrier stays, the incumbent goes away.
+    // The OMP hook has to keep cutting at that barrier, otherwise the whole
+    // pre-barrier history returns to the provider on the request after completion.
+    const advanced = review(stateRoot, workId, 'advance', [])
+    assert.equal(advanced.kind, 'Advanced', advanced.reason)
+    const closed = review(stateRoot, workId, 'close', [])
+    assert.equal(closed.kind, 'Completed', closed.reason)
+    const afterClose = surface.inspect(stateRoot, workId)
+    assert.equal(afterClose.active, null, 'a completed work has no incumbent')
+    assert.equal(afterClose.barrier.toolCallId, toolCallId, 'the barrier survives completion')
+    const storedAfter = ompHistory(toolCallId, successorId)
+    const originalAfter = snapshotOf(storedAfter)
+    const replyAfter = await context({ messages: storedAfter }, session)
+    assert.ok(replyAfter?.messages, 'the completed work still cuts')
+    assert.notEqual(replyAfter.messages, storedAfter)
+    assertCut(replyAfter.messages, storedAfter, originalAfter)
+    assert.deepEqual(replyAfter.messages.map((message) => message.id).filter(Boolean), ['before', 'call', 'result', 'kept', 'stray'])
+    console.log('omp completed work still cuts at the last barrier')
   } finally {
     rmSync(workspace, { recursive: true, force: true })
   }
@@ -291,6 +310,45 @@ test('WHAT[work-008] a completed work still cuts at its last barrier', async () 
   const kept = cutVisible(messages, { BarrierToolCallId: 'review-1', SuccessorTenureId: 'ten-2', ActiveId: null })
   assert.ok(kept, 'the cut still applies after completion')
   assert.deepEqual(kept.map((m) => m.info.id), ['u1', 'a2', 'u2', 'a3'])
+})
+
+// The barrier call itself may already be out of view. For a completed work the
+// cut falls back to the user rows exactly as it does while the successor is
+// still incumbent; before this fix the empty incumbent skipped the cut entirely
+// and the whole pre-barrier history went back to the provider.
+test('WHAT[work-008] a completed work without the barrier in view keeps only user messages', async () => {
+  const { cutVisible } = await import('../../../../dist/Mission/Work/OpenCode/NarrativeTransform.js')
+  const user = (id, body, extra = {}) => ({ info: { id, role: 'user' }, parts: [{ type: 'text', text: body }], ...extra })
+  const asst = (id, parentID, parts) => ({ info: { id, role: 'assistant', parentID }, parts })
+  const messages = [
+    user('u1', 'commission body'),
+    asst('a1', 'u1', [{ type: 'text', text: 'predecessor talk' }]),
+    user('u2', 'successor prompt'),
+    asst('a2', 'u2', [{ type: 'text', text: 'successor own text' }]),
+    user('u3', 'synthetic line', { synthetic: true }),
+  ]
+  const kept = cutVisible(messages, { BarrierToolCallId: 'review-1', SuccessorTenureId: 'ten-2', ActiveId: null })
+  assert.ok(kept, 'the cut still applies when the barrier left the view')
+  assert.deepEqual(kept.map((m) => m.info.id), ['u1', 'u2'])
+})
+
+// Reopening after completion opens a third tenure and leaves the barrier alone.
+// The incumbent is no longer the successor the barrier names, so the history
+// must come back in full: the cut only covers the tenure that closed the work.
+test('WHAT[work-008] a reopened work shows the history again', async () => {
+  const { cutVisible } = await import('../../../../dist/Mission/Work/OpenCode/NarrativeTransform.js')
+  const user = (id, body) => ({ info: { id, role: 'user' }, parts: [{ type: 'text', text: body }] })
+  const asst = (id, parentID, parts) => ({ info: { id, role: 'assistant', parentID }, parts })
+  const done = (callID, tool, output) => ({ type: 'tool', callID, tool, state: { status: 'completed', input: {}, output } })
+  const messages = [
+    user('u1', 'commission body'),
+    asst('a1', 'u1', [{ type: 'text', text: 'predecessor talk' }]),
+    asst('a2', 'u1', [done('review-1', 'review', 'relay note')]),
+    user('u2', 'successor prompt'),
+    asst('a3', 'u2', [{ type: 'text', text: 'successor own text' }]),
+  ]
+  const kept = cutVisible(messages, { BarrierToolCallId: 'review-1', SuccessorTenureId: 'ten-2', ActiveId: 'ten-3' })
+  assert.equal(kept, undefined, 'another incumbent reopens visibility')
 })
 
 // Relayed keeps every user message: the commission, operator messages and
