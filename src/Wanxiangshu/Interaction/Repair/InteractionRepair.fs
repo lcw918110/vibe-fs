@@ -202,9 +202,12 @@ module InteractionRepairWorkflow =
         match journal with
         | Some durable ->
             let snapshot = AgentJournal.snapshot durable
+
             AgentProjection.tryFind sessionId snapshot.AgentProjections
             |> Option.bind (fun session -> session.ProviderFailures)
-            |> Option.exists (fun pf -> pf.Exhausted || pf.Budget.ConsecutiveFailureCount >= ProviderFailureBudget.DefaultBudget)
+            |> Option.exists (fun pf ->
+                pf.Exhausted
+                || pf.Budget.ConsecutiveFailureCount >= ProviderFailureBudget.DefaultBudget)
         | None -> false
 
     let private repairDefect
@@ -231,6 +234,7 @@ module InteractionRepairWorkflow =
                     TerminalStop.forAuthority turn.AuthorityRootUserMessageId "failure budget exhausted (10)"
                 ))
             |> ignore
+
             AsyncSupport.completedTask ()
         else
             match
@@ -240,7 +244,16 @@ module InteractionRepairWorkflow =
                     turn.Outcome
             with
             | CompletedTurnClassifier.RepairDefectDecision.RequestRepair ->
-                trySendIdleRepair quiescence context sessionPort rootWorkspace eventPort journal prompt repairKind observer
+                trySendIdleRepair
+                    quiescence
+                    context
+                    sessionPort
+                    rootWorkspace
+                    eventPort
+                    journal
+                    prompt
+                    repairKind
+                    observer
             | CompletedTurnClassifier.RepairDefectDecision.AwaitRepairTerminal
             | CompletedTurnClassifier.RepairDefectDecision.NoRepair -> AsyncSupport.completedTask ()
 

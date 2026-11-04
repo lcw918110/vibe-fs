@@ -35,13 +35,17 @@ module JoinTool =
 
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let private fissionRuntime: obj = jsNative
+
     [<Emit("$0 === undefined")>]
     let private isUndefined (_v: obj) : bool = jsNative
 
     let private tryFissionLaneInfo (sessionId: SessionId) : (string * int) option =
         let r: obj = fissionRuntime?tryLane (SessionId.value sessionId)
-        if isNull r || isUndefined r then None
-        else Some (unbox<string> r?GroupId, unbox<int> r?LaneIndex)
+
+        if isNull r || isUndefined r then
+            None
+        else
+            Some(unbox<string> r?GroupId, unbox<int> r?LaneIndex)
 
     [<RequireQualifiedAccess>]
     module Path =
@@ -223,9 +227,7 @@ module JoinTool =
             // Only process-local Fission bindings are active. A durable Open
             // group from a previous process is a broken tool record, not an
             // implicit lane to resume.
-            let lane =
-                tryFissionLaneInfo sessionId
-                |> JoinRun.decideLane
+            let lane = tryFissionLaneInfo sessionId |> JoinRun.decideLane
 
             let joinTask = joinTaskForMembership runtime permit waitTask lane
             let! joined = CausalAwait.awaitTask scope.WaitObserver joinDescriptor joinTask
@@ -277,11 +279,13 @@ module JoinTool =
             // join admission or setup is still running is recorded on THIS attempt's own
             // TCS. There is no session-level future latch; Dispose unregisters.
             let attempt: obj = scope.JoinAttempts?Begin(sessionId, context.ToolCallId)
-            let detachAbort = context.AttachAbort (fun () -> attempt?SignalOperatorAbort() |> ignore)
+
+            let detachAbort =
+                context.AttachAbort(fun () -> attempt?SignalOperatorAbort () |> ignore)
 
             use _attempt =
                 { new IDisposable with
-                    member _.Dispose() = attempt?Dispose() |> ignore }
+                    member _.Dispose() = attempt?Dispose () |> ignore }
 
             use _cleanup =
                 { new IDisposable with

@@ -20,6 +20,9 @@
     <ProjectReference Include="Wanxiangshu.Owner.execution-failure-policy.execution-failure-decision.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-identityseed.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.composition-turn-recovery-workflow.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-digest.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-root-workspace-contract.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-session-contract.fsproj"/>
     <Compile Include="Participant/Provider/Attempt/Fallback/ProviderFailureSurface.fsi"/>
     <Compile Include="Participant/Provider/Attempt/Fallback/ProviderFailureSurface.fs"/>
   </ItemGroup>

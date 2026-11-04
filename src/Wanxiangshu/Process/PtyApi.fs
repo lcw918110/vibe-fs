@@ -16,10 +16,10 @@ module Pty =
     let private parentAbortRegistry: obj = jsNative
 
     let registerParentAbort (parentId: string) (abort: unit -> unit) : int =
-        unbox<int> (parentAbortRegistry?register(parentId, abort))
+        unbox<int> (parentAbortRegistry?register (parentId, abort))
 
     let unregisterParentAbort (parentId: string) (token: int) : unit =
-        parentAbortRegistry?unregister(parentId, token) |> ignore
+        parentAbortRegistry?unregister (parentId, token) |> ignore
 
     let abortParent (parentId: string) : unit =
-        parentAbortRegistry?abortParent(parentId) |> ignore
+        parentAbortRegistry?abortParent (parentId) |> ignore

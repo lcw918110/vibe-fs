@@ -304,7 +304,12 @@ test('WHAT[managed-chat-execution-005] transform durably starts the real assista
     const assistant = assistantMessage(sessionID, messageID, 'assistant-start-before-transform')
     runtime.pushHostMessage(sessionID, assistant)
     await hooks.event({ event: { type: 'message.updated', properties: { info: assistant.info } } })
-    assert.equal(status.query(runtime.journal, sessionID, messageID).providerStarted, false)
+    // managed-chat-execution-005: an exact public message.updated is itself the
+    // provider-start observation. It must land before transform, and transform
+    // must replay that same fact rather than append another one.
+    assert.deepEqual(status.query(runtime.journal, sessionID, messageID), {
+      accepted: true, providerStarted: true, terminal: false, disposition: null,
+    }, 'the exact public assistant observation durably starts the provider phase')
 
     await hooks['experimental.chat.messages.transform']({}, request)
 

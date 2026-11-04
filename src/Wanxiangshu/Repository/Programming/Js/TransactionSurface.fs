@@ -362,5 +362,3 @@ module JsTransactionSurface =
         JsToolsTransactionStore.createLifecyclePersistence (eventStoreOf store)
 
     let createLifecyclePersistence (store: obj) : obj = lifecyclePersistenceOf store |> box
-
-

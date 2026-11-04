@@ -10,6 +10,7 @@ import { openIncumbency, withExecutablePlugin } from '../../verification-system/
 import { integrationTest } from '../../verification-system/tests/support/tier-gate.mjs'
 import { OPENCODE_BIN } from '../../verification-system/tests/e2e/support/process-host-utils.js'
 import { isCanaryTurnSettled, managerReviewStage } from './support/manager-review-canary-turn.mjs'
+import { INITIAL_RETENTION_STEER } from '../../verification-system/tests/e2e/support/runtime-key.js'
 
 test('WHAT[host-boundary-032] canary does not advance on a delayed idle from a previous physical turn', () => {
   const state = {
@@ -41,7 +42,7 @@ test('WHAT[host-boundary-032] canary provider routes repeated requests by physic
   assert.equal(managerReviewStage({ messages: [{ role: 'user', content: '[ANCHOR: 1; prefixCount: 1]\u0000\ufeffREAD_SAMPLE\u0000\ufeff<system>calibration</system>' }] }), 1)
   assert.equal(managerReviewStage({ messages: [{ role: 'user', content: '[ANCHOR: 1]\u0000\ufeffREAD_SAMPLE\u0000\ufeff<system>calibration</system>' }] }), 1)
   assert.equal(managerReviewStage(body), 1)
-  body.messages.push({ role: 'user', content: '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]' })
+  body.messages.push({ role: 'user', content: INITIAL_RETENTION_STEER })
   assert.equal(managerReviewStage(body), 1)
   body.messages.pop()
   body.messages.push({ role: 'assistant', tool_calls: [{ id: 'call_read_norm_1' }] })

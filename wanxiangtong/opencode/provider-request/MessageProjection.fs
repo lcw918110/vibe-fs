@@ -142,11 +142,20 @@ module HostMessageProjection =
             let reasoningText = rawParts |> Array.tryPick reasoningFromPart
             withFallbackTextPart raw rawParts (fallbackText role reasoningText)
 
+    let private requestSeparators: obj = emitJsExpr () "new WeakSet()"
+
+    let isRequestSeparator (message: obj) : bool =
+        emitJsExpr (requestSeparators, message) "$0.has($1)"
+
     let private createAssistantDotMessage () : obj =
-        createObj
-            [ "info", box (createObj [ "role", box "assistant" ])
-              "role", box "assistant"
-              "parts", box [| createObj [ "type", box "text"; "text", box "." ] |] ]
+        let message =
+            createObj
+                [ "info", box (createObj [ "role", box "assistant" ])
+                  "role", box "assistant"
+                  "parts", box [| createObj [ "type", box "text"; "text", box "." ] |] ]
+
+        emitJsExpr (requestSeparators, message) "$0.add($1)" |> ignore
+        message
 
     let private isUserRole (raw: obj) : bool =
         if isNull raw then

@@ -1,3 +1,5 @@
+import { isScopeReminderText } from '../../../verification-system/tests/e2e/support/runtime-key.js';
+
 export function isCanaryTurnSettled({ sessionID, messageID, status, messages }) {
   if (status !== undefined && status?.type !== 'idle') return false;
   return messages.some(({ info }) => info?.sessionID === sessionID && info?.role === 'assistant'
@@ -21,7 +23,7 @@ export function managerReviewStage(body) {
     // 标记在 7bf520242 简化为只含锚点编号；保留旧格式兼容，避免解析停在 null。
     const content = message.content.replace(/^\[ANCHOR: \d+(?:; prefixCount: \d+)?\]\u0000\ufeff/, '');
     const prompt = content.split('\u0000')[0];
-    if (prompt === '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]') continue;
+    if (isScopeReminderText(prompt)) continue;
     const stages = prompts.get(prompt);
     if (!stages) return null;
     const [beforeCall, afterCall, callID] = stages;

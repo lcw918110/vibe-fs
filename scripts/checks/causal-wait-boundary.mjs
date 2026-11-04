@@ -8,8 +8,7 @@
  *     file locator stay inside Execution/Session/Wait.
  *
  * Migration guards retained here:
- *   - critical migrated sites do not reintroduce bare TCS.Task awaits;
- *   - CausalWaitRegistry mutable fields carry DSL-MUTABLE annotations.
+ *   - critical migrated sites do not reintroduce bare TCS.Task awaits.
  */
 
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'

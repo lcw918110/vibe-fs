@@ -15,7 +15,7 @@
  */
 
 import { assertEq, assertTrue } from './lib.mjs';
-import { kindOf, lanesOf, resolveEntry, runtimeKeyOf, sessionIdOf, stepOf, turnOf } from '../../e2e/support/runtime-key.js';
+import { INITIAL_RETENTION_STEER, kindOf, lanesOf, resolveEntry, runtimeKeyOf, sessionIdOf, stepOf, turnOf } from '../../e2e/support/runtime-key.js';
 import { forkAnchor, forkRelay } from '../../e2e/support/production.js';
 import { createHash } from 'node:crypto';
 import * as providerProjection from '../../../../../dist/Participant/Provider/Projection/Surface.js';
@@ -79,7 +79,7 @@ export const runtimeKeyCases = [
   {
     name: 'verification-system-003 初始化 steer 前的宿主相邻 user 占位不是模型步骤',
     fn: () => {
-      const reminder = user('[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]');
+      const reminder = user(INITIAL_RETENTION_STEER);
       assertEq(stepOf(request([user('first'), assistant('.'), reminder])), 0);
       assertEq(stepOf(request([user('first'), assistant('real reply'), reminder])), 1);
       assertEq(stepOf(request([user('first'), assistant('.'), user('real next')])), 0);
@@ -437,7 +437,7 @@ export const runtimeKeyCases = [
   {
     name: 'verification-system-003 初始化提醒不替代真实用户轮次或重置步骤',
     fn: () => {
-      const body = request([user('first'), assistant('r1'), user('[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]')]);
+      const body = request([user('first'), assistant('r1'), user(INITIAL_RETENTION_STEER)]);
       assertEq(turnOf(body), 'first');
       assertEq(stepOf(body), 1);
     },

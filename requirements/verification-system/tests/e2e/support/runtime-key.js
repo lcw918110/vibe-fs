@@ -41,6 +41,7 @@ import {
   source as pairProgrammingThoughtSource,
 } from '../../../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js';
 import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { sanitizeMessage } from '../../../../../dist/OpenCode/Host/HostBoundarySurface.js';
 
 /**
@@ -126,12 +127,132 @@ const insertedReplayPairLength = (messages, index) => {
 };
 
 const scopeReminderTexts = new Set([
-  '[System: Estimate the turnBudget for the first fine-grained task block (state closed-loop). Then call resetScope immediately, before doing anything else.]',
-  '[System: Before any resetScope initialization, call negotiate(questions: string) NOW. Ask the delegator all questions needed to clarify this assignment. Group related questions into the single plural questions argument. Once the call is accepted, negotiation is complete and the timeline continues: do not wait for any answer, and call resetScope promptly. If the delegator’s answer is obtained, it may arrive later as a user steer; it never blocks the timeline. You may negotiate again at any time; later calls never delay resetScope.]',
+  // `wanxiangli/src/pair-hint/PairHint.fs` — initialize / negotiate /
+  // askPreviousScope / weak retention reminders. Kept verbatim; the pair-hint
+  // module is the only writer of these rows.
+  '[System: Estimate the retentionBudget for the first task block (how many keepLast it is expected to take; size-neutral, estimated as it is, main path when unsure). Initialize that closed-loop with a tool call whose scope.kind=resetScope (newScopeGoal + newScopeRetentionBudget) before other work. See common law «Scope».]',
+  '[系统：估计第一个任务状态闭环所需的 retentionBudget（完成它预计还要几次 keepLast；对大小中立，按实估计，拿不准按主路径估）。用带 scope.kind=resetScope 的工具调用初始化该闭环（newScopeGoal + newScopeRetentionBudget），再执行其他工作。见共同法 «Scope»。]',
+  '[System: Call negotiate(questions: string) NOW to clarify this assignment (you may carry scope.kind=resetScope on the same turn; once negotiate is accepted, that reset takes effect immediately). Group related questions into questions. Acceptance completes negotiation; do not wait for an answer. See common law «Scope».]',
+  '[系统：先调用 negotiate(questions: string) 向委托者澄清本次任务（可同拍在 scope 里带 resetScope；negotiate 受理后 reset 立即生效）。把需要确认的多个具体问题集中写入 questions；调用一经受理即协商完成，时序继续，不必等待答复。见共同法 «Scope»。]',
   '[System: You have received the handoff from the previous scope. You must now call askPreviousScope(questions) first to clarify specific questions with the previous scope based on the handoff and current objective. The call acknowledges sending immediately; continue your work without waiting. Answers will arrive later as a user steer.]',
+  '[系统：你已经收到前一 Scope 的交接。现在必须先调用 askPreviousScope(questions)，由你根据交接及当前目标，自行向前一 Scope 确认需要澄清的具体问题。调用受理后不必等待答复，可继续工作；回答随后作为 steer 到达。]',
+  "[System: This scope's retention is exhausted (0 remaining). Continue work already in progress; do not interrupt or abandon it for this reminder. After closing the current state loop, the next non-exempt tool must use scope.kind=resetScope. See common law «Scope».]",
+  '[系统：当前 scope 的 retention 已用尽（剩余 0）。继续完成正在进行的工作，不得因本提醒中断、暂停或放弃；当前状态闭环完成后，下一次非豁免工具必须 scope.kind=resetScope。见共同法 «Scope»。]',
 ]);
 
-export const isScopeReminderText = (text) => scopeReminderTexts.has(text);
+// The production Host composes its scope steers from `resources/provider/host/scope-steer/`,
+// so the wire text changes whenever those resources are reworded (the estimate→retention
+// rewording already broke exact matching once). Reading the live resource files here keeps
+// one source of truth: a future rewording cannot silently turn steer rows back into
+// "real user turns" for the step cursor. Missing files are skipped, not fatal — the
+// literals above still cover legacy hosts.
+const scopeSteerResourceDir = new URL(
+  '../../../../../resources/provider/host/scope-steer/',
+  import.meta.url,
+);
+if (existsSync(scopeSteerResourceDir)) {
+  for (const steerName of ['missing-estimate', 'reset-due']) {
+    for (const language of ['en.md', 'zh-CN.md']) {
+      try {
+        scopeReminderTexts.add(readFileSync(new URL(`${steerName}/${language}`, scopeSteerResourceDir), 'utf8').trim());
+      } catch {}
+    }
+  }
+}
+
+// The contract anchor prefix (`[ANCHOR: N]\u0000\uFEFF`, stripped by `turnOf`) rides in
+// front of a scope reminder on the same user row, and the pair-guidance writer appends
+// its own `\u0000\uFEFF`-separated hint tail after the reminder text. Reminder
+// recognition therefore normalizes both: strip a leading contract anchor, cut at the
+// first separator tail, then exact-match — otherwise a decorated reminder is misread as
+// a real user turn and the step cursor lands on an undeclared key.
+const anchorPrefixPattern = /^\[ANCHOR: [1-9]\d*\]\u0000\uFEFF/;
+const separatorTailPattern = /\u0000\uFEFF/;
+
+// The wire may carry the reminder as typed chunks instead of a plain string, so the
+// text is read the same way `contentParts` does: a plain string as-is, an array of
+// `{type:'text'}` chunks joined.
+const reminderTextOf = (content) => {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return content;
+  return content
+    .map((chunk) => (typeof chunk === 'string' ? chunk : chunk?.type === 'text' ? String(chunk?.text ?? '') : ''))
+    .join('');
+};
+
+const reminderCandidates = (content) => {
+  const text = reminderTextOf(content);
+  if (typeof text !== 'string') return [];
+  const withoutAnchor = text.replace(anchorPrefixPattern, '');
+  const cut = withoutAnchor.split(separatorTailPattern)[0];
+  return Array.from(new Set([text, withoutAnchor, cut]));
+};
+
+export const isScopeReminderText = (text) =>
+  reminderCandidates(text).some((candidate) => scopeReminderTexts.has(candidate));
+
+/**
+ * The answer to `negotiate` and the answer to `askPreviousScope`.
+ *
+ * Both arrive as a user steer on the session that asked, in their own user turn: the
+ * Host appends the row after the ask tool result, so a scenario declares it like any
+ * other turn. It carries the same `# ` heading marker a declared prompt carries, so
+ * the marker is stripped before the prefix is compared. Exported because a scenario
+ * needs the same text it declares.
+ *
+ * Verbatim from `wanxiangli/src/pair-hint/PairHint.fs` (`prepare`,
+ * `preparePreviousScopeReply`); the pair-hint module is the only writer of these rows.
+ */
+export const DELEGATION_ANSWER_PREFIXES = [
+  'Delegator answered negotiate(questions):',
+  '委托者已回答 negotiate(questions)：',
+  'Previous Scope answered askPreviousScope(questions):',
+  '前一 Scope 的答复：',
+];
+
+const withoutHeadingMarker = (text) => text.replace(/^(?:# )+/, '');
+
+export const isDelegationAnswerSteer = (text) =>
+  reminderCandidates(text).some((candidate) =>
+    DELEGATION_ANSWER_PREFIXES.some((prefix) => withoutHeadingMarker(candidate).startsWith(prefix)),
+  );
+
+/**
+ * The Host's own post-compaction continuation.
+ *
+ * After an automatic compaction the Host writes the continuation row straight into
+ * storage — "Continue if you have next steps, or stop and ask for clarification if
+ * you are unsure how to proceed." — and never runs `chat.message` for it
+ * (`ProviderWireCapture.isHostCompactionContinuation`, managed-chat-execution-017).
+ * Production treats it as the continuation of the execution it compacted, not as a
+ * new authority: the compacted step is superseded and the run keeps its identity.
+ *
+ * The wire no longer carries the compacted turn — only the summary and this row — so
+ * the step cursor cannot be recovered from message counts, and reading the row as an
+ * ordinary user turn would put a key under a text no scenario can declare. It is its
+ * own request kind instead (`compaction-continue`), which a scenario declares once
+ * with the ladder the model walks after it wakes up.
+ *
+ * The text is OpenCode's, not this repository's — no owner surface exports it, so the
+ * prefix is measured (017 records the row verbatim). Only the leading sentence is
+ * matched: the tail is the Host's advice to the model and may be reworded, while a
+ * rewrite of the leading sentence makes this miss, which shows up as a
+ * no-declared-turn naming this exact row rather than as a silently wrong answer.
+ */
+const hostCompactionContinuationPrefix =
+  'Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.';
+
+const isHostCompactionContinuation = (text) =>
+  reminderCandidates(text).some((candidate) =>
+    withoutHeadingMarker(candidate).startsWith(hostCompactionContinuationPrefix),
+  );
+
+/**
+ * The initial retention steer, verbatim, for callers that have to build a wire
+ * carrying one. Kept here so a rewording touches one file, not every fixture.
+ */
+export const INITIAL_RETENTION_STEER =
+  '[System: Estimate the retentionBudget for the first task block (how many keepLast it is expected to take; size-neutral, estimated as it is, main path when unsure). Initialize that closed-loop with a tool call whose scope.kind=resetScope (newScopeGoal + newScopeRetentionBudget) before other work. See common law «Scope».]';
 
 // ── lane ────────────────────────────────────────────────────────────────────
 
@@ -214,6 +335,18 @@ export function sessionIdOf(context) {
  */
 const TITLE_MARKER = 'Generate a title for this conversation:';
 
+/**
+ * The Host's negotiation snapshot dialogue: a temporary, tool-free turn that only
+ * asks the delegator to answer the recipient's clarifying questions in prose.
+ */
+export const SNAPSHOT_DIALOGUE_MARKER = 'This is a temporary snapshot dialogue, not a work turn.';
+
+const snapshotDialogue = (body) => {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  return messages.some((message) =>
+    typeof message?.content === 'string' && message.content.includes(SNAPSHOT_DIALOGUE_MARKER));
+};
+
 /** How far in to look. The marker is a preamble; a real turn cannot push it back. */
 const TITLE_PREAMBLE_LIMIT = 4;
 
@@ -234,7 +367,15 @@ export function kindOf(body) {
   for (const message of messages.slice(0, TITLE_PREAMBLE_LIMIT)) {
     const content = message?.content;
     if (typeof content === 'string' && content.startsWith(TITLE_MARKER)) return 'title';
+    if (typeof content === 'string' && content.startsWith('You are a context summarization agent.')) return 'compaction';
   }
+  // The Host's own row after an automatic compaction: the conversation it continues is
+  // no longer on the wire, so this is its own kind rather than a rung of a chat ladder.
+  if (compactionContinuationRequest(messages)) return 'compaction-continue';
+  // The Host asks for a squat, answer-only negotiation snapshot from the delegator
+  // before it delivers the recipient's questions. It is its own request kind: the
+  // delegator is forbidden from calling tools there, so no chat ladder can answer it.
+  if (snapshotDialogue(body)) return 'negotiation-answer';
   return 'chat';
 }
 
@@ -292,9 +433,28 @@ const lastUserIndex = (messages) => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (!isUser(messages[index])) continue;
     if (isScopeReminderText(messages[index].content)) continue;
+    // A delegation answer is a steer injected into the session that asked, not a new
+    // user turn: `PairHint.fs` returns it as `steer`, and the asker keeps walking the
+    // turn it was already in. Treating it as the turn would zero the step cursor and
+    // strand every remaining rung of that ladder under an undeclared key.
+    if (isDelegationAnswerSteer(messages[index].content)) continue;
     return index;
   }
   return -1;
+};
+
+/**
+ * Whether this request is the one the Host sends right after an automatic compaction.
+ *
+ * Its last user row is the Host's own continuation (see `isHostCompactionContinuation`),
+ * and everything before it is the summary that replaced the compacted turn. The row is
+ * still the turn — a scenario declares what the model does when it wakes up — but it is
+ * its own request kind, because no chat ladder can reach it: the compacted rungs are
+ * gone from the wire.
+ */
+const compactionContinuationRequest = (messages) => {
+  const index = lastUserIndex(messages);
+  return index >= 0 && isHostCompactionContinuation(messages[index].content);
 };
 
 /**

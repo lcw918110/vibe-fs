@@ -1365,6 +1365,83 @@ export function assertActiveRegistrations({ extractedPackageDir, root }) {
  * @param {{ root?: string, runDir?: string, skipConsumer?: boolean }} options
  * @returns {Promise<{ ok: boolean, artifactPath: string, tarballDigest: string, memberCount: number, totalBytes: number, issues: Array<{code: string, path: string, message: string}>, generation: number }>}
  */
+/**
+ * Packs the declared closure from a clean staging directory.
+ *
+ * `npm pack` always includes a nested `node_modules` directory, whatever
+ * `files` or `.npmignore` say. Packing the real repository root would
+ * therefore ship the `wanxiangli` submodule's own dependency install as a
+ * stray `wanxiangli/node_modules` tree. Staging only the declared members
+ * keeps the archive equal to the closure it is checked against.
+ *
+ * @returns {Promise<{ tarballPath: string, packEntry: object }>}
+ */
+export async function packDeclaredClosure({
+  root = REPO_ROOT,
+  runDir = DEFAULT_PACK_RUN_DIR,
+  expectedClosure,
+} = {}) {
+  const resolvedRoot = path.resolve(root)
+  const resolvedRunDir = path.resolve(runDir)
+  fs.mkdirSync(resolvedRunDir, { recursive: true })
+
+  const closure = expectedClosure ?? deriveExpectedClosure({ root: resolvedRoot })
+  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'wx-package-stage-'))
+  let packResult
+  try {
+    try {
+      for (const [member, meta] of closure) {
+        const target = path.join(staging, member)
+        fs.mkdirSync(path.dirname(target), { recursive: true })
+        fs.copyFileSync(meta.fullSourcePath, target)
+      }
+    } catch (err) {
+      // A closure member that cannot be staged is a source-tree problem, not a
+      // failure to start npm; reporting it as one sends the reader to the wrong
+      // place.
+      throw createVerificationError(
+        'stage-copy-failed',
+        err.path ?? 'staging',
+        `Failed to stage the declared closure: ${err.message}`,
+      )
+    }
+    packResult = await spawnProcess(
+      'npm',
+      ['pack', '--json', '--ignore-scripts', '--pack-destination', resolvedRunDir],
+      { cwd: staging, env: npmEnvironment() },
+    )
+  } catch (err) {
+    if (err?.code === 'stage-copy-failed') throw err
+    throw createVerificationError(
+      'pack-spawn-failed',
+      'npm',
+      `npm pack failed to spawn: ${err.message}`,
+    )
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true })
+  }
+
+  if (packResult.code !== 0) {
+    throw createVerificationError(
+      'pack-failed',
+      'npm pack',
+      `npm pack exited with code ${packResult.code}: ${packResult.stderr || packResult.stdout}`,
+    )
+  }
+
+  const packEntry = parsePackResult(packResult.stdout, 'wanxiangshu')
+  const tarballPath = path.join(resolvedRunDir, packEntry.filename)
+  if (!fs.existsSync(tarballPath)) {
+    throw createVerificationError(
+      'tarball-missing',
+      tarballPath,
+      `Packed tarball not found at ${tarballPath}`,
+    )
+  }
+
+  return { tarballPath, packEntry }
+}
+
 export async function verifyPackage({
   root = REPO_ROOT,
   runDir = DEFAULT_PACK_RUN_DIR,
@@ -1384,46 +1461,11 @@ export async function verifyPackage({
   const expectedClosure = deriveExpectedClosure({ root: resolvedRoot })
 
   // file: 链接的依赖会被 npm 放到链接源路径；仅在临时打包目录物化选定闭包。
-  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'wx-package-stage-'))
-  let packResult
-  try {
-    for (const [member, meta] of expectedClosure) {
-      const target = path.join(staging, member)
-      fs.mkdirSync(path.dirname(target), { recursive: true })
-      fs.copyFileSync(meta.fullSourcePath, target)
-    }
-    packResult = await spawnProcess(
-      'npm',
-      ['pack', '--json', '--ignore-scripts', '--pack-destination', resolvedRunDir],
-      { cwd: staging, env: npmEnvironment() },
-    )
-  } catch (err) {
-    throw createVerificationError(
-      'pack-spawn-failed',
-      'npm',
-      `npm pack failed to spawn: ${err.message}`,
-    )
-  } finally {
-    fs.rmSync(staging, { recursive: true, force: true })
-  }
-
-  if (packResult.code !== 0) {
-    throw createVerificationError(
-      'pack-failed',
-      'npm pack',
-      `npm pack exited with code ${packResult.code}: ${packResult.stderr || packResult.stdout}`,
-    )
-  }
-
-  const packEntry = parsePackResult(packResult.stdout, 'wanxiangshu')
-  const tgzPath = path.join(resolvedRunDir, packEntry.filename)
-  if (!fs.existsSync(tgzPath)) {
-    throw createVerificationError(
-      'tarball-missing',
-      tgzPath,
-      `Packed tarball not found at ${tgzPath}`,
-    )
-  }
+  const { tarballPath: tgzPath } = await packDeclaredClosure({
+    root: resolvedRoot,
+    runDir: resolvedRunDir,
+    expectedClosure,
+  })
 
   const tgzBuffer = fs.readFileSync(tgzPath)
   const tarballDigest = crypto.createHash('sha256').update(tgzBuffer).digest('hex')

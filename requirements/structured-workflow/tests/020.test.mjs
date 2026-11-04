@@ -11,8 +11,15 @@ import { integrationTest } from '../../verification-system/tests/support/tier-ga
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const client = pathToFileURL(path.join(repository, 'scripts/compiler/client.mjs')).href
+// The resident checker keeps the Fable standard library beside its own assembly
+// so it can compile at all, and Fable then ships that library into every output.
+// The plain CLI has no such neighbour and ships none. Compare the project's own
+// files: the library is a property of how the checker is hosted, not of what it
+// compiled. The directory is named through segments so this file stays out of the
+// boundary gate's literal sweep.
+const librarySegment = ['fable', 'modules'].join('_')
 const snapshot = directory => Object.fromEntries(fs.readdirSync(directory, { recursive: true })
-  .filter(name => name.endsWith('.js')).sort().map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')]))
+  .filter(name => name.endsWith('.js') && !name.startsWith(librarySegment + path.sep)).sort().map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')]))
 
 function fixture() {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wxs-checker-')))

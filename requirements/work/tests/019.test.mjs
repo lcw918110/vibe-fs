@@ -106,17 +106,22 @@ const assertBeforeDenied = async (hooks, sessionID, tool, callID) => {
   )
 }
 
-test('WHAT[work-019] 没有任期时 review 与 deliver 在执行入口被拒绝', async () => {
+test('WHAT[work-019] 没有任期时首次空账 review 原子开立工作，deliver 不是宿主工具', async () => {
   await withExecutablePlugin(async (hooks, _directory, createdIds, runtime) => {
     const sessionID = 'ses-no-tenure'
     await acceptAuthorityRoot(runtime, sessionID, 'manager')
-    // 无活跃任期：office 工具在 ToolRegistry 执行入口 fail closed。
+    // 无任期但有权威：第一次 review 按 [002] 原子开立（WHAT[019]「第一次
+    // review 按 [002] 原子开立」）；空账询问返回 Asked/ConfirmEffect。
+    // 旧的 review-unavailable 预期建立在夹具不传 callID/messageID 的伪影上——
+    // 宿主总是同时携带二者（fixture 现已对齐），程序内 this.review 与宿主
+    // review 工具走同一执行入口。
     const reviewResult = await runManagerProgram(
       hooks,
       sessionID,
       'return await this.review([]);',
     )
-    assert.match(reviewResult, /code = "tool\/review\/binding-unavailable"|review-unavailable/)
+    assert.match(reviewResult, /ok = true/)
+    assert.match(reviewResult, /incumbencyId = "/)
     assert.equal(hooks.tool.deliver, undefined)
     assert.equal(permissionOfToolName(manager, 'deliver') ?? null, null)
     assert.equal(createdIds.length, 0)

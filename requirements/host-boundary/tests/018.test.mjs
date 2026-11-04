@@ -32,7 +32,7 @@ test('WHAT[host-boundary-018] composition root only assembles existing Hook/SDK 
   assert.match(spike, /PluginBoot\.create/)
   assert.match(spike, /PluginHostWiring\.create/)
   assert.match(spike, /PluginSessionWiring\.attach/)
-  assert.match(spike, /PluginTransforms\.create/)
+  assert.match(spike, /PluginTransformComposition\.create/)
   assert.match(spike, /PluginHooks\.create/)
   assert.doesNotMatch(spike, /client\.session|SendPrompt|beginProviderAttempt/, 'no Host business-path call in the plugin entry')
 })

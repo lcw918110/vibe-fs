@@ -41,6 +41,7 @@
     <ProjectReference Include="Wanxiangshu.Owner.work.mission-work-core.fsproj"/>
         <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-projection-queries.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-tool-adapter.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.opencode-host-joinattemptfactory.fsproj"/>
     <Compile Include="OpenCode/Tools/ToolRuntimeScope.fsi"/>
     <Compile Include="OpenCode/Tools/ToolRuntimeScope.fs"/>
     <Compile Include="OpenCode/Tools/ToolRuntimeScopeSurface.fsi"/>

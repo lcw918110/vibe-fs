@@ -25,7 +25,9 @@ import {
 } from './strict-mock-server.js';
 import { faultBody } from './delivery-plan.js';
 import { wireOf } from './provider-wire.js';
+import { turnOf as turnOfDiagnostic } from './runtime-key.js';
 import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { StrictMockSignals } from './strict-mock-signals.js';
 import { respond } from './strict-mock-responses.js';
 import {
@@ -361,6 +363,7 @@ export class StrictMockProvider {
           if (a !== b) diffs.push(`msg[${i}] ${prevW[i].role}:${a} != ${nextW[i].role}:${b}`);
         }
         if (prevW.length !== nextW.length) diffs.push(`len ${prevW.length} != ${nextW.length}`);
+        if (process.env.WXS_SEAL_DUMP) writeFileSync(process.env.WXS_SEAL_DUMP, JSON.stringify({ prev: prevW.slice(1), next: nextW.slice(1) }, null, 1));
         // system 内容差异定位
         const prevSys = Array.from(prevW[0]?.parts ?? [])[0]?.text ?? '';
         const nextSys = Array.from(nextW[0]?.parts ?? [])[0]?.text ?? '';
@@ -438,6 +441,9 @@ export class StrictMockProvider {
     const responseEntry = neverEnds
       ? { ...entry, respond: { ...entry.respond, neverEnd: true } }
       : entry;
+    // The scope annotation is per Session: two lanes answering in the same run
+    // must each open their own Scope lifetime.
+    this._state.retention.sessionId = String(context?.sessionId ?? '');
     return respond(this._state, res, responseEntry, parsed);
   }
 
@@ -556,6 +562,10 @@ export class StrictMockProvider {
     });
     if (!this._quiet) {
       console.error(`[MOCK-FATAL] first script mismatch: reason=${reason} session=${sessId} parent=${parentSessionId || '-'} model=${JSON.stringify(parsed.model)} tools=${JSON.stringify(extractToolNames(parsed))} msgs=${msgs.length} lastUser=${JSON.stringify(fatal.lastUser)} candidates=${JSON.stringify(candidateLabels)}`);
+      try {
+        const keyTurn = turnOfDiagnostic(parsed);
+        console.error(`[MOCK-FATAL] key.turn=${JSON.stringify(keyTurn)}`);
+      } catch {}
       try {
         const roles = msgs.map((m) => `${m.role}`).join(' ');
         console.error(`[MSG-ROLES] ${roles}`);

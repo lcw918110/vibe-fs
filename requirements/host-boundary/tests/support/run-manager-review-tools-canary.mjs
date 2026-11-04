@@ -43,6 +43,7 @@ const CONTRACT_TOKEN = 'do-not-use-except-for-review';
 const CANCEL_ARGUMENTS = {
   name: 'cancel-review',
   intent: '等待评审程序，取消时保留真实终态。',
+  scope: { kind: 'resetScope', newScopeGoal: '评审工具取消路径', newScopeRetentionBudget: 3 },
   program: 'class Js extends JsProgram { async run() { await new Promise(() => {}); return null; } }',
   contract: CONTRACT_TOKEN,
 };
@@ -171,6 +172,11 @@ const provider = await startHttpServer(async (request, response) => {
       stage: managerReviewStage(body),
       prompts: (body.messages ?? []).filter((message) => message.role === 'user')
         .map((message) => typeof message.content === 'string' ? message.content.slice(0, 150) : '<structured>'),
+      lastUserFull: (() => {
+        const users = (body.messages ?? []).filter((m) => m.role === 'user');
+        const last = users[users.length - 1];
+        return last ? String(last.content).slice(0, 400) : null;
+      })(),
     } });
 
     // Title requests do not belong to a canary execution path.
@@ -210,6 +216,7 @@ const provider = await startHttpServer(async (request, response) => {
         argsStr: JSON.stringify({
           name: 'read-review-sample',
           intent: '等待读取结果，保留评审工具真实回执。',
+          scope: { kind: 'resetScope', newScopeGoal: '读通评审样例', newScopeRetentionBudget: 3 },
           program: "class Js extends JsProgram { async run() { return await this.reviewOnly.cat('fixture-sample.txt'); } }",
           contract: CONTRACT_TOKEN,
         }),
@@ -240,6 +247,7 @@ const provider = await startHttpServer(async (request, response) => {
         argsStr: JSON.stringify({
           name: 'missing-review-file',
           intent: '等待读取失败回执，不把拒绝改写为成功。',
+          scope: { kind: 'resetScope', newScopeGoal: '评审工具业务错误路径', newScopeRetentionBudget: 3 },
           program: "class Js extends JsProgram { async run() { return await this.reviewOnly.cat('nonexistent-missing-file.txt'); } }",
           contract: CONTRACT_TOKEN,
         }),
@@ -280,6 +288,7 @@ const provider = await startHttpServer(async (request, response) => {
         argsStr: JSON.stringify({
           name: 'executor-rejection',
           intent: '保留执行器拒绝事实并观察宿主处理。',
+          scope: { kind: 'resetScope', newScopeGoal: '评审工具执行器拒绝路径', newScopeRetentionBudget: 3 },
           program: `class Js extends JsProgram { async run() { return '${EXECUTOR_THROW_SENTINEL}'; } }`,
           contract: CONTRACT_TOKEN,
         }),

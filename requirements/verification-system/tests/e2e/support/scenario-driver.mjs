@@ -55,9 +55,27 @@ const tenureBoundaryCountOf = (workDir, sessionId) =>
     ? workJournalEvents(workDir)
         .filter((event) => event.stream === sessionId)
         .filter((event) => event.type === 'IncumbencyOpened'
+          || event.type === 'WorkContinued'
           || (event.type === 'IncumbencyRetired' && event.payload?.outcome === 'Relayed'))
         .length
     : 0;
+
+/**
+ * Tool calls the durable journal already recorded for one session.
+ *
+ * A lifecycle fact carries the `toolCallId` it was produced by, so this is the
+ * journal's own answer to "did the Host really run this call?", never an
+ * inference from the wire.
+ */
+const journalCallIdsOf = (workDir, sessionId) => {
+  if (typeof sessionId !== 'string' || sessionId === '') return new Set();
+  const ids = new Set();
+  for (const event of workJournalEvents(workDir, { sessionId })) {
+    const callId = event.payload?.toolCallId;
+    if (typeof callId === 'string' && callId !== '') ids.add(callId);
+  }
+  return ids;
+};
 
 /** Short wall-clock guard when journal/SSE wake is unavailable; not a success-path sleep. */
 const FACT_WAKE_GUARD_MS = 50;
@@ -920,6 +938,7 @@ export async function runCanary(scriptName, { customs, preFlow } = {}) {
       // oracles read — scoped to the session by the identity the payload carries, so the
       // seal never infers a tenure change from the wire.
       tenureBoundaryCount: (sessionId) => tenureBoundaryCountOf(scenario.host.workDir, sessionId),
+      journalCallIds: (sessionId) => journalCallIdsOf(scenario.host.workDir, sessionId),
     }));
 
     if (Array.isArray(doc.setup?.preFlowTurns) && doc.setup.preFlowTurns.length > 0 && !preFlow) {

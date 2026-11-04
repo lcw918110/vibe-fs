@@ -14,20 +14,22 @@ test('WHAT[latency-degeneration-004] interrupting a Provider attempt retains a m
 })
 
 test('WHAT[latency-degeneration-004] production latency watchdog uses the attempt interruption port, not session termination',()=>{
-  const source=readFileSync(new URL('../../../../src/Wanxiangshu/OpenCode/Plugin/PluginHooks.fs',import.meta.url),'utf8')
+  // The watchdog wiring moved from PluginHooks into the adapter layer together
+  // with the rest of the OpenCode request-latency translation.
+  const source=readFileSync(new URL('../../../../wanxiangtong/opencode/request-latency/RequestLatency.fs',import.meta.url),'utf8')
   const beginning=source.indexOf('let latencyPorts: LatencyWatchdogPorts')
   const end=source.indexOf('let latencyWatchdog =',beginning)
   assert.ok(beginning>0&&end>beginning)
   const wiring=source.slice(beginning,end)
-  assert.match(wiring,/Abort = fun sessionId ->[\s\S]*?sessionPort\.InterruptAttempt/)
+  assert.match(wiring,/Abort =\s*fun sessionId ->[\s\S]*?sessionPort\.InterruptAttempt/)
   assert.doesNotMatch(wiring,/sessionPort\.AbortSession/,
     'a watchdog must not tear down the session it needs to resume')
-  assert.match(wiring,/HostSessionNudge\.sendContinuationDetachedObservedResult/,
+  assert.match(wiring,/sendContinuationDetachedObservedResult/,
     'the interruption must send the existing managed continuation, not only record censored latency')
   const sender=readFileSync(new URL('../../../../src/Wanxiangshu/Interaction/Dispatch/SessionNudge.fs',import.meta.url),'utf8')
   assert.match(sender,/PromptDispatcher\.AwaitMode\.Detached/,
     'the Host sender must dispatch without blocking on physical acceptance')
-  assert.match(wiring,/Notify = fun _ ->/, 'physical event callback must be installed')
+  assert.match(wiring,/Notify =\s*fun _ ->/, 'physical event callback must be installed')
   assert.match(wiring,/accepted \(\)/, 'acceptance notification must settle continuation')
   assert.match(wiring,/onLateRefused/, 'a late definite Host refusal must reach the failure-return port')
   assert.match(wiring,/\n\s+acceptance\n/,

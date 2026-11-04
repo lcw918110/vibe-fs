@@ -884,6 +884,13 @@ module PairProgrammingThoughtTransform =
                 |> List.filter (isPairProgrammingThought >> not)
                 |> sanitizeActiveToolCalls lang
 
+            // An assistant "." separator is a request-local synthetic row this
+            // module itself inserted between consecutive user messages. It has
+            // no Host address by construction, so it must never reach the
+            // addressability check; it is neither a real message nor a steer.
+            let requestSeparators, realMessages =
+                realMessages |> List.partition HostMessageProjection.isRequestSeparator
+
             let addressableMessages, scopeSteers = separateScopeSteers realMessages
 
             let transcript =

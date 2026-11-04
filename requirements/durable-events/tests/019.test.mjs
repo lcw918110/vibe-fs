@@ -159,10 +159,30 @@ test('WHAT[durable-events-019] every registered business oracle changes its prod
 })
 
 test('WHAT[durable-events-019] removing one real hostProgram registration blocks its domain result', async () => {
-  // Structural 与 Journal 是 spine 注册：移除时 CanonicalIntegrator 的
-  // base-rule 前置检查直接拒绝构造。如实断言「构造被整体拒绝」这一
-  // fail-closed 形态，不把它伪称为「观察到缺失 Current」。
-  for (const ruleName of ['Structural', 'Journal']) {
+  // Structural heads 由库内 Integrator 拥有，不再是宿主注册；宿主程序里能移除的
+  // spine 注册只剩 Journal。移除它必须被 base-rule 前置检查整体拒绝。
+  // 「移除 Structural」这条前提已不存在——按真实边界改成断言：移除一个不在程序里
+  // 的名字不制造新 Current，也不悄悄放行。
+  const root = mkdtempSync(join(tmpdir(), 'wxs-integrator-without-structural-'))
+  const structuralCommonDir = join(root, '.Herdchestra')
+  mkdirSync(structuralCommonDir, { recursive: true })
+  try {
+    const store = workspace.createIsolatedWithoutRegistration(structuralCommonDir, 'without-structural', 'Structural')
+    try {
+      mustOk(await eventStore.append(store, [structuralEvent]), 'append Structural fact when no rule carries that name')
+      assert.equal(
+        eventStore.head(store, structuralEvent.stream),
+        structuralEvent.id,
+        'library-owned Structural heads still fold without a host registration',
+      )
+    } finally {
+      eventStore.dispose(store)
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+
+  for (const ruleName of ['Journal']) {
     const root = mkdtempSync(join(tmpdir(), `wxs-integrator-without-${ruleName.toLowerCase()}-`))
     const commonDir = join(root, '.Herdchestra')
     mkdirSync(commonDir, { recursive: true })

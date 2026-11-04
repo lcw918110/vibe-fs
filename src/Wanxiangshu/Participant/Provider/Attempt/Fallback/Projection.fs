@@ -59,6 +59,11 @@ module ProviderFailureProjection =
               "exhausted" ==> current.Exhausted
               "lastTransitionWasSuccess" ==> current.LastTransitionWasSuccess ]
 
+    /// The one mapping from the host projection to the library's plain state.
+    /// Callers that only need to hand a projection across the boundary (the
+    /// durable budget adapter) reuse this instead of reassembling the fields.
+    let toLibraryState (current: ProviderFailureProjection) : obj = stateView current
+
     let private stateOf (current: ProviderFailureProjection) (state: obj) : ProviderFailureProjection =
         { current with
             Budget = { ConsecutiveFailureCount = unbox<int> (field state "consecutiveFailureCount") }

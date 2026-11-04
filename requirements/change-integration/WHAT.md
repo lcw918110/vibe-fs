@@ -18,7 +18,7 @@ Orchestrator 受理用户请求前，目标工作区须无暂存、未暂存、�
 
 ## [005] 冲突归属
 
-Unmerged entries 或 rebase conflict 须记录 ConflictDetected。在门禁外交给同一 Work 的下一 tenure 重新处理与验证；不得复活已退休 tenure，也不得另起评审者。失效原因只记录在 durable invalidation 中。
+Unmerged entries 或 rebase conflict 须记录 ConflictDetected。在门禁外交给同一 Work 的下一 tenure 重新处理与验证；不得复活已退休 tenure，也不得另起评审者。工作已结案但发布尚未完成时，Change 以系统续办请求开立新任期，不冒充操作员消息；续办前须根据已退休任期对应的精确运行终态确认停止，不能把停止请求当作停止完成。终态已持久化时，中断恢复须能重新关联并确认；无法确认时保持未知，不启动新任期。续办与提示发送须可在重复调用和中断恢复时辨认，提交或发送结果未知时不得盲目重发。目标前移导致的 rebase 同样需要重新处理与验证。程序待改。
 
 ## [006] 从事实恢复
 

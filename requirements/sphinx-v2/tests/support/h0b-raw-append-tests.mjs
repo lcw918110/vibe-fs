@@ -49,6 +49,13 @@ const expectPending = (observed, request) => {
     key: request.payload.dispatchIntentId, value: { request: request.payload, receipt: null },
   }])
 }
+// After both sides of a legal fork are appended the stream has two heads, so the
+// canonical Current refuses to pick a winner ("ConcurrentHeads"). A branch is
+// observed as one of the stream's heads — never as the single winning one.
+const expectBranchPending = (heads, event, request) => {
+  assert.ok(heads.includes(event.id), 'the appended branch is one of the stream heads')
+  assert.deepEqual(event.payload.events, [request])
+}
 
 export function registerH0bRawAppendTests({ inquiry, seed, request }) {
   test('WHAT[sphinx-v2-010] two stale handles can both append the same intent under different commands and cold replay retains the legal fork', async t => {
@@ -73,14 +80,14 @@ export function registerH0bRawAppendTests({ inquiry, seed, request }) {
       assert.deepEqual(current(leftWriter, inquiry), before, 'Pure seal does not publish the intent')
       assert.deepEqual(current(rightWriter, inquiry), before)
       assert.deepEqual(await store.append(leftWriter, [left]), { ok: true, cuts: [] })
-      expectPending(current(leftWriter, inquiry), request)
+      expectBranchPending(store.heads(leftWriter, base.stream), left, request)
       assert.deepEqual(current(rightWriter, inquiry), before, 'The second actual handle still owns its original Current')
       assert.equal(store.read(rightWriter, left.id), null)
       const afterLeft = filesAt(commonDir)
       assert.deepEqual(await store.append(leftWriter, [left]), { ok: true, cuts: [] })
       assert.deepEqual(filesAt(commonDir), afterLeft, 'The same raw success shape also represents exact no-new-write replay')
       assert.deepEqual(await store.append(rightWriter, [right]), { ok: true, cuts: [] })
-      expectPending(current(rightWriter, inquiry), request)
+      expectBranchPending(store.heads(rightWriter, base.stream), right, request)
       close(leftWriter)
       close(rightWriter)
       const cold = await coldObservation(t, commonDir, inquiry, base, [base, left, right])
@@ -130,8 +137,7 @@ export function registerH0bRawAppendTests({ inquiry, seed, request }) {
         const writtenBytes = allFiles[`${sealed.writerId}.ndjson`] ?? allFiles[`${sealed.writerId}-0000.ndjson`]
         assert.equal(writtenBytes, completed.writerBytes,
           'Each actual OS contender appended its original complete canonical bytes to its own writer')
-        expectPending(completed.current, request)
-        assert.deepEqual(completed.heads, [sealed.event.id])
+        expectBranchPending(completed.heads, completed.event, request)
       }
       assert.deepEqual(measured.closed, [{ code: 0, signal: null }, { code: 0, signal: null }])
       const cold = await coldObservation(t, commonDir, inquiry, base, [base, ...branches])

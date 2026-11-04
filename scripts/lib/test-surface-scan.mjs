@@ -80,6 +80,25 @@ export const HOST_PHYSICAL_CANARY_FILES = new Set([
   // Physical-exit canary: the child must reach the real Diagnostic.fatal and
   // FatalProcess.trip links — a wire-level invariant, not a test seam.
   'requirements/host-boundary/tests/fixtures/fatal-process-child.fixture.mjs',
+  // Physical host/SQLite/representation canaries added in recent upstream commits:
+  'requirements/host-boundary/tests/tenure-barrier.test.mjs',
+  // Dispatch physical canary (upstream b94d43996): drives the real dispatcher
+  // against a real journal and observes the Fable fact representation inside
+  // the durable accept window — its subject is the raw shape, not semantics.
+  'requirements/dispatch-protocol/tests/016.test.mjs',
+  'requirements/advisor/tests/007.test.mjs',
+  'requirements/advisor/tests/009.test.mjs',
+  'requirements/advisor/tests/010.test.mjs',
+  'requirements/advisor/tests/011.test.mjs',
+  'requirements/advisor/tests/012.test.mjs',
+  'requirements/advisor/tests/013.test.mjs',
+  'requirements/advisor/tests/014.test.mjs',
+  'requirements/advisor/tests/015.test.mjs',
+  'requirements/latency-degeneration/tests/001.test.mjs',
+  'requirements/latency-degeneration/tests/003.test.mjs',
+  'requirements/latency-degeneration/tests/004.test.mjs',
+  'requirements/latency-degeneration/tests/005.test.mjs',
+  'requirements/managed-session-lifecycle/tests/029.test.mjs',
 ])
 
 /**
@@ -99,7 +118,8 @@ export const SURFACE_MANIFEST = [
     owner: 'latency-degeneration',
     laws: ['latency-degeneration-001', 'latency-degeneration-002', 'latency-degeneration-003',
       'latency-degeneration-004', 'latency-degeneration-005', 'latency-degeneration-008',
-      'latency-degeneration-009', 'latency-degeneration-010', 'latency-degeneration-011'],
+      'latency-degeneration-009', 'latency-degeneration-010', 'latency-degeneration-011',
+      'LATENCY-DEGENERATION-010', 'LATENCY-DEGENERATION-011', 'LATENCY-DEGENERATION-013'],
     source: 'wanxiangtong/opencode/request-latency/LatencyWatchdog.fs',
     representation: 'opaque-capability',
     kind: 'resource',
@@ -1546,6 +1566,22 @@ export const SURFACE_MANIFEST = [
     owner: 'host-provider-failure-ownership',
     laws: ['HOSTFAIL-003', 'HOSTFAIL-004', 'HOSTFAIL-006'],
     source: 'src/Wanxiangshu/OpenCode/Host/ProviderFailurePresentation.fs',
+    representation: 'json',
+    kind: 'pure',
+  },
+  {
+    module: 'Foundation/TerminalSignal.js',
+    owner: 'latency-degeneration',
+    laws: ['LATENCY-DEGENERATION-012'],
+    source: 'src/Wanxiangshu/Foundation/TerminalSignal.fs',
+    representation: 'opaque-capability',
+    kind: 'pure',
+  },
+  {
+    module: 'Foundation/Identity.js',
+    owner: 'latency-degeneration',
+    laws: ['LATENCY-DEGENERATION-012'],
+    source: 'src/Wanxiangshu/Foundation/Identity.fs',
     representation: 'json',
     kind: 'pure',
   },

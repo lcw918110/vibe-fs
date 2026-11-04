@@ -19,16 +19,6 @@ module ProviderFailureLedger =
     [<Import("DurableProviderBudget", "wanxiangli/failure-budget")>]
     let private budgetClass: obj = jsNative
 
-    let private stateView (state: ProviderFailureProjection) =
-        createObj
-            [ "logicalRun" ==> LogicalRunId.value state.LogicalRunId
-              "authorityRoot"
-              ==> AuthorityRootUserMessageId.value state.AuthorityRootUserMessageId
-              "consecutiveFailureCount" ==> state.Budget.ConsecutiveFailureCount
-              "recentFailureKeys" ==> List.toArray state.RecentFailureKeys
-              "exhausted" ==> state.Exhausted
-              "lastTransitionWasSuccess" ==> state.LastTransitionWasSuccess ]
-
     let private factOf (value: obj) =
         let session = SessionId.create (unbox value?sessionId)
         let run = LogicalRunId.create (unbox value?logicalRun)
@@ -77,7 +67,7 @@ module ProviderFailureLedger =
                 [ "current"
                   ==> (fun session ->
                       port.CurrentState(SessionId.create session)
-                      |> Option.map stateView
+                      |> Option.map ProviderFailureProjection.toLibraryState
                       |> Option.toObj)
                   "append" ==> append ]
 

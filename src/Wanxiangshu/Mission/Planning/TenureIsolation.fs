@@ -43,7 +43,11 @@ module TenureIsolation =
     let private presentText (raw: obj) (name: string) : obj =
         let value = raw?(name)
 
-        if isNull value || jsTypeof value <> "string" || String.IsNullOrEmpty(unbox<string> value) then
+        if
+            isNull value
+            || jsTypeof value <> "string"
+            || String.IsNullOrEmpty(unbox<string> value)
+        then
             null
         else
             value
@@ -76,9 +80,7 @@ module TenureIsolation =
             match tenure.BarrierToolCallId, tenure.SuccessorTenureId with
             | Some callId, Some successor ->
                 let barrier =
-                    createObj
-                        [ "toolCallId" ==> callId
-                          "successorTenureId" ==> successor ]
+                    createObj [ "toolCallId" ==> callId; "successorTenureId" ==> successor ]
 
                 let kept =
                     projection.tenure (rows |> Array.map (neutral messageCursors) |> box, barrier)

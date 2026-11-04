@@ -31,7 +31,10 @@ module Surface =
         owner?adjustBudgetForKpi (estimate, completion)
 
     let turnBudget (sessionId: string) : int = owner?turnBudget (sessionId)
-    let setRetentionBudget (sessionId: string) (remaining: int) : unit = owner?setRetention (sessionId, remaining)
+
+    let setRetentionBudget (sessionId: string) (remaining: int) : unit =
+        owner?setRetention (sessionId, remaining)
+
     let isScopeInitialized (sessionId: string) : bool = owner?isInitialized (sessionId)
     let onTurnStart (sessionId: string) : unit = owner?startTurn (sessionId)
     let resetScopeState (sessionId: string) (budget: int) : unit = owner?resetSession (sessionId, budget)
@@ -95,7 +98,7 @@ module Surface =
     let projectPreviousMessages (messages: obj array) : obj = owner?projectPreviousMessages messages
 
     let startTemporaryPrevious (tempId: string) (sourceSessionId: string) (metadata: obj) : obj =
-        owner?startTemporaryPrevious(tempId, sourceSessionId, metadata)
+        owner?startTemporaryPrevious (tempId, sourceSessionId, metadata)
 
     let modelForTemporary (tempId: string) : obj = owner?modelForTemporary (tempId)
 

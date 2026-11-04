@@ -19,6 +19,7 @@ open Wanxiangshu.Persistence.Journal
 module LoadRecoverySurface =
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let private fissionRuntime: obj = jsNative
+
     [<Emit("$0 === undefined")>]
     let private isUndefined (_v: obj) : bool = jsNative
 
@@ -134,6 +135,7 @@ module LoadRecoverySurface =
 
     let lane (session: string) : obj =
         let r: obj = fissionRuntime?tryLane session
+
         if isNull r || isUndefined r then
             null
         else

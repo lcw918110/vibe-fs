@@ -517,10 +517,51 @@ module PluginTransforms =
             emitJsExpr rewritten "delete $0.providerPayload; delete $0.responseId" |> ignore
             rewritten
 
+    /// A request-only steer row carries no Host address: `steering` is true,
+    /// it speaks for an agent, and it has no `info.id`.
+    let private isAnonymousScopeSteerRow (message: obj) : bool =
+        not (isNull message)
+        && scopeText (scopeField (scopeField message "info") "role") = "user"
+        && scopeText (scopeField message "steering") = "true"
+        && scopeText (scopeField message "attribution") = "agent"
+        && isNull (scopeField (scopeField message "info") "id")
+        && isNull (scopeField message "id")
+
+    /// Append the request-only steer, replacing any steer an earlier pass on the
+    /// same request array already left at the tail. A host transform may see one
+    /// array twice; the provider must still see exactly one steer.
     let private openCodeScopeSteer (messages: obj array) (prose: string) (strong: bool) : obj array =
-        let last = messages |> Array.tryLast |> Option.defaultValue null
-        let originalInfo = scopeField last "info"
-        let sessionId = scopeField originalInfo "sessionID"
+        let withoutSteer =
+            let tail =
+                messages |> Array.rev |> Array.takeWhile isAnonymousScopeSteerRow |> Array.length
+
+            if tail = 0 then
+                messages
+            else
+                messages |> Array.take (messages.Length - tail)
+
+        // A request whose whole array is anonymous steers has no surviving
+        // message to inherit from, so the removed tail is the next best source:
+        // dropping the dedup pass must not be what makes a steer lose its session.
+        let sessionIdOf (row: obj) = scopeField (scopeField row "info") "sessionID"
+
+        let sessionId =
+            let inherited =
+                withoutSteer
+                |> Array.tryLast
+                |> Option.map sessionIdOf
+                |> Option.filter (fun value -> not (isNull value))
+
+            match inherited with
+            | Some value -> value
+            | None ->
+                messages
+                |> Array.rev
+                |> Array.tryPick (fun row ->
+                    let value = sessionIdOf row
+                    if isNull value then None else Some value)
+                |> Option.defaultValue null
+
         let info = createObj [ "role", box "user"; "sessionID", sessionId ]
 
         let steer =
@@ -531,7 +572,7 @@ module PluginTransforms =
                   "attribution", box "agent"
                   "strong", box strong ]
 
-        Array.append messages [| steer |]
+        Array.append withoutSteer [| steer |]
 
     /// Collapse a retracted beat's assistant message to one text part (removeLast projection).
     /// Match keys: message/info id, responseId, providerRunId, and any tool-call /

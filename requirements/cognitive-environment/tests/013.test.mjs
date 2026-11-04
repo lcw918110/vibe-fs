@@ -18,11 +18,11 @@ test('WHAT[cognitive-environment-013] Pair Hint carries the bound-language ancho
   // [PRODUCT-RETIRED standalone-resetScope] the boundary is the `scope`
   // annotation under common law «Scope», not a standalone tool name.
   assert.match(zh, /«Scope»[\s\S]*`scope`/)
-  assert.match(zh, /状态闭环/)
+  assert.match(zh, /闭环靠保留/)
   assert.match(en, /«Scope»[\s\S]*`scope`/)
-  assert.match(en, /closed-loop is retention|state closed-loop/)
-  assert.match(zh, /落盘的因果/)
-  assert.match(en, /committed cause and effect/)
+  assert.match(en, /retention is what closes the loop/)
+  assert.match(zh, /变故留痕/)
+  assert.match(en, /every change leaves a record/)
 })
 
 test('WHAT[cognitive-environment-013] permanent Pair Hint carries no state-dependent initialization instruction in either locale', () => {

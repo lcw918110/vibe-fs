@@ -55,22 +55,37 @@ module OrdinaryTurnWorkflow =
                     question.Request.AuthorityRootUserMessageId = turn.AuthorityRootUserMessageId
                     && (question.Answer.IsNone || question.Request.ProviderRunId = turn.ProviderRun))))
 
-    let private isTurnWorkSettled (turn: ReconciledTurn) : Task<bool> =
+    /// An Orchestrator owns no lifecycle work of its own, so the Manager work
+    /// lookup below can never speak for it: it would report 「not settled」 for
+    /// every Orchestrator turn, and each natural stop would then earn another
+    /// `work/orchestrator-continue` ride. Its unsettledness is exactly whether a
+    /// Change job it commissioned is still active — the same question
+    /// `TerminalPolicy.outstandingBackground` already asks for this role.
+    let private orchestratorStillOwesRoads (journal: AgentJournal option) (sessionId: SessionId) : bool =
+        let port = journal |> Option.map AgentJournalPortAdapter.forTerminalPolicy
+        TerminalPolicy.outstandingBackground port (fun _ -> false) (Some Role.Orchestrator) sessionId
+
+    let private isTurnWorkSettled (journal: AgentJournal option) (turn: ReconciledTurn) : Task<bool> =
         task {
-            // Manager missing projection must not be treated as settled/completed
-            match turn.Directory with
-            | None -> return false
-            | Some directory ->
-                let! commonDir = RuntimePath.stateRoot directory
+            if turn.Role = Some Role.Orchestrator then
+                return not (orchestratorStillOwesRoads journal turn.SessionId)
+            else
+                // Manager missing projection must not be treated as settled/completed
+                match turn.Directory with
+                | None -> return false
+                | Some directory ->
+                    let! commonDir = RuntimePath.stateRoot directory
 
-                let workOpt =
-                    Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir (SessionId.value turn.SessionId)
+                    let workOpt =
+                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected
+                            commonDir
+                            (SessionId.value turn.SessionId)
 
-                return
-                    workOpt
-                    |> Option.exists (fun work ->
-                        Wanxiangshu.Mission.Lifecycle.DurableWorkHost.owesNoContinuation work
-                        || List.contains (ProviderRunIdentity.value turn.ProviderRun) work.RetiredRuns)
+                    return
+                        workOpt
+                        |> Option.exists (fun work ->
+                            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.owesNoContinuation work
+                            || List.contains (ProviderRunIdentity.value turn.ProviderRun) work.RetiredRuns)
         }
 
     /// Delivery evidence for one turn (deliver clause 3). A turn counts as
@@ -111,8 +126,7 @@ module OrdinaryTurnWorkflow =
     /// witness or nudging unfinished work. An empty `stop` never reaches this: it is
     /// TurnNeedsContinuation and earns the missing-final-report nudge (WHAT[interaction-authority-024]).
     let private deliversByProse (turn: ReconciledTurn) : bool =
-        turn.Role = Some Role.Engineer
-        || turn.Role = Some Role.DevOps
+        turn.Role = Some Role.Engineer || turn.Role = Some Role.DevOps
 
     let private classifyManagerOrPlanTurn (context: ReconciledTurnContext) : LongWorkGate =
         let turn = context.Turn
@@ -171,8 +185,9 @@ module OrdinaryTurnWorkflow =
 
             let emptyStopped =
                 turn.Observation.IsNone
-                && (turn.Finish |> Option.exists (fun finish ->
-                    System.String.Equals(finish, "stop", System.StringComparison.OrdinalIgnoreCase)))
+                && (turn.Finish
+                    |> Option.exists (fun finish ->
+                        System.String.Equals(finish, "stop", System.StringComparison.OrdinalIgnoreCase)))
                 && System.String.IsNullOrWhiteSpace(CompletedTurnClassifier.partsText turn.Parts)
                 && not (CompletedTurnClassifier.hasRealToolCall turn.Parts)
 
@@ -185,7 +200,7 @@ module OrdinaryTurnWorkflow =
             elif deliversByProse turn then
                 return Ordinary
             else
-                let! settled = isTurnWorkSettled turn
+                let! settled = isTurnWorkSettled journal turn
                 return settledTurnGate journal context settled
         }
 

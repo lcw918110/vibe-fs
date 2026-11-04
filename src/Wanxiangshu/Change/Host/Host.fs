@@ -261,6 +261,41 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
         | Error error -> Task.FromResult(Error error)
         | Ok(relay, record) -> awaitLoopSignalFromRelay jobId relay record
 
+    /// A recorded conflict needs one new tenure so the repair can be reviewed.
+    /// The completed work has no active tenure, and reopening it is refused
+    /// everywhere else. This is the one place that continuation is owed.
+    let continueConflict commonDir sessionId requestId stopEffectId =
+        let confirmNote =
+            match stopEffectId with
+            | Some effectId ->
+                let receipt =
+                    DurableWorkHost.execute
+                        commonDir
+                        sessionId
+                        ("observed-stop:" + effectId)
+                        (DurableWorkHost.command "Confirm" [ "effectId", box effectId; "outcome", box "Observed" ])
+
+                sprintf "confirm=%s/%s" receipt.Status receipt.Reason
+            | None -> "confirm=no-stop-effect"
+
+        let receipt =
+            DurableWorkHost.execute
+                commonDir
+                sessionId
+                requestId
+                (DurableWorkHost.command "ContinueWork" [ "continuationId", box requestId ])
+
+        let current = DurableWorkHost.inspected commonDir sessionId
+
+        match current |> Option.bind (fun value -> value.ActiveId) with
+        | Some activeId when
+            receipt.Status = "Committed"
+            || receipt.Status = "Replayed"
+            || receipt.Status = "Observed"
+            ->
+            Ok(IncumbencyId.create activeId)
+        | _ -> Error(sprintf "Conflict continuation failed: %s (%s) %s" receipt.Status confirmNote receipt.Reason)
+
     /// The continuation the road owes after its last committed retirement.
     ///
     /// A Relayed tenure hands the road to the successor incumbency it opened, and
@@ -288,14 +323,23 @@ type OrchestratorHost(deps: OrchestratorHostDeps, orchestratorId: SessionId) =
             let requestId =
                 "hand-off:" + ManagerJobId.value jobId + ":" + retirement.RetirementId
 
-            return!
-                DeliveredTenureHandOff.continuation
-                    commonDir
-                    (SessionId.value record.ManagerSessionId)
-                    work
-                    retirement
-                    (deps.ObservedHeadCursor record.ManagerSessionId)
-                    requestId
+            match record.ConflictDetected, retirement.Outcome, work.ActiveId with
+            | Some _, "Completed", None ->
+                return!
+                    continueConflict
+                        commonDir
+                        (SessionId.value record.ManagerSessionId)
+                        requestId
+                        retirement.StopEffectId
+            | _ ->
+                return!
+                    DeliveredTenureHandOff.continuation
+                        commonDir
+                        (SessionId.value record.ManagerSessionId)
+                        work
+                        retirement
+                        (deps.ObservedHeadCursor record.ManagerSessionId)
+                        requestId
         }
 
     let finalizeRegisteredWorktree (agentId: string) =

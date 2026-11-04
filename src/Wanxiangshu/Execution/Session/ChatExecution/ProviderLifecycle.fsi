@@ -36,6 +36,7 @@ module ProviderLifecycle =
 
     val persistProviderStartedFromObservation:
         journal: AgentJournal option ->
-        bindAttemptPlan: (SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> PendingAttemptPlan -> AttemptPlan) ->
+        bindAttemptPlan:
+            (SessionId -> PhysicalUserMessageId -> ProviderRunIdentity -> PendingAttemptPlan -> AttemptPlan) ->
         observation: ExactProviderStartObservation ->
             Task<Result<bool, ProviderStartObservationError<unit>>>

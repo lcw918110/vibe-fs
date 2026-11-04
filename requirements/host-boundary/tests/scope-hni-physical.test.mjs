@@ -75,6 +75,43 @@ test('WHAT[context-compression-039] OpenCode prompts for a first chargeable esti
   clearSessionState(sid)
 })
 
+test('WHAT[context-compression-039] repeated OpenCode transform does not duplicate its request-only steer', async () => {
+  const sid = 'ses_scope_repeat_039'
+  clearSessionState(sid)
+  try {
+    const messages = [user('u-repeat', 'work', 1)]
+    await outbound(sid, messages)
+    await outbound(sid, messages)
+    assert.equal(messages.filter(message => message.steering === true).length, 1)
+  } finally {
+    clearSessionState(sid)
+  }
+})
+
+test('WHAT[host-boundary-011] repeated provider projection keeps synthetic separators out of transcript anchoring', async () => {
+  const pair = await import('../../../dist/OpenCode/Host/PairProgrammingThoughtSurface.js')
+  const projection = await import('../../../dist/wanxiangtong/opencode/provider-request/MessageProjection.js')
+  const sid = 'ses_scope_repeat_separator_011'
+  clearSessionState(sid)
+  const messages = [user('u-repeat-separator', 'work', 1)]
+  const caps = safeCaps()
+  caps.InjectPairGuideline = async (_session, _started, out) => {
+    const result = await pair.tryInject(sid, 'guidance', out.messages)
+    assert.equal(result.ok, true, result.error)
+    out.messages.splice(0, out.messages.length, ...result.value)
+  }
+  caps.SanitizeMessages = (_session, out) => projection.sanitizeOutputMessages(out)
+  try {
+    const out = { messages }
+    await normalTransform(caps, sid, {}, out)
+    assert.equal(messages.filter(message => message.info?.role === 'assistant').length, 1)
+    await normalTransform(caps, sid, {}, out)
+    assert.equal(messages.filter(message => message.steering === true).length, 1)
+  } finally {
+    clearSessionState(sid)
+  }
+})
+
 test('WHAT[context-compression-039] OpenCode applies a reset and preserves critical calls, later work and a new progress-baseline steer', async () => {
   const sid = 'ses_scope_039_reset'
   clearSessionState(sid)
@@ -1306,7 +1343,7 @@ test('WHAT[delegation-negotiation-037] thrown temporary provider admission/capac
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
       assert.equal(prompted.length,1,'transport capacity rejection cannot be confused with an incomplete assistant response')
       assert.ok(prompted[0].startsWith('What should the worker investigate next?'))
-      assert.match(prompted[0],/严禁调用任何工具|strictly forbidden/)
+      assert.match(prompted[0],/禁止调用任何工具|Calling any tool is forbidden/)
       assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('DENIED.')),false)
     } finally {
       session.delete=originalDelete
@@ -1351,7 +1388,7 @@ test('WHAT[delegation-negotiation-038] a normally completed empty SDK reply term
       await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(new Error('cleanup not observed')),3000))])
       assert.equal(prompted.length,1,'a completed empty answer is an explicit host failure, not grounds for a fictional follow-up')
       assert.ok(prompted[0].startsWith('What should the worker investigate next?'))
-      assert.match(prompted[0],/严禁调用任何工具|strictly forbidden/)
+      assert.match(prompted[0],/禁止调用任何工具|Calling any tool is forbidden/)
       assert.equal(runtime.prompts.some(x=>JSON.stringify(x).includes('DENIED.')),false)
     } finally {
       session.delete=originalDelete

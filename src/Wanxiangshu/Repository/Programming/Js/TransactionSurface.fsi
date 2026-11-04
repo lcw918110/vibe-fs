@@ -47,4 +47,3 @@ module JsTransactionSurface =
     val internal lifecyclePersistenceOf: store: obj -> IJsLifecyclePersistence
 
     val createLifecyclePersistence: store: obj -> obj
-

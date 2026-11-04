@@ -77,18 +77,39 @@ module ReconcileProgram =
         (incoming: ReconcileWake)
         =
         match previous, incoming, currentPhysicalUserMessageId with
-        | ReconcileWake.FailureWake(Some physical, failure, diagnostic, source), ReconcileWake.IdleWake permit, Some current
-        | ReconcileWake.IdleWake permit, ReconcileWake.FailureWake(Some physical, failure, diagnostic, source), Some current
-            when physical = current -> ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
-        | ReconcileWake.IdleFailureWake(_, physical, failure, diagnostic, source), ReconcileWake.IdleWake permit, Some current
-            when physical = current -> ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
-        | ReconcileWake.IdleFailureWake(_, physical, _, _, _), ReconcileWake.RetryWake, Some current
-            when physical = current -> previous
-        | ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, FailureWakeSource.ExactAssistantProjection),
-          ReconcileWake.FailureWake(_, _, _, FailureWakeSource.CoarseHostSignal), Some current when physical = current ->
-            ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, FailureWakeSource.ExactAssistantProjection)
-        | ReconcileWake.IdleFailureWake(permit, physical, _, _, _), ReconcileWake.FailureWake(Some failed, failure, diagnostic, source), Some current
-            when physical = current && failed = current -> ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
+        | ReconcileWake.FailureWake(Some physical, failure, diagnostic, source),
+          ReconcileWake.IdleWake permit,
+          Some current
+        | ReconcileWake.IdleWake permit,
+          ReconcileWake.FailureWake(Some physical, failure, diagnostic, source),
+          Some current when physical = current ->
+            ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
+        | ReconcileWake.IdleFailureWake(_, physical, failure, diagnostic, source),
+          ReconcileWake.IdleWake permit,
+          Some current when physical = current ->
+            ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
+        | ReconcileWake.IdleFailureWake(_, physical, _, _, _), ReconcileWake.RetryWake, Some current when
+            physical = current
+            ->
+            previous
+        | ReconcileWake.IdleFailureWake(permit,
+                                        physical,
+                                        failure,
+                                        diagnostic,
+                                        FailureWakeSource.ExactAssistantProjection),
+          ReconcileWake.FailureWake(_, _, _, FailureWakeSource.CoarseHostSignal),
+          Some current when physical = current ->
+            ReconcileWake.IdleFailureWake(
+                permit,
+                physical,
+                failure,
+                diagnostic,
+                FailureWakeSource.ExactAssistantProjection
+            )
+        | ReconcileWake.IdleFailureWake(permit, physical, _, _, _),
+          ReconcileWake.FailureWake(Some failed, failure, diagnostic, source),
+          Some current when physical = current && failed = current ->
+            ReconcileWake.IdleFailureWake(permit, physical, failure, diagnostic, source)
         | ReconcileWake.FailureWake(_, _, _, FailureWakeSource.ExactAssistantProjection),
           ReconcileWake.FailureWake(_, _, _, FailureWakeSource.CoarseHostSignal),
           _ -> previous

@@ -8,6 +8,9 @@ open Wanxiangshu.Foundation
 open Wanxiangshu.Composition.Durable
 open Wanxiangshu.Composition.Durable.Fact
 open Wanxiangshu.Interaction.Authority
+open Wanxiangshu.Interaction.Dispatch
+open Wanxiangshu.Foundation.HostSession
+open Wanxiangshu.Foundation.TerminalSignal
 open Wanxiangshu.Foundation.Identity
 open Wanxiangshu.Interaction.Dispatch
 open Wanxiangshu.Participant.Persona
@@ -950,3 +953,158 @@ module ProviderFailureSurface =
                 | RetryVerdict.WaitDenied -> "WaitDenied"
                 | RetryVerdict.Terminal _ -> "Terminal"
         }
+
+    /// The failure name a confirmed-failure continuation classifies by. The label
+    /// is the domain's own vocabulary (`ProviderTransient`, ...), never a compiled
+    /// union tag.
+    let private confirmedFailureOf (name: string) : ExecutionFailure =
+        match name with
+        | "LocalInvariant" -> ExecutionFailure.LocalInvariant
+        | "ProtocolRejection" -> ExecutionFailure.ProtocolRejection
+        | "AuthorizationDenied" -> ExecutionFailure.AuthorizationDenied
+        | "UserCancelled" -> ExecutionFailure.UserCancelled
+        | "Superseded" -> ExecutionFailure.Superseded
+        | "CapacityQueueFull" -> ExecutionFailure.CapacityQueueFull
+        | "ProviderTransient" -> ExecutionFailure.ProviderTransient
+        | "ProviderPermanent" -> ExecutionFailure.ProviderPermanent
+        | "AcceptanceUnknown" -> ExecutionFailure.AcceptanceUnknown
+        | "StreamInterruptedAfterFirstToken" -> ExecutionFailure.StreamInterruptedAfterFirstToken
+        | other -> invalidArg "failure" $"unsupported confirmed failure '{other}'"
+
+    /// A JavaScript session port, read through its own members. The recovery path
+    /// sends prompts and awaits runner idle; the rest of the contract is never
+    /// reached from here and refuses instead of pretending to work.
+    type private JsSessionPort(raw: obj) =
+        interface ISessionHostPort with
+            member _.SubscribeTerminal(_, _) =
+                invalidOp "confirmed-failure recovery does not subscribe terminals on the session port"
+
+            member _.SubscribeFutureTerminal(_, _) =
+                invalidOp "confirmed-failure recovery does not subscribe future terminals on the session port"
+
+            member _.SendPrompt(sessionId, promptText, options) =
+                let send = field raw "SendPrompt"
+                let kindOf = field
+
+                let value =
+                    emitJsExpr (send, raw, SessionId.value sessionId, promptText, options) "$0.call($1,$2,$3,$4)"
+
+                task {
+                    let! outcome = emitJsExpr value "Promise.resolve($0)"
+
+                    return
+                        match text (kindOf outcome "kind") with
+                        | "Receipt" ->
+                            Outcome.SendOutcome.AdmittedWithReceipt(
+                                TransportReceipt.create (text (kindOf outcome "value"))
+                            )
+                        | "Physical" ->
+                            Outcome.SendOutcome.AdmittedWithPhysicalMessage(
+                                PhysicalUserMessageId.create (text (kindOf outcome "value"))
+                            )
+                        | "Retryable" -> Outcome.SendOutcome.Retryable(text (kindOf outcome "reason"))
+                        | "Unknown" -> Outcome.SendOutcome.AcceptanceUnknown(text (kindOf outcome "reason"))
+                        | _ -> Outcome.SendOutcome.Fatal(text (kindOf outcome "reason"))
+                }
+
+            member _.AbortSession(_) =
+                Task.FromResult(Error "confirmed-failure recovery does not abort sessions")
+
+            member _.InterruptAttempt(_) =
+                Task.FromResult(Error "confirmed-failure recovery does not interrupt attempts")
+
+            member _.IsManagedChild(_) = false
+            member _.AbortChildren(_) = Task.FromResult(())
+
+            member _.CreateSiblingSession(_, _, _) =
+                Task.FromResult(Error "confirmed-failure recovery does not create sibling sessions")
+
+            member _.TryGetParentSession(_) =
+                Task.FromResult(Error "confirmed-failure recovery does not resolve parents")
+
+            member _.CreateChildSession(_, _) =
+                Task.FromResult(Error "confirmed-failure recovery does not create child sessions")
+
+            member _.ListChildren(_) =
+                Task.FromResult(Error "confirmed-failure recovery does not list children")
+
+            member _.FamilyRootOf(sessionId) = sessionId
+
+            member _.AwaitRunnerIdle(sessionId, directory) =
+                let awaitIdle = field raw "AwaitRunnerIdle"
+
+                if isNullish awaitIdle then
+                    Task.FromResult(()) :> Task
+                else
+                    emitJsExpr
+                        (awaitIdle, raw, SessionId.value sessionId, Option.toObj directory)
+                        "Promise.resolve($0.call($1,$2,$3))"
+
+    /// Decode the turn a confirmed failure belongs to. Only identity and role take
+    /// part in recovery; the transcript evidence of the failed attempt is not an
+    /// input here, so the decoded turn carries none.
+    let turnForRecovery
+        (session: string)
+        (physicalMessage: string)
+        (authorityRoot: string)
+        (providerRun: string)
+        (role: string)
+        : ReconciledTurn =
+        { SessionId = SessionId.create (requiredText "session" session)
+          PhysicalUserMessageId = PhysicalUserMessageId.create (requiredText "physicalMessage" physicalMessage)
+          AuthorityRootUserMessageId = AuthorityRootUserMessageId.create (requiredText "authorityRoot" authorityRoot)
+          ProviderRun = ProviderRunIdentity.create (requiredText "providerRun" providerRun)
+          Role =
+            if String.IsNullOrWhiteSpace role then
+                None
+            else
+                Roles.tryParseRole role
+          Directory = None
+          Parts = [||]
+          Finish = None
+          ErrorName = None
+          Model = None
+          Outcome = ReconcileProgram.TurnFailed "confirmed provider failure"
+          Observation = None }
+
+    /// The whole confirmed-failure recovery for one turn, entered from JavaScript:
+    /// the ports are the host's own objects, the turn and failure come as domain
+    /// names, and the durable journal is the only state. A terminal verdict reaches
+    /// the session as a failure notification; an open long-running role is nudged
+    /// to continue instead.
+    let continueAfterConfirmedFailure
+        (sessionPort: obj)
+        (rootWorkspace: obj)
+        (eventPort: obj)
+        (handle: Wanxiangshu.Persistence.Journal.JournalHandle)
+        (session: string)
+        (physicalMessage: string)
+        (authorityRoot: string)
+        (providerRun: string)
+        (role: string)
+        (failure: string)
+        (reason: string)
+        (continuationPrompt: string)
+        : Task =
+        task {
+            let observation =
+                if isNullish eventPort then
+                    invalidArg "eventPort" "missing event observation port"
+                else
+                    unbox<IEventObservationPort> eventPort
+
+            do!
+                ProviderRecoveryWorkflow.continueAfterConfirmedFailure
+                    (JsSessionPort(sessionPort) :> ISessionHostPort)
+                    (if isNullish rootWorkspace then
+                         Unchecked.defaultof<IRootWorkspaceReader>
+                     else
+                         unbox<IRootWorkspaceReader> rootWorkspace)
+                    observation
+                    (Some handle.Journal)
+                    (turnForRecovery session physicalMessage authorityRoot providerRun role)
+                    (confirmedFailureOf (requiredText "failure" failure))
+                    (requiredText "reason" reason)
+                    continuationPrompt
+        }
+        :> Task

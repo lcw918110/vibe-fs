@@ -37,10 +37,17 @@ import { wireOf } from './provider-wire.js';
 
 export class ScenarioRuntime {
   /** @param scenario the `{ entries, faults, boundaries }` shape `compileScenario` returns */
-  constructor(scenario, { tenureBoundaryCount = null } = {}) {
+  constructor(scenario, { tenureBoundaryCount = null, journalCallIds = null } = {}) {
     this.scenario = scenario;
     this.bindings = new Map();
     this.deliveries = emptyDeliveries();
+    /**
+     * Tool calls the durable journal already recorded for this session. The seal
+     * admits a late-arriving interaction only when its `toolCallId` appears here
+     * (measured: the Host can run a tool and send the next request before its own
+     * projection shows that call, so the transcript gains it one delivery later).
+     */
+    this.journalCallIds = journalCallIds;
     /**
      * Durable tenure-boundary count per session, as of that session's last answered chat
      * delivery. The successor projection (work-008) may only strip a predecessor's
@@ -110,6 +117,21 @@ export class ScenarioRuntime {
   }
 
   /**
+   * An automatic compaction makes the previous seal incomparable, for the same reason a
+   * restart does: the conversation the next request continues is the summary, not the
+   * transcript. The requests between the two (the summarizer call and the Host's own
+   * continuation row) are not chat turns, so the seal would otherwise stay anchored on a
+   * prefix the Host has already discarded.
+   *
+   * Only the seal is dropped. Deliveries, answers and fired boundaries survive: the
+   * compaction happened inside one process and one run, so nothing was replayed.
+   */
+  resealAfterCompaction(sessionId) {
+    this.seals.delete(sessionId);
+    this.sealTenures.delete(sessionId);
+  }
+
+  /**
    * Decide one chat request. Six outcomes, and every one is terminal for this request.
    *
    *   { unmatched }    nothing declared here — fail closed, never a default reply
@@ -164,7 +186,21 @@ export class ScenarioRuntime {
     if (selection.entry !== undefined) this.answered.add(selection.entry.id);
 
     const sessionId = sessionIdOf(context);
-    if (sessionId !== null && runtimeKeyOf(body, this.bindings, context).kind === 'chat') {
+    if (sessionId === null) return;
+
+    // An automatic compaction replaces the stored conversation with its summary
+    // (`ProviderWireCapture.isHostCompactionContinuation`, managed-chat-execution-017):
+    // the next request legitimately carries a different prefix, and comparing it against
+    // the pre-compaction wire would report an ARCH-004 break for something that is not
+    // one. That is the same situation `clearSeals` handles for a Host restart, and the
+    // scenario has already named the point by declaring a `compaction` turn — so the
+    // reset is taken from the declaration, not sniffed off the wire.
+    if (selection.entry?.kind === 'compaction') {
+      this.resealAfterCompaction(sessionId);
+      return;
+    }
+
+    if (runtimeKeyOf(body, this.bindings, context).kind === 'chat') {
       this.seals.set(sessionId, wireOf(body));
       const tenure = this.tenureBoundaryCount?.(sessionId);
       if (typeof tenure === 'number') this.sealTenures.set(sessionId, tenure);
@@ -223,6 +259,7 @@ export class ScenarioRuntime {
       body,
       boundary: boundaryFor(this.scenario.boundaries, entry),
       stripAdmitted: this.#crossedTenureBoundary(sessionId),
+      admittedCallIds: this.#journalCallIds(sessionId),
     });
     if (decision.resealed !== undefined) this.firedBoundaries.add(entry.id);
     return decision;
@@ -234,5 +271,11 @@ export class ScenarioRuntime {
     if (previous === undefined) return false;
     const current = this.tenureBoundaryCount?.(sessionId);
     return typeof current === 'number' && current > previous;
+  }
+
+  /** Tool calls the journal recorded for this session, read at decision time. */
+  #journalCallIds(sessionId) {
+    const recorded = this.journalCallIds?.(sessionId);
+    return recorded instanceof Set ? recorded : new Set();
   }
 }

@@ -22,6 +22,7 @@ module HostTurnObserver =
 
     [<Import("deliveryAttemptLedger", "wanxiangli/dispatch")>]
     let private deliveryAttemptLedger: obj = jsNative
+
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let private fissionRuntime: obj = jsNative
 
@@ -50,7 +51,11 @@ module HostTurnObserver =
             // （没有中断不得变成阻塞）。
             let deliveryTask: Task option =
                 let taskOpt: obj option =
-                    deliveryAttemptLedger?activeInterruptTask(SessionId.value sessionId, ProviderRunIdentity.value providerRun)
+                    deliveryAttemptLedger?activeInterruptTask (
+                        SessionId.value sessionId,
+                        ProviderRunIdentity.value providerRun
+                    )
+
                 taskOpt |> Option.map (fun t -> unbox<Task> t)
 
             match deliveryTask with

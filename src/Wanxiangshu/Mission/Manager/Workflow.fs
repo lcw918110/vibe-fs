@@ -56,14 +56,20 @@ module ManagerWorkflow =
     /// True when the work is already complete. A completed Manager owes no
     /// continuation; only a new operator message reopens it through Work.
     let private isRetiredObservation
+        (rootWorkspace: IRootWorkspaceReader)
         (directory: string option)
         (sessionId: SessionId)
         (_providerRun: ProviderRunIdentity)
         =
         task {
-            let! workOpt = lifecycleWork directory (SessionId.value sessionId)
+            let effectiveDir =
+                RootWorkspaceDirectory.select System.IO.Directory.Exists rootWorkspace directory
 
-            return workOpt |> Option.exists Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority
+            let! workOpt = lifecycleWork effectiveDir (SessionId.value sessionId)
+
+            return
+                workOpt
+                |> Option.exists Wanxiangshu.Mission.Lifecycle.DurableWorkHost.closesAuthority
         }
 
     // Algorithm H reads the Manager milestone plus tenure, review state, and obligations.
@@ -91,9 +97,12 @@ module ManagerWorkflow =
             let key = if isNull entry?key then "" else string entry?key
             let value = if isNull entry?value then "" else string entry?value
 
-            if System.String.IsNullOrWhiteSpace key then None
-            elif System.String.IsNullOrWhiteSpace value then Some("- " + key)
-            else Some("- " + key + "：" + value))
+            if System.String.IsNullOrWhiteSpace key then
+                None
+            elif System.String.IsNullOrWhiteSpace value then
+                Some("- " + key)
+            else
+                Some("- " + key + "：" + value))
         |> String.concat "\n"
 
     /// A qualified nudge names its target: the consultation the host is
@@ -117,7 +126,11 @@ module ManagerWorkflow =
                           sessionId
                           "work/manager-continue-obligations"
                           (Map [ "obligations", obligationLines work.Obligations ]) ]
-                | Some work when work.ActiveId.IsSome && work.ActiveId = work.SuccessorTenureId && not work.Reviewed ->
+                | Some work when
+                    work.ActiveId.IsSome
+                    && work.ActiveId = work.SuccessorTenureId
+                    && not work.Reviewed
+                    ->
                     [ ProviderProse.documentFor
                           sessionId
                           "work/manager-continue-successor"
@@ -201,7 +214,8 @@ module ManagerWorkflow =
         | Some activeId, Some successorId, Some retirement, obligations when
             activeId = successorId
             && retirement.Outcome = "Relayed"
-            && Array.isEmpty obligations ->
+            && Array.isEmpty obligations
+            ->
             Some retirement.RetirementId
         | _ -> None
 
@@ -215,6 +229,24 @@ module ManagerWorkflow =
             |> Option.map (fun event -> string event?providerRunId)
             |> Option.defaultValue "")
 
+    let private continuedRetirement
+        commonDir
+        sessionIdText
+        (current: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork)
+        =
+        match current.ActiveId, current.Reviewed with
+        | Some activeId, false ->
+            Wanxiangshu.Mission.Lifecycle.DurableWorkHost.useWork commonDir sessionIdText (fun live ->
+                let frames: obj array = unbox (live?history ())
+
+                frames
+                |> Array.collect (fun frame -> unbox<obj array> frame?events)
+                |> Array.tryFindBack (fun event -> string event?``type`` = "WorkContinued")
+                |> Option.filter (fun event -> string event?incumbencyId = activeId)
+                |> Option.bind (fun _ -> current.Retirements |> List.tryLast)
+                |> Option.map (fun retirement -> retirement.RetirementId))
+        | _ -> None
+
     let private successorPromptContext
         (workspaceDirectory: string option)
         (sessionIdText: string)
@@ -225,12 +257,17 @@ module ManagerWorkflow =
             | Some workspace ->
                 let! commonDir = Wanxiangshu.Persistence.Journal.RuntimePath.stateRoot workspace
 
-                match
+                let work =
                     Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected commonDir sessionIdText
-                    |> Option.bind unreviewedSuccessor
-                with
-                | None -> return None
-                | Some retirementId -> return Some(retirementId, providerRunOfLastRetirement commonDir sessionIdText)
+
+                let continued = work |> Option.bind (continuedRetirement commonDir sessionIdText)
+
+                let retirement =
+                    (work |> Option.bind unreviewedSuccessor) |> Option.orElse continued
+
+                return
+                    retirement
+                    |> Option.map (fun id -> id, providerRunOfLastRetirement commonDir sessionIdText)
         }
 
     /// Read-only probe (the `loopSignalOf` / `publishReviewOf` pattern): the
@@ -376,7 +413,12 @@ module ManagerWorkflow =
         (context: ReconciledTurnContext)
         : Task =
         task {
-            let! retired = isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun
+            let! retired =
+                isRetiredObservation
+                    rootWorkspace
+                    context.Turn.Directory
+                    context.Turn.SessionId
+                    context.Turn.ProviderRun
 
             match retired, journal, context.Failure, context.Turn.Outcome, context.Quiescence with
             | true, _, _, _, _ -> return ()
@@ -402,7 +444,12 @@ module ManagerWorkflow =
         (context: ReconciledTurnContext)
         : Task =
         task {
-            let! retired = isRetiredObservation context.Turn.Directory context.Turn.SessionId context.Turn.ProviderRun
+            let! retired =
+                isRetiredObservation
+                    rootWorkspace
+                    context.Turn.Directory
+                    context.Turn.SessionId
+                    context.Turn.ProviderRun
 
             match retired, context.Failure, context.Turn.Outcome with
             | true, _, _ -> return ()

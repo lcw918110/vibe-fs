@@ -16,6 +16,7 @@ module RelayNarrativeTransform =
             bool
 
     /// Messages the active successor may see. None leaves the array unchanged.
+    /// Successor turns are attributed from Host parentID facts after the barrier.
     val cutVisible:
         messages: obj array ->
         work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option ->

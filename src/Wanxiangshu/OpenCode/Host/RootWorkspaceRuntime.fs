@@ -15,11 +15,13 @@ type RootWorkspaceRuntime internal (cell: obj) =
 
     let reader =
         { new IRootWorkspaceReader with
-            member _.TryRead() = cell?tryRead() |> unbox<string> |> Option.ofObj }
+            member _.TryRead() =
+                cell?tryRead () |> unbox<string> |> Option.ofObj }
 
     let binder =
         { new IRootWorkspaceBinder with
-            member _.TryBind candidate = cell?tryBind(candidate |> Option.defaultValue null) }
+            member _.TryBind candidate =
+                cell?tryBind (candidate |> Option.defaultValue null) }
 
     new() = RootWorkspaceRuntime(emitJsExpr RootWorkspaceInterop.cellClass "new $0()")
 

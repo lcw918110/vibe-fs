@@ -28,20 +28,27 @@ module ForkCommand =
 
     [<Import("fissionRuntime", "wanxiangli/fission-group")>]
     let private fissionRuntime: obj = jsNative
+
     [<Emit("$0 === undefined")>]
     let private isUndefined (_v: obj) : bool = jsNative
 
     let private tryFissionLane (sessionIdText: string) : FissionLaneBinding option =
-        if String.IsNullOrWhiteSpace sessionIdText then None
-        else
+        let readLane () =
             let r: obj = fissionRuntime?tryLane sessionIdText
-            if isNull r || isUndefined r then None
+
+            if isNull r || isUndefined r then
+                None
             else
                 Some
                     { GroupId = unbox<string> r?GroupId
                       OwnerSessionId = SessionId.create (unbox<string> r?OwnerSessionId)
                       LaneIndex = unbox<int> r?LaneIndex
                       LaneCount = unbox<int> r?LaneCount }
+
+        if String.IsNullOrWhiteSpace sessionIdText then
+            None
+        else
+            readLane ()
 
     [<RequireQualifiedAccess>]
     module Path =

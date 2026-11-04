@@ -597,10 +597,19 @@ module HostForkRunLifecycle =
         subs |> Seq.toList
 
     let private claimPendingRun (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
-        lock gate (fun () ->
+        let claim () =
             let verdict: obj = pendingRuns?claim (run.AgentId, run.Token)
 
             if verdict?claimed = true then
+                run.Finished <- true
+                true, run.Subscription
+            else
+                false, None
+
+        lock gate (fun () ->
+            if emitJsExpr pendingRuns "typeof $0?.claim === 'function'" then
+                claim ()
+            elif not run.Finished then
                 run.Finished <- true
                 true, run.Subscription
             else
@@ -637,7 +646,11 @@ module HostForkRunLifecycle =
         }
 
     let private removeClaimedRun (gate: obj) (pendingRuns: obj) (run: PendingHostRun) =
-        lock gate (fun () -> pendingRuns?removeClaimed (run.AgentId, run.Token) |> ignore)
+        lock gate (fun () ->
+            if emitJsExpr pendingRuns "typeof $0?.removeClaimed === 'function'" then
+                pendingRuns?removeClaimed (run.AgentId, run.Token) |> ignore
+            elif emitJsExpr pendingRuns "typeof $0?.Remove === 'function'" then
+                pendingRuns?Remove (run.AgentId) |> ignore)
 
     let private resolveFinalCommittedOutcome
         (journal: AgentJournal option)

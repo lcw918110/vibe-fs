@@ -174,23 +174,27 @@ module ProviderRecoveryWorkflow =
         (continuationPrompt: string)
         (observer: ContinuationAcceptanceObserver option)
         =
-        let sendRetry (_profile: obj) (license: ProviderRecoveryAuthorization) =
-            task {
-                let! sent =
-                    HostSessionNudge.trySendGateContinuationObserved
-                        sessionPort
-                        rootWorkspace
-                        turn.SessionId
-                        continuationPrompt
-                        PromptAuthority.ContinuationKind.ProviderRetryAttempt
-                        turn.Directory
-                        (Some durable)
-                        (recoveryGateKind license)
-                        license.ProviderRun
-                        observer
+        // A two-argument F# function passed through `==>` is emitted as `curry2`,
+        // so the caller's tuple-style invocation would receive the second stage
+        // instead of the Task. A delegate keeps the JS arity intact.
+        let sendRetry =
+            System.Func<obj, ProviderRecoveryAuthorization, Task<obj>>(fun _profile license ->
+                task {
+                    let! sent =
+                        HostSessionNudge.trySendGateContinuationObserved
+                            sessionPort
+                            rootWorkspace
+                            turn.SessionId
+                            continuationPrompt
+                            PromptAuthority.ContinuationKind.ProviderRetryAttempt
+                            turn.Directory
+                            (Some durable)
+                            (recoveryGateKind license)
+                            license.ProviderRun
+                            observer
 
-                return sentView sent
-            }
+                    return sentView sent
+                })
 
         createObj
             [ "alreadyAdmitted" ==> recoveryAlreadyAdmitted durable turn

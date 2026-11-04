@@ -8,9 +8,6 @@ open Wanxiangshu.Execution.Delegation.Handle
 open Wanxiangshu.Execution.Session.ChatExecution
 open Wanxiangshu.Foundation.Identity
 
-module HostJoinAttemptFactory =
-    val create: unit -> obj
-
 /// Per-instance session registry state for one plugin instance (HOST-012):
 /// owned sessions, companions, verdicts, nudges,
 /// quiescence permits and join interrupts. Shared cross-worktree state stays

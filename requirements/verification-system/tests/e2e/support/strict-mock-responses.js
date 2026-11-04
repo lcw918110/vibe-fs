@@ -1,5 +1,5 @@
 import { buildToolCallChunks, buildToolCallsChunks, buildTextChunks, sendJSON } from './strict-mock-sse.js';
-import { decorateLegacyArgs } from './strict-mock-decorate.js';
+import { decorateLegacyArgs, decorateScopeArgs } from './strict-mock-decorate.js';
 
 const MOCK_MODEL = 'mock';
 
@@ -70,7 +70,7 @@ async function respondStream(res, chunks, exp) {
   res.end();
 }
 
-function toolArgs(exp, parsed, strict, state) {
+function toolArgs(exp, parsed, strict, state, toolName, position = 0) {
   const args = typeof exp.respond.args === 'function'
     ? exp.respond.args(parsed)
     : { ...exp.respond.args };
@@ -79,7 +79,7 @@ function toolArgs(exp, parsed, strict, state) {
     if (rewritten && typeof rewritten === 'object') Object.assign(args, rewritten);
   }
   if (!strict) decorateLegacyArgs(args);
-  return args;
+  return decorateScopeArgs(args, state.retention, toolName, position);
 }
 
 function withPrefixText(chunks, text) {
@@ -97,7 +97,7 @@ function withPrefixText(chunks, text) {
 }
 
 function toolCallChunks(id, exp, parsed, strict, promptTokens, state) {
-  const args = toolArgs(exp, parsed, strict, state);
+  const args = toolArgs(exp, parsed, strict, state, exp.respond.tool, 0);
   const argsText = exp.respond.malformedArgs
     ? '{malformed_json_arguments:'
     : JSON.stringify(args);
@@ -114,9 +114,9 @@ function toolCallChunks(id, exp, parsed, strict, promptTokens, state) {
 }
 
 function multiToolCallChunks(id, exp, parsed, strict, promptTokens, state) {
-  const calls = (exp.respond.calls ?? []).map((call) => {
+  const calls = (exp.respond.calls ?? []).map((call, position) => {
     const callExp = { ...exp, respond: { ...exp.respond, ...call, type: 'tool-call' } };
-    return { name: call.tool, argsStr: JSON.stringify(toolArgs(callExp, parsed, strict, state)) };
+    return { name: call.tool, argsStr: JSON.stringify(toolArgs(callExp, parsed, strict, state, call.tool, position)) };
   });
   if (!exp.respond.streamCalls) {
     return withPrefixText(buildToolCallsChunks(id, calls, promptTokens), exp.respond.prefixText);

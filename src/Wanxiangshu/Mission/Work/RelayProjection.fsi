@@ -49,3 +49,11 @@ module RelayProjection =
     /// not a previous tenure and not permission to continue.
     val disposition:
         work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork option -> RelayProjectionDisposition
+
+    /// Whether a physical user message id is owned by the relayed successor,
+    /// judged from committed ChatExecution acceptance and the loop-gate nudge.
+    val successorOwns:
+        journal: AgentJournal ->
+        sessionId: Wanxiangshu.Foundation.Identity.SessionId ->
+        work: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork ->
+            (string -> bool)

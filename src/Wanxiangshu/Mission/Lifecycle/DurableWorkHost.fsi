@@ -51,6 +51,7 @@ module DurableWorkHost =
           Outcome: string
           Expected: string
           Fence: HostRunFence
+          StopEffectId: string option
           ProjectionCut: bool }
 
     type HostAdvance =

@@ -57,7 +57,9 @@ const envelopeOk = (result) => /^ok = true$/m.test(rendered(result))
 const refusalCode = (result) => envelopeString(result, 'code')
 const outcomeOf = (result) => envelopeString(result, 'outcome')
 
-// 隔离的持久边界快照：拒绝路径不得追加任何字节。
+// 隔离的持久边界快照。模型回合的 scope 标注（common law «Scope»）落在
+// retention 库且在拒绝路径上照常记账——快照排除它；断言对象是派工台账：
+// 被拒的派工不得追加任何字节。
 const durableSnapshot = (target) => {
   const snapshot = []
   const visit = (relativePath) => {
@@ -75,7 +77,7 @@ const durableSnapshot = (target) => {
     }
   }
   visit('')
-  return snapshot
+  return snapshot.filter((entry) => !entry.path.endsWith('scope-retention.sqlite'))
 }
 
 const prepareWorkspace = () => {
@@ -90,6 +92,14 @@ if (phase === 'produce') {
       await incarnation.withRuntime(async (runtime) => {
         await acceptAuthorityRoot(runtime, ISOLATED_SESSION, 'manager')
         await openIncumbency(runtime, ISOLATED_SESSION)
+
+        // Scope 门要读 retention 流；Node 24 的 node:sqlite 打开即建库。预热让
+        // 首次开库发生在快照之前，「拒绝不得追加持久字节」才成立。
+        await runManagerProgram(
+          incarnation.hooks,
+          ISOLATED_SESSION,
+          `return "warm"`,
+        )
 
         const durableBefore = durableSnapshot(directory)
 
@@ -160,7 +170,7 @@ if (phase === 'produce') {
         assert.equal(refusalCode(unreviewed), REVIEW_PENDING, unreviewed)
         assert.equal(envelopeOk(unreviewed), false, unreviewed)
         assert.deepEqual(durableSnapshot(directory), durableBefore,
-          'the unreviewed dispatch must not append any durable bytes')
+          'the unreviewed dispatch must not append any ledger bytes')
 
         // (b) 接力后的后继任期在未评审前被拒：门读的是持久事实，不是进程局部记忆。
         const store = await storeOf(directory)

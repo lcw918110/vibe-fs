@@ -92,16 +92,11 @@ Reliability query 的 queue depth、active lease 与 duplicate/stale/conflict fe
 
 fatal incident必须携带exact execution key、capacity fence及`Committed | Unknown` settlement evidence；未settle、stale fence与coarse session identity无权fatal。routing/Host port只接受composition注入的mandatory fatal capability，不得直接引用physical adapter。同一incident只允许一次report与kill，fatal不得修复、清零或释放capacity state。
 
-## [017] provider 恢复重投的原目标绑定与失败驱逐
+## [017] 无 fallback 的失败重试与租约稳定
 
-provider 恢复的一次已确认失败由 `ModelRouting` 结算失败 attempt 的 exact witness（execution-model-routing-006），且只有两种结局：
+provider 恢复遵循无 fallback 策略（provider-attempt-recovery-021）：一次已确认失败不产生重试绑定、不 poison provider、不切换候选模型；同会话的重试按该执行原本确定的目标原样重新准入。run → target 的 exact witness（execution-model-routing-006）只作观察与结算凭据，不驱动模型更换。进程不存在 provider 健康状态或候选池；`hasTheoreticalCapacity` 只按角色回答理论容量，模型可用性变化不参与调度决策。
 
-- 保留目标：为同一 `SessionId` 写入一次单次消费的 recovery retry 绑定；该 session 的下一次 fresh admission 以该 target 作为调度偏好（优先于被原子取代执行提供的 `previous`），绑定随之被消费，无论该 admission 成功、排队还是被更新物理消息取代。
-- 驱逐目标：其 provider 在进程生命周期内被 poison，后续 fresh admission 回到普通调度。
-
-两种结局都只属于该 exact witness：witness 单次消费，重复或过期证据不产生第二结局；无 witness（例如进程重启后）不产生任何结局。recovery retry 绑定不是 session 级 previous 缓存：它只由失败结算从 exact witness 显式写入、只服务该 session 的下一次 fresh admission，并在 force cleanup（`ReleaseExecution`）时清除。
-
-provider 健康变化只参与 fresh demand 的准入与既有队列的重算。同一 exact physical execution 重放时，先核对既有 role、participant 并复用原 fence；不得把后来的理论容量不足误作该已提交准入的拒绝，也不得为此替换或释放旧 lease。
+同一 exact physical execution 重放时，先核对既有 role、participant 并复用原 fence；不得把后来的理论容量不足误作该已提交准入的拒绝，也不得为此替换或释放旧 lease。force cleanup（`ReleaseExecution`）只清空该会话的租约与在途记录，不留任何待消费的重试状态。
 
 ## [018] 新角色集合模型路由与旧角色槽位解耦
 

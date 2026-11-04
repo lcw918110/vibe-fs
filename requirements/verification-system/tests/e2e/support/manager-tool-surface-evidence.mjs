@@ -51,14 +51,14 @@ export const collectManagerProviderToolEvidence = (scenario, opts = {}) => {
       if (!sessionID || !managerSessions.has(sessionID)) continue;
     }
     // Without a bound Manager session, only consider requests that already carry tools
-    // and a manager-shaped tool surface (todowrite-for-manager+join+horizon+deliver) — never invent matches.
+    // and a manager-shaped tool surface — never invent matches.
     const tools = extractToolNamesFromRequest(request);
     if (managerSessions.size === 0) {
       const hasManagerSpine =
         tools.includes('todowrite-for-manager')
         && tools.includes('join')
         && tools.includes('horizon')
-        && tools.includes('deliver');
+        && tools.includes('review');
       if (!hasManagerSpine) continue;
     }
     chatRequests.push({
@@ -100,10 +100,13 @@ export const assertManagerToolSurface = (opts = {}) => {
       `MANAGER_TOOL_SURFACE: Manager provider wire must advertise todowrite-for-manager: ${JSON.stringify(wire)}`,
     );
   }
-  for (const required of ['horizon', 'join', 'assume', 'deliver', 'todowrite-for-manager']) {
+  for (const required of ['horizon', 'join', 'assume', 'review', 'todowrite-for-manager']) {
     if (!wire.unionTools.includes(required)) {
       throw new Error(`MANAGER_TOOL_SURFACE: missing Manager tool ${required}`);
     }
+  }
+  if (wire.unionTools.includes('deliver')) {
+    throw new Error('MANAGER_TOOL_SURFACE: retired lifecycle tool deliver is registered');
   }
   return { ok: true, unionTools: wire.unionTools, requestCount: wire.requestCount };
 };

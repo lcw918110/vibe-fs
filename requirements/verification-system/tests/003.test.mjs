@@ -100,15 +100,17 @@ test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two e
   assert.deepEqual(
     result.scenario.faults.filter((fault) => fault.kind === 'provider-error' && fault.status === 400)
       .map((fault) => fault.entryId),
-    ['manager-loop.2', 'continue.0'],
+    // The failure lands on the join rung: the fork must be delivered or no child work
+    // exists at all. The negotiate rung shifts the join one step past its old position.
+    ['manager-loop.3', 'continue.0'],
   );
 
-  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'deliver'];
+  const loopTools = ['todowrite-for-manager', 'join', 'horizon', 'review', 'negotiate'];
   // The Manager provider surface carries independent assume + todowrite-for-manager.
   const managerTools = [
     'assume',
     'horizon', 'join', 'todowrite-for-manager',
-    'skill', 'deliver',
+    'skill', 'review',
   ];
   const request = (turn, step) => ({
     messages: [
@@ -155,7 +157,7 @@ test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two e
   assert.equal(reopened1?.step, 1);
   assert.equal(reopened1?.optional, true);
   assert.equal(reopened1?.internal, true);
-  assert.equal(reopened1?.respond?.tool, 'deliver');
+  assert.equal(reopened1?.respond?.tool, 'review');
 
   assert.equal(
     resolveEntry(loopRequest(assessUser, 0), result.scenario.entries, bindings, context).matched?.id,
@@ -182,7 +184,7 @@ test('WHAT[verification-system-003] Long Stroke keeps one Manager loop and two e
   // the bound exists and is optional (a bounded runtime cursor may land on any of them, and
   // an unbounded nudge stream must fail closed rather than be answered by a default). The
   // bound is the same one the Long Stroke compile literal pins in `014.test.mjs`.
-  assert.deepEqual(currentActions.map((entry) => entry.step), Array.from({ length: 26 }, (_, index) => index));
+  assert.deepEqual(currentActions.map((entry) => entry.step), Array.from({ length: 36 }, (_, index) => index));
   assert.ok(currentActions.every((entry) => entry.optional === true));
   assert.ok(!result.scenario.must.some((id) => id.startsWith('manager-current-action.')));
   assert.ok(!result.scenario.entries.some((entry) => entry.id.startsWith('manager-repair-resume.')));

@@ -53,8 +53,8 @@ module ChildRecoverySurface =
             | "gone" -> Some ChildRecovery.HostObservation.HostSessionGone
             | "active" -> Some ChildRecovery.HostObservation.SessionActive
             | "restore" -> Some ChildRecovery.HostObservation.RecoveryInFlight
-            
-                
+
+
             | _ -> None)
 
     let resolve (durable: string) (snapshot: string) (observations: obj array) (body: string) : obj =
