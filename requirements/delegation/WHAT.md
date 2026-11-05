@@ -250,4 +250,4 @@ Manager、Orchestrator、Plan 负责长程工作。它们无工具调用的自�
 
 测试：`requirements/delegation/tests/042.test.mjs`。重试用例在旧实现下把重试物理 ID 当 Root，交付见证与 canonical work 都不匹配、恢复失败；修复后以原 Root 结算并 join 到重试回合的散文。已完成工作用例确认重启恢复不要求 Accepted、不重复写入完成，join 仍返回材料。缺失 Accepted 用例确认恢复只观察为 `RecoveryIncomplete`，不查询交付见证、不写完成，工作保持 Active。
 
-验收：`requirements/delegation/tests/042.test.mjs`（重试用例在旧实现下把重试物理 ID 当 Root，交付见证查询与 canonical work 均不匹配，恢复失败；修复后以原 Root 结算并 join 到重试回合的散文。已完成工作用例验证重启恢复不要求 Accepted、不重复写入完成，join 仍返回材料。缺失 Accepted 用例验证恢复只观察为 `RecoveryIncomplete`、不查询交付见证、不写完成，工作保持 Active）。
+`requirements/delegation/tests/042.test.mjs` 覆盖这三条路径：重试用例在旧实现下把重试物理 ID 当 Root，交付见证查询与 canonical work 均不匹配，恢复失败；修复后以原 Root 结算并 join 到重试回合的散文。已完成工作用例验证重启恢复不要求 Accepted、不重复写入完成，join 仍返回材料。缺失 Accepted 用例验证恢复只观察为 `RecoveryIncomplete`、不查询交付见证、不写完成，工作保持 Active。

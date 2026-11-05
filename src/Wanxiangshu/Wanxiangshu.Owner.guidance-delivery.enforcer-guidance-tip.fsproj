@@ -38,6 +38,10 @@
         <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-projection-queries.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.guidance-delivery.opencode-host-pairprogrammingcalibration.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.durable-events.durable-journal-port-adapter.fsproj" />
+    <!-- PairProgrammingThoughtTransform 用 Context.Scope.Surface 的 SuffixSeparator / stripKnownHints /
+         writeToolResultHint / writeUserHint / userCanCarryHint / toolCanCarryHint。缺这条边时全量编译
+         被 compile-order.txt 的全序掩盖，focused 增量编译直接报「类型未定义」。 -->
+    <ProjectReference Include="Wanxiangshu.Owner.context-compression.context-scope.fsproj" />
     <Compile Include="OpenCode/Host/PairProgrammingThoughtTransform.fsi" />
     <Compile Include="OpenCode/Host/PairProgrammingThoughtTransform.fs" />
     <Compile Include="OpenCode/Host/PairProgrammingThoughtSurface.fsi" />

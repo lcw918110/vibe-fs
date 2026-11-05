@@ -97,8 +97,7 @@ dispose 收尾。
   借此再派发一次 degeneration 续行。没有任何外部物理回执时继续
   保留未知事实；不增设第二个超时来伪造无死锁。
 
-验收：`tests/010.test.mjs` 的可复现反例和 seeded fast-check
-验证两种回执顺序、未决 Promise、物理接纳幂等及新旧 Provider 的隔离。
+`tests/010.test.mjs` 用可复现反例和 seeded fast-check 覆盖两种回执顺序、未决 Promise、物理接纳幂等及新旧 Provider 的隔离。
 
 ## [011] 中断在途时请求先行结束，已受理的中断仍须续跑
 
@@ -142,7 +141,7 @@ Fork 的 Join 本来就把 `Aborted` 当观察，不受影响。
 样本是模型自己的耗时）。中断已在途时仍按 [011] 停放、由回执决定续跑。同一步的并行工具、无测量时的
 工具开始均为空操作；下一次模型请求由新的 assistant 开始重新计量。
 
-验收：`tests/013.test.mjs`（状态机 + 生产接线）。真机对照：`tests/support/run-real-host-degeneration.mjs`
+`tests/013.test.mjs` 覆盖状态机与生产接线。真机对照见 `tests/support/run-real-host-degeneration.mjs`
 （`REPRO_MODE=slowtool`，配合 `tests/support/slow-tool-plugin.mjs` 让 `negotiate` 在 step 内阻塞）——
 撤掉 `ToolStarted` 时 15s 的工具在 3.3s 被 Abort（`aborted=true`），接上后完整执行（`aborted=false`）。
 
@@ -150,7 +149,7 @@ Fork 的 Join 本来就把 `Aborted` 当观察，不受影响。
 
 库侧阈值无先验，p99 至少要 100 条观测：之前 `ThresholdMs` 为 +∞。宿主照常测量与记样本（样本本身
 结束保护期），但 +∞ 阈值不调度任何定时器、不中断；这类从未武装的测量在 idle 时也不返回失败。
-验收：`tests/014.test.mjs`。
+`tests/014.test.mjs` 覆盖这条边界。
 
 ## [015] 两次中断同时在途时，受理的回执仍各得一次结算
 

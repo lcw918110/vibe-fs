@@ -7,6 +7,12 @@
     <ProjectReference Include="Wanxiangshu.Owner.distribution.resources-enforcercatalogresource.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.cognitive-environment.resources-runtimeresources.fsproj" />
     <ProjectReference Include="Wanxiangshu.Owner.knowledge-reuse.repository-knowledge-casebook-model.fsproj" />
+    <!-- SystemProjection 还 open 了 Foundation / Foundation.Identity / Host.Ports / Participant.Provider。
+         缺这些边时全量编译被 compile-order.txt 的全序掩盖，focused 增量编译报「类型未定义」。 -->
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-identity.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.foundation-outcome.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-neutral-ports.fsproj" />
+    <ProjectReference Include="Wanxiangshu.Owner.provider-language.participant-provider-language.fsproj" />
     <Compile Include="../../wanxiangtong/opencode/provider-request/SystemProjection.fsi" />
     <Compile Include="../../wanxiangtong/opencode/provider-request/SystemProjection.fs" />
   </ItemGroup>
