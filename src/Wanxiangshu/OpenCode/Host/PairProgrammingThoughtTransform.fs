@@ -765,7 +765,6 @@ module PairProgrammingThoughtTransform =
     // semantic-decorator-owner: guidance-delivery
     // semantic-decorator-WHAT: guidance-delivery-011
     // semantic-decorator-trace-relation: R_gap_pair(address) = (gapCtor address, gapCtor address), left then right, with a pure extensional constructor
-    // semantic-decorator-proof: requirements/guidance-delivery/tests/pair-gap-constructor.test.mjs::WHAT[guidance-delivery-011] PPT_gap_constructor_receives_the_same_address_exactly_twice_in_pair_order
     // semantic-decorator-failure-policy: a constructor exception propagates immediately and prevents the second invocation
     // semantic-decorator-cancel-policy: pure synchronous gap construction introduces no cancellation boundary
     // semantic-decorator-deadline-policy: pure synchronous gap construction introduces no deadline

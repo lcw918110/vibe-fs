@@ -27,4 +27,4 @@
 
 ## 文档与程序不一致
 
-10. **源码里的证明注释**：4 处 `semantic-decorator-proof:` 注释指向不存在的测试文件（如 `requirements/guidance-delivery/tests/...`，该包已不存在）。它们不参与构建，是死引用。**程序待改**：删注释或改成现存测试的真实名字，不要为此重建包。
+10. ~~**源码里的证明注释**：4 处 `semantic-decorator-proof:` 注释指向不存在的测试文件~~ 已处理：全仓只有 3 处该注解；其中 2 处指向 `managed-chat-execution/tests/admission-transaction.test.mjs`（测试搬家到 `003.test.mjs:205`，已改路径），1 处指向 `guidance-delivery/tests/pair-gap-constructor.test.mjs`（包随 `584c30c61` 删除，测试全仓不存在，已删注释）。不再有死引用。
