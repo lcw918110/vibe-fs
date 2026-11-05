@@ -1,3 +1,0 @@
-import test from 'node:test'
-
-test.todo('WHAT[epistemic-reasoning-031] GAP-170 / 47-D1: high-level inquiry runs to a bounded outcome without caller-controlled phase driving; Legacy compatibility scope needs review')

@@ -1,3 +1,0 @@
-import test from 'node:test'
-
-test.todo('WHAT[epistemic-reasoning-018] GAP-170: actual MCP and OpenCode entry points feed the same accepted events into the same Core reducer with identical semantic state')

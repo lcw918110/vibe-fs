@@ -51,4 +51,3 @@
 | `repository-programming` | JS 编程面。 |
 | `sphinx-v2` | Sphinx 结构化问答。 |
 | `distribution` | 安装包与产物完整性。 |
-| `epistemic-reasoning` | 历史：旧认识论内核，已被 `sphinx-v2` 取代；不是现行条款。 |

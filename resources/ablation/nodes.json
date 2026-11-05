@@ -286,13 +286,6 @@
       "borrowed_surface": []
     },
     {
-      "id": "epistemic-reasoning",
-      "package": "epistemic-reasoning",
-      "station": 47,
-      "kind": "package",
-      "borrowed_surface": []
-    },
-    {
       "id": "sphinx-v2",
       "package": "sphinx-v2",
       "station": 47,
@@ -559,11 +552,6 @@
     },
     {
       "from": "requirement-system",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "requirement-system",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -769,11 +757,6 @@
     },
     {
       "from": "verification-system",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "verification-system",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -974,11 +957,6 @@
     },
     {
       "from": "js-semantic-surface",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "js-semantic-surface",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -1174,11 +1152,6 @@
     },
     {
       "from": "structured-workflow",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "structured-workflow",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -1369,11 +1342,6 @@
     },
     {
       "from": "host-boundary",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-boundary",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -1559,11 +1527,6 @@
     },
     {
       "from": "session-ontology",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "session-ontology",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -1744,11 +1707,6 @@
     },
     {
       "from": "participant-identity",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-identity",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -1924,11 +1882,6 @@
     },
     {
       "from": "provider-language",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-language",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -2099,11 +2052,6 @@
     },
     {
       "from": "office-capability",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "office-capability",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -2269,11 +2217,6 @@
     },
     {
       "from": "capability-enforcement",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "capability-enforcement",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -2434,11 +2377,6 @@
     },
     {
       "from": "cognitive-environment",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "cognitive-environment",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -2594,11 +2532,6 @@
     },
     {
       "from": "action-affordance",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "action-affordance",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -2749,11 +2682,6 @@
     },
     {
       "from": "participant-horizon",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "participant-horizon",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -2899,11 +2827,6 @@
     },
     {
       "from": "provider-projection",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-projection",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3044,11 +2967,6 @@
     },
     {
       "from": "repository-investigation",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-investigation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3184,11 +3102,6 @@
     },
     {
       "from": "repository-programming",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "repository-programming",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3319,11 +3232,6 @@
     },
     {
       "from": "time-capability",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "time-capability",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3449,11 +3357,6 @@
     },
     {
       "from": "process-execution",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "process-execution",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3574,11 +3477,6 @@
     },
     {
       "from": "causal-wait",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "causal-wait",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3694,11 +3592,6 @@
     },
     {
       "from": "durable-events",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "durable-events",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3809,11 +3702,6 @@
     },
     {
       "from": "effect-accounting",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "effect-accounting",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -3919,11 +3807,6 @@
     },
     {
       "from": "semantic-trace",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "semantic-trace",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4024,11 +3907,6 @@
     },
     {
       "from": "context-compression",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "context-compression",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4124,11 +4002,6 @@
     },
     {
       "from": "prefix-stability",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "prefix-stability",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4219,11 +4092,6 @@
     },
     {
       "from": "attention-regulation",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "attention-regulation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4309,11 +4177,6 @@
     },
     {
       "from": "execution-failure-policy",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "execution-failure-policy",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4394,11 +4257,6 @@
     },
     {
       "from": "interaction-authority",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "interaction-authority",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4474,11 +4332,6 @@
     },
     {
       "from": "managed-chat-execution",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "managed-chat-execution",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4549,11 +4402,6 @@
     },
     {
       "from": "execution-model-routing",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "execution-model-routing",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4619,11 +4467,6 @@
     },
     {
       "from": "managed-session-lifecycle",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "managed-session-lifecycle",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4684,11 +4527,6 @@
     },
     {
       "from": "dispatch-protocol",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "dispatch-protocol",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4744,11 +4582,6 @@
     },
     {
       "from": "provider-attempt-recovery",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "provider-attempt-recovery",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4799,11 +4632,6 @@
     },
     {
       "from": "host-provider-failure-ownership",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "host-provider-failure-ownership",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4849,11 +4677,6 @@
     },
     {
       "from": "crash-reconciliation",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "crash-reconciliation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4894,11 +4717,6 @@
     },
     {
       "from": "durable-convergence",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "durable-convergence",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4934,11 +4752,6 @@
     },
     {
       "from": "delegation",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "delegation",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4969,11 +4782,6 @@
     },
     {
       "from": "concern-routing",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "concern-routing",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -4999,11 +4807,6 @@
     },
     {
       "from": "intra-participant-parallelism",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "intra-participant-parallelism",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5024,11 +4827,6 @@
     },
     {
       "from": "knowledge-reuse",
-      "to": "epistemic-reasoning",
-      "kind": "station-order"
-    },
-    {
-      "from": "knowledge-reuse",
       "to": "obligation-ledger",
       "kind": "station-order"
     },
@@ -5044,26 +4842,6 @@
     },
     {
       "from": "knowledge-reuse",
-      "to": "distribution",
-      "kind": "station-order"
-    },
-    {
-      "from": "epistemic-reasoning",
-      "to": "obligation-ledger",
-      "kind": "station-order"
-    },
-    {
-      "from": "epistemic-reasoning",
-      "to": "work",
-      "kind": "station-order"
-    },
-    {
-      "from": "epistemic-reasoning",
-      "to": "change-integration",
-      "kind": "station-order"
-    },
-    {
-      "from": "epistemic-reasoning",
       "to": "distribution",
       "kind": "station-order"
     },

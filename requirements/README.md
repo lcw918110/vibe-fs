@@ -61,6 +61,5 @@
 | [repository-programming](repository-programming/WHAT.md) | JS 编程面。 |
 | [sphinx-v2](sphinx-v2/WHAT.md) | Sphinx 结构化问答。 |
 | [distribution](distribution/WHAT.md) | 安装包与产物完整性。 |
-| [epistemic-reasoning](epistemic-reasoning/WHAT.md) | 历史：旧认识论内核，已被 sphinx-v2 取代；仅存线索索引，不是现行条款。 |
 
 包的边界就是 `requirements/` 下的目录本身，有没有 `WHY.md`、规范文件与 `tests/` 一眼可见。[INDEX.md](INDEX.md) 只是便于浏览的表格视图，不参与包发现，漏改不会让检查变红。
