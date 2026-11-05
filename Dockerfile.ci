@@ -25,7 +25,17 @@ RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
     && rm -f /tmp/dotnet-install.sh
 
 ENV DOTNET_ROOT=/usr/share/dotnet
-ENV PATH="${PATH}:/root/.dotnet/tools"
+ENV PATH="${PATH}:/home/runner/.dotnet/tools"
+
+# 以非 root 运行（对齐 GitHub Actions 的 runner 用户）：
+#   有两类测试靠文件权限注入故障——chmod 000 的不可读目录、chmod 444 的
+#   不可写事件日志。root 无视权限位，故障注入静默失效，测试变成假红。
+#   Ubuntu 24.04 自带 uid 1000 的 ubuntu 用户，直接复用它跑构建与测试。
+RUN mkdir -p /home/ubuntu/.dotnet/tools \
+    && chown -R ubuntu:ubuntu /home/ubuntu
+
+USER ubuntu
+ENV HOME=/home/ubuntu
 
 WORKDIR /workspace
 
