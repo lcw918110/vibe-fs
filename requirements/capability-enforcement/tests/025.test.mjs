@@ -455,7 +455,9 @@ test('WHAT[capability-enforcement-025] P15_concurrent_physical_rg_overlap_with_r
         spawns += 1
         // Freeze the live OS process while it is genuinely in flight, so the
         // review acceptance below overlaps a running rg, not a finished one.
-        process.kill(child.pid, 'SIGSTOP')
+        try { process.kill(child.pid, 'SIGSTOP') } catch (error) {
+          if (error.code !== 'ESRCH') throw error
+        }
         liveChild = child
         paused.resolve(child)
         return child
@@ -468,7 +470,9 @@ test('WHAT[capability-enforcement-025] P15_concurrent_physical_rg_overlap_with_r
       await injectAcceptedAssessment(runtime, sessionID)
       const overlapped = await execute(hooks, sessionID, reads[3], 'overlapped-after-accept')
       assert.equal(overlapped.code, 'REVIEW_ONLY', JSON.stringify(overlapped))
-      process.kill(child.pid, 'SIGCONT')
+      try { process.kill(child.pid, 'SIGCONT') } catch (error) {
+        if (error.code !== 'ESRCH') throw error
+      }
       const admitted = await pending
       assert.equal(admitted.code, undefined, JSON.stringify(admitted))
       assert.equal(admitted.data.exitCode, 0)
