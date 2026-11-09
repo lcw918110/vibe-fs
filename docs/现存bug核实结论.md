@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | H-1 | Sphinx v2 用量结算整体覆盖 | **已修** | `Sphinx/V2/Core/Reducer.fs:687` `SettledUsage = accumulated` |
 | H-2 | Sphinx v2 货币账恒 0 | **已修** | 同文件 `:688` `SettledMoneyMinor = target.SettledMoneyMinor + usage.MoneyMinor` |
-| H-3 | Host 编解码把 provider 超时误判为中止 | **已修** | `HostEventCodec.fs` 已无 `"The operation timed out"` → `UserCancelled` 分支 |
+| H-3 | Host 编解码把 provider 超时误判为中止 | **已修** | `HostEventCodec.fs:131` `"TimeoutError" -> ExecutionFailure.ProviderTransient`，已归入 provider 瞬时失败 |
 | H-4 | parts 非数组强转 | **已修** | 文件已迁 `wanxiangtong/opencode/provider-request/MessageProjection.fs:45`，有 `Array.isArray` 守卫 |
 | H-5 | 恢复闭包丢弃 AgentChild | **判断有误** | 去重走 `RecoveryNode.token`（`Recovery/Model.fs:51`），`AgentChild` 与 `ManagerJob` token 前缀不同（`A:` vs `M:`），不会混。`sortKey` 只用于排序 |
 | H-6 | Pending 允许直接物理释放 | **判断有误** | 许可在准入时即绑定物理消息（`RoutingProtocol.fs:489`），用户撤回时许可尚未提交，按物理完成释放是该次执行的正常结束。测试 `permit/tests/001.test.mjs:113` 固化的是正确行为；错的是 `permit/AGENTS.md` 契约漏写该路径，已补 |
@@ -17,8 +17,8 @@
 
 | 原编号 | 核实结论 |
 | --- | --- |
-| M-3 死 permit | **已修**（`SessionQuiescenceGate` 中已无 serial=0 分支） |
-| M-9 AsyncSemaphore 取消丢许可 | **已修**（`Foundation/Parallel.fs` 已无该实现） |
+| M-3 死 permit | **已修**（`SessionQuiescenceGate.fs` 已重写为薄壳，`TryConsume`/`TryRelease` 委托 `inner?TryConsume`，不再自行签发 permit；签 `serial=0` 的路径消失） |
+| M-9 AsyncSemaphore 取消丢许可 | **已修**（`Foundation/Parallel.fs` 文件已不存在） |
 | M-10 外部工具 fail-open | 仍在（`ExternalToolAdmission.fs:56` `\| None -> ()`），需判断 `RoleFor=None` 是否可达 |
 | M-13 `Option.get` | 仍在（`DelegationProjectionBridge.fs:89`），前置 `admitWork` 已保证非 None，属防御性缺失 |
 | M-14 `Option.get` | 仍在（`ExecutionFactFold.fs:61-62`），同上 |
