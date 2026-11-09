@@ -2331,19 +2331,24 @@ module Adapter =
               "resultFor", (optionalString (fieldValue message "toolCallId") |> Option.toObj |> box)
               "tenureId", (optionalString (fieldValue message "tenureId") |> Option.toObj |> box) ]
 
+    /// A finished work has no active tenure (`ActiveId = None`), but its last
+    /// succession barrier still names the successor that just closed it. The cut
+    /// applies to that barrier all the same; only a different incumbent reopens
+    /// visibility.
     let private ompTenureMessages stateRoot sessionId (messages: obj) =
         match Wanxiangshu.Mission.Lifecycle.DurableWorkHost.inspected stateRoot sessionId with
         | Some work when
-            work.ActiveId.IsSome
-            && work.ActiveId = work.SuccessorTenureId
+            (work.ActiveId.IsNone || work.ActiveId = work.SuccessorTenureId)
             && work.BarrierToolCallId.IsSome
+            && work.SuccessorTenureId.IsSome
             ->
+            let successor = work.SuccessorTenureId.Value
             let original = Surface.toObjArray messages
             let call = work.BarrierToolCallId.Value
             let neutral = original |> Array.map (ompTenureMessage call)
 
             let barrier =
-                createObj [ "toolCallId", box call; "successorTenureId", box work.ActiveId.Value ]
+                createObj [ "toolCallId", box call; "successorTenureId", box successor ]
 
             let kept: obj array = tenureProjection?tenure (box neutral, barrier)
             kept |> Array.map (fun index -> original[int (unbox<float> index)]) |> box
