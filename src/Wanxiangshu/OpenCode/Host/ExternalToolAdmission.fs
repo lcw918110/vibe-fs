@@ -39,6 +39,10 @@ module ExternalToolAdmission =
           AttachAbort = fun _ -> id }
 
     /// Refuse the call before its body runs: fail closed, zero side effects.
+    ///
+    /// A resolved office role is the only thing this gate can refuse: no office capability
+    /// admits an external integration tool. A session with no office profile is a Host
+    /// session, and it keeps the Host's own MCP surface (capability-enforcement-007).
     let before (runtime: ToolRuntimeScope) (sessionId: string) (toolName: string) : Task<unit> =
         task {
             if
