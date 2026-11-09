@@ -308,9 +308,14 @@ module RelayNarrativeTransform =
         else
             Some(indexes |> Array.map (fun index -> messages.[index]))
 
+    /// A finished work has no active tenure (`ActiveId = None`), but its last
+    /// succession barrier still names the successor that just closed it. The cut
+    /// applies to that barrier all the same: an empty incumbent means "the
+    /// successor is the latest tenure", not "another tenure took over". Only a
+    /// different incumbent reopens visibility.
     let private activeBarrier (inspected: Wanxiangshu.Mission.Lifecycle.DurableWorkHost.InspectedWork) =
         match inspected.BarrierToolCallId, inspected.SuccessorTenureId, inspected.ActiveId with
-        | Some callId, Some successor, Some active when active = successor -> Some(callId, successor)
+        | Some callId, Some successor, active when active = Some successor || active = None -> Some(callId, successor)
         | _ -> None
 
     /// Keep the successor's own messages after the committed review barrier.
