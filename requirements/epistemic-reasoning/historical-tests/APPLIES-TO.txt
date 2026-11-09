@@ -1,7 +1,0 @@
-# Positive package-external path set. Repository-root relative; gitignore wildmatch syntax.
-# requirements/epistemic-reasoning/** is covered implicitly.
-/src/Wanxiangshu/Sphinx/**
-/src/Wanxiangshu/OpenCode/Host/SphinxMcpConfig.fs
-/src/Wanxiangshu/OpenCode/Host/SphinxMcpConfig.fsi
-/src/Wanxiangshu/OpenCode/Host/SphinxMcpConfigSurface.fs
-/src/Wanxiangshu/OpenCode/Host/SphinxMcpConfigSurface.fsi

@@ -4,9 +4,6 @@ import { existsSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { walk } from '../lib/walk.mjs'
-import { CONTROL_PYRAMID_GUIDE } from './fsharp-control-pyramid-guide.mjs'
-
-export { CONTROL_PYRAMID_GUIDE }
 
 export const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 export const DEFAULT_SOURCE_ROOT = 'src/Wanxiangshu'
@@ -177,7 +174,9 @@ export const scanControlPyramidEntries = (entries) => {
 
       const depth = stack.length + 1
       const region = { kind, indent, line: index + 1 }
-      if (depth >= 2) {
+      // 只报真正的深塔：三层及以上才说明因果顺序已经由缩进承担。
+      // 两层（例如 `if 前置检查 then ... else match`）是正常写法，不是债务。
+      if (depth >= 3) {
         violations.push({
           kind: kind === 'match' || kind === 'match!' || kind === 'function' ? 'match-pyramid' : 'branch-pyramid',
           file: norm(file),
@@ -282,7 +281,17 @@ export const runCli = (argv = process.argv.slice(2)) => {
   }
 
   if (options.explain) {
-    console.log(CONTROL_PYRAMID_GUIDE.trim())
+    console.log(
+      [
+        'fsharp-control-pyramid 只拒绝一种形状：一个 decision 的 body 继续长第二个 decision，',
+        '再长第三个——三层及以上，主要因果顺序已经由缩进承担，读者必须数空格。',
+        '',
+        '两层（例如 `if 前置检查 then ... else match`）是正常写法，不报。',
+        '',
+        '修法：给内层 decision 一个真实名字，把边界压平；不要加 suppression，',
+        '也不要把嵌套搬进 helper 假装解决。',
+      ].join('\n'),
+    )
     return 0
   }
 

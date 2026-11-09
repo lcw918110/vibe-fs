@@ -1,3 +1,0 @@
-import test from 'node:test'
-
-test.todo('WHAT[epistemic-reasoning-032] GAP-170: actual internal Engineer obeys read-only authority, budget and cancellation and cannot execute, delegate, recurse or Fission')
