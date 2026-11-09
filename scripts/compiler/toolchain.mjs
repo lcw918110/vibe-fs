@@ -6,10 +6,16 @@ import { fileURLToPath } from 'node:url'
 
 const source = path.dirname(fileURLToPath(import.meta.url))
 const command = (root, args) => execFileSync('dotnet', args, { cwd: root, encoding: 'utf8', env: { ...process.env, DOTNET_CLI_UI_LANGUAGE: 'en' } }).trim()
+// The default root is only a fallback for a stale override, so a dotnet invocation that cannot
+// run here must not fail the build: an empty answer just means this candidate is unavailable.
 const commandWithoutOverrides = (root, args) => {
   const env = { ...process.env, DOTNET_CLI_UI_LANGUAGE: 'en' }
   delete env.NUGET_PACKAGES
-  return execFileSync('dotnet', args, { cwd: root, encoding: 'utf8', env }).trim()
+  try {
+    return execFileSync('dotnet', args, { cwd: root, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return ''
+  }
 }
 export const digest = value => createHash('sha256').update(value).digest('hex')
 
@@ -35,12 +41,14 @@ export function toolchain(root) {
   const reported = command(root, ['nuget', 'locals', 'global-packages', '--list']).replace(/^global-packages:\s*/, '')
   // Ask dotnet for the root it would use without the override, rather than rebuilding that path
   // from HOME — test runners and sandboxes hand us a temporary HOME, and guessing `.nuget` under
-  // it pointed at an empty directory while the real restored tool sat elsewhere.
+  // it pointed at an empty directory while the real restored tool sat elsewhere. The second query
+  // is allowed to fail: a compiler service started under a stripped environment must keep using
+  // the reported root instead of aborting the compile.
   const fallback = commandWithoutOverrides(root, ['nuget', 'locals', 'global-packages', '--list']).replace(/^global-packages:\s*/, '')
   const candidate = base => path.join(base, 'fable', version)
   const carries = packageRoot => fs.existsSync(path.join(packageRoot, 'tools'))
 
-  let packageRoot = [reported, fallback].map(candidate).find(carries)
+  let packageRoot = [reported, fallback].filter(Boolean).map(candidate).find(carries)
 
   if (!packageRoot) {
     // Nothing holds the tool anywhere we know. Let dotnet restore into its own default root,

@@ -23,6 +23,23 @@
 | M-13 `Option.get` | 仍在（`DelegationProjectionBridge.fs:89`），前置 `admitWork` 已保证非 None，属防御性缺失 |
 | M-14 `Option.get` | 仍在（`ExecutionFactFold.fs:61-62`），同上 |
 
+### 中危剩余 9 条逐条核实（2026-11-09 续）
+
+| 原编号 | 原判断 | 核实结论 | 证据 |
+| --- | --- | --- | --- |
+| M-2 | abandon 清 occasion 但保留 PhysicalLandings | **判断有误（设计如此）** | `ClaimLaw.fs:134` `ClaimEvent.Abandon -> [ DropPending; ClearOccasion ]` 只清 occasion；`Run.fs:446` 注释「精确落地证据永不抹去」是明确设计意图 |
+| M-4 | accepted 在 lock 外调 callback，重入竞态 | **已重构** | `PhysicalAcceptance.fs` 中已无对应 lock/callback 结构 |
+| M-5 | Cancelled 完成一律拒绝 | **判断有误（设计如此）** | `LinkageProjection.fs:482` 注释 `EXEC-004: Abandoned is not a completion cell`，`joinable` 只认 `CompletedAwaitingJoin` |
+| M-6 | `trySpendFullReplayBudget` 依赖 `loadedCommonDir=Some` | **已修** | `IntegratorEngine.fs` 从 400+ 行缩到 120 行，`trySpendFullReplayBudget` 与 `loadedCommonDir` 全仓无匹配 |
+| M-7 | 空问题拒绝分支把角色与空问题耦合 | **已重构** | `Fold.fs:172-186` 现为 `foldTerminalSource`，只校验 `source.FactId` 非空，原「空问题拒绝分支」已不存在 |
+| M-8 | `readExactAt` 空块边界缺守卫 | **已修** | 已迁 `wanxiangli/src/segments/SegmentedReader.fs:109-119`，有 `if count <= 0 then failwith "unexpected EOF"` 显式守卫 |
+| M-10 | `RoleFor=None` 分支落到 `()`，fail-open | **判断有误（设计如此）** | `capability-enforcement/tests/007.test.mjs:229-233` 要求无办公角色的宿主会话保留宿主自己的 MCP 面。已解析办公角色一律拒绝；`None` 不是漏洞，是「这不是办公会话」 |
+| M-11 | `findRestoredRoot` 环路返回环内节点 | **已重构** | 函数已不存在，改为 `resolveFamilyRoot`（`Sessions.fs:133`）委托 JS 侧 `familyTree?resolveFamilyRoot` |
+| M-12 | 未知 escape kind 解码语义不一致 | **仍成立（真 bug）** | `Wait/Registry.fs:57` `\| _ -> WaitEscape.OpenEndedExternal` 静默降级；`Wait/Surface.fs:96` `\| unknown -> invalidArg "escape" (...)` 抛异常。同一类型两个解码器语义相反 |
+| M-15 | `foldPromptClaimed` 孤儿代码 | **已修** | `Ledger.fs` 与 `Fold.fs` 中该符号均无匹配 |
+
+**中危汇总：** 14 条中 6 条已修（M-3/M-6/M-7/M-8/M-9/M-15）、5 条判断有误或已重构（M-2/M-5/M-10 设计如此，M-4/M-11 已重构）、**1 条真 bug（M-12）**、2 条防御性缺失（M-13/M-14）。
+
 ## 三、低危 40 条
 
 未逐条核实。按原清单描述多为死代码、命名口径不一致、防御性兜底缺失，不影响主流程。

@@ -57,7 +57,12 @@ module private WaitCodec =
         | "cancelledBy" -> WaitEscape.CancelledBy(ownerOf (property value "owner"))
         | "processLifetime" -> WaitEscape.ProcessLifetime
         | "sessionLifetime" -> WaitEscape.SessionLifetime
-        | _ -> WaitEscape.OpenEndedExternal
+        | "openEndedExternal" -> WaitEscape.OpenEndedExternal
+        // A wait escape decides when a wait may end, so an unrecognised kind is not a
+        // harmless default: silently reading it as OpenEndedExternal would let a durable
+        // record written by a newer shape end a wait that should have kept running. Surface
+        // already refuses unknown kinds; this decoder has to agree with it.
+        | unknown -> invalidArg "escape" ("unknown wait escape: " + unknown)
 
     let private escapeObject (escape: WaitEscape) : obj =
         match escape with
