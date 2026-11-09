@@ -49,6 +49,16 @@
 | L-1 | **真缺陷，已修** | `Recovery/Surface.fs` 与 `RecoveryClosureSurface.fs` 都把未知 kind 读成 `WorkSession`。合法工作会话的 kind 是 `work`。未知 kind 现在 `invalidArg`。`managed-session-lifecycle/tests/013.test.mjs` 覆盖 |
 | L-6 | **判断有误** | `LastTransitionWasSuccess` 在投影、库状态和读回三处都有，不是死字段 |
 | L-13 | **真缺陷，已修** | 库侧中断只有 `OperatorAbort`、`UserMessageArrived`、`DeadlineExpired`。宿主桥漏了第三种，并把其余未知值读成超时。现与库侧 `Wait.fs` 一致：三种显式映射，未知值拒绝 |
+| L-32 | **真缺陷，已修** | `sedReadFile` 原先把第二个 `-e` 当成文件。`-e`、`-f` 现各带一个值，粘连写法整段是选项；没有它们时第一个非选项仍是位置脚本。库测试先红后绿 |
+| L-8 | **名不符实，未改** | `tryConsumeSilentInterrupt` 只调用 `isSilentInterrupt`，不移除标记。改名牵动宿主表面和库，单独一批 |
+| L-10 | **名不符实，不改** | `bindOrAbort` 只返回错误。真正中止在 `bindSessionStartedAt`。改名不改变行为 |
+| L-7 | **判断有误** | `recordSubstantiveAccess` 只把库返回的路径记进追踪器，没有第二套口径 |
+| L-19 | **现有规则，不改** | 显式 profile 未列出的节点标成消融。`feature-ablation-004` 按这个行为断言 |
+| L-35 | **有意 no-op** | 认知事实只兼容读取，不恢复投影。`cognitive-workspace/WHAT.md` 写明 fold 必须为 no-op |
+| L-37 | **不成立** | `Option.get` 前已用 `Work` 非空筛过候选 |
+| L-38 | **不成立** | `failwith` 拒绝库返回的非法形状，不是静默降级 |
+| L-40 | **判断有误** | `byname` 是函数参数，`Byname` 是句柄字段，不是同一字段的大小写口径 |
+| L-4、L-5、L-16、L-17、L-20、L-25、L-29、L-30、L-33、L-36 | **符号已不在** | 原清单点名的字段、分支或函数已不在当前文件 |
 
 ## 四、结论
 
