@@ -115,4 +115,4 @@ OpenCode 给每个 assistant step 包 `step-start`/`step-finish` 标记。这两
 
 现场依据：2026-10-28 10022 Manager `ses_e7ed7cdb2ffe…`，Engineer `父方恢复`（wg46yn，`ses_e7e843cd7ffe…`）回合 `msg_1817dc764…` 07:51:06 `finish=stop`，只有两个 step 标记。旧判定把标记算作工具调用 → `TurnCompleted` → `completed with empty terminal output` 失败终态（`HandleWorkCompleted` Kind=SendFailure），父方 join 拿到“父方恢复 未能完成此项任务”，没有 nudge；07:41:38 `控制流续做`（yij9q4）同形。
 
-验收：`requirements/interaction-authority/tests/024.test.mjs` 覆盖全部角色、无文本／只有 reasoning／真实工具调用及连续空终止不耗尽；`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `interaction-authority-024` 通过真实注册的 OMP `turn_end` hook 连续触发 35 个新空回合，确认每回合一条 agent-attributed nudge、同回合重放不重复、真实工具/正文/人工取消不误触发。
+`requirements/interaction-authority/tests/024.test.mjs` 覆盖全部角色、无文本／只有 reasoning／真实工具调用及连续空终止不耗尽；`requirements/host-boundary/tests/omp-scope-seam.test.mjs` 的 `interaction-authority-024` 通过真实注册的 OMP `turn_end` hook 连续触发 35 个新空回合，确认每回合一条 agent-attributed nudge、同回合重放不重复、真实工具/正文/人工取消不误触发。

@@ -3,5 +3,9 @@
     <ProjectReference Include="Wanxiangshu.Owner.durable-events.journal-outcome-contract.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.runtime.fsproj"/>
     <ProjectReference Include="Wanxiangshu.Owner.interaction-authority.interaction-authority-ledger.fsproj"/>
+    <!-- DispatchSurface 用 SessionNudge.HostSessionNudge 与 Foundation.RootWorkspace.IRootWorkspaceReader。
+         缺这两条边时全量编译被 compile-order.txt 的全序掩盖，focused 增量编译报「类型未定义」。 -->
+    <ProjectReference Include="Wanxiangshu.Owner.dispatch-protocol.session-nudge.fsproj"/>
+    <ProjectReference Include="Wanxiangshu.Owner.host-boundary.host-root-workspace-contract.fsproj"/>
   </ItemGroup>
 </Project>
