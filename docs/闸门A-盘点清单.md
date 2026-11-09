@@ -154,7 +154,11 @@
 
 - ~~`fsharp-control-pyramid-guide.mjs` **1517 行**是纯常量表（控制流金字塔的文案指南）。它不检查任何东西，只提供文案。**这是典型的证明税化石**——一个 1517 行的「怎么写代码」教条文件。~~
   **已处理（2026-11-05）**：手册删除，`--explain` 改为 11 行；门禁阈值从 `depth >= 2` 收到 `depth >= 3`。原阈值报出的 2 处都是 `if 前置检查 then ... else match` 这种正常写法，改后全仓 0 违规。
-- `unified-store-gate.mjs` **776 行**、`language-parity-gate.mjs` **526 行**，都是巨型门禁。
+- ~~`unified-store-gate.mjs` **776 行**、`language-parity-gate.mjs` **526 行**，都是巨型门禁。~~
+  **已核实（2026-11-09），结论：留，不删不瘦。** 行数不是罪证，抓不住反例才是。逐个 scanner 喂违规样本实测：
+  - `unified-store-gate` 6 个 scanner 全部真会红，且守卫条件正确：`git-bypass` 只在非 store-owner 路径报（`Persistence/`、`Git/` 本就该调 git），`schema-version` 只在附近有 `EventStore`/`EventEnvelope` 上下文时报，裸 `schemaVersion` 不误伤。既有自测 `durable-events/tests/009` 等已覆盖 75 处引用。
+  - `language-parity-gate` 的 `hardcoded-english` 只抓 `ProviderProse.render ProviderLanguage.English` 这类硬编码渲染，不抓普通英文句子；`provider-language-binding` 要求观察原始环境值、委托解析、别名归 owner 三件事同时成立。`provider-language/tests/` 与 `distribution/tests/012` 已覆盖 17 处。
+  - 判据：删了它，双写、绕过统一 git、私有持久底座、硬编码英文渲染会立刻回来。按「删掉用户会立刻做不成事吗」这一条，两个都该留。
 - `test-surface-scan.mjs` **1903 行**，扫描测试挂载关系。
 
 **处置：逐个读，不是批量删。** ~~优先看 `fsharp-control-pyramid-guide.mjs`——如果它只输出文案给 AI 看，那就是纠偏令点名的「正确性宗教」，该删或该瘦成几十行。~~
