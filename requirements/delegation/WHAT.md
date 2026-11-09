@@ -248,6 +248,4 @@ Manager、Orchestrator、Plan 负责长程工作。它们无工具调用的自�
 
 重启恢复的终态 assistant 只回答它自己的物理父消息；最后一条 user 消息可能是重试的新物理消息，其物理 ID 不是 Authority Root。恢复必须按 `assistant.ParentId` 的精确物理消息读取持久 `ChatExecution.Accepted`，用该记录同时查询交付见证并编码完成体；不得把物理 ID 提升为 Root。Accepted 与 `assistant.ParentId` 必须精确相符，且其 Root 必须对应该 handle／child 的 canonical admitted work；任一缺失或不相符时只作为观察（`Unreadable`，恢复等待），不得猜测 Root 或补造完成。已存在 `HandleWorkCompleted` 的 durable 终态不经过该快照路径，重启后仍按原工作正常 join，且不重复写入完成。
 
-测试：`requirements/delegation/tests/042.test.mjs`。重试用例在旧实现下把重试物理 ID 当 Root，交付见证与 canonical work 都不匹配、恢复失败；修复后以原 Root 结算并 join 到重试回合的散文。已完成工作用例确认重启恢复不要求 Accepted、不重复写入完成，join 仍返回材料。缺失 Accepted 用例确认恢复只观察为 `RecoveryIncomplete`，不查询交付见证、不写完成，工作保持 Active。
-
 `requirements/delegation/tests/042.test.mjs` 覆盖这三条路径：重试用例在旧实现下把重试物理 ID 当 Root，交付见证查询与 canonical work 均不匹配，恢复失败；修复后以原 Root 结算并 join 到重试回合的散文。已完成工作用例验证重启恢复不要求 Accepted、不重复写入完成，join 仍返回材料。缺失 Accepted 用例验证恢复只观察为 `RecoveryIncomplete`、不查询交付见证、不写完成，工作保持 Active。

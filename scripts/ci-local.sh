@@ -12,10 +12,22 @@ echo "============================================================"
 # 镜像不存在，或 Dockerfile.ci 比镜像新时重建。
 # 只判断「镜像存在」会让 Dockerfile 的改动（例如补装 ripgrep）永远进不去，
 # 容器里缺工具时表现为一堆与本次改动无关的测试失败。
+#
+# 用 epoch 秒比较，不用 `find -newermt`：后者在 macOS 的 BSD find 上解析不了
+# Docker 的 `{{.Created}}` 格式（`2026-11-05 12:34:56.123456789 +0000 UTC`），
+# 报错被 2>/dev/null 吞掉后 `$(...)` 得空串，检测恒不生效——正是本段想防的那种。
 IMAGE_STALE=0
 if docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-    IMAGE_CREATED="$(docker image inspect "${IMAGE_NAME}" --format '{{.Created}}')"
-    if [ -n "$(find "${ROOT_DIR}/Dockerfile.ci" -newermt "${IMAGE_CREATED}" 2>/dev/null)" ]; then
+    IMAGE_EPOCH="$(docker image inspect "${IMAGE_NAME}" --format '{{.Created}}' 2>/dev/null \
+        | xargs -I{} date -u -j -f '%Y-%m-%d %H:%M:%S' "$(echo {} | cut -d. -f1)" '+%s' 2>/dev/null \
+        || true)"
+    DOCKERFILE_EPOCH="$(stat -f %m "${ROOT_DIR}/Dockerfile.ci" 2>/dev/null \
+        || stat -c %Y "${ROOT_DIR}/Dockerfile.ci" 2>/dev/null \
+        || echo '')"
+    # 任一解析失败就 fail-open 到重建：宁可多建一次，不可让过期镜像蒙混过关。
+    if [ -z "${IMAGE_EPOCH}" ] || [ -z "${DOCKERFILE_EPOCH}" ]; then
+        IMAGE_STALE=1
+    elif [ "${DOCKERFILE_EPOCH}" -gt "${IMAGE_EPOCH}" ]; then
         IMAGE_STALE=1
     fi
 else
