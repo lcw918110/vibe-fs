@@ -24,7 +24,10 @@ type CompletionMailbox(gate: obj) =
         match interrupt with
         | "OperatorAbort" -> JoinInterruptReason.OperatorAbort
         | "UserMessageArrived" -> JoinInterruptReason.UserMessageArrived
-        | _ -> JoinInterruptReason.DeadlineExpired
+        | "DeadlineExpired" -> JoinInterruptReason.DeadlineExpired
+        // The library names exactly these three. An unknown name is not a timeout:
+        // reading it as one would end a wait that the producer did not expire.
+        | unknown -> invalidArg "interrupt" ("unknown interrupt reason: " + unknown)
 
     let wakeOf (value: obj) : MailboxWakeReason =
         match string value with

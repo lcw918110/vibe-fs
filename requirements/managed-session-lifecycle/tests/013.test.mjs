@@ -165,4 +165,13 @@ test('WHAT[managed-session-lifecycle-013] session_recovery_contract_authorizes_f
   ])
   assert.equal(authBlocked.state, 'FamilyBlocked')
 })
+
+test('WHAT[managed-session-lifecycle-013] an unknown recovery member is refused instead of becoming a work session', () => {
+  assert.throws(
+    () => RecoverySurface.validateClosure('ses_root', [{ kind: 'future', session: 'ses_unknown' }]),
+    /unknown recovery node: future/,
+  )
+  const work = RecoverySurface.validateClosure('ses_root', [{ kind: 'work', session: 'ses_work' }])
+  assert.equal(work.ok, true)
+})
 }

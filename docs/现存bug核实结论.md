@@ -40,9 +40,15 @@
 
 **中危汇总：** 14 条中 6 条已修（M-3/M-6/M-7/M-8/M-9/M-15）、5 条判断有误或已重构（M-2/M-5/M-10 设计如此，M-4/M-11 已重构）、**1 条真 bug（M-12）**、2 条防御性缺失（M-13/M-14）。
 
-## 三、低危 40 条
+## 三、低危 40 条（2026-11-09 部分核实）
 
-未逐条核实。按原清单描述多为死代码、命名口径不一致、防御性兜底缺失，不影响主流程。
+文件已不存在：L-8、L-12、L-21、L-22、L-23、L-26、L-28、L-31、L-41。
+
+| 原编号 | 核实结论 | 证据 |
+| --- | --- | --- |
+| L-1 | **真缺陷，已修** | `Recovery/Surface.fs` 与 `RecoveryClosureSurface.fs` 都把未知 kind 读成 `WorkSession`。合法工作会话的 kind 是 `work`。未知 kind 现在 `invalidArg`。`managed-session-lifecycle/tests/013.test.mjs` 覆盖 |
+| L-6 | **判断有误** | `LastTransitionWasSuccess` 在投影、库状态和读回三处都有，不是死字段 |
+| L-13 | **真缺陷，已修** | 库侧中断只有 `OperatorAbort`、`UserMessageArrived`、`DeadlineExpired`。宿主桥漏了第三种，并把其余未知值读成超时。现与库侧 `Wait.fs` 一致：三种显式映射，未知值拒绝 |
 
 ## 四、结论
 

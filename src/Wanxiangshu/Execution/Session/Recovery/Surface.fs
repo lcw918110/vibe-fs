@@ -28,7 +28,10 @@ module RecoverySurface =
                 ManagerJobId.create (text (value?job)),
                 SessionId.create (text (value?manager))
             )
-        | _ -> SessionRecovery.RecoveryNode.WorkSession(SessionId.create (text (value?session)))
+        | "work" -> SessionRecovery.RecoveryNode.WorkSession(SessionId.create (text (value?session)))
+        // An unrecognised member is not a work session. Reading it as one would put a
+        // newer record into a recovery closure under the wrong identity.
+        | unknown -> invalidArg "kind" ("unknown recovery node: " + unknown)
 
     let token (value: obj) : string =
         SessionRecovery.RecoveryNode.token (nodeOf value)

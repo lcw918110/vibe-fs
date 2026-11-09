@@ -30,7 +30,8 @@ module RecoveryClosureSurface =
                 ManagerJobId.create (text (value?job)),
                 SessionId.create (text (value?manager))
             )
-        | _ -> SessionRecovery.RecoveryNode.WorkSession(SessionId.create (text (value?session)))
+        | "work" -> SessionRecovery.RecoveryNode.WorkSession(SessionId.create (text (value?session)))
+        | unknown -> invalidArg "kind" ("unknown recovery node: " + unknown)
 
     let closureTokens (root: string) (candidates: obj array) (journalSequence: int) : string array =
         let members = candidates |> Array.toList |> List.map nodeOf
