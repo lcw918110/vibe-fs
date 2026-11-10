@@ -4,9 +4,7 @@
 
 ## 取代范围
 
-`sphinx-v2/WHAT.md` 的 36 条命题取代 `epistemic-reasoning/WHAT.md` 中描述旧内核的条款。旧条款的文本、旧测试、旧数据不删除：历史 inquiry 事件仍在权威日志中，可由原版本工具离线读取；旧测试文件保留为反例与设计对照，不进新 runner 的通过集。
-
-2026-09-28迁移中的旧测试输入保存在 `epistemic-reasoning/historical-tests/`，使用非执行后缀并附解压后SHA-256清单；完整旧版本保留于Git备份 `1d7098a38`。归档不恢复旧生产接口，也不表示新测试已充分替代全部证明；当前范围见 `sphinx-v2/tests/README.md`。
+`sphinx-v2/WHAT.md` 的 36 条命题取代旧 `epistemic-reasoning` 内核条款。历史 inquiry 事件仍在权威日志中，可由原版本工具离线读取；旧 `requirements/epistemic-reasoning/` 目录已从工作树移除，完整旧条款与归档测试保留于 Git 历史（如备份提交 `1d7098a38`）。当前范围见 `sphinx-v2/tests/README.md`。
 
 ## 逐条对应
 

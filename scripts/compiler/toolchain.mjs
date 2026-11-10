@@ -53,14 +53,17 @@ export function toolchain(root) {
   if (!packageRoot) {
     // Nothing holds the tool anywhere we know. Let dotnet restore into its own default root,
     // which means clearing the stale override rather than writing through it.
+    const restoreEnv = { ...process.env, DOTNET_CLI_UI_LANGUAGE: 'en' }
+    delete restoreEnv.NUGET_PACKAGES
     execFileSync('dotnet', ['tool', 'restore'], {
       cwd: root,
       encoding: 'utf8',
-      env: { ...process.env, NUGET_PACKAGES: '', DOTNET_CLI_UI_LANGUAGE: 'en' },
+      env: restoreEnv,
     })
-    const restored = candidate(fallback)
-    if (!carries(restored)) throw new Error(
-      `Fable ${version} is not restored in either reported global-packages (${reported}) or the user default (${fallback}); ` +
+    const postRestore = commandWithoutOverrides(root, ['nuget', 'locals', 'global-packages', '--list']).replace(/^global-packages:\s*/, '')
+    const restored = [postRestore, fallback, reported].filter(Boolean).map(candidate).find(carries)
+    if (!restored) throw new Error(
+      `Fable ${version} is not restored in either reported global-packages (${reported}) or the user default (${postRestore || fallback || '<unavailable>'}); ` +
       `run dotnet tool restore after unsetting NUGET_PACKAGES.`,
     )
     packageRoot = restored

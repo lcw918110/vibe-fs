@@ -13,14 +13,16 @@ echo "============================================================"
 # 只判断「镜像存在」会让 Dockerfile 的改动（例如补装 ripgrep）永远进不去，
 # 容器里缺工具时表现为一堆与本次改动无关的测试失败。
 #
-# 用 epoch 秒比较，不用 `find -newermt`：后者在 macOS 的 BSD find 上解析不了
-# Docker 的 `{{.Created}}` 格式（`2026-11-05 12:34:56.123456789 +0000 UTC`），
-# 报错被 2>/dev/null 吞掉后 `$(...)` 得空串，检测恒不生效——正是本段想防的那种。
+# 用 Node Date.parse 统一解析 Docker `{{.Created}}` 的 ISO-8601（`2026-11-05T12:34:56.123Z`）
+# 与 Go 空格格式（`2026-11-05 12:34:56.123 +0000 UTC`），避免 macOS BSD date 与 Linux GNU date 选项互不兼容。
 IMAGE_STALE=0
 if docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-    IMAGE_EPOCH="$(docker image inspect "${IMAGE_NAME}" --format '{{.Created}}' 2>/dev/null \
-        | xargs -I{} date -u -j -f '%Y-%m-%d %H:%M:%S' "$(echo {} | cut -d. -f1)" '+%s' 2>/dev/null \
-        || true)"
+    IMAGE_CREATED="$(docker image inspect "${IMAGE_NAME}" --format '{{.Created}}' 2>/dev/null || true)"
+    IMAGE_EPOCH="$(node -e '
+        const raw = (process.argv[1] || "").trim().replace(/ \+\d{4} UTC$/, "Z");
+        const ms = Date.parse(raw);
+        if (Number.isFinite(ms)) process.stdout.write(String(Math.floor(ms / 1000)));
+    ' "${IMAGE_CREATED}" 2>/dev/null || true)"
     DOCKERFILE_EPOCH="$(stat -f %m "${ROOT_DIR}/Dockerfile.ci" 2>/dev/null \
         || stat -c %Y "${ROOT_DIR}/Dockerfile.ci" 2>/dev/null \
         || echo '')"
@@ -65,11 +67,20 @@ echo "------------------------------------------------------------"
 # 构建以 uid 1000 跑（Dockerfile.ci 的 USER ubuntu，对齐 GitHub Actions）。
 # 有几项测试靠文件权限注入故障——chmod 000 的不可读目录、chmod 444 的不可写
 # 事件日志。root 无视权限位，故障注入静默失效，测试变成假红。
+# 若当前目录是 linked git worktree，.git 文件指向宿主机 common gitdir 的绝对路径，
+# 须将该路径按原绝对路径只读挂载进容器，避免容器内 git 命令报 not a git repository。
+EXTRA_GIT_MOUNTS=()
+GIT_COMMON_DIR="$(cd "${ROOT_DIR}" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+if [ -n "${GIT_COMMON_DIR}" ] && [ "${GIT_COMMON_DIR}" != "${ROOT_DIR}/.git" ] && [ -d "${GIT_COMMON_DIR}" ]; then
+    EXTRA_GIT_MOUNTS+=(-v "${GIT_COMMON_DIR}:${GIT_COMMON_DIR}:ro")
+fi
+
 docker run --rm \
     --init \
     --memory=6g \
     --user root \
     -v "${ROOT_DIR}:/src:ro" \
+    "${EXTRA_GIT_MOUNTS[@]}" \
     -v "${ROOT_DIR}/.fable-build/verify-logs:/logs" \
     --mount type=volume,source="${WORK_VOLUME}",target=/workspace \
     -w /workspace \

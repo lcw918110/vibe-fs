@@ -25,7 +25,7 @@ RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
     && rm -f /tmp/dotnet-install.sh
 
 ENV DOTNET_ROOT=/usr/share/dotnet
-ENV PATH="${PATH}:/home/runner/.dotnet/tools"
+ENV PATH="${PATH}:/home/ubuntu/.dotnet/tools"
 
 # 以非 root 运行（对齐 GitHub Actions 的 runner 用户）：
 #   有两类测试靠文件权限注入故障——chmod 000 的不可读目录、chmod 444 的
