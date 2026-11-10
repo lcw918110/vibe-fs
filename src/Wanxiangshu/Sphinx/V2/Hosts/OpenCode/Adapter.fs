@@ -28,7 +28,8 @@ type OpenCodeHostPort internal (runtime: SyncDelegateRuntime) =
                   Role = context.Role
                   Workspace = context.Workspace
                   Correlation = None
-                  ToolPolicy = None }
+                  ToolPolicy = None
+                  Delivery = None }
 
             runtime.InvokeObservedPrepared(
                 owner,

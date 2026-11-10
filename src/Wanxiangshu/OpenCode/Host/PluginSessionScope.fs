@@ -128,8 +128,10 @@ type PluginSessionScope
                         failure
                 ))
 
-            ModelRouting.releasePhysicalExecution execution.key.SessionId execution.key.PhysicalUserMessageId
-            |> ignore
+            // The permit decides which release is legal: a pre-provider
+            // settlement leaves it Pending, while a started one is committed.
+            // Guessing from the journal fact would strand a Pending permit.
+            ModelRouting.releaseExactExecution execution.key |> ignore
         }
 
     member private this.SettleSessionExecutions(sessionId: string) : Task =

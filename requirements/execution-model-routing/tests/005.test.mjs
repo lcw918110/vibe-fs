@@ -23,13 +23,15 @@ test('WHAT[execution-model-routing-005] changing only the scheduler changes both
     assert.deepEqual(observations.at(-1).running, Array.from({ length: limit }, () => target))
     assert.equal(observations.at(-1).role, 'engineer')
     assert.equal(observations.at(-1).previous, null)
-    routing.releasePhysicalExecution(runtime, 'owner-0', 'msg-owner-0')
+    // These leases never reached the provider, so their permits are still Pending:
+    // the before-provider release is the only legal way to return the credit.
+    routing.releasePendingPhysicalExecution(runtime, 'owner-0', 'msg-owner-0')
     const resumed = await routing.awaitQueuedExecutionAdmission(waiting.queue)
     assert.equal(resumed.kind, 'Acquired')
     assert.deepEqual(routing.executionAdmissionTarget(runtime, resumed.lease), target)
-    routing.releasePhysicalExecution(runtime, 'waiting', 'msg-waiting')
+    routing.releasePendingPhysicalExecution(runtime, 'waiting', 'msg-waiting')
     for (let index = 1; index < limit; index += 1) {
-      routing.releasePhysicalExecution(runtime, `owner-${index}`, `msg-owner-${index}`)
+      routing.releasePendingPhysicalExecution(runtime, `owner-${index}`, `msg-owner-${index}`)
     }
     assert.deepEqual(routing.snapshotOccupied(runtime), [])
   }

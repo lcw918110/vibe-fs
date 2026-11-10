@@ -161,9 +161,12 @@ test('WHAT[execution-model-routing-009] BusyAgentNudge explicitly sends immediat
     wanxiangshu_origin:'ProviderRetryAttempt',
     wanxiangshu_prompt_key:'pk-provider-recovery',
   }
+  // The product names the delivery verb on the send options; the adapter only
+  // translates it. A busy nudge therefore carries `delivery: 'steer'` from the
+  // product side, and the origin metadata alone no longer decides anything.
   for(const metadata of [busy,consultation,retry]){
     const result=await routing.sendPrompt(port,'ses-engineer-reset','Continue work.',{
-      agent:'engineer',metadata,
+      agent:'engineer',metadata,delivery:'steer',
     })
     assert.equal(result.kind,'AdmittedWithReceipt')
   }
@@ -178,4 +181,19 @@ test('WHAT[execution-model-routing-009] BusyAgentNudge explicitly sends immediat
     'confirmed provider retry must retain immediate continuation semantics')
   assert.equal(submitted[0].body.parts[0].metadata.wanxiangshu_origin,'BusyAgentNudge')
   assert.equal(submitted[0].body.parts[0].metadata.wanxiangshu_prompt_key,'pk-busy-steer')
+})
+test('WHAT[execution-model-routing-009] the adapter never infers steer from an origin name', async () => {
+  const submitted=[]
+  const client={session:{promptAsync:async request=>{submitted.push(request);return {}}}}
+  const port=routing.createSdkClientPort(client)
+  // Same origin metadata as a busy nudge, but the product asked for no delivery
+  // verb. The adapter must leave the host default alone instead of re-deriving
+  // steer from the name, which is what put a host decision in the adapter.
+  const result=await routing.sendPrompt(port,'ses-engineer-reset','Continue work.',{
+    agent:'engineer',
+    metadata:{wanxiangshu_origin:'BusyAgentNudge',wanxiangshu_prompt_key:'pk-no-verb'},
+  })
+  assert.equal(result.kind,'AdmittedWithReceipt')
+  assert.equal(submitted[0].body.delivery,undefined,
+    'an origin name alone must not produce a delivery verb')
 })

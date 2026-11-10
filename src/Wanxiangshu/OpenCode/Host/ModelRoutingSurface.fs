@@ -456,6 +456,7 @@ module ModelRoutingSurface =
           Agent = optionalText (field value [ "agent"; "Agent" ])
           Directory = optionalText (field value [ "directory"; "Directory" ])
           Metadata = optionalObject (field value [ "metadata"; "Metadata" ])
+          Delivery = optionalText (field value [ "delivery"; "Delivery" ])
           Tools = toolsOf value
           DetachedListener = None }
 
@@ -842,6 +843,21 @@ module ModelRoutingSurface =
     let releasePhysicalExecution (runtime: obj) (sessionId: string) (physicalUserMessageId: string) : obj =
         (runtimeOf runtime).ReleasePhysicalExecution(sessionId, physicalUserMessageId)
         |> physicalReleaseObject
+
+    /// Release an execution that never reached the provider, addressed by its key.
+    /// Its permit is still Pending, so physical completion would be refused; this
+    /// returns the exact credit on the before-provider path instead.
+    let releasePendingPhysicalExecution (runtime: obj) (sessionId: string) (physicalUserMessageId: string) : obj =
+        (runtimeOf runtime)
+            .ReleasePendingPhysicalExecution(sessionId, physicalUserMessageId)
+        |> transitionOutcomeObject
+
+    /// The shared-runtime face of the same before-provider release.
+    let sharedReleasePendingPhysicalExecution (sessionId: string) (physicalUserMessageId: string) : obj =
+        ModelRouting.releaseBeforeProviderExecution
+            { SessionId = SessionId.create sessionId
+              PhysicalUserMessageId = PhysicalUserMessageId.create physicalUserMessageId }
+        |> transitionOutcomeObject
 
     let releaseExecution (runtime: obj) (sessionId: string) : obj =
         (runtimeOf runtime).ReleaseExecution(sessionId) |> transitionOutcomeObject

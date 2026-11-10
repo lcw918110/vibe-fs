@@ -115,6 +115,10 @@ module ModelRouting =
         member internal ReleasePhysicalExecution:
             sessionId: string * physicalUserMessageId: string -> PhysicalExecutionReleaseOutcome
 
+        /// Release a lease that never reached the provider, addressed by its key.
+        member internal ReleasePendingPhysicalExecution:
+            sessionId: string * physicalUserMessageId: string -> CapacityTransitionOutcome
+
         member CancelPendingExecution: sessionId: string -> CapacityTransitionOutcome
 
         member CancelPendingPhysicalExecution:
@@ -219,6 +223,11 @@ module ModelRouting =
     val internal cancelUnacquiredExecution: sessionId: SessionId -> CapacityTransitionOutcome
 
     val internal cancelPendingPhysicalExecution: key: ChatExecutionKey -> CapacityTransitionOutcome
+
+    val internal releaseBeforeProviderExecution: key: ChatExecutionKey -> CapacityTransitionOutcome
+
+    /// 归还该 key 的容量配额，按许可实际生命周期选择释放路径。
+    val internal releaseExactExecution: key: ChatExecutionKey -> PhysicalExecutionReleaseOutcome
     val internal capacitySnapshot: unit -> CapacityInvariantEvidence
 
     val enterProviderStep:

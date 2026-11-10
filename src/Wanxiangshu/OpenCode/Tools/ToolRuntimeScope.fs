@@ -80,6 +80,7 @@ module private ExecutionSpawn =
                   Agent = Some agent
                   Directory = None
                   Metadata = None
+                  Delivery = None
                   Tools = None
                   DetachedListener = None }
 
@@ -1629,6 +1630,7 @@ type ToolRuntimeScope
               Agent = agent
               Directory = None
               Metadata = None
+              Delivery = None
               Tools = None
               DetachedListener = None }
 

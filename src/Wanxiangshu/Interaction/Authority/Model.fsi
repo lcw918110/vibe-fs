@@ -173,6 +173,9 @@ module PromptAuthority =
     val empty: PromptAuthorityProjection
     val acceptedDispatchKey: sessionId: SessionId -> payloadDigest: string -> string
     val originLabel: origin: PromptOrigin -> string
+
+    /// The delivery verb the product wants the host to use for this origin.
+    val deliveryFor: origin: PromptOrigin -> string option
     val tryParseContinuationKind: value: string -> ContinuationKind option
 
     [<RequireQualifiedAccess>]

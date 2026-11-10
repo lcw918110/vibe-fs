@@ -289,6 +289,7 @@ module ModelRouting =
         abstract tryInput: sessionId: string * physical: string -> obj
         abstract cancelInput: sessionId: string * physical: string -> unit
         abstract cancelSessionInputs: sessionId: string -> unit
+        abstract releasePendingPhysical: sessionId: string * physical: string -> string
         abstract ``continue``: lease: ExecutionAdmissionLease * physical: string * target: obj -> Task<obj>
         abstract wasSuperseded: sessionId: string * physical: string -> bool
         abstract wasStoppedSuperseded: sessionId: string * physical: string -> bool
@@ -499,6 +500,9 @@ module ModelRouting =
 
         member _.CancelPendingPhysicalExecution(sessionId: string, physicalUserMessageId: string) =
             library.cancelPendingPhysical (sessionId, physicalUserMessageId) |> outcomeOf
+
+        member _.ReleasePendingPhysicalExecution(sessionId: string, physicalUserMessageId: string) =
+            library.releasePendingPhysical (sessionId, physicalUserMessageId) |> outcomeOf
 
         member _.CapacitySnapshot() = library.snapshot () |> snapshotOf
 
@@ -801,6 +805,38 @@ module ModelRouting =
                 PhysicalUserMessageId.value key.PhysicalUserMessageId
             )
         | None -> CapacityTransitionOutcome.AlreadyApplied
+
+    /// Release an execution that never reached the provider, addressed by its key.
+    ///
+    /// The permit of such an execution is still Pending, and physical completion is
+    /// only legal after a commit proves the provider started. The before-provider
+    /// release is the matching path; an execution already gone answers AlreadyApplied.
+    let internal releaseBeforeProviderExecution (key: ChatExecutionKey) =
+        match tryCurrent () with
+        | Some runtime ->
+            runtime.ReleasePendingPhysicalExecution(
+                SessionId.value key.SessionId,
+                PhysicalUserMessageId.value key.PhysicalUserMessageId
+            )
+        | None -> CapacityTransitionOutcome.AlreadyApplied
+
+    /// Return this key's capacity credit whatever lifecycle its permit reached.
+    ///
+    /// The permit is the authority on whether the provider ever started; a durable
+    /// journal fact is not that proof. Try the before-provider release first: it
+    /// settles a Pending permit and refuses a committed one, which then falls
+    /// through to the physical completion that owns that committed permit.
+    let internal releaseExactExecution (key: ChatExecutionKey) =
+        match releaseBeforeProviderExecution key with
+        | CapacityTransitionOutcome.Conflict ->
+            match tryCurrent () with
+            | Some runtime ->
+                runtime.ReleasePhysicalExecution(
+                    SessionId.value key.SessionId,
+                    PhysicalUserMessageId.value key.PhysicalUserMessageId
+                )
+            | None -> PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.AlreadyApplied
+        | outcome -> PhysicalExecutionReleaseOutcome.Released outcome
 
     let internal capacitySnapshot () = current().CapacitySnapshot()
 

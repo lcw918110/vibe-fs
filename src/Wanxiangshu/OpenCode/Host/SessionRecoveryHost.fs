@@ -222,8 +222,13 @@ type SessionRecoveryHost
         else
             PersistenceCommitment.NotCommitted
 
+    /// Return this key's capacity credit.
+    ///
+    /// The permit decides whether the provider ever started; the durable journal
+    /// fact does not prove a commit. The routing layer picks the matching release
+    /// from the permit's actual lifecycle, so no caller guesses it here.
     let release (key: ChatExecutionKey) =
-        match ModelRouting.releasePhysicalExecution key.SessionId key.PhysicalUserMessageId with
+        match ModelRouting.releaseExactExecution key with
         | PhysicalExecutionReleaseOutcome.HeldForInput
         | PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.Applied
         | PhysicalExecutionReleaseOutcome.Released CapacityTransitionOutcome.AlreadyApplied

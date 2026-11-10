@@ -6,12 +6,16 @@ open Wanxiangshu.Foundation.Outcome
 
 /// HNI P-02: deliver one user-role prompt, at most once.
 type PromptRequest =
-    { Text: string
-      Route: ModelRoute option
-      Role: AgentRole option
-      Workspace: WorkspacePath option
-      Correlation: PromptKey option
-      ToolPolicy: Map<string, bool> option }
+    {
+        Text: string
+        Route: ModelRoute option
+        Role: AgentRole option
+        Workspace: WorkspacePath option
+        Correlation: PromptKey option
+        ToolPolicy: Map<string, bool> option
+        /// Host delivery verb chosen by the product. None keeps the host default.
+        Delivery: string option
+    }
 
 /// Late transport verdict for a detached send. OwnedSettled: the returned task already settled
 /// the send. Refused: never accepted. OutcomeUnknown: not observable, never resend.

@@ -101,6 +101,7 @@ module SessionsSurface =
                           Agent = Some "engineer"
                           Directory = None
                           Metadata = None
+                          Delivery = None
                           Tools = None
                           DetachedListener = None }
 

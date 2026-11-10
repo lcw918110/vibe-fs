@@ -58,6 +58,7 @@ module DispatchSessionPort =
           Agent = request.Role |> Option.map (fun (AgentRole role) -> role)
           Directory = request.Workspace |> Option.map (fun (WorkspacePath path) -> path)
           Metadata = metadata
+          Delivery = request.Delivery
           Tools = request.ToolPolicy
           DetachedListener =
             late

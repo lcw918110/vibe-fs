@@ -58,7 +58,10 @@ test('WHAT[execution-model-routing-014] valid immutable snapshot is a reconcilia
 test('WHAT[execution-model-routing-014] duplicate release never decrements twice', async () => {
   const runtime = routing.createRuntime(() => target)
   const firstIdentity = identity('session', 'physical-1')
-  await acquire(runtime, firstIdentity)
+  const first = await acquire(runtime, firstIdentity)
+  // Physical completion releases a committed execution. Releasing straight from
+  // Pending would let an uncommitted permit free capacity it never spent.
+  assert.deepEqual(routing.commitExecutionAdmission(runtime, first, firstIdentity), { kind: 'Applied' })
 
   assert.deepEqual(routing.releasePhysicalExecution(runtime, 'session', 'physical-1'), { kind: 'Applied' })
   const released = routing.capacitySnapshot(runtime)
@@ -67,6 +70,16 @@ test('WHAT[execution-model-routing-014] duplicate release never decrements twice
   const duplicate = routing.capacitySnapshot(runtime)
   assert.equal(duplicate.ledgerEntries.length, 0)
   assert.equal(duplicate.counters.duplicate, released.counters.duplicate + 1)
+})
+test('WHAT[execution-model-routing-014] physical release straight from pending is refused', async () => {
+  const runtime = routing.createRuntime(() => target)
+  const pendingIdentity = identity('session', 'physical-pending')
+  await acquire(runtime, pendingIdentity)
+
+  // Pending → Released(PhysicalCompletion) would skip the commit that proves the
+  // provider actually started, so the lifecycle rejects it and capacity stays held.
+  assert.deepEqual(routing.releasePhysicalExecution(runtime, 'session', 'physical-pending'), { kind: 'Conflict' })
+  assert.equal(routing.capacitySnapshot(runtime).ledgerEntries.length, 1)
 })
 test('WHAT[execution-model-routing-014] stale fence cannot touch a newer execution', async () => {
   const runtime = routing.createRuntime(() => target)

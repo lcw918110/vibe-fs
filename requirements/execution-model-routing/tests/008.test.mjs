@@ -69,7 +69,8 @@ test('WHAT[execution-model-routing-008] EMR_008_distinct_current_roles_may_hold_
   }
   assert.deepEqual(routing.snapshotOccupied(runtime), Array.from({ length: 5 }, () => sameTarget))
   for (const role of ['engineer', 'devops', 'manager', 'orchestrator', 'plan']) {
-    routing.releasePhysicalExecution(runtime, role, `msg-${role}`)
+    // Nothing reached the provider here, so the permit is still Pending.
+    routing.releasePendingPhysicalExecution(runtime, role, `msg-${role}`)
   }
 })
 

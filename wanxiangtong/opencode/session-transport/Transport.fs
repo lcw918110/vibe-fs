@@ -162,19 +162,15 @@ module OpenCodePortAdapter =
 
                     let model = opts.Model
 
-                    // BusyAgentNudge is an immediate parent correction, not
-                    // next-idle work. OpenCode's steer inbox is consumed at the
-                    // next Provider step boundary, while queue waits for idle.
-                    // This send does not itself invoke AbortSession. A marked
-                    // consultation steer keeps its separate latest-assistant
-                    // rule in PluginTransforms; no other origin is reclassified.
+                    // The product names the delivery verb on the send options; this
+                    // adapter only translates it into the Host's protocol field. It
+                    // must not infer steer from an origin name: whether a nudge
+                    // steers is a product decision, and a host that guessed from
+                    // metadata would re-derive it for every new origin.
                     let deliveryFields =
-                        match opts.Metadata with
-                        | Some metadata when
-                            emitJsExpr (metadata, PromptMetadataCodec.OriginField) "$0?.[$1] === 'BusyAgentNudge'"
-                            ->
-                            [ "delivery", box "steer" ]
-                        | _ -> []
+                        match opts.Delivery with
+                        | Some delivery -> [ "delivery", box delivery ]
+                        | None -> []
 
                     let bodyFields =
                         [ "parts", box parts ]

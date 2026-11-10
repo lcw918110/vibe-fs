@@ -85,6 +85,11 @@ module ModelRoutingSurface =
     val seedDevOpsModelTarget: runtime: obj -> sessionId: string -> target: string -> unit
 
     val releasePhysicalExecution: runtime: obj -> sessionId: string -> physicalUserMessageId: string -> obj
+
+    val releasePendingPhysicalExecution: runtime: obj -> sessionId: string -> physicalUserMessageId: string -> obj
+
+    val sharedReleasePendingPhysicalExecution: sessionId: string -> physicalUserMessageId: string -> obj
+
     val releaseExecution: runtime: obj -> sessionId: string -> obj
     val cancelPendingExecution: runtime: obj -> sessionId: string -> obj
 

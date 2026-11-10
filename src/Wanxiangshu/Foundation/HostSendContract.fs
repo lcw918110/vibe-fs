@@ -28,6 +28,8 @@ type SessionPromptOptions =
         Agent: string option
         Directory: string option
         Metadata: obj option
+        /// Host delivery verb chosen by the product. None keeps the host default.
+        Delivery: string option
         Tools: Map<string, bool> option
         /// Out-of-band listener for the eventual detached enqueue result. None
         /// when the caller's returned sendTask settles the send itself.

@@ -45,6 +45,7 @@ module OpenCodeHostPorts =
                       Agent = request.Role |> Option.map (fun (AgentRole s) -> s)
                       Directory = request.Workspace |> Option.map (fun (WorkspacePath p) -> p)
                       Metadata = metadataOf request.Correlation
+                      Delivery = request.Delivery
                       Tools = request.ToolPolicy
                       DetachedListener = lateListenerOf late }
 

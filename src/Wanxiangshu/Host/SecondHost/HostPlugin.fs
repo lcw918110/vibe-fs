@@ -259,7 +259,8 @@ module HostPlugin =
                       Role = None
                       Workspace = None
                       Correlation = None
-                      ToolPolicy = None },
+                      ToolPolicy = None
+                      Delivery = None },
                     None
                 )
 

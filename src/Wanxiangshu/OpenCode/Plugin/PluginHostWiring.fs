@@ -138,6 +138,7 @@ module PluginHostWiring =
                                               Agent = Some agent
                                               Directory = None
                                               Metadata = None
+                                              Delivery = None
                                               Tools = Some exactTools
                                               DetachedListener = None }
 

@@ -297,7 +297,8 @@ module PromptDispatcherSend =
                       Role = Some(Wanxiangshu.Host.Ports.AgentRole agent)
                       Workspace = directory |> Option.map (fun path -> Wanxiangshu.Host.Ports.WorkspacePath path)
                       Correlation = Some key
-                      ToolPolicy = tools }
+                      ToolPolicy = tools
+                      Delivery = PromptAuthority.deliveryFor origin }
 
                 let metadata = Some(this.Metadata key (PromptDispatcher.originLabel origin) None)
 
@@ -379,6 +380,7 @@ module PromptDispatcherSend =
             (sessionId: SessionId)
             (text: string)
             (originLabel: string)
+            (delivery: string option)
             (profile: PromptAuthority.AuthorityExecutionProfile)
             (directory: string option)
             (awaitMode: PromptDispatcher.AwaitMode)
@@ -395,7 +397,8 @@ module PromptDispatcherSend =
                       Role = Some(Wanxiangshu.Host.Ports.AgentRole profile.SelectedAgent)
                       Workspace = directory |> Option.map (fun path -> Wanxiangshu.Host.Ports.WorkspacePath path)
                       Correlation = Some key
-                      ToolPolicy = tools }
+                      ToolPolicy = tools
+                      Delivery = delivery }
 
                 let metadata = Some(this.Metadata key originLabel (Some profile.LogicalRunId))
 
@@ -477,6 +480,7 @@ module PromptDispatcherSend =
                                 sessionId
                                 text
                                 originLabel
+                                (PromptAuthority.deliveryFor origin)
                                 profile
                                 directory
                                 awaitMode

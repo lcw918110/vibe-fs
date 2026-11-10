@@ -502,6 +502,17 @@ module PromptAuthority =
         | HostInternal -> "HostInternal"
         | UnknownOrigin -> "UnknownOrigin"
 
+    /// The delivery verb the product wants the host to use for this origin.
+    ///
+    /// A busy nudge must reach a running session as a steer so the nudge lands on the
+    /// next model step instead of waiting for idle; every other origin keeps the host
+    /// default. This is a product decision made here, on the send options, so a host
+    /// adapter only translates the verb and never infers it from an origin name.
+    let deliveryFor (origin: PromptOrigin) =
+        match origin with
+        | Continuation BusyAgentNudge -> Some "steer"
+        | _ -> None
+
     let tryParseContinuationKind (value: string) =
         match value with
         | "InteractionRepair" -> Some InteractionRepair
