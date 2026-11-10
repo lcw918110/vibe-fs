@@ -152,6 +152,63 @@ test('WHAT[causal-wait-006] CAUSAL_006_escapes_render_distinctly_in_diagnostics'
     fs.rmSync(workspace, { recursive: true, force: true })
   }
 })
+test('WHAT[causal-wait-006] CAUSAL_006_unknown_escape_kind_is_refused_at_the_wait_boundary', () => {
+  // An unrecognised escape kind decides nothing: reading it as OpenEndedExternal
+  // would let a record written by a newer shape end a wait that should have kept
+  // running. The refusal happens where descriptors enter (Surface's decoder and the
+  // library's own validator), so an unknown kind can never reach a registry at all.
+  // Registry.waitOf only decodes what the library hands back, which is why it cannot
+  // be exercised with an unknown kind: the library already refused it upstream.
+  const registry = causal.createRegistry()
+  const descriptor = causal.createWait({
+    waitKind: 'escape-taxonomy',
+    owner: owner('A'),
+    subject: { target: 'X' },
+    producer: causal.externalProducer('capability', { id: 'X' }),
+    escapes: [{ kind: 'escapeFromANewerShape' }],
+    source: 'escape-taxonomy.test',
+  })
+
+  assert.throws(() => causal.enter(registry, descriptor), /unknown wait escape: escapeFromANewerShape/)
+  assert.equal(causal.snapshot(registry).active.length, 0, 'a refused descriptor must not register a wait')
+})
+test('WHAT[causal-wait-006] CAUSAL_006_every_escape_kind_survives_the_registry_round_trip', () => {
+  // The registry decodes wait descriptors back out of library snapshots, so this is the
+  // one path where its decoder runs for real. Assert the payloads, not just the tags:
+  // losing the deadline instant or the cancelling owner would silently change when a
+  // wait may end.
+  const registry = causal.createRegistry()
+  const lease = causal.enter(
+    registry,
+    causal.createWait({
+      waitKind: 'escape-taxonomy',
+      owner: owner('A'),
+      subject: { target: 'X' },
+      producer: causal.externalProducer('capability', { id: 'X' }),
+      escapes: [
+        causal.escape('deadlineAt', '2026-01-01T00:00:00Z'),
+        causal.escape('cancelledBy', owner('review-attempt')),
+        causal.escape('processLifetime'),
+        causal.escape('sessionLifetime'),
+        causal.escape('openEndedExternal'),
+      ],
+      source: 'escape-taxonomy.test',
+    }),
+  )
+
+  const [observation] = causal.snapshot(registry).active
+  // Assert the whole payload, not just the tags: losing the deadline instant or the
+  // cancelling owner would silently change when a wait may end. Compared as literals
+  // because reading a Fable union's discriminator is refused by the boundary gate.
+  assert.deepEqual(observation.escapes, [
+    { tag: 'deadlineAt', at: '2026-01-01T00:00:00.000Z' },
+    { tag: 'cancelledBy', owner: { kind: 'flow', identity: { id: 'review-attempt' } } },
+    { tag: 'processLifetime' },
+    { tag: 'sessionLifetime' },
+    { tag: 'openEndedExternal' },
+  ])
+  causal.dispose(lease)
+})
 test('WHAT[causal-wait-006] CAUSAL_006_deadline_escape_carries_typed_instant', async () => {
   const wait = causal.createWait({
     waitKind: 'deadline-escape',

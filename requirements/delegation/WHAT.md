@@ -201,7 +201,7 @@ Fork 子代理的在途运行（agentId、因果令牌、子会话、角色、�
 
 ## [036] Busy 子代理必须即时 steer 而不是等待空闲
 
-Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话的 `BusyAgentNudge` 必须明确使用 `delivery: "steer"`（SDK body 与顶层载体一致）。它沿原 LogicalRun 和身份种子保存真实 PromptKey，供正在运行的子代理在下一模型步骤优先消费，不允许退化成 `queue` 等待 idle，也不创建新 assignment。宿主发送者不另发 `AbortSession`；若 SDK 为消费 steer 切换旧 Provider attempt，须按真实 Provider 终态核对，不把任何 `Cancelled` 一概认作非预期中断。
+Manager 对仍活跃的 Engineer／DevOps 执行 `resume` 时，已有子会话的 `BusyAgentNudge` 必须明确使用 `delivery: "steer"`（SDK body 与顶层载体一致）。是否 steer 由产品在发送选项上给出；OpenCode 适配只把它翻译成协议字段，不读取来源名。它沿原 LogicalRun 和身份种子保存真实 PromptKey，供正在运行的子代理在下一模型步骤优先消费，不允许退化成 `queue` 等待 idle，也不创建新 assignment。宿主发送者不另发 `AbortSession`；若 SDK 为消费 steer 切换旧 Provider attempt，须按真实 Provider 终态核对，不把任何 `Cancelled` 一概认作非预期中断。
 
 普通 Busy steer 不伪装成 `wanxiangshu_consultation_steer=true`，咨询消息仍单独按最近一轮 assistant 已完成且无工具调用的判据裁决，不限定为咨询发起回合；degeneration 的 `ProviderRetryAttempt` 也不改变。SDK 入队确认不等于模型消费，物理接纳与 PromptKey 恢复仍按原合同处理。
 
