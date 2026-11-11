@@ -26,13 +26,20 @@ jobs:
       - run: dotnet tool restore
       - name: Install ripgrep for real search checks
         run: |
-          # Runner images usually ship rg already. Only touch apt when it is missing:
-          # apt-get update is a network dependency that fails the whole job on a DNS blip.
+          # rg backs the programming search capability, so verification needs it.
+          # Runner images usually ship it; when they do not, apt is the only system
+          # network dependency here and a DNS blip on the Ubuntu mirror kills the
+          # whole job before verification starts. Fall back to the npm binary, which
+          # resolves through the registry npm ci already uses.
           if command -v rg >/dev/null 2>&1; then
-            echo "ripgrep already present, skipping apt"
+            echo "ripgrep already present"
+          elif sudo apt-get update && sudo apt-get install --no-install-recommends -y ripgrep; then
+            echo "ripgrep installed from apt"
           else
-            sudo apt-get update
-            sudo apt-get install --no-install-recommends -y ripgrep
+            echo "apt unavailable, installing ripgrep from npm"
+            npm install --no-save --no-audit --no-fund @vscode/ripgrep
+            rg_bin="$(node -p "require('@vscode/ripgrep').rgPath")"
+            sudo ln -sf "$rg_bin" /usr/local/bin/rg
           fi
           rg --version
       - name: Run verification
