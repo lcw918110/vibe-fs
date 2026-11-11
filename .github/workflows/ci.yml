@@ -26,8 +26,14 @@ jobs:
       - run: dotnet tool restore
       - name: Install ripgrep for real search checks
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y ripgrep
+          # Runner images usually ship rg already. Only touch apt when it is missing:
+          # apt-get update is a network dependency that fails the whole job on a DNS blip.
+          if command -v rg >/dev/null 2>&1; then
+            echo "ripgrep already present, skipping apt"
+          else
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -y ripgrep
+          fi
           rg --version
       - name: Run verification
         id: verify
