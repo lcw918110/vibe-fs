@@ -333,6 +333,11 @@ async function runConcurrentAwaitTimeouts() {
  */
 const CAUSAL_LANE = ['publish', 'main', 'manager', 'turn-1'].join('/');
 
+// `setTimeout` is allowed to fire a hair before its deadline, so a watchdog armed for exactly N ms
+// can report N-1. The barrier contract is about which signals renew the window, not about timer
+// precision; anything larger than this would start hiding a real early exit.
+const WATCHDOG_TIMER_TOLERANCE_MS = 5;
+
 // Background traffic must not be reported as causal progress. The emitted diagnostic
 // must identify the last real advance; its decorative layout is not a separate contract.
 async function runDiagnosticDumpIsComplete() {
@@ -489,7 +494,15 @@ async function runWaitFactRenewsOnlyOnObservation() {
   const reportedSilence = /silent for (\d+)ms \(limit (\d+)ms\)/.exec(appending.stderr);
   assertTrue(reportedSilence !== null, `the watchdog must report its actual silence: ${appending.stderr}`);
   assertEq(Number(reportedSilence[2]), scaledWatchdogMs, 'the real watchdog must keep its original limit');
-  assertTrue(Number(reportedSilence[1]) >= scaledWatchdogMs, 'the real watchdog must observe the complete silence window');
+  // The timer is armed for exactly the remaining window, but setTimeout may fire a hair early on a
+  // loaded runner, so the reported silence can land 1ms under the limit. What this assertion has to
+  // rule out is a watchdog that gave up on a fraction of the window or renewed on background
+  // progress — not sub-millisecond timer precision.
+  assertTrue(
+    Number(reportedSilence[1]) >= scaledWatchdogMs - WATCHDOG_TIMER_TOLERANCE_MS,
+    `the real watchdog must observe the complete silence window, saw ${reportedSilence[1]}ms of ` +
+      `${scaledWatchdogMs}ms (tolerance ${WATCHDOG_TIMER_TOLERANCE_MS}ms)`,
+  );
   const observedTypes = journalEventLines(appendingDir).map((text) => JSON.parse(text).payload?.type);
   assertTrue(observedTypes.length > 0, 'background facts must reach the current EventStore');
   assertTrue(observedTypes.every((type) => type === 'UnrelatedProgressFact'), 'the watchdog must stop before the awaited fact');
